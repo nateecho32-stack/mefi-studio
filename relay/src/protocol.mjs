@@ -194,6 +194,7 @@ export const HTTP_ERRORS = Object.freeze([
   'needs',
   'price-changed',
   'short',
+  'no-tip',
   'hold',
   'bad-pack',
   'too-big',
@@ -691,8 +692,9 @@ export const HTTP_BODIES = Object.freeze({
   voteEvent: { userId: snowflake() },
   // POST /v1/admin/reports/:id/resolve: "remove" also takes a reported Shop pack off for good.
   resolveReport: { action: optional(oneOf(['remove'])) },
-  // POST /v1/shop/:id/buy (feature "shop"): the price the member was shown, so a changed price is never paid by surprise.
-  shopBuy: { price: integer(0, 1_000_000) },
+  // POST /v1/shop/:id/buy (feature "shop"): the price the member was shown, so a changed price is never paid by
+  // surprise, and a tip for a community pack's maker (credits, never money; Studio's own items take none).
+  shopBuy: { price: integer(0, 1_000_000), tip: optional(integer(0, 100)) },
   // POST /v1/shop/packs: a style pack. `data` passes through whole (up to the body limit) so relay/src/shop-pack.mjs
   // can refuse a key it does not name instead of it being dropped here, and say when a pack is too big.
   shopPublish: { name: string(1, 40, { pattern: SINGLE_LINE, nonBlank: true }), blurb: optional(line(0, 160)), price: integer(0, 250), data: opaqueObject(LIMITS.bodyBytes) },

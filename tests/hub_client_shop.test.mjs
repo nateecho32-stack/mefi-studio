@@ -64,6 +64,7 @@ test("ids, views and fields are checked before anything leaves", async () => {
   const refused = [
     h.client.shop("studio", "not a cursor!"),
     h.client.shopBuy("nope", 10), h.client.shopBuy("studio:Skin", 10), h.client.shopBuy("studio:fx-embers", -1), h.client.shopBuy("studio:fx-embers", 1.5), h.client.shopBuy("pack_short", 0),
+    h.client.shopBuy(PACK_ID, 0, -1), h.client.shopBuy(PACK_ID, 0, 101), h.client.shopBuy(PACK_ID, 0, 1.5), h.client.shopBuy(PACK_ID, 0, "5"),
     h.client.shopUpdate("studio:skin-frost", { name: "Neon" }), h.client.shopUpdate(PACK_ID, { price: 5 }), h.client.shopUpdate(PACK_ID, { listed: "yes" }), h.client.shopUpdate(PACK_ID, { name: "A" }),
     h.client.shopUnlist("../admin"),
     h.client.shopPublish({ name: "Neon", price: 0 }), h.client.shopPublish({ name: "Neon", price: 0, data: [] }), h.client.shopPublish({ name: "Neon", price: 251, data: PACK }),
@@ -84,6 +85,8 @@ test("each call goes where the relay expects it, with only the fields it takes",
   await h.client.shopOwned();
   await h.client.shopBuy("studio:fx-embers", 90);
   await h.client.shopBuy(PACK_ID, 0);
+  await h.client.shopBuy(PACK_ID, 0, 15);
+  await h.client.shopBuy("studio:fx-embers", 90, null);
   await h.client.shopPublish({ name: "Neon night", blurb: " ", price: 0, data: { ...PACK, css: "x" }, listed: true, extra: 1 });
   await h.client.shopUpdate(PACK_ID, { blurb: "", listed: false, sales: 99 });
   await h.client.shopUnlist(PACK_ID);
@@ -96,6 +99,8 @@ test("each call goes where the relay expects it, with only the fields it takes",
     { method: "GET", path: "/v1/shop/owned", body: undefined },
     { method: "POST", path: "/v1/shop/studio:fx-embers/buy", body: { price: 90 } },
     { method: "POST", path: `/v1/shop/${PACK_ID}/buy`, body: { price: 0 } },
+    { method: "POST", path: `/v1/shop/${PACK_ID}/buy`, body: { price: 0, tip: 15 } },
+    { method: "POST", path: "/v1/shop/studio:fx-embers/buy", body: { price: 90 } },
     { method: "POST", path: "/v1/shop/packs", body: { name: "Neon night", price: 0, data: { ...PACK, css: "x" } } },
     { method: "PUT", path: `/v1/shop/packs/${PACK_ID}`, body: { blurb: "", listed: false } },
     { method: "DELETE", path: `/v1/shop/packs/${PACK_ID}`, body: undefined },
@@ -148,12 +153,19 @@ test("shopOwned keeps id, kind, name, data and when it changed, and a pack only 
   ] });
 });
 
-test("refusals keep needs, price, balance, hold and until, and nothing else", async () => {
+test("refusals keep needs, price, balance, tip, hold and until, and nothing else; a purchase says what was paid", async () => {
   let reply = null;
   const h = harness({ answer: () => reply });
   await h.ready();
   reply = { status: 409, body: { ok: false, error: "short", reason: "credits", balance: 10, price: 60, needs: "javascript:alert(1)", hold: "nope", extra: "x" } };
   assert.deepEqual(await h.client.shopBuy("studio:fx-dissolve", 60), { ok: false, error: "short", reason: "credits", balance: 10, price: 60 });
+  reply = { status: 409, body: { ok: false, error: "short", balance: 30, price: 20, tip: 15 } };
+  assert.deepEqual(await h.client.shopBuy(PACK_ID, 20, 15), { ok: false, error: "short", balance: 30, price: 20, tip: 15 });
+  reply = { status: 400, body: { ok: false, error: "no-tip", tip: 999 } };
+  assert.deepEqual(await h.client.shopBuy("studio:fx-dissolve", 60, 5), { ok: false, error: "no-tip" }, "a tip out of range is not passed on");
+  reply = { status: 200, body: { ok: true, item: { id: PACK_ID, kind: "pack", name: "Neon", price: 0, data: PACK, owned: true }, paid: 15, balance: 5 } };
+  const bought = await h.client.shopBuy(PACK_ID, 0, 15);
+  assert.deepEqual([bought.ok, bought.item.id, bought.paid, bought.balance], [true, PACK_ID, 15, 5]);
   reply = { status: 409, body: { ok: false, error: "needs", needs: "studio:fx-embers" } };
   assert.deepEqual(await h.client.shopBuy("studio:hat-party", 20), { ok: false, error: "needs", needs: "studio:fx-embers" }, "no item needs another today, but the refusal keeps its shape");
   reply = { status: 403, body: { ok: false, error: "hold", hold: "new-member", until: 123 } };

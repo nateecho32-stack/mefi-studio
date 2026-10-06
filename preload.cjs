@@ -395,7 +395,7 @@ const api = {
   // Friends › Shop (main.cjs HUB_SHOP_METHODS): plain values, and a pack's fields with its data (shopArg).
   hubShop: (method, ...args) => ipcRenderer.invoke("hub:shop", {
     method: typeof method === "string" ? method : "",
-    args: args.slice(0, 2).map(shopArg),
+    args: args.slice(0, 3).map(shopArg),
   }),
   // Companion friends (main.cjs "Companion friends"): what friends' companions
   // may see, the friends out now and playdates. Only named fields cross.

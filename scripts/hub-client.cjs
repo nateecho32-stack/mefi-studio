@@ -112,6 +112,7 @@ const PACK_NODE_STYLES = Object.freeze(["orbs", "glass", "minimal", "halo", "cry
 const PACK_MATERIALS = Object.freeze(["focus", "studio", "atmosphere"]);
 const PACK_FONTS = Object.freeze(["studio", "display", "serif", "mono"]);
 const PACK_PRICE_MAX = 250;
+const PACK_TIP_MAX = 100; // a tip for a community pack's maker, in credits
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const BACKOFF_MS = Object.freeze([1_000, 2_000, 5_000, 10_000, 30_000, 60_000]);
@@ -975,7 +976,7 @@ function createHubClient(options = {}) {
   }
   const refused = (answer) => ({ ok: false, error: answer.error, ...(answer.reason ? { reason: answer.reason } : {}), ...(answer.retryAfter != null ? { retryAfter: answer.retryAfter } : {}) });
   // A Shop refusal also keeps what Studio needs to say why: the item to get first (needs), the price now, the
-  // balance, and why this member cannot sell yet (hold, until).
+  // balance (and the tip that made it short), and why this member cannot sell yet (hold, until).
   const shopRefused = (answer) => {
     const data = object(answer.data) ? answer.data : {};
     return {
@@ -983,6 +984,7 @@ function createHubClient(options = {}) {
       ...(shopItemId(data.needs) ? { needs: data.needs } : {}),
       ...(count(data.price, 1e6) != null ? { price: data.price } : {}),
       ...(count(data.balance, 1e12) != null ? { balance: data.balance } : {}),
+      ...(count(data.tip, PACK_TIP_MAX) ? { tip: data.tip } : {}),
       ...(CREDIT_HOLDS.includes(data.hold) ? { hold: data.hold } : {}),
       ...(Number.isFinite(data.until) ? { until: data.until } : {}),
     };
@@ -1405,17 +1407,20 @@ function createHubClient(options = {}) {
       };
       return { ok: true, items: Array.isArray(answer.data.items) ? answer.data.items.map(owned).filter(Boolean).slice(0, 2048) : [] };
     },
-    // Buying, or getting a free pack. `price` is the price the member was
-    // shown, so a changed one is never paid by surprise. Refusals: "gone",
-    // "owned", "own" (your own pack), "needs" (+ needs), "price-changed"
-    // (+ price), "short" (+ balance, price).
-    async shopBuy(itemId, price) {
+    // Buying, or getting a free pack, with a tip of 0 to 100 credits for a
+    // pack's maker if the member likes (Studio's own items take none). `price`
+    // is the price the member was shown, so a changed one is never paid by
+    // surprise. -> { ok, item, paid (the tip included), balance }. Refusals:
+    // "gone", "owned", "own" (your own pack), "needs" (+ needs),
+    // "price-changed" (+ price), "short" (+ balance, price, tip), "no-tip".
+    async shopBuy(itemId, price, tip = 0) {
       if (!features.includes("shop")) return { ok: false, error: "unsupported" };
-      if (!shopItemId(itemId) || count(price, 1e6) == null) return { ok: false, error: "bad-request" };
-      const answer = await authed("POST", `/v1/shop/${itemId}/buy`, { price });
+      const extra = tip == null ? 0 : tip;
+      if (!shopItemId(itemId) || count(price, 1e6) == null || count(extra, PACK_TIP_MAX) == null) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/shop/${itemId}/buy`, { price, ...(extra ? { tip: extra } : {}) });
       if (!answer.ok) return shopRefused(answer);
       const item = itemCard(answer.data.item);
-      return item ? { ok: true, item, balance: count(answer.data.balance, 1e12) ?? 0 } : { ok: false, error: "failed" };
+      return item ? { ok: true, item, paid: count(answer.data.paid, 1e6) ?? price + extra, balance: count(answer.data.balance, 1e12) ?? 0 } : { ok: false, error: "failed" };
     },
     // A style pack: { name, blurb?, price (0, or 10 to 250), data }. Refusals:
     // "bad-pack", "too-big", "low-contrast", "hold" (+ hold, until) for a

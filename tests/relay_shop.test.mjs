@@ -282,6 +282,48 @@ test("a free pack is a Get: owned and counted, and no credits move", async () =>
   studio.socket.close();
 });
 
+test("tips: up to 100 credits for a pack's maker, a free pack too; the maker's 75% counts them under the same caps, and the balance must cover them", async () => {
+  const clock = morning();
+  const relay = makeRelay({ now: () => clock });
+  const as = api(relay);
+  const maker = await connected(relay, "tok-alice");
+  const buyer = await connected(relay, "tok-bob");
+  const free = (await publish(as, "tok-alice", { name: "Thanks" })).pack.id;
+  give(relay, BOB.id, 300);
+  // Studio's own items have nobody to thank, and a tip is a whole number up to 100.
+  const studioTip = await as("tok-bob", "POST", "/v1/shop/studio:fx-embers/buy", { price: 90, tip: 5 });
+  assert.deepEqual([studioTip.status, studioTip.error], [400, "no-tip"]);
+  for (const tip of [101, -1, 2.5, "5"]) assert.equal((await as("tok-bob", "POST", `/v1/shop/${free}/buy`, { price: 0, tip })).status, 400, `tip ${tip}`);
+  assert.deepEqual([balanceOf(relay, BOB.id), relay.sql("SELECT COUNT(*) AS n FROM shop_owned")[0].n], [300, 0], "nothing moved");
+
+  // A free pack with a tip: the buyer pays the tip, and its maker earns 75% of it.
+  const tipped = await as("tok-bob", "POST", `/v1/shop/${free}/buy`, { price: 0, tip: 20 });
+  assert.deepEqual([tipped.status, tipped.paid, tipped.balance, tipped.item.owned, tipped.item.sales], [200, 20, 280, true, 1]);
+  assert.equal(balanceOf(relay, ALICE.id), 15);
+  assert.equal((await until(() => buyer.of("credits").find((frame) => frame.reason === "shop"), "the buyer's frame")).delta, -20);
+  assert.equal((await until(() => maker.of("credits").find((frame) => frame.reason === "sale"), "the maker's frame")).delta, 15);
+  assert.equal(relay.sql("SELECT price FROM shop_owned WHERE user_id = ? AND item_id = ?", BOB.id, free)[0].price, 20, "what the member paid, the tip included");
+
+  // The balance must cover the price and the tip together.
+  const priced = (await publish(as, "tok-alice", { name: "Neon", price: 100 })).pack.id;
+  give(relay, BOB.id, 150);
+  const short = await as("tok-bob", "POST", `/v1/shop/${priced}/buy`, { price: 100, tip: 60 });
+  assert.deepEqual([short.status, short.error, short.balance, short.price, short.tip], [409, "short", 150, 100, 60]);
+  assert.equal(balanceOf(relay, BOB.id), 150);
+  // The pair cap counts tips: 15 already this week, and 75% of 150 asks for more than the 85 left.
+  const paid = await as("tok-bob", "POST", `/v1/shop/${priced}/buy`, { price: 100, tip: 50 });
+  assert.deepEqual([paid.status, paid.paid, paid.balance], [200, 150, 0]);
+  assert.equal(balanceOf(relay, ALICE.id), GUARD.salePairWeek, "15 + 85: one buyer is worth 100 to one maker in 7 days, tips and all");
+  const third = (await publish(as, "tok-alice", { name: "Dusk" })).pack.id;
+  give(relay, BOB.id, 40);
+  assert.equal((await as("tok-bob", "POST", `/v1/shop/${third}/buy`, { price: 0, tip: 40 })).paid, 40);
+  assert.equal(balanceOf(relay, ALICE.id), GUARD.salePairWeek, "a tip past the cap is nobody's");
+  assert.deepEqual(relay.sql(`SELECT amount FROM credit_events WHERE kind = 'sale' ORDER BY id`).map((row) => row.amount), [15, 85]);
+  assert.equal(relay.sql("SELECT COUNT(*) AS n FROM credit_events WHERE amount < 0")[0].n, 0);
+  maker.socket.close();
+  buyer.socket.close();
+});
+
 test("publishing checks the pack, the name and the price, and a priced pack needs a maker who may earn", async () => {
   const clock = morning();
   const relay = makeRelay({ now: () => clock, discord: MORE });
@@ -491,7 +533,7 @@ test("schema v6: a v5 database gains the Shop's tables and keeps every row it ha
   db.close();
 });
 
-test("Studio's client: the Shop's lists, a price that changed, a pack published, bought and removed, refusals with their details", async () => {
+test("Studio's client: the Shop's lists, a price that changed, a pack published, bought with a tip and removed, refusals with their details", async () => {
   let clock = morning();
   const relay = makeRelay({ now: () => clock });
   const alice = member(relay, "tok-alice");
@@ -517,10 +559,12 @@ test("Studio's client: the Shop's lists, a price that changed, a pack published,
   assert.deepEqual(await alice.client.shopPublish({ name: "Big", price: 0, data: { ...PACK, note: "x".repeat(3000) } }), { ok: false, error: "too-big" });
   const held = await newbie.client.shopPublish({ name: "Starter", price: 20, data: PACK });
   assert.deepEqual([held.ok, held.error, held.hold, typeof held.until], [false, "hold", "new-member", "number"]);
-  assert.equal((await bob.client.shopBuy(made.pack.id, 100)).balance, 140);
-  await until(() => alice.of("credits").some((event) => event.reason === "sale" && event.delta === 75), "alice hears the sale");
-  assert.equal((await bob.client.shopBuy("studio:fx-embers", 90)).balance, 50);
-  assert.deepEqual(await bob.client.shopBuy("studio:fx-stardust", 90), { ok: false, error: "short", price: 90, balance: 50 });
+  const tipped = await bob.client.shopBuy(made.pack.id, 100, 10);
+  assert.deepEqual([tipped.ok, tipped.paid, tipped.balance], [true, 110, 130]);
+  await until(() => alice.of("credits").some((event) => event.reason === "sale" && event.delta === 82), "alice hears the sale: 75% of the price and the tip");
+  assert.deepEqual(await bob.client.shopBuy("studio:fx-embers", 90, 5), { ok: false, error: "no-tip" });
+  assert.equal((await bob.client.shopBuy("studio:fx-embers", 90)).balance, 40);
+  assert.deepEqual(await bob.client.shopBuy("studio:fx-stardust", 90), { ok: false, error: "short", price: 90, balance: 40 });
   const owned = await bob.client.shopOwned();
   assert.deepEqual(owned.items.map((item) => [item.id, item.kind, item.data === null]), [[made.pack.id, "pack", false], ["studio:fx-embers", "effect", true], ["studio:skin-gold", "skin", true]]);
   assert.deepEqual((await bob.client.shop("new")).items.map((item) => [item.id, item.owned, item.sales]), [[made.pack.id, true, 1]]);

@@ -173,18 +173,20 @@ everything free in Studio stays free, since the Shop sells new things only:
 
 A purchase is one transaction: the item, the price the member was shown and
 their balance are checked, the credits come off the balance, and the item is
-theirs on every PC. A pack's maker earns 75% of its price, only when buyer
-and maker are both in good standing; one buyer is worth at most 100 credits
-to one maker in 7 days, and a maker earns at most 300 a day from sales. The
-rest of the price is nobody's, so moving credits between two accounts by
-selling packs loses at least a quarter of them every time, and soon pays
-nothing. Selling needs the same good standing as earning; a free pack needs
+theirs on every PC. A member may add a tip of up to 100 credits to a pack,
+a free one too (Studio's own items take none). A pack's maker earns 75% of
+what was paid, tip included, only when buyer and maker are both in good
+standing; one buyer is worth at most 100 credits to one maker in 7 days,
+and a maker earns at most 300 a day from sales. The rest is nobody's, so
+moving credits between two accounts through the Shop loses at least a
+quarter of them every time, and soon pays nothing. Selling needs the same good standing as earning; a free pack needs
 only a member who may write. A maker lists 12 packs at most and publishes 4 a
 day, and the Shop holds 2000.
 
 `GET /v1/shop?view=studio|new|top|owned|mine` lists (30 packs a page, with
 `cursor`), `GET /v1/shop/owned` puts what a member owns back on a new PC, and
-`POST /v1/shop/:id/buy` (`{ "price": 150 }`) buys. `POST /v1/shop/packs`
+`POST /v1/shop/:id/buy` (`{ "price": 40 }`, and for a pack an optional
+`"tip"`) buys. `POST /v1/shop/packs`
 publishes a pack, `PUT /v1/shop/packs/:id` changes or lists it again, and
 `DELETE` takes it off the lists (whoever owns it keeps it, with its newest
 colours). `POST /v1/shop/packs/:id/report` reports one; moderators remove it

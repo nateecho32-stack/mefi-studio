@@ -16,14 +16,18 @@
 // and the member owns the item from then on, on every PC (GET /v1/shop/owned).
 // A purchase is kept as a shop_owned row, never as a negative credit row
 // (several sums over credit_events do not look at the sign). A free pack is a
-// Get: owned, and no credits move.
+// Get: owned, and no credits move. A member may add a tip of up to 100
+// credits to a community pack, free ones too (never to Studio's own items,
+// which have nobody to thank): it is paid with the price, in the same
+// transaction.
 //
 // What a Studio item costs leaves the economy. A community pack's maker earns
-// 75% of its price through credits.sale(): both must be in good standing, one
-// buyer is worth at most 100 credits to one maker in 7 days, and a maker
-// earns at most 300 a day from sales; the rest of the price is nobody's. So
-// moving credits between two accounts through the Shop loses at least a
-// quarter of them every time, and soon pays nothing at all.
+// 75% of what the buyer paid (the price and any tip) through credits.sale():
+// both must be in good standing, one buyer is worth at most 100 credits to
+// one maker in 7 days, and a maker earns at most 300 a day from sales; the
+// rest is nobody's. So moving credits between two accounts through the Shop,
+// tips included, loses at least a quarter of them every time, and soon pays
+// nothing at all.
 //
 // Makers: 12 listed packs at most, 4 published a day, 2000 in the whole
 // Shop, and a name once among a maker's listed packs. Unlisting keeps a pack
@@ -39,7 +43,8 @@ export const SHOP = Object.freeze({
   pageSize: 30, // community packs in one page of a list
   priceMin: 10, // a priced pack; 0 is free
   priceMax: 250,
-  makerShare: 0.75, // of a community pack's price, before the sale caps (credits.mjs EARN.sale, GUARD.salePairWeek)
+  makerShare: 0.75, // of what a community pack's buyer paid, before the sale caps (credits.mjs EARN.sale, GUARD.salePairWeek)
+  tipMax: 100, // a tip for a community pack's maker (protocol.mjs shopBuy says the same)
   listedPerMaker: 12,
   publishesPerDay: 4, // new packs and packs listed again, per maker
   listedTotal: 2000,
@@ -242,8 +247,9 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
     // What a member owns, for a new PC to put back: removed packs left out, a pack's data always its newest.
     route('GET', '/v1/shop/owned', ({ actor }) => reply(200, { ok: true, items: ownedList(actor.uid).map(({ id, kind, name, data, updatedAt }) => ({ id, kind, name, data, updatedAt })) }));
 
-    // Buying, or getting a free pack. Refusals say what Studio needs to explain them: the item to get first
-    // (needs), the price now, and the balance.
+    // Buying, or getting a free pack, with a tip for its maker if the member likes. Refusals say what Studio needs to
+    // explain them: the item to get first (needs), the price now, the balance (and the tip that made it short).
+    // The answer says what was paid, the tip included.
     route(
       'POST',
       '/v1/shop/:id/buy',
@@ -251,6 +257,9 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
         const item = studioItems.get(params.id) ?? null;
         const first = item ? null : packRow(params.id);
         if (!item && first?.status !== 'listed') return fail(404, 'gone');
+        // A tip thanks a pack's maker: Studio's own items have nobody to thank.
+        const tip = body.tip ?? 0;
+        if (item && tip > 0) return fail(400, 'no-tip');
         // The holds are read first (heldUntil is async); the sale checks them inside the transaction.
         const buyerHeld = await credits.heldUntil(actor.uid);
         const makerHeld = first?.maker_id ? await credits.heldUntil(first.maker_id) : 0;
@@ -262,19 +271,20 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
           if (hasRow(actor.uid, params.id)) return { error: fail(409, 'owned') };
           if (item?.requires && !hasRow(actor.uid, item.requires)) return { error: fail(409, 'needs', { needs: item.requires }) };
           if (body.price !== price) return { error: fail(409, 'price-changed', { price }) };
-          if (!credits.spend(actor.uid, price)) return { error: fail(409, 'short', { balance: credits.account(actor.uid).balance, price }) };
-          store.run('INSERT INTO shop_owned (user_id, item_id, price, at) VALUES (?, ?, ?, ?)', actor.uid, params.id, price, now());
-          if (!pack) return { price, paid: 0, makerId: null };
+          const paid = price + tip;
+          if (!credits.spend(actor.uid, paid)) return { error: fail(409, 'short', { balance: credits.account(actor.uid).balance, price, ...(tip ? { tip } : {}) }) };
+          store.run('INSERT INTO shop_owned (user_id, item_id, price, at) VALUES (?, ?, ?, ?)', actor.uid, params.id, paid, now());
+          if (!pack) return { paid, payout: 0, makerId: null };
           store.run('UPDATE shop_packs SET sales = sales + 1 WHERE id = ?', pack.id);
-          // The maker's share of a priced pack; what the sale caps leave out is nobody's.
-          const paid = price > 0 ? credits.sale({ buyer: actor.uid, maker: pack.maker_id, itemId: pack.id, amount: Math.floor(price * SHOP.makerShare), buyerHeld, makerHeld }) : 0;
-          return { price, paid, makerId: pack.maker_id };
+          // The maker's share of what was paid, a tip included; what the sale caps leave out is nobody's.
+          const payout = paid > 0 ? credits.sale({ buyer: actor.uid, maker: pack.maker_id, itemId: pack.id, amount: Math.floor(paid * SHOP.makerShare), buyerHeld, makerHeld }) : 0;
+          return { paid, payout, makerId: pack.maker_id };
         });
         if (result.error) return result.error;
-        credits.tell(actor.uid, -result.price, 'shop');
-        if (result.makerId) credits.tell(result.makerId, result.paid, 'sale');
+        credits.tell(actor.uid, -result.paid, 'shop');
+        if (result.makerId) credits.tell(result.makerId, result.payout, 'sale');
         const owned = ownedIds(actor.uid);
-        return reply(200, { ok: true, item: item ? studioView(item, owned, studioSales()) : packView(packRow(params.id), owned), balance: credits.account(actor.uid).balance });
+        return reply(200, { ok: true, item: item ? studioView(item, owned, studioSales()) : packView(packRow(params.id), owned), paid: result.paid, balance: credits.account(actor.uid).balance });
       },
       { write: true, body: 'shopBuy', param: ITEM_PARAM },
     );

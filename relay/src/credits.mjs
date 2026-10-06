@@ -7,7 +7,8 @@
 // player 2), and a star earns the maker 3. Credits are never bought and never
 // cashed out; they are spent on featuring a project at the top of the hub for
 // a day, and in the Shop (shop.mjs), where a style pack's maker earns a share
-// of its price through sale(), under that kind's own caps.
+// of what it sold for (a tip included) through sale(), under that kind's own
+// caps.
 //
 // Ranks come in two kinds. Levels follow lifetime credits (Spark, Ember,
 // Flame, Comet, Star, Nova, Void) and are badges in Studio only. Special
@@ -60,10 +61,10 @@ export const EARN = Object.freeze({
   together: Object.freeze({ amount: 4, perDay: 4, award: true }),
   cowork: Object.freeze({ amount: 4, perDay: 8, award: true }),
   jam: Object.freeze({ amount: 0, max: 450, perDay: 1000, award: true, prize: true }),
-  // A Shop sale (shop.mjs), paid only through sale(): a community pack's maker earns a share of its price from the
-  // buyer. Prize-style, so the day's 60 and the 15-a-week pair limit do not stack on its own caps (300 a day, and
-  // GUARD.salePairWeek from one buyer to one maker in 7 days). A sale still counts toward that pair's 15 for every
-  // other kind, so after one, the buyer's plays and stars pay that maker nothing more that week.
+  // A Shop sale (shop.mjs), paid only through sale(): a community pack's maker earns a share of what its buyer paid
+  // (the price and any tip). Prize-style, so the day's 60 and the 15-a-week pair limit do not stack on its own caps
+  // (300 a day, and GUARD.salePairWeek from one buyer to one maker in 7 days). A sale still counts toward that pair's
+  // 15 for every other kind, so after one, the buyer's plays and stars pay that maker nothing more that week.
   sale: Object.freeze({ amount: 0, max: 100, perDay: 300, prize: true }),
   dayCap: 60,
 });

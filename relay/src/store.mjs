@@ -227,7 +227,7 @@ const V5 = [
 // v6: the Shop (shop.mjs). Members' style packs, data only (colours and a few
 // keys from Studio's lists, checked by shop-pack.mjs), and who owns what,
 // Studio's own items and packs alike. A purchase is kept here as the item and
-// what it cost, never as a negative credit row.
+// what the member paid (a tip included), never as a negative credit row.
 const V6 = [
   `CREATE TABLE IF NOT EXISTS shop_packs (
      id TEXT PRIMARY KEY,

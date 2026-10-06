@@ -37,20 +37,21 @@ function host(env = {}) {
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test("main lets the renderer call only the Shop's methods, with the hub client's own arity", async () => {
-  assert.match(main, /const HUB_SHOP_METHODS = Object\.freeze\(\{ shop: 2, shopOwned: 0, shopBuy: 2, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2 \}\);/);
+  assert.match(main, /const HUB_SHOP_METHODS = Object\.freeze\(\{ shop: 2, shopOwned: 0, shopBuy: 3, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2 \}\);/);
   assert.match(main, /ipcMain\.handle\("hub:shop", async \(_event, payload\) => hubShop\(String\(payload\?\.method \?\? ""\), Array\.isArray\(payload\?\.args\) \? payload\.args : \[\]\)\);/);
   assert.match(preload, /hubShop: \(method, \.\.\.args\) => ipcRenderer\.invoke\("hub:shop", \{/);
   assert.equal((main.match(/process\.env\.MEFI_STUDIO_SHOP_ALL/g) ?? []).length, 1, "the switch is read once");
   const h = host();
   assert.deepEqual(Object.keys(h.api.HUB_SHOP_METHODS), METHODS);
-  for (const [method, args] of [["nope", []], ["__proto__", []], ["toString", []], ["shopOwned", ["x"]], ["shopBuy", ["studio:fx-embers", 90, "extra"]], ["shopPublish", [{}, {}]], ["shop", "studio"]]) {
+  for (const [method, args] of [["nope", []], ["__proto__", []], ["toString", []], ["shopOwned", ["x"]], ["shopBuy", ["studio:fx-embers", 90, 0, "extra"]], ["shopPublish", [{}, {}]], ["shop", "studio"]]) {
     assert.deepEqual(plain(await h.api.hubShop(method, args)), { ok: false, error: "bad-request" }, `${method} with ${JSON.stringify(args)}`);
   }
   assert.equal(h.calls.length, 0);
   await h.api.hubShop("shop", ["top", "30"]);
   await h.api.hubShop("shopBuy", ["studio:fx-embers", 90]);
+  await h.api.hubShop("shopBuy", ["pack_AbCdEfGhIjKlMnOp", 0, 15]);
   await h.api.hubShop("shopUnlist", ["pack_AbCdEfGhIjKlMnOp"]);
-  assert.deepEqual(plain(h.calls), [["shop", "top", "30"], ["shopBuy", "studio:fx-embers", 90], ["shopUnlist", "pack_AbCdEfGhIjKlMnOp"]]);
+  assert.deepEqual(plain(h.calls), [["shop", "top", "30"], ["shopBuy", "studio:fx-embers", 90], ["shopBuy", "pack_AbCdEfGhIjKlMnOp", 0, 15], ["shopUnlist", "pack_AbCdEfGhIjKlMnOp"]], "a tip is the third argument");
 });
 
 test("one object of fields crosses as plain data: a pack's data and its palette copied, anything deeper null with its key kept", async () => {
@@ -105,5 +106,5 @@ test("the preload bridge copies a Shop call's arguments by the same rule", () =>
   const { shopArg } = context;
   assert.deepEqual(plain(shopArg({ name: "Neon", data: { v: 1, palette: { accent: "#4f8cff", deeper: { x: 1 } }, font: ["mono"] }, other: { x: 1 } })), { name: "Neon", data: { v: 1, palette: { accent: "#4f8cff", deeper: null }, font: null }, other: null });
   assert.deepEqual([shopArg("studio:skin-frost"), shopArg(150), shopArg(null), shopArg(() => 1), shopArg([1])], ["studio:skin-frost", 150, null, null, null]);
-  assert.match(preload, /args: args\.slice\(0, 2\)\.map\(shopArg\),/);
+  assert.match(preload, /args: args\.slice\(0, 3\)\.map\(shopArg\),/, "as many as the longest call, shopBuy's item, price and tip");
 });
