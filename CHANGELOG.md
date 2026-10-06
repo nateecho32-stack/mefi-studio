@@ -7,6 +7,30 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **0.5 polish: an easier first run, and menus that behave.** A new
+  install now starts with **Start a new app** (Studio makes the folder) beside
+  **Open a folder…**, and the Studio Daily says *Welcome to Studio*. The first
+  run asks **Pick the AI that builds for you** in plain words (which account
+  each tool uses), offers OpenCode's free models when you have no
+  subscription, and now really switches Studio to the tool you signed in to
+  when you press Continue (before, it kept the default). Its last step, **What
+  should Studio make first?**, has examples to tap and never adds a task with
+  no project open. Social's rail uses Studio's names (Friends, Map, Team) and
+  gains Help; Friends and Team show their places as a row of chips when the
+  side list is closed, so Rooms, Events, Your PCs and every Team page are
+  reachable from Social; Events is in Studio's menu and in Search. Fixed:
+  switching Social to Studio while a page was open left the menu blank;
+  Configuration and Friends could stay open or leave their name in the
+  breadcrumb and tab after you left them; Search listed "Switch to Studio"
+  twice and the + menu listed Today twice; a key tip covered Build it and the
+  first-run dialog; the old node-tree strip covered the right edge of
+  Settings; the Ruins Runner launcher showed without the game; the status
+  bar's player opened the media menu in the wrong place; Plans squeezed its
+  editor in a smaller window; the breadcrumb cut every crumb to a few letters.
+  The wide menu opens by itself only on screens 1600 px wide or more (your
+  pin still holds), Team lists Resources, and the startup settings read
+  *Open Today on launch*, *Always start in Social mode* and *Agents when
+  Studio opens*.
 - **My PCs: your PCs work as one.** Friends › Your PCs now lists every PC
   you sign in to Friends on, live: its CPU, free memory, battery and how
   many tasks it runs, and why it is not taking work. Pair each PC once by
