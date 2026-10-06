@@ -16,6 +16,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Suspend for a day or a week. Anyone can now Report someone else's project
   in the Project hub (spam or a broken link, not safe to open, someone
   else's work), and a moderator can take a project off the hub there too.
+- **Pop-ups from friends.** Studio now says when someone you share a room
+  with opens Studio (several at once are one pop-up), when someone invites
+  you to a room or asks to join yours, and when someone plays or stars your
+  project, each with a button to the right Friends page. Nobody is announced
+  to the whole Lobby or while they hide from Who's online, and the same
+  friend at most every 30 minutes. **Pop-ups from friends** at the foot of
+  The Lobby turns them off.
 - **Credits cannot be farmed.** Credits and ranks are worked out by the
   relay, never by Studio, and they now hold up against second accounts,
   trading and replays: credits start once a Discord account is 30 days old

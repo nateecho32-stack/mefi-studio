@@ -39,7 +39,10 @@ that comes back has to match what was actually said.
 Forget me (`POST /v1/me/forget`) deletes every row about you and closes the
 rooms you own. Observability is off in `wrangler.toml`. Who's online and The
 Lobby's front page (`GET /v1/front`) are read from the live connections when a
-member asks; nothing about who was online, or when, is written. An unlisted
+member asks; nothing about who was online, or when, is written. When a member
+opens Studio, the people they share a room with (not the Lobby) hear it as a
+`friendOnline` frame, unless they hide, at most once in 30 minutes per pair;
+that is kept in memory only. An unlisted
 room's name never appears on anyone else's front page.
 
 ## Credits that cannot be farmed
