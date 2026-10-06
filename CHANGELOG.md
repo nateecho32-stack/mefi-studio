@@ -7,6 +7,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Friends looks and feels like a chat app.** An open room now fills the
+  page: one header with the room's name, faces of who is here, Listen
+  together and a ⋯ menu (invite code, invite by name, lock, close or leave),
+  the conversation growing above one message box that stays at the bottom.
+  Enter sends and Shift+Enter starts a new line; Report and Delete wait in a
+  small ⋯ on each message; a mention of someone Studio can't name reads
+  "@someone". Rooms are cards with a New room button, the Rooms and Project
+  hub switches show which view is chosen, Rooms and the Project hub have
+  their own icons (and so does every Friends tab), and The Lobby updates
+  within seconds when a friend arrives or leaves. The Playground says what
+  friends see in one plain sentence. It all fits from a small window at 150%
+  to 1920x1080, in dark and light colours.
 - **Moderation in Studio, and Report on projects.** Moderators get a
   Friends › Moderation place (nobody else sees it): who looks like they are
   farming credits (most of their credits from one person, or two people

@@ -61,6 +61,7 @@ function environment({ status = { configured: true, linked: true, state: "ready"
   const api = bridge ? {
     hubStatus: async () => ({ ok: true, status }),
     hubConnect: async () => { calls.push(["connect"]); status = { ...status, state: "ready" }; return { ok: true, status }; },
+    hubSubscribe: (roomId, on, holder) => { calls.push(["subscribe", roomId, on, holder]); },
     hubRooms: async () => ({ ok: true, rooms: [] }),
     onHubEvent: (fn) => { hubEvent = fn; },
     hubRoom: async (method, ...args) => {
@@ -309,6 +310,26 @@ test("Building now: a small tree per friend who shares, and this member's own sw
   const plain = quiet.front.card();
   await flush();
   assert.equal(plain.byClass("front-building").length, 0, "nobody sharing: no section");
+});
+
+test("while it shows, The Lobby holds the Lobby room and reads again when someone arrives or leaves", async () => {
+  let reads = 0;
+  const env = environment({ status: { configured: true, linked: true, state: "ready", user: ME, front: true, lobby: true }, page: () => { reads += 1; return front(); } });
+  const card = env.front.card();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "subscribe"), ["subscribe", "lobby", true, "rooms"], "the Lobby room is held for its presence frames");
+  env.push({ type: "presence", roomId: "lobby", inStudio: [ME.id, "200000000000000001"] });
+  env.push({ type: "presence", roomId: "lobby", inStudio: [ME.id] });
+  env.push({ type: "presence", roomId: "room_other", inStudio: [] });
+  const soon = env.timers.filter((timer) => timer.ms !== 60_000 && timer.ms !== 3000);
+  assert.equal(soon.length, 1, "a burst of arrivals is one read, and other rooms do not count");
+  assert.ok(soon[0].ms >= 1500 && soon[0].ms <= 10_000);
+  soon[0].fn();
+  await flush();
+  assert.equal(reads, 2);
+  card.dispose();
+  card.dispose();
+  assert.deepEqual(env.calls.filter((call) => call[0] === "subscribe"), [["subscribe", "lobby", true, "rooms"], ["subscribe", "lobby", false, "rooms"]], "let go once, however often Friends closes it");
 });
 
 test("main lets the renderer read the front page through hub:room", () => {

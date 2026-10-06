@@ -15,8 +15,11 @@
 // many tasks run and finished today, as a small tree); "Share what I'm
 // building" at the foot is this member's own switch (main's
 // hubBuildingShare), off until they turn it on. It reads again
-// every minute while it is on screen and the window can be seen, and stops
-// when Friends lets it go (dispose). Everything is text: names and titles go
+// every minute while it is on screen and the window can be seen, and sooner
+// when someone arrives or leaves: while it shows, it holds the Lobby room
+// (hubSubscribe "lobby", as Rooms does) and a presence frame there reads the
+// page again, at most every ten seconds. It lets go when Friends does
+// (dispose). Everything is text: names and titles go
 // in with textContent, and nothing from the relay becomes a link.
 //
 // Pop-ups (popups.hear, on the module's one hub listener, Friends open or
@@ -177,6 +180,7 @@
     }
     listen(api);
     let timer = null, seq = 0, tried = false, gone = false;
+    let holding = false, soon = null, readAt = 0; // the Lobby room held for its presence frames
     let page = null; // the last front page read
     let sharing = false; // "Share what I'm building", as main's hub:status says
     let code = null; // { roomId, code, link } for the member's own room
@@ -243,6 +247,8 @@
         return;
       }
       page = answer;
+      readAt = Date.now();
+      if (!holding && hub.lobby) { holding = true; api.hubSubscribe?.("lobby", true, "rooms"); }
       root.dataset.state = "ready";
       status.textContent = "";
       if (page.ownRoom && code?.roomId !== page.ownRoom.id) {
@@ -443,12 +449,19 @@
     function hear(event) {
       if (gone || root.isConnected === false) { dispose(); return; }
       if (event?.type === "status" || event?.type === "credits" || event?.type === "played") void load();
+      // Someone arrived in or left the Lobby: read again, not more than once every ten seconds.
+      else if (event?.type === "presence" && event.roomId === "lobby" && !soon) {
+        soon = setTimeout(() => { soon = null; if (!gone) void load(); }, Math.max(1500, readAt + 10_000 - Date.now()));
+      }
     }
     function dispose() {
+      if (gone) return;
       gone = true;
       seq += 1;
       clearTimeout(timer);
+      clearTimeout(soon);
       timer = null;
+      if (holding) { holding = false; api.hubSubscribe?.("lobby", false, "rooms"); }
       if (current === handle) current = null;
     }
     const handle = { hear, dispose };
