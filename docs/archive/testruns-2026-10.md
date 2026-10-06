@@ -6,6 +6,23 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Playlists in the media menu land on main
+
+Branch `feat/playlists` in `C:\wt\playlists` (9064526: renderer/playlists.js, the music.js hooks, music.css, docs),
+rebased onto main d55269f with the CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged.
+
+Windows CI (`Studio checks`: build-booklet and its diff, check, the full `npm test` with the Python contracts, audit)
+green on the first push of the branch (run 37398280329, 7 min 19 s). On this PC, after each rebase: `npm run check`
+ok (285 targets, every selector used), eslint on the touched files clean, `npm run audit` no findings; music 123/123,
+playlists 12/12 (new), booklet_build, together_ui: 150 pass. Electron, run alone while another session's suites came
+and went: media_window_render 1/1 (69 s) and media_browser_render 1/1 (17 s), the two fixtures that open the media
+menu. command_render only opens it for the Tree reactions this does not change, and was not run here.
+
+Seen in a browser preview of the real renderer files with a stub bridge: the five starting points with thumbnails,
+Make it yours, Share's text round trip (multi-line, one line, the YouTube link alone), Browse's box handing a shared
+list to Playlists, Save to a playlist from a Browse card (and Escape closing only it), Play putting 11 videos at the
+front of Up next with the playing row marked; no console errors.
+
 ## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
 
 Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,

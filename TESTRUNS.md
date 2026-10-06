@@ -39,6 +39,34 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The 0.5 polish pass: a full gate, every window failure checked against main, and the fixes
+
+Branches `polish/0.5` (C:\wt\v05, with `polish/names` and `polish/tour` merged in; the owner merged it as #6, feb4a29)
+and `polish/0.5-b` (C:\wt\v05b, landed here), found with a fresh-profile run of the real app (C:\wt\probe: isolated
+profile, coding CLIs blocked, driven over CDP: every place and page in both modes, 12 themes, interface scale, menus).
+Fixed: a blank Studio menu after Social to Studio, Configuration and Friends leaving their layer claims, the old tree
+strip over Settings, Plans laid out by its own room, key tips over the welcome, the welcome's AI choice never applied
+on Continue (and never re-read after a sign-in in its own window: now on window focus, Check again and Continue),
+queued tasks shown as running with agents off, Events in the menu, the Help sheet's links, a place row (picker below
+760 px, out of the way below 520 px of height), the first task carried from Start a new app into the welcome,
+GETTING_STARTED.md rewritten for 0.5.
+
+Full `npm test` on polish/0.5 (ab7d4ea, about 2 h at 700 MB free): Node stage 7587 tests, 7572 pass, 1 fail (a test
+still matching the old setup advice "is selected"; fixed on main as 0c4633c), 14 skipped; Python contracts pass;
+Electron lane 69 tests, 62 pass, 6 fail, plus command_render. Each failing window suite then ran alone on a control
+worktree of main before the polish (4d23e3c, C:\wt\ctl) and on the branch: all passed on the control, so all were
+the polish's. Causes and fixes: the menu's default pin moved to 1600 px changed every fixture's layout at 1100 and
+1440 px (Size went to two columns, Home's composer moved with its drawer, the project map's Browse stayed open,
+unified_studio's hover dwell) - reverted to main's 1100 px default; Team's place row took the row a 400 px window
+needs (agent_setup_render) - picker and short-window rule; the frame's right margin overrode styles.css's narrow one
+below 900 px - restored; Size's kept-in-view picture now stays within two thirds of the pane with its caption and
+buttons (507 of 715 px before); fixtures that pinned old words (the welcome's titles and buttons, "Folder mapped" now
+"Project mapped", the hidden tree strip that command_render waited to see painting on a tab page).
+
+On the landed tree, one window suite at a time under the lease: agent_setup_render (one missed click, then 2/2), project_map_render, size_render, workflow_render, team_render, friends_render, shell_render, settings_render, setup_helper_render, unified_studio_render and command_render (84 s) all pass. `npm run test:fast`:
+7589 tests, 7572 pass, 14 skipped, 3 failed under about 400 MB free with the Electron lane busy and all 3 pass alone (paired_reconnect 6/6, resource_helper_win 1/1, rust_parity_git 4/4 in 188 s). `npm run check` ok, `npm run audit` 0 findings. Not run here: a second full `npm test` (the lane
+results above cover every suite the fixes touch).
+
 ## 2026-10-06 model_performance: the corrupt-ledger race, and the store's cache compares a fresh ledger's bytes
 
 Branch `fix/model-perf-race` (C:\wt\mperf), landed from `land/model-perf-race` (off main 86cfa93, main merged in up to 89639b4). Hosted Windows CI failed "corrupt ledger failures preserve the file and
@@ -493,23 +521,6 @@ rust_parity_snapshots 186, attempt_snapshots_host 177, worktree_actions 151, att
 pc_vault_turns 89; the median suite is 0.37 s. The 48 Electron suites sum to 2017 s (layout_contract_render 193,
 tabs_render 173, unified_studio_render 149, shell_render 139, sessions_render 128). From the next run each stage
 starts its slowest suites first. `npm run test:lease -- --slowest` prints the record.
-
-## 2026-10-06 Playlists in the media menu land on main
-
-Branch `feat/playlists` in `C:\wt\playlists` (9064526: renderer/playlists.js, the music.js hooks, music.css, docs),
-rebased onto main d55269f with the CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged.
-
-Windows CI (`Studio checks`: build-booklet and its diff, check, the full `npm test` with the Python contracts, audit)
-green on the first push of the branch (run 37398280329, 7 min 19 s). On this PC, after each rebase: `npm run check`
-ok (285 targets, every selector used), eslint on the touched files clean, `npm run audit` no findings; music 123/123,
-playlists 12/12 (new), booklet_build, together_ui: 150 pass. Electron, run alone while another session's suites came
-and went: media_window_render 1/1 (69 s) and media_browser_render 1/1 (17 s), the two fixtures that open the media
-menu. command_render only opens it for the Tree reactions this does not change, and was not run here.
-
-Seen in a browser preview of the real renderer files with a stub bridge: the five starting points with thumbnails,
-Make it yours, Share's text round trip (multi-line, one line, the YouTube link alone), Browse's box handing a shared
-list to Playlists, Save to a playlist from a Browse card (and Escape closing only it), Play putting 11 videos at the
-front of Up next with the playing row marked; no console errors.
 
 ## Read Before Any Tests
 
