@@ -41,7 +41,7 @@ Every feature and roadmap item says where it stands. Keep the labels honest:
 - Before a release: **In 0.4.4** (in the download today) and **Coming in 0.5** (built on `main`, ships with the next release). 0.4.5 and 0.4.6 were folded into 0.5.
 - After it: **In Studio** (in the download) and **New in 0.5** (new in the latest release).
 - **In progress** (with the release it's meant for, such as "In progress for 0.5"): being built now, not in a download yet.
-- **Rolling out**: built, but it needs the community rooms hub and the Discord link to be online.
+- **Rolling out**: built, but it needs a part outside Studio to be live first (today, the Studio bot’s side of Reach this PC from Discord).
 - **Planned**, and ideas with no date.
 
 The download stays on the latest published release.
