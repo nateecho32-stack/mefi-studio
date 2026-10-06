@@ -42,6 +42,8 @@
     "icon": "node scripts/make-icon.mjs",
     "test": "node scripts/run-all-tests.mjs",
     "test:fast": "node scripts/run-node-tests.mjs --fast",
+    "test:one": "node scripts/test-lease.mjs run --test-files --",
+    "test:lease": "node scripts/test-lease.mjs",
     "lint": "npx --yes eslint@9 --no-config-lookup -c eslint.config.js .",
     "package": "node scripts/package-portable.mjs",
     "package:release": "npm run build-booklet && node scripts/package-portable.mjs --release",

@@ -7,6 +7,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Test runs on one PC take turns.** When several sessions test Studio from
+  their own folders at once, `npm test` and the new `npm run test:one --
+  tests/x.test.mjs` now wait for their turn instead of starving each other:
+  one set of live test windows on the PC at a time, two batches of the quick
+  suites at a time, first come first served, with a line every 30 seconds
+  saying who is running. `npm run test:lease` shows the line-up. The quick
+  suites run as many at once as free memory allows, and every run starts its
+  slowest suites first, from timings each run records. `MEFI_TEST_LEASE=off`
+  turns the turns off.
 - **Studio times its own launch.** Trace shows one `[startup]` line per
   launch (app ready, first paint, each loading step and when the window was
   ready), and `--startup-report <file>` writes the same as JSON.

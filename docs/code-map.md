@@ -247,7 +247,11 @@ in the template's own line ending so a rebuild matches Git's checkout.
 `spec-collisions.mjs` and `check-testruns.mjs` make up `npm run check`;
 `run-all-tests.mjs` is `npm test`: the Node suites through `run-node-tests.mjs`,
 the Python contracts in `tools/` and the normalized-path lock, every leg run
-even when an earlier one fails. `append-testruns-row.mjs` is the
+even when an earlier one fails. `test-lease.mjs` makes test runs from every
+worktree and session on the PC take turns (one Electron lane, two parallel
+stages, first come first served; `npm run test:one` and `npm run test:lease`),
+and `test-timings.mjs` is the reporter that records each suite's wall time so
+the next run starts the slowest first. `append-testruns-row.mjs` is the
 write-side companion to the `check-testruns.mjs` gate: it lands a new row at
 the true top of the live region (the dated rows above the `## Read Before Any
 Tests` anchor — the archive below that anchor is frozen), under a

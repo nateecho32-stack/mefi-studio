@@ -16,7 +16,10 @@ Longer-form docs live under `docs/`; superseded ones under `docs/archive/`.
   `npm run host:core` has built the binary.
 - Run `npm run check`, `npm test`, and `npm run audit` for application changes.
   Run `npm run build-booklet` after editing renderer sources; the generated
-  `renderer/booklet.html` is committed.
+  `renderer/booklet.html` is committed. Run single suites with
+  `npm run test:one -- tests/x.test.mjs`, not a bare `node --test`: test runs
+  from every session on the PC take turns through it, and
+  `npm run test:lease` shows who holds the turn.
 - Before every commit, work through `.claude/skills/commit-check/SKILL.md`:
   look at recent commits first, send only what is new, keep older work
   reachable on request, stay fast and stable, log properly and lose nothing.
