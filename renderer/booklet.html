@@ -11299,6 +11299,8 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 #workspace-layer .today-b .ws-composer .composer-attach { padding: 0; font-size: var(--t-f12); }
 #workspace-layer .today-b .ws-composer .composer-attach:not(:has(.composer-thumb)):not(:has(.composer-attach-note:not(:empty))) { display: none; }
 #workspace-layer .today-b .ws-composer .file-input-tools { margin: 0; color: var(--t-soft); font-size: var(--t-f12); }
+/* Its idle "Drop text or code files" hint waits until it has news (file-inputs.js marks it data-idle), as in Social's box. */
+#workspace-layer .today-b .ws-composer .file-input-tools:has(> [role="status"][data-idle]) { display: none; }
 .today-b-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip) { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip):hover:not(:disabled) { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); }
@@ -13825,9 +13827,11 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .sx-itab.on { border-bottom-color: var(--gold); color: var(--ivory); }
 .sx-itab em { padding: 1px 5px; border-radius: var(--r-pill); background: var(--tint-gold-3); color: var(--gold-bright); font: 600 var(--x12)/1.2 var(--font-ui); }
 .sx-ibody { flex: 1 1 0; min-height: 0; padding: var(--x-pad); overflow-y: auto; overscroll-behavior: contain; }
-.sx-pane, .sx-own { display: grid; gap: var(--x-gap); align-content: start; min-width: 0; }
+/* minmax(0, 1fr): an automatic column is as wide as its widest item's smallest size, which pushed the project's cards past the
+   inspector's right edge at 1920 px (a member's state, a long value). */
+.sx-pane, .sx-own { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--x-gap); align-content: start; min-width: 0; }
 .sx-insp-empty { padding: 24px 16px; }
-.sx-icard { display: grid; gap: 8px; padding: var(--x-card); border: 1px solid var(--hairline); border-radius: var(--r-lg); background: var(--surface-raised); }
+.sx-icard { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 8px; padding: var(--x-card); border: 1px solid var(--hairline); border-radius: var(--r-lg); background: var(--surface-raised); }
 .sx-icard h4 { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0; color: var(--ivory); font: 650 var(--x14)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
 .sx-icard h4 .r { color: var(--dim); font: 500 var(--x12)/1.3 var(--font-ui); letter-spacing: 0; text-align: right; text-transform: none; }
 .sx-kv { display: flex; justify-content: space-between; gap: 12px; font-size: var(--x13); }

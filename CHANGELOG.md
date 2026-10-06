@@ -17,7 +17,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   its extra band, a board card no longer keeps an empty row under a one-line
   title, Studio's Today sets its greeting beside a smaller orb, and the
   session list puts the Git chip and the worktree count on one row. The
-  launch switch reads *Open Today on launch* in both modes.
+  launch switch reads *Open Today on launch* in both modes. Fixed: the
+  project's cards in Studio's inspector ran past the window's right edge at
+  1920 px (a long team member's name now ends in "…").
 - **0.5 polish: an easier first run, and menus that behave.** A new
   install now starts with **Start a new app** (Studio makes the folder) beside
   **Open a folder…**, and the Studio Daily says *Welcome to Studio*. The first

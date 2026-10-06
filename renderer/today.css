@@ -354,6 +354,8 @@
 #workspace-layer .today-b .ws-composer .composer-attach { padding: 0; font-size: var(--t-f12); }
 #workspace-layer .today-b .ws-composer .composer-attach:not(:has(.composer-thumb)):not(:has(.composer-attach-note:not(:empty))) { display: none; }
 #workspace-layer .today-b .ws-composer .file-input-tools { margin: 0; color: var(--t-soft); font-size: var(--t-f12); }
+/* Its idle "Drop text or code files" hint waits until it has news (file-inputs.js marks it data-idle), as in Social's box. */
+#workspace-layer .today-b .ws-composer .file-input-tools:has(> [role="status"][data-idle]) { display: none; }
 .today-b-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; min-width: 0; }
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip) { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip):hover:not(:disabled) { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); }
