@@ -39,6 +39,32 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Startup marks and the settings cache (S1) land on main
+
+Branch `land/s1-boot` in a cloud session (Linux, Node 24.21.0), stacked on S3 over main dfda798: the parked slice
+0605bcd re-applied (conflicts in main.cjs, booklet.js, build-booklet.mjs, booklet_build and module_purity resolved
+file by file; booklet.html rebuilt). The compile cache stays main's first statement and the marks block follows;
+startup-marks.js is first in BOOKLET_INPUTS (the updater's prefix pin moved with it); booklet.js keeps bootHealthy
+before the gate. readSettings asks the Rust store first and the cache fronts only the Electron path (6f2c154).
+
+Startup (tools/benchmark_startup.py, finished here, 5 smoke launches each under xvfb as a non-root user, medians):
+interactive (Vibe) 4,055 ms on main, 4,024 ms with the marks (no cost; loaded 2,624 / 2,616 ms). New marks, ms since
+main started: app ready 212, first paint 462, gate released 3,856; the gate opens at ~700 but the launch choice lands
+at ~2,200, and the release comes ~600 ms after the last step. readSettings on a 47 KB settings file (main.cjs's own
+code, 2,000 calls): ~460 us per call before, ~265 us with the cache, two stats instead of two file reads.
+Kill switches MEFI_STUDIO_STARTUP_MARKS=0 and MEFI_STUDIO_SETTINGS_CACHE=0, both pinned.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main; the WIP's unused
+`utimes` import removed). `npm run test:fast` with mefi-core built (`npm run host:core`): 7099 tests, 7062 pass, 34
+skipped, 3 fail, all as on clean main with the same binary: rust_modules image-store folder, and rust_parity_git
+"the actions answer like the JavaScript" and "the chip's host answers like git-host.cjs" (fail identically on
+dfda798 here; for the Rust chat). rust_parity_settings 3/3 ran (not skipped) with its new cached leg: main's JS with
+the cache on equals the uncached JS and Rust step for step. settings_cache 17/17 (new: Rust first, then the cache,
+then the files), startup_marks 10/10, startup_marks_renderer, booklet_build, release_updater and shell_frame_wiring
+(pins updated for launchGate and ?marks=0). Python test_mefi_studio_idle + updater 42 OK. Electron: startup_render and
+renderer_startup 12/12; for S3, task_overview_render, sessions_render, builder_render, fleet_render and
+workflow_render 5/5.
+
 ## 2026-10-06 Board pushes carry the rows that changed (S3) land on main
 
 Branch `wip/s3-row-push` in a cloud session (Linux, Node 24.21.0) over main 24d6756: the parked slice c682642
@@ -541,25 +567,6 @@ the owner's 20 GB OpenCode store, read-only: 12 of 12 reads identical;
 usageLedger cold 2.1 s vs 3.1 s, warm 22 ms vs ~190 ms. Live self-test on
 the Rust host: `eyes:state` and `worktrees:list` answered through Rust
 (rustCalls lists eyes.* and repo.sync.sync, repo.worktrees.listWorktrees).
-
-## 2026-10-03 Rust host stage 1 (Tauri) - first gate
-
-Branch `claude/app-migration-rust-b89096` (pushed as `wip/rust-host`), based on
-72c6f58. `npm run check` ok (264 targets). `npm test`: Node 6757 tests, 6743
-pass, 14 skipped, 0 fail (274 s); Python contracts 248 OK; normalized-path lock
-ok. The Electron lane skipped 39 suites in that run because the worktree had no
-`node_modules`; with a junction to the main checkout's, `evidence_capture`,
-`startup_render`, `task_overview_render` and `command_render` (56 s) each pass
-solo. `npm run lint`: 0 errors, no new warnings. `npm run audit`: ok.
-
-New: `tests/rust_host_bridge.test.mjs` (4 tests, no Rust needed: the wire's
-tagging, the engine shim over a real pipe against a fake host, the page bridge
-built from the real preload.cjs). `npm run host:test`: 13 Rust unit tests pass.
-On the host itself, with scratch userData: `--smoke` exits 0 (45 cards, models,
-assistant tick 1); `MEFI_HOST_SELFTEST` recorded a 1825x1175 page capture, 40
-invokes, 29 channels listened to, live pushes and an accepted toast. Electron
-44.4.1 safeStorage round trip verified both ways on synthetic data in a scratch
-app folder. No change to what the Electron build does.
 
 ## Read Before Any Tests
 

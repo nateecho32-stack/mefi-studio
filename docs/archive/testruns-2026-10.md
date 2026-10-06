@@ -6,6 +6,25 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-03 Rust host stage 1 (Tauri) - first gate
+
+Branch `claude/app-migration-rust-b89096` (pushed as `wip/rust-host`), based on
+72c6f58. `npm run check` ok (264 targets). `npm test`: Node 6757 tests, 6743
+pass, 14 skipped, 0 fail (274 s); Python contracts 248 OK; normalized-path lock
+ok. The Electron lane skipped 39 suites in that run because the worktree had no
+`node_modules`; with a junction to the main checkout's, `evidence_capture`,
+`startup_render`, `task_overview_render` and `command_render` (56 s) each pass
+solo. `npm run lint`: 0 errors, no new warnings. `npm run audit`: ok.
+
+New: `tests/rust_host_bridge.test.mjs` (4 tests, no Rust needed: the wire's
+tagging, the engine shim over a real pipe against a fake host, the page bridge
+built from the real preload.cjs). `npm run host:test`: 13 Rust unit tests pass.
+On the host itself, with scratch userData: `--smoke` exits 0 (45 cards, models,
+assistant tick 1); `MEFI_HOST_SELFTEST` recorded a 1825x1175 page capture, 40
+invokes, 29 channels listened to, live pushes and an accepted toast. Electron
+44.4.1 safeStorage round trip verified both ways on synthetic data in a scratch
+app folder. No change to what the Electron build does.
+
 ## 2026-10-03 Weak-drive check without administrator rights
 
 `fsutil fsinfo volumeinfo C:\` refuses a normal user on the owner's PC
