@@ -16,6 +16,9 @@ import adapter from "../scripts/paired-worker-host.cjs";
 
 const spec={repo:"owner/mefi-studio",commit:"a".repeat(40),profile:"studio-check"};
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+// Waits for a condition rather than a fixed time: these run over real HTTP on
+// a PC that is often busy with other suites.
+async function until(check,what,ms=5000){const end=Date.now()+ms;while(!check()){if(Date.now()>end)throw new Error(`timed out waiting: ${what}`);await pause(5);}}
 const network=()=>Object.assign(new Error("fetch failed"),{status:undefined});
 const stale=()=>Object.assign(new Error("Assignment fence is stale."),{status:409});
 
@@ -55,13 +58,14 @@ test("a worker below the coordinator's oldest protocol is refused with words tha
 
 test("an unreachable coordinator is retried with backoff; wake() tries at once; a too-old worker waits for its update",async t=>{
   const directory=await mkdtemp(path.join(os.tmpdir(),"mefi-paired-backoff-"));t.after(()=>rm(directory,{recursive:true,force:true}));
-  let fail=network,behindCalls=0;
-  const request=async action=>{if(action!=="poll")return {ok:true};if(fail)throw fail();return {ok:true,job:null,app:"0.5.0"};};
+  let fail=network,behindCalls=0,polls=0;
+  const request=async action=>{if(action!=="poll")return {ok:true};polls++;if(fail)throw fail();return {ok:true,job:null,app:"0.5.0"};};
   const worker=await workerModule.createWorker({directory,request,run:async()=>({ok:true}),pollMs:60_000,maxBackoffMs:240_000,updateWaitMs:600_000,onBehind:()=>{behindCalls++;}});
   t.after(()=>worker.stop());
-  worker.start();await pause(20);
+  worker.start();await until(()=>worker.status().link==="reconnecting","the first poll fails");
   assert.equal(worker.status().link,"reconnecting");assert.equal(worker.status().retryInMs,60_000);
-  worker.wake();await pause(20);
+  await worker.tick();assert.equal(worker.status().retryInMs,120_000);
+  const before=polls;worker.wake();await until(()=>polls>before,"the wake poll");
   assert.equal(worker.status().retryInMs,60_000,"wake() starts the backoff over");
   await worker.tick();assert.equal(worker.status().retryInMs,120_000,"each miss doubles the wait");
   await worker.tick();await worker.tick();assert.equal(worker.status().retryInMs,240_000,"up to the cap");
@@ -70,7 +74,7 @@ test("an unreachable coordinator is retried with backoff; wake() tries at once; 
   assert.equal(worker.status().link,"update");assert.equal(worker.status().update,"worker");assert.equal(worker.status().coordinatorApp,"0.6.0");
   assert.equal(worker.status().retryInMs,600_000,"it asks again every ten minutes, not every minute");
   assert.equal(behindCalls,1,"the update look runs once per change, not per poll");
-  fail=null;worker.wake();await pause(20);
+  fail=null;worker.wake();await until(()=>worker.status().link==="connected","the reconnect");
   assert.equal(worker.status().link,"connected");assert.equal(worker.status().retryInMs,null);assert.equal(worker.status().update,null);
 });
 
@@ -81,11 +85,11 @@ test("a check rides out missed heartbeats while its lease lasts and stops when t
   const request=async(action,payload)=>{if(action==="heartbeat"&&beats)throw beats();if(action==="progress"&&beats)throw beats();return send(action,payload);};
   const run=async options=>{signal=options.signal;await options.onProgress("working");await new Promise(resolve=>{finish=resolve;options.signal.addEventListener("abort",resolve);});return {ok:true,summary:"done"};};
   const worker=await workerModule.createWorker({directory:path.join(h.directory,"worker"),request,run,heartbeatMs:5,leaseMs:30_000,clock:()=>now});
-  const ticking=worker.tick();await pause(30);
+  const ticking=worker.tick();await until(()=>signal&&worker.status().busy,"the check starts");
   assert.equal(worker.status().busy,true,"the check is running");
   beats=network;await pause(40);
   assert.equal(signal.aborted,false,"a dropped connection inside the lease does not stop the check");
-  now=30_000;await pause(30);
+  now=30_000;await until(()=>signal.aborted,"the lease runs out");
   assert.equal(signal.aborted,true,"once the lease would run out it stops");
   await ticking;
   const second=await setup(t);await second.coordinator.enqueue({key:"request-two",spec});
@@ -93,8 +97,8 @@ test("a check rides out missed heartbeats while its lease lasts and stops when t
   let gone=false,signalTwo=null;
   const requestTwo=async(action,payload)=>{if(action==="heartbeat"&&gone)throw stale();return sendTwo(action,payload);};
   const workerTwo=await workerModule.createWorker({directory:path.join(second.directory,"worker"),request:requestTwo,run:async options=>{signalTwo=options.signal;await new Promise(resolve=>options.signal.addEventListener("abort",resolve));return {ok:false};},heartbeatMs:5,leaseMs:30_000,clock:()=>0});
-  const tickingTwo=workerTwo.tick();await pause(30);
-  gone=true;await pause(30);
+  const tickingTwo=workerTwo.tick();await until(()=>signalTwo,"the second check starts");
+  gone=true;await until(()=>signalTwo.aborted,"the 409");
   assert.equal(signalTwo.aborted,true,"a 409 stops it at once");
   await tickingTwo;finish?.();
 });
