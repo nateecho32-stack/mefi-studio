@@ -39,6 +39,31 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The Social/Studio names, the scroll fix, the social polish and the models page land while the PCs are offline
+
+Landed by the planning chat (cloud, Linux, Node 24.21.0) after the owner's PC became unreachable at 02:35 UTC. Each
+branch's tip had green Windows CI: ui/social-studio-names 2ee0106 (merge e2d2034); fix/doc-scroll ace7d22 (efec563,
+plus bf0d0ce: the rule split so every selector starts with html[data-frame], the one pin its CI failed);
+wip/social-polish a676b05 (1e54cc5; tabs.js keeps main's agents block and takes "lobby"); wip/models bc490ff (6c9126b;
+both sides kept in main.cjs, executor-core.cjs, agents.js and build-booklet.mjs, the teamLayout() calls dropped since the
+classic layout is gone; d9dad85 updates cli_deadline_host's pin). booklet.html rebuilt after each merge. Hosted Windows
+CI green on 1e54cc5 and d9dad85; main fast-forwarded to d9dad85.
+
+Here, as a non-root user under xvfb: npm run check ok, lint 0 errors (47 warnings, as before), audit 0/0, test:fast ok.
+Every real-window suite, one at a time, before the merges (55494c6) and after them: agent_setup_render, sessions_render
+and today_render failed only after them, each on a fixture that described the old state. Agent setup opened Seats and
+models without a target, and the seat rows now fold under More settings (c385a65 names the row, as an old way in does).
+Sessions pinned " · Vibe" and "Build · task" (c385a65, 15bfec3). Today asserted that Tab never leaves the document,
+which held only because the order walked into the Model catalog's 28 controls under the frame's layers; with
+fix/doc-scroll the order wraps once through the document and back to the frame, which 15bfec3 allows, pinning that no
+stop lands under the layers. After the fixes all three pass; sessions_render's "the keyboard starts on the open
+project" failed once and passed twice, the known flake. Failing on Linux both before and after, and ok on Windows per
+the ui/v2-only row: team_render (Providers sideways at 600x560@1.5), unified_studio_render and project_map_render (the
+map at 600x560@1.5), settings_render (Report a problem's panels at 600x560@1.5), workflow_render (the authoring layout
+at 600) and command_render (task pixels): Linux fonts and software rendering. friends_render and friends_two_render
+pass; their screenshots show the open room as a chat app, rooms as cards, each place's own icon, two Studios catching
+up after one was away, and no scroll arrow over the status bar.
+
 ## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
 
 Branch `wip/social-polish` in `C:\wt\polish` (bea5ec9 an open room like a chat app, rooms as cards, Friends icons,
@@ -513,26 +538,6 @@ sessions_render (with its new Today gallery: Build's Today at 1920x1080 and
 (1 skipped); path lock ok.
 Captures (1920x1080) in `C:\wt\gap\after-today\final\`, prototype-left
 side-by-sides in `C:\wt\gap\after-today\compare\`.
-## 2026-10-04 The v2 Settings, first run and plan draft page land on main
-
-Branch `land/ui-settings` in `C:\wt\land-ui`: origin/main 349802a with
-wip/ui-settings cd17a4f merged file by file (CHANGELOG keeps both sides'
-entries; TESTRUNS keeps every row of both, checked heading by heading, with a
-row main had rotated left in the October archive only; booklet.html
-regenerated).
-
-Full `npm test` on d2d5ae4 (a Today agent's fixture ran beside it for its
-first minutes): Node 6950 tests, 6934 pass, 14 skipped, 2 fail, both pass
-alone: rust_parity_snapshots (3/3; under load one side's 10 s `rev-parse HEAD`
-timed out and made its start picture without a parent: same tree, other
-commit id) and sync_changes (5/5; a push to a local bare repo failed under
-memory pressure). Electron lane 76: 72 pass, 1 skipped, 3 fail:
-layout_contract_render and shell_render (as on clean main on this PC) and
-tree_dynamics_render, which fails now and then on this PC (failed once alone
-here, then passed 3 times alone; the branch's own run saw it fail on c01604e
-too). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run
-check` ok. Side-by-sides: `C:\wt\gap\after-settings\compare\`.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.

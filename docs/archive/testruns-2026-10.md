@@ -6,6 +6,26 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 The v2 Settings, first run and plan draft page land on main
+
+Branch `land/ui-settings` in `C:\wt\land-ui`: origin/main 349802a with
+wip/ui-settings cd17a4f merged file by file (CHANGELOG keeps both sides'
+entries; TESTRUNS keeps every row of both, checked heading by heading, with a
+row main had rotated left in the October archive only; booklet.html
+regenerated).
+
+Full `npm test` on d2d5ae4 (a Today agent's fixture ran beside it for its
+first minutes): Node 6950 tests, 6934 pass, 14 skipped, 2 fail, both pass
+alone: rust_parity_snapshots (3/3; under load one side's 10 s `rev-parse HEAD`
+timed out and made its start picture without a parent: same tree, other
+commit id) and sync_changes (5/5; a push to a local bare repo failed under
+memory pressure). Electron lane 76: 72 pass, 1 skipped, 3 fail:
+layout_contract_render and shell_render (as on clean main on this PC) and
+tree_dynamics_render, which fails now and then on this PC (failed once alone
+here, then passed 3 times alone; the branch's own run saw it fail on c01604e
+too). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run
+check` ok. Side-by-sides: `C:\wt\gap\after-settings\compare\`.
+
 ## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
 
 Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,
