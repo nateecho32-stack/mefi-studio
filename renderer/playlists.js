@@ -124,17 +124,26 @@
     if (ids.length < 2 || ids.some((id) => !id)) return "";
     return `https://www.youtube.com/watch_videos?video_ids=${ids.join(",")}&title=${encodeURIComponent(list.name)}`;
   }
-  // Links sit in <…> so Discord shows the text, not a dozen previews.
-  function shareText(list, info) {
-    const lines = [`${SHARE_HEAD} ${list.name}`];
-    list.items.forEach((item, index) => {
+  // Links sit in <…> so Discord shows the text, not a dozen previews. With a
+  // `max` (a chat message's length) the last lines give way first; the
+  // YouTube link still names every video, so nothing is lost on the way back.
+  function shareText(list, info, { max = Infinity } = {}) {
+    const head = `${SHARE_HEAD} ${list.name}`;
+    const lines = list.items.map((item, index) => {
       const id = plainYouTube(item.url, info);
       const words = [item.title, item.channel && `· ${item.channel}`, item.duration && `· ${item.duration}`].filter(Boolean).join(" ");
-      lines.push(`${index + 1}. ${words ? `${words} ` : ""}<${id ? `https://youtu.be/${id}` : item.url}>`);
+      return `${index + 1}. ${words ? `${words} ` : ""}<${id ? `https://youtu.be/${id}` : item.url}>`;
     });
     const all = youtubeAll(list, info);
-    if (all) lines.push(`${PLAY_ALL} <${all}>`);
-    return lines.join("\n");
+    const tail = all ? `${PLAY_ALL} <${all}>` : "";
+    const join = (kept) => {
+      const left = lines.length - kept;
+      const more = left ? `…and ${left} more video${left === 1 ? "" : "s"}${all ? " in the YouTube link" : ""}` : "";
+      return [head, ...lines.slice(0, kept), more, tail].filter(Boolean).join("\n");
+    };
+    let kept = lines.length;
+    while (kept > 0 && join(kept).length > max) kept -= 1;
+    return join(kept);
   }
   // A shared list back from text: the share text above (whole, or pasted into
   // a one-line box that lost its line breaks), a YouTube watch_videos link,
@@ -170,9 +179,15 @@
       }
       items.push(item);
     }
-    if (!items.length && watch) {
+    // The YouTube link names every video: those the lines left out (a long
+    // list cut to fit a message, or the link on its own) join untitled.
+    if (watch) {
       const ids = String(watch.searchParams.get("video_ids") || "").split(",").filter((id) => /^[\w-]{11}$/.test(id));
-      for (const id of ids.slice(0, ITEM_LIMIT)) { const item = cleanItem({ url: `https://www.youtube.com/watch?v=${id}` }, info); if (item && !items.some((known) => known.url === item.url)) items.push(item); }
+      for (const id of ids) {
+        if (items.length >= ITEM_LIMIT) break;
+        const item = cleanItem({ url: `https://www.youtube.com/watch?v=${id}` }, info);
+        if (item && !items.some((known) => known.url === item.url)) items.push(item);
+      }
     }
     if (watch && !name) name = clean(watch.searchParams.get("title"), NAME_LIMIT);
     if (!items.length || !(head || watch || loose)) return null;
@@ -474,6 +489,186 @@
     mark(button("Copy as text", "primary mini", tools, () => copy(text, "Copied. Paste it in Discord, a room or any chat.")), "copy");
     if (all) button("Copy the YouTube link", "ghost mini", tools, () => copy(all, "Copied the YouTube link. It plays the whole list on YouTube, and Studio adds it back too."));
     if (text.length > DISCORD_MESSAGE) element("small", null, `That's longer than one Discord message (${DISCORD_MESSAGE.toLocaleString("en-US")} characters).${all ? " The YouTube link fits, and Studio reads it back too." : " Send it in two parts."}`, panel);
+    friendsBox = element("div", "music-pl-friends", null, panel);
+    friendsBox.setAttribute("aria-label", "Send it to friends");
+    friendsList = list;
+    // Rooms are looked up when Share opens on a list, and again after a minute.
+    if (friends.list !== keyOf(list) || Date.now() - friends.at > 60000) { friends.list = keyOf(list); friends.at = Date.now(); friends.note = ""; friends.go = null; void loadFriends(); }
+    else paintFriends();
+  }
+
+  // ---- Friends: post a list in a room, or put it on the Project hub. Both go
+  // through the bridge's room service calls (main.cjs "Rooms hub"), and
+  // neither needs anything new from the relay: a room gets the share text as
+  // a message (2,000 characters at most), the hub one YouTube link that plays
+  // every video. Studio shows either as a playlist again (card, fromLink).
+  const ROOM_TEXT_CHARS = 2000, HUB_LINK_CHARS = 512;
+  const FRIEND_REASONS = {
+    "links-not-allowed": "Sharing links opens after your first day in the Void Engine server.",
+    "already-shared": "This playlist is already on the Project hub.",
+    "owned-projects": "You have 5 things on the Project hub. Remove one there to add this.",
+    "daily-shares": "You have shared 3 things on the Project hub today. Try again tomorrow.",
+    "hub-full": "The Project hub is full right now.",
+    "bad-link": "The Project hub didn't take this playlist's link.",
+    "rate-limited": "Slow down a moment, then try again.",
+    "read-only": "Your account is read-only in the server right now.",
+    paused: "The room service is paused right now.",
+    "not-member": "You're not in that room any more.",
+    closed: "That room is closed.",
+    locked: "That room is locked.",
+    offline: "Not connected to the room service.",
+    timeout: "The room service didn't answer in time. Try again.",
+    auth: "Your Discord sign-in has run out. Sign in again in Friends.",
+    unsupported: "This room service doesn't have the Project hub yet.",
+  };
+  const friendReason = (answer, fallback) => FRIEND_REASONS[answer?.reason] || FRIEND_REASONS[answer?.error] || fallback;
+  // phase: idle, loading, unsupported, signed-out, offline, ready.
+  const friends = { phase: "idle", rooms: [], room: null, busy: false, note: "", error: false, go: null, list: null, at: 0 };
+  let friendsBox = null, friendsList = null;
+  const hubBridge = () => window.mefiStudio;
+  async function loadFriends() {
+    const hub = hubBridge();
+    if (typeof hub?.hubStatus !== "function" || typeof hub?.hubRoom !== "function") { friends.phase = "unsupported"; paintFriends(); return; }
+    friends.phase = "loading"; paintFriends();
+    let status = null;
+    try { status = (await hub.hubStatus())?.status ?? null; } catch {}
+    if (!status?.configured && !status?.communityConfigured) friends.phase = "unsupported";
+    else if (!status.linked) friends.phase = "signed-out";
+    else if (status.state !== "ready") friends.phase = "offline";
+    else {
+      let answer = null;
+      try { answer = await hub.hubRooms(); } catch {}
+      friends.rooms = (Array.isArray(answer?.rooms) ? answer.rooms : []).filter((room) => ["owner", "member"].includes(room?.you) && room.status === "active" && typeof room.id === "string");
+      if (!friends.rooms.some((room) => room.id === friends.room)) friends.room = friends.rooms.find((room) => room.id === "lobby")?.id ?? friends.rooms[0]?.id ?? null;
+      friends.phase = "ready";
+    }
+    paintFriends();
+  }
+  const goFriends = (place, extra = {}) => window.MefiNav?.go?.("friends-page", { place, ...extra });
+  function paintFriends() {
+    const box = friendsBox, list = friendsList;
+    if (!box?.isConnected || !list) return;
+    box.textContent = "";
+    element("strong", null, "Send it to friends", box);
+    if (friends.phase === "loading" || friends.phase === "idle") { element("small", null, "Looking for your rooms…", box); return; }
+    if (friends.phase === "unsupported") { element("small", null, "Rooms and the Project hub need the Studio desktop app's room service.", box); return; }
+    if (friends.phase === "signed-out") {
+      element("small", null, "Sign in with Discord in Friends to post this in a room or on the Project hub.", box);
+      button("Open Friends", "ghost mini", element("div", "music-link-tools", null, box), () => goFriends("lobby"));
+      return;
+    }
+    if (friends.phase === "offline") {
+      element("small", null, "Studio isn't connected to the room service right now.", box);
+      button("Connect", "ghost mini", element("div", "music-link-tools", null, box), async () => { try { await hubBridge().hubConnect?.(); } catch {} void loadFriends(); });
+      return;
+    }
+    // A room: the share text as a message.
+    const roomRow = element("div", "music-pl-friend-row", null, box);
+    if (friends.rooms.length) {
+      const label = element("label", "music-pl-field", null, roomRow);
+      element("span", null, "Post in a room", label);
+      const pick = element("select", null, null, label);
+      for (const room of friends.rooms) { const option = element("option", null, room.name, pick); option.value = room.id; option.selected = room.id === friends.room; }
+      pick.value = friends.room ?? "";
+      pick.addEventListener("change", () => { friends.room = pick.value; });
+      const post = button("Post", "ghost mini", roomRow, () => void postToRoom(list));
+      post.disabled = friends.busy || !list.items.length;
+    } else element("small", null, "You're not in any rooms yet: join one in Friends › Rooms.", roomRow);
+    // The Project hub: one YouTube link that plays the list.
+    const hubRow = element("div", "music-pl-friend-row", null, box);
+    const link = hubLink(list);
+    if (link) {
+      element("small", null, link.count < list.items.length ? `The Project hub keeps one link: it holds the first ${count(link.count)}.` : "Friends play it from the Project hub, and plays earn you both credits.", hubRow);
+      const add = button("Add to the Project hub", "ghost mini", hubRow, () => void addToHub(list));
+      add.disabled = friends.busy;
+    } else element("small", null, "Only playlists of YouTube videos go on the Project hub: it shares one YouTube link.", hubRow);
+    if (friends.note) {
+      const said = element("p", "music-pl-friends-note", friends.note, box);
+      said.setAttribute("role", "status"); said.dataset.error = String(friends.error);
+      if (friends.go) button(friends.go.label, "ghost mini", box, () => goFriends(friends.go.place, friends.go.extra));
+    }
+  }
+  // The hub's link: YouTube's play-them-all link for as many videos as fit.
+  function hubLink(list) {
+    const ids = list.items.map((item) => plainYouTube(item.url, api.info));
+    if (!ids.length || ids.some((id) => !id)) return null;
+    const title = encodeURIComponent(list.name);
+    for (let size = ids.length; size > 0; size -= 1) {
+      const url = `https://www.youtube.com/watch_videos?video_ids=${ids.slice(0, size).join(",")}&title=${title}`;
+      if (url.length <= HUB_LINK_CHARS) return { url, count: size };
+    }
+    return null;
+  }
+  async function friendCall(work, done) {
+    if (friends.busy) return;
+    friends.busy = true; friends.note = ""; friends.go = null; paintFriends();
+    let answer = null;
+    try { answer = await work(); } catch {}
+    friends.busy = false;
+    done(answer);
+    paintFriends();
+  }
+  function postToRoom(list) {
+    const room = friends.rooms.find((item) => item.id === friends.room);
+    if (!room) return Promise.resolve();
+    const text = shareText(list, api.info, { max: ROOM_TEXT_CHARS });
+    return friendCall(() => hubBridge().hubRoom("sendMessage", room.id, text), (answer) => {
+      friends.error = !answer?.ok;
+      friends.note = answer?.ok ? `Posted in ${room.name}. Friends there see it as a playlist they can play or save.` : `Not posted: ${friendReason(answer, "try again.")}`;
+      friends.go = answer?.ok ? { label: `Open ${room.name}`, place: "rooms", extra: { room: room.id } } : null;
+    });
+  }
+  function addToHub(list) {
+    const link = hubLink(list);
+    if (!link) return Promise.resolve();
+    const channels = [...new Set(list.items.slice(0, link.count).map((item) => item.channel).filter(Boolean))];
+    const blurb = clean(`A playlist of ${count(link.count)}${channels.length ? `: ${channels.slice(0, 6).join(", ")}${channels.length > 6 ? " and more" : ""}` : ""}.`, 300);
+    return friendCall(() => hubBridge().hubProjects("shareProject", { url: link.url, title: clean(list.name, 100), blurb, kind: "other" }), (answer) => {
+      friends.error = !answer?.ok;
+      friends.note = answer?.ok ? "It's on the Project hub. When a friend plays it for two minutes, you both earn credits." : `Not added: ${friendReason(answer, "try again.")}`;
+      friends.go = answer?.ok ? { label: "Open the Project hub", place: "hub" } : null;
+    });
+  }
+
+  // ---- A shared list where friends talk: a room message whose text is a
+  // shared playlist (rooms.js asks card), or a Project hub link to YouTube's
+  // play-them-all (project-hub.js asks fromLink and cardFor), shows as a
+  // playlist to play or keep.
+  const sameList = (a, b) => a.name === b.name && a.items.length === b.items.length && a.items.every((item, index) => item.url === b.items[index].url);
+  function keepShared(parsed) {
+    const known = store.lists.find((list) => sameList(list, parsed));
+    if (known) return { ok: true, id: known.id, already: true };
+    const list = createList(parsed.name, parsed.items, "shared");
+    if (!list) return { ok: false };
+    say(`${list.name} is in your playlists, under Music & video › Playlists.`);
+    paint();
+    return { ok: true, id: list.id };
+  }
+  function cardFor(parsed, { from = "", play = true, title = true } = {}) {
+    if (!api || !parsed?.items?.length) return null;
+    const card = element("section", "music-pl-shared");
+    card.setAttribute("aria-label", `Playlist: ${parsed.name}`);
+    cover(card, parsed, "music-pl-cover music-pl-shared-cover");
+    const words = element("div", "music-pl-shared-words", null, card);
+    if (title) { element("small", "music-pl-kicker", "Playlist", words); element("strong", null, parsed.name, words); }
+    const length = lengthLabel(parsed.items);
+    element("small", "music-pl-meta", [count(parsed.items.length), length && `about ${length}`, from && `shared by ${from}`].filter(Boolean).join(" · "), words);
+    const tools = element("div", "music-link-tools", null, words);
+    if (play) actionButton("play", "Play", "primary mini", tools, () => api.play(parsed.items, parsed.name)).setAttribute("aria-label", `Play ${parsed.name}`);
+    const saved = store.lists.some((list) => sameList(list, parsed));
+    const keep = button(saved ? "Saved" : "Save", "ghost mini", tools, () => {
+      const kept = keepShared(parsed);
+      if (kept.ok) { keep.textContent = "Saved"; keep.disabled = true; open.hidden = false; open.dataset.id = kept.id; }
+    });
+    keep.disabled = saved;
+    keep.setAttribute("aria-label", saved ? `${parsed.name} is in your playlists` : `Save ${parsed.name} to your playlists`);
+    const open = button("Open in Playlists", "ghost mini", tools, () => window.MefiPlaylists?.open?.(open.dataset.id || store.lists.find((list) => sameList(list, parsed))?.id || null));
+    open.hidden = !saved;
+    const more = element("details", "music-pl-shared-list", null, words);
+    element("summary", null, "The videos", more);
+    const ol = element("ol", null, null, more);
+    for (const item of parsed.items) element("li", null, [titleOf(item), item.channel].filter(Boolean).join(" · "), ol);
+    return card;
   }
   function copy(text, done) {
     try {
@@ -714,6 +909,26 @@
     // that carry links (a room, a chat).
     shareText: (key) => { const list = init() ? listFor(key) : null; return list ? shareText(list, api.info) : ""; },
     parse: (text) => init() ? parseShare(text, api.info, { loose: true }) : null,
+    // Where friends talk: a room message that is a shared playlist, as a card
+    // to play or save (null for any other text); a Project hub link that is
+    // YouTube's play-them-all, as a playlist named after its card.
+    card: (text, options = {}) => {
+      if (!init() || typeof text !== "string" || !/Mefi Studio playlist:|youtube\.com\/watch_videos/i.test(text)) return null;
+      const parsed = parseShare(text, api.info);
+      return parsed ? cardFor(parsed, options) : null;
+    },
+    fromLink: (url, name = "") => {
+      if (!init()) return null;
+      let link;
+      try { link = new URL(String(url ?? "")); } catch { return null; }
+      if (link.protocol !== "https:" || !/^(?:www\.|m\.)?youtube\.com$/i.test(link.hostname) || link.pathname !== "/watch_videos") return null;
+      const parsed = parseShare(link.href, api.info);
+      const title = clean(name, NAME_LIMIT);
+      return parsed ? { ...parsed, name: title || parsed.name } : null;
+    },
+    cardFor: (parsed, options = {}) => init() ? cardFor(parsed, options) : null,
+    play: (parsed) => Boolean(init() && parsed?.items?.length && api.play(parsed.items, parsed.name)),
+    keep: (parsed) => init() && parsed?.items?.length ? keepShared(parsed) : { ok: false },
     model: { parseShare, shareText, youtubeAll, cleanList, lengthLabel, SHARE_HEAD, ITEM_LIMIT, LIST_LIMIT },
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

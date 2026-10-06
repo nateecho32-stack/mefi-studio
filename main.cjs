@@ -2549,7 +2549,7 @@ function hubRoom(method, args) {
 // public link in the browser and, two minutes later while Studio is still
 // running, tells the relay the play happened, which credits its owner and
 // this member. A play still waiting is kept once per project.
-const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1, reportProject: 2 });
+const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 2, star: 2, feature: 1, reportProject: 2 });
 const hubPlayTimers = new Map(); // projectId -> timeout
 function hubProjects(method, args) {
   const arity = Object.hasOwn(HUB_PROJECT_METHODS, method) ? HUB_PROJECT_METHODS[method] : -1;
@@ -2563,7 +2563,10 @@ function hubProjects(method, args) {
     let link = null;
     try { link = new URL(play.url); } catch { link = null; }
     if (link?.protocol !== "https:") return { ok: false, error: "bad-link" };
-    await shell.openExternal(link.href);
+    // A playlist (YouTube's play-them-all link) may play in Studio's own
+    // player (renderer/playlists.js): the play still counts, nothing opens.
+    const here = plain[1]?.here === true && /^(?:www\.|m\.)?youtube\.com$/i.test(link.hostname) && link.pathname === "/watch_videos";
+    if (!here) await shell.openExternal(link.href);
     if (hubPlayTimers.has(projectId)) return { ok: true, minMs: play.minMs, waiting: true };
     const timer = setTimeout(() => {
       hubPlayTimers.delete(projectId);

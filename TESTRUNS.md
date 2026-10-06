@@ -66,6 +66,66 @@ Electron's download cache and an `npm ci --ignore-scripts` scratch copy; all 15 
 --version` is 44.4.1 and window suites pass again. A window suite that failed oddly on this PC between 08:26 and 08:31
 should be run again.
 
+## 2026-10-06 A test stage that runs past its limit is stopped with everything it started
+
+Branch `wip/test-speed` (C:\wt\speed), main 017d51a merged in. Overnight an economy-events gate held the machine-wide
+Electron lane about nine hours: media_window_render and layout_contract_render each kept an Electron window alive
+after their own kill timers failed (29 to 300 MB free), so `node --test` never finished, until killed by hand.
+run-node-tests now gives each stage a limit (scripts/test-lease.mjs stageLimitMs: 120 min for the parallel stage,
+90 for the Electron lane, 30 for each exclusive fixture; MEFI_TEST_STAGE_LIMIT_MIN) and past it ends the stage's
+whole tree (killTree: taskkill /T, three tries, then SIGKILL), names the suites still running and fails the stage.
+test_lease.test.mjs no longer spells a fixture name, so it runs with the quick suites and in test:fast.
+
+Tried and dropped, measured alone: running the parity suites' JavaScript and Rust halves side by side.
+rust_parity_repo went from 115 s to 75 s, but rust_parity_git from 78 s to 366 s with a failure (both halves start
+many processes at once; at ~500 MB free a filesystem check timed out), and at the 4-wide width this laptop usually
+gets, the parallel stage is bound by total work, which side-by-side halves do not reduce.
+
+`npm run check` ok, eslint on the changed files 0 problems, `npm run audit` 0 findings, hosted CI (ci.yml, Windows)
+green on e2eb757 in 7 min 9 s. `npm run test:fast` here at 4 suites at a time (223 to 510 MB free while other
+sessions ran Electron suites through the lease): 7409 tests, 7392 pass, 14 skipped, 2 fail plus one cancelled, all
+process-heavy suites under that load: git_actions "a push maps sign-in and network failures", project_preview "a
+real npm preview process reaches readiness" and rust_parity_repo "sync answers the same". Alone through `npm run
+test:one`: 85 of 86 pass; rust_parity_repo's sync test hit its own 240 s timeout again at ~200 MB free (it passed
+in 115 s on main's copy earlier today, and this branch does not touch it). The new suites pass:
+run_node_tests_stage_limit (a copy of the runner meets a suite kept alive by a child that never ends: stopped in
+about 5 s, named, the run failed, the turn given back, no process left) and test_lease 13/13.
+
+## 2026-10-06 Sharing playlists in rooms and on the Project hub lands on main
+
+Branch `feat/playlists-share` in `C:\wt\playlists` (aadb6ad; parked first as `wip/playlists-share` 48e3a8a), rebased
+onto main e0e5a46 with the CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged. No relay
+change and no deploy: a room gets the share text as a message, the hub a YouTube `watch_videos` link.
+
+On this PC: `npm run check` ok (296 targets, every selector used), eslint on the touched files adds no warnings (the
+5 in main.cjs are older), `npm run audit` no findings. Node, run together: playlists 16/16 (4 new), rooms_ui and
+project_hub_ui (one new case each; the HUB_PROJECT_METHODS pin now reads playProject: 2 and pins the `here` rule),
+music, booklet_build, together_ui, friends_front_ui and every hub_* suite: 234 pass, 0 fail. Windows CI (`Studio
+checks`) runs on this commit before the fast-forward. Electron suites were not run here: the change adds no window
+fixture and the media ones passed this morning on the same menu; friends_render (12 px text rule) is covered by the
+card's 12 px floor in music.css.
+
+Seen in a browser preview of the real renderer files with a stub room service: Share › Send it to friends lists only
+active rooms you're in (the Lobby first), Post sent 1,337 characters to the Lobby, the chat card plays and saves once
+(then Saved and Open in Playlists), Add to the Project hub sent a 226-character link with a blurb naming the channels,
+and the hub shelf offers Save; no console errors.
+
+## 2026-10-06 A way to Routing opens More settings at Routing; the background check reads the Settings strip where Settings shows
+
+Branch `fix/routing-narrow` in `C:\wt\routing`, off main 017d51a. The full Electron lane on main 0b2fa14 (here, one
+suite at a time under the test lease) had 43 of 47 ok: command_render and today_render passed alone again (flakes),
+shell_render stops at the display-scaling check as before, and unified_studio_render failed every time at
+"#ai-role-routine-choice fits in narrow Routing". The Seats and models page (wip/models, 6c9126b) files Routing into
+the closed More settings, and go("agents", {pane: "routing"}) left it closed, so the controls were laid out but
+folded away (about 5,800 px down, nothing hit). agents.js openTeam now opens More at #settings-routing for a Routing
+way in that names no control. The suite then reached its contrast sweep, where `.settings-nav` read transparent:
+its solid fill is a container query on the Settings page, and since the window-scroll fix (efec563, bf0d0ce) the tab
+pages are not laid out under another page; the sweep now reads the strip with Settings open in the Studio mode and
+requires it measured there.
+
+unified_studio_render ok (alone, under the lease); team_render, agent_setup_render, settings_render ok; npm run check
+ok; npm run lint 0 errors and 47 warnings, as on clean main 017d51a. Hosted CI (Windows) on ef34f7a: green (37472060180). After merging main 4b150b3 (shell_render at 125% scaling): shell_render ok here, its first pass on this PC, so every window suite is green with this fix.
+
 ## 2026-10-06 shell_render passes at 125% display scaling: the inspector check reads the page's own width
 
 Branch `fx/scaling` (on main 017d51a; first proven on 0b2fa14): in `tests/fixtures/shell-render-electron.cjs` the narrow-window
@@ -433,74 +493,6 @@ the Rust host program mefi-studio.exe on Windows and mefi-studio elsewhere, as r
 rust_modules and package_host pass alone. Hosted CI on the branch (run 37395258702, Windows): the whole chain green.
 studio-linux.yml runs on the main push this lands with; it failed on every main push since 4 October on exactly
 these two tests.
-
-## 2026-10-05 The Mefi Studio relay, the Project hub, the Lobby and one Friends page land on main
-
-Branch `wip/friends-ux` in `C:\wt\fux`: wip/relay (the Cloudflare relay under `relay/`, hub-client, room history,
-credits, the Project hub; 7b7d243) merged in 2bb548b, the Friends page in both layouts with tabs and Close, the
-Your PCs summary, the Lobby, join codes and Who's online (dab7bb4), the Project hub in the rail and the page-based
-friends_navigation (3b35abf). main d8a8cf4 merged (the Map, the 0.5 default; CHANGELOG keeps both sides' entries,
-booklet.html regenerated and equal to the auto-merge).
-
-Full `npm test` on 3b35abf (after another session's gate finished, none overlapping): Node 7035 tests, 7017 pass, 14
-skipped, 4 fail, all git-heavy and all pass alone: attempt_review_host 28/28, attempt_snapshots_host 25/25. Electron
-lane 78: 71 pass, 1 skipped, 6 fail: layout_contract_render and shell_render (as on clean main), fleet_render 1/1,
-media_window_render 1/1, node_views_render 1/1 and performance_render 2/2 alone. Python 248 tests OK; path lock ok;
-`npm run check` ok; `npm run lint` 44 warnings, the same as clean main; `npm run audit` 0 findings. Relay suites
-(relay_core, relay_e2e, relay_credits, relay_connect, room_history, hub_client, hub_host) pass inside the Node stage.
-
-After the merge with d8a8cf4 (3d48f57), re-checked rather than re-gated: `npm run check`; friends_navigation 6/6,
-app_rail 40/40, onboarding 43/43, rooms_ui 13/13, pc_sync_ui 13/13, project_hub_ui 5/5, booklet_build 5/5,
-layout_contract_nav 15/15, shell_frame_bars 34/34, command_toolbar 19/19, check_testruns 9/9; friends_render,
-companion_hub_render, unified_studio_render and map_render 1/1 each.
-
-## 2026-10-05 The Map, the 0.5 layout as the default and Chrome's buttons land on main
-
-Branch `ui/map2` in `C:\wt\ui-map2` over main c7a4d26: the Map place (WIP 404a0c5 finished: the session list stays in
-the list column on Map pages, Map | Fleet | Pipelines as a switch in the Map bar and in Fleet's and the Agent brain's
-heads, Running only, View ▾ with music.js's five node layouts), the 0.5 layout as the default (13a7034; ?smoke/?capture
-launches and a saved classic choice keep v1), one page at a time over the Map and Chrome's metal without the dark
-line through button labels (7b3b867), and companion_hub_render asking for the classic layout it walks (649d229).
-
-`npm run check` 0, `npm run audit` 0, lint 0 errors (45 warnings, none new). Full `npm test` on 7b3b867 here: Node
-6993 tests, 6965 pass, 13 fail + 1 cancelled, all slow git/process suites starved while other sessions' agents and
-tests held the memory (attempt_review_host, attempt_snapshots_host, git_actions, rust_parity_repo, sync,
-sync_changes x2, sync_lineage x2, update_rehearsal, worktree_actions, worktrees x2); hosted CI on the same commit
-(run 37377470163, Windows) passed the whole chain: Node 6993/6959/0 fail (34 skipped), Electron lane 88/45/0 fail
-(43 real-window suites skipped there), Python and audit green. The local Electron lane was cut off by the runner's
-2-hour limit after project_map_render with one failure, companion_hub_render (the 0.5 default sent its Friends
-click to the Friends page; fixed in 649d229, 1/1); layout_contract_render failed as on clean main here (viewport
-1921x1081). The remaining 23 Electron suites then ran one at a time on 649d229 and passed, except shell_render
-(as on clean main on this PC): release_channel_render, renderer_recovery, review_render, rust_host_bridge,
-sessions_render, settings_render, setup_helper_render, size_render, skills_render, stamp_exe, startup_render,
-tabs_render, task_overview_render, team_render, today_render, tree_dynamics_render, unified_studio_render,
-workflow_render, worktrees_render, command_render (57 s), eyes_toggle_electron, occlusion_probe. map_render (new)
-passed in the lane.
-
-## 2026-10-05 The 0.5 rail, Team, Friends and the owner's design follow-ups land on main
-
-Branch `ui/friends` in `C:\wt\ui-friends`: ui/ia (the v2 rail, the list column's places, Team's twelve places, the
-up-next fix) + the Friends place and the owner's follow-ups (2cd76b2, 9487621) + main 3752b7e merged (1c338d0;
-CHANGELOG keeps both sides' entries, booklet.html regenerated).
-
-ui/ia's own gate on fb46061: Node 6982/6961, 7 fail (tabs_strip x2 pinned the Add menu's Home group, fixed in d3779b3,
-66/66; the rest pass alone); Electron 77/73, 3 fail (layout_contract_render and shell_render as on clean main,
-today_render's known lane flake, passes alone).
-
-Full `npm test` on 9487621 (free memory fell to 12 MB during it): Node 6991 tests, 6954 pass, 22 fail, all git-heavy
-suites whose git could not start, all pass alone: attempt_review_host 28/28, attempt_snapshots_host 25/25 + 3 skipped,
-git_actions 65/65, pc_vault_turns 9/9, rust_parity_repo 3/3, rust_parity_snapshots 3/3, sync 22/22, sync_changes 5/5,
-sync_lineage 5/5, worktree_actions 17/17, worktrees 8/8, worktrees_host 10/10. Electron lane 78: 73 pass, 1 skipped, 4
-fail: layout_contract_render and shell_render (as on clean main), task_overview_render (1/1 alone) and
-unified_studio_render (1/1 alone, 148 s). Run alone before the gate on this tree: friends_render (new), team_render,
-companion_hub_render, today_render, tabs_render, sessions_render, settings_render, unified_studio_render,
-agent_setup_render. Python 104 s OK; path lock ok; `npm run audit` 0 findings.
-
-main moved during the gate (c630b4d, 52a3d16: Chrome's iridescent finish, chrome.css with its test, docs and
-screenshots; no file this branch changed but CHANGELOG). Merged as d39878e (CHANGELOG keeps both sides, booklet.html
-regenerated) and re-checked rather than re-gated: `npm run check`; chrome_theme 9/9, tabs_strip 66/66,
-shell_frame_bars 34/34, today_inbox 38/38, builder_kit 21/21; settings_render (every theme at 4.5:1), friends_render,
-team_render and today_render 1/1 each.
 
 ## Read Before Any Tests
 
