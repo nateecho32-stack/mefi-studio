@@ -6,6 +6,54 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-05 The Map, the 0.5 layout as the default and Chrome's buttons land on main
+
+Branch `ui/map2` in `C:\wt\ui-map2` over main c7a4d26: the Map place (WIP 404a0c5 finished: the session list stays in
+the list column on Map pages, Map | Fleet | Pipelines as a switch in the Map bar and in Fleet's and the Agent brain's
+heads, Running only, View ▾ with music.js's five node layouts), the 0.5 layout as the default (13a7034; ?smoke/?capture
+launches and a saved classic choice keep v1), one page at a time over the Map and Chrome's metal without the dark
+line through button labels (7b3b867), and companion_hub_render asking for the classic layout it walks (649d229).
+
+`npm run check` 0, `npm run audit` 0, lint 0 errors (45 warnings, none new). Full `npm test` on 7b3b867 here: Node
+6993 tests, 6965 pass, 13 fail + 1 cancelled, all slow git/process suites starved while other sessions' agents and
+tests held the memory (attempt_review_host, attempt_snapshots_host, git_actions, rust_parity_repo, sync,
+sync_changes x2, sync_lineage x2, update_rehearsal, worktree_actions, worktrees x2); hosted CI on the same commit
+(run 37377470163, Windows) passed the whole chain: Node 6993/6959/0 fail (34 skipped), Electron lane 88/45/0 fail
+(43 real-window suites skipped there), Python and audit green. The local Electron lane was cut off by the runner's
+2-hour limit after project_map_render with one failure, companion_hub_render (the 0.5 default sent its Friends
+click to the Friends page; fixed in 649d229, 1/1); layout_contract_render failed as on clean main here (viewport
+1921x1081). The remaining 23 Electron suites then ran one at a time on 649d229 and passed, except shell_render
+(as on clean main on this PC): release_channel_render, renderer_recovery, review_render, rust_host_bridge,
+sessions_render, settings_render, setup_helper_render, size_render, skills_render, stamp_exe, startup_render,
+tabs_render, task_overview_render, team_render, today_render, tree_dynamics_render, unified_studio_render,
+workflow_render, worktrees_render, command_render (57 s), eyes_toggle_electron, occlusion_probe. map_render (new)
+passed in the lane.
+
+## 2026-10-05 The 0.5 rail, Team, Friends and the owner's design follow-ups land on main
+
+Branch `ui/friends` in `C:\wt\ui-friends`: ui/ia (the v2 rail, the list column's places, Team's twelve places, the
+up-next fix) + the Friends place and the owner's follow-ups (2cd76b2, 9487621) + main 3752b7e merged (1c338d0;
+CHANGELOG keeps both sides' entries, booklet.html regenerated).
+
+ui/ia's own gate on fb46061: Node 6982/6961, 7 fail (tabs_strip x2 pinned the Add menu's Home group, fixed in d3779b3,
+66/66; the rest pass alone); Electron 77/73, 3 fail (layout_contract_render and shell_render as on clean main,
+today_render's known lane flake, passes alone).
+
+Full `npm test` on 9487621 (free memory fell to 12 MB during it): Node 6991 tests, 6954 pass, 22 fail, all git-heavy
+suites whose git could not start, all pass alone: attempt_review_host 28/28, attempt_snapshots_host 25/25 + 3 skipped,
+git_actions 65/65, pc_vault_turns 9/9, rust_parity_repo 3/3, rust_parity_snapshots 3/3, sync 22/22, sync_changes 5/5,
+sync_lineage 5/5, worktree_actions 17/17, worktrees 8/8, worktrees_host 10/10. Electron lane 78: 73 pass, 1 skipped, 4
+fail: layout_contract_render and shell_render (as on clean main), task_overview_render (1/1 alone) and
+unified_studio_render (1/1 alone, 148 s). Run alone before the gate on this tree: friends_render (new), team_render,
+companion_hub_render, today_render, tabs_render, sessions_render, settings_render, unified_studio_render,
+agent_setup_render. Python 104 s OK; path lock ok; `npm run audit` 0 findings.
+
+main moved during the gate (c630b4d, 52a3d16: Chrome's iridescent finish, chrome.css with its test, docs and
+screenshots; no file this branch changed but CHANGELOG). Merged as d39878e (CHANGELOG keeps both sides, booklet.html
+regenerated) and re-checked rather than re-gated: `npm run check`; chrome_theme 9/9, tabs_strip 66/66,
+shell_frame_bars 34/34, today_inbox 38/38, builder_kit 21/21; settings_render (every theme at 4.5:1), friends_render,
+team_render and today_render 1/1 each.
+
 ## 2026-10-05 Chrome's iridescent finish: holo edges, hairlines and a tinted ground
 
 Branch `paint/chrome-gradients` in a cloud worktree (Linux, Node 24.21.0,
