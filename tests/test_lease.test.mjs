@@ -166,7 +166,8 @@ test("the parallel stage narrows with free memory, never under four, and MEFI_TE
 });
 
 test("a run picks the Electron lane when a file it runs drives a window", () => {
-  const sources = { "tests/a_render.test.mjs": 'spawn(electron, [path.join(studio, "tests", "fixtures", "a-render-electron.cjs")])', "tests/b.test.mjs": "plain" };
+  // Built at run time: the fixture name spelled out here would make the runner put this suite in the Electron lane.
+  const sources = { "tests/a_render.test.mjs": `spawn(electron, [path.join(studio, "tests", "fixtures", "${["a-render", "electron.cjs"].join("-")}")])`, "tests/b.test.mjs": "plain" };
   const read = (file) => sources[file];
   assert.equal(laneForFiles(["tests/b.test.mjs"], read), "suites");
   assert.equal(laneForFiles(["tests/b.test.mjs", "tests/a_render.test.mjs"], read), "windows");
