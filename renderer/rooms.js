@@ -469,7 +469,8 @@
         more.setAttribute("aria-expanded", String(messageMenus.has(message.id)));
         head.append(more);
       }
-      const text = node("p", "rooms-message-text", readable(message, nameOf));
+      // A shared playlist shows as one to play or save (renderer/playlists.js).
+      const text = window.MefiPlaylists?.card?.(String(message.text ?? "")) || node("p", "rooms-message-text", readable(message, nameOf));
       item.append(head, text);
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
       if (messageMenus.has(message.id)) {

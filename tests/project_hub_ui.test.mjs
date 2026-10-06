@@ -36,7 +36,7 @@ class Element {
 const project = (overrides = {}) => ({ id: "proj_a", url: "https://aksana.itch.io/void", host: "aksana.itch.io", title: "Void Runner", blurb: "Jump the void", kind: "game", owner: { id: FRIEND.id, name: "Aksana", rank: "ember" }, plays: 4, stars: 2, createdAt: 1, lastPlayedAt: 2, featuredUntil: null, starred: false, ...overrides });
 const me = (overrides = {}) => ({ ok: true, user: ME, credits: { balance: 42, lifetime: 120, today: 7, todayCap: 60 }, rank: { key: "ember", name: "Ember", next: { key: "flame", name: "Flame", at: 200 }, progress: 0.47 }, specialRanks: ["builder"], streak: { days: 3, best: 5 }, featureCost: 100, canEarn: true, projects: [], ...overrides });
 
-function environment({ status = { configured: true, linked: true, state: "ready", user: ME, projects: true }, list = [project()], featured = [], replies = {}, bridge = true } = {}) {
+function environment({ status = { configured: true, linked: true, state: "ready", user: ME, projects: true }, list = [project()], featured = [], replies = {}, bridge = true, windowExtra = {} } = {}) {
   const calls = [];
   let hubEvent = null;
   const api = bridge ? {
@@ -51,7 +51,7 @@ function environment({ status = { configured: true, linked: true, state: "ready"
       return typeof reply === "function" ? reply(...args) : reply ?? { ok: true };
     },
   } : undefined;
-  const window = { mefiStudio: api, confirm: () => true, devicePixelRatio: 1 };
+  const window = { mefiStudio: api, confirm: () => true, devicePixelRatio: 1, ...windowExtra };
   const context = vm.createContext({
     window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String, Math,
     requestAnimationFrame: (fn) => fn(), getComputedStyle: () => ({ getPropertyValue: () => "" }),
@@ -189,8 +189,38 @@ test("credits on hold say why and until when; credits taken back say so", async 
 });
 
 test("main lets the renderer call only the hub's project methods, and plays only https links", () => {
-  assert.match(main, /const HUB_PROJECT_METHODS = Object\.freeze\(\{ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1, reportProject: 2 \}\);/);
+  assert.match(main, /const HUB_PROJECT_METHODS = Object\.freeze\(\{ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 2, star: 2, feature: 1, reportProject: 2 \}\);/);
+  assert.ok(main.includes('const here = plain[1]?.here === true && /^(?:www\\.|m\\.)?youtube\\.com$/i.test(link.hostname) && link.pathname === "/watch_videos";\n    if (!here) await shell.openExternal(link.href);'), "only a YouTube play-them-all link may play in Studio instead of the browser");
   assert.match(main, /ipcMain\.handle\("hub:projects", async \(_event, payload\) => hubProjects\(String\(payload\?\.method \?\? ""\), Array\.isArray\(payload\?\.args\) \? payload\.args : \[\]\)\);/);
   assert.match(main, /if \(link\?\.protocol !== "https:"\) return \{ ok: false, error: "bad-link" \};/);
   assert.ok(!/innerHTML/.test(source), "text only, never markup");
+});
+
+test("a playlist on the hub shows its videos, plays in Studio and still counts; any other project opens in the browser", async () => {
+  const LINK = "https://www.youtube.com/watch_videos?video_ids=Qz0KTGYJtUk,aircAruvnKk&title=Mix";
+  const played = [];
+  const shelf = new Element("section"); shelf.className = "music-pl-shared";
+  const MefiPlaylists = {
+    fromLink: (url, name) => (url === LINK ? { name, items: [{ url: "https://www.youtube.com/watch?v=Qz0KTGYJtUk" }, { url: "https://www.youtube.com/watch?v=aircAruvnKk" }] } : null),
+    cardFor: () => shelf,
+    play: (parsed) => { played.push(parsed.name); return true; },
+  };
+  const env = environment({ list: [project({ id: "proj_p", url: LINK, host: "www.youtube.com", title: "Code & math", kind: "other" }), project()], windowExtra: { MefiPlaylists } });
+  const card = env.hub.card();
+  await flush();
+  card.find("project-hub-tab-top").click();
+  await flush();
+  const rows = () => card.byClass("project-hub-row");
+  assert.equal(rows()[0].byClass("music-pl-shared").length, 1, "the playlist's videos show on its row");
+  assert.match(rows()[0].byClass("project-hub-meta")[0].textContent, / · Playlist$/);
+  assert.match(rows()[1].byClass("project-hub-meta")[0].textContent, / · Game$/);
+  rows()[0].buttons("Play")[0].click();
+  await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(env.calls.at(-1))), ["playProject", "proj_p", { here: true }]);
+  assert.deepEqual(played, ["Code & math"]);
+  assert.match(card.find("project-hub-status").textContent, /Code & math is playing in Studio\. Listen for 2 minutes and it counts for you both\./);
+  rows()[1].buttons("Play")[0].click();
+  await flush();
+  assert.deepEqual(env.calls.at(-1), ["playProject", "proj_a"]);
+  assert.deepEqual(played, ["Code & math"], "a game is not a playlist");
 });

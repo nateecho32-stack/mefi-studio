@@ -645,7 +645,7 @@
       const own = document.getElementById("settings-start-vibe");
       if (own && own.type === "checkbox") { own.checked = startBox.checked; own.dispatchEvent?.(new Event("change", { bubbles: true })); }
       else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
-      note(startBox.checked ? "Every launch starts in Social." : "Each launch keeps the mode you closed in.", "good");
+      note(startBox.checked ? "Every launch starts in Social." : "Each launch opens the mode you last used.", "good");
     });
     start.append(el("span", "vibe-set-label", "Always start in Social"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
     body.append(start);

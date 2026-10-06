@@ -349,7 +349,10 @@ function createGitActions({
     return new Promise((resolve) => {
       // The folder asked about is the repository asked about: a GIT_DIR or index left in the
       // environment (by a hook that started Studio, say) must not point git somewhere else.
-      const set = { GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never", GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", NO_COLOR: "1", LC_ALL: "C", ...(reads ? { GIT_OPTIONAL_LOCKS: "0" } : {}) };
+      // core.fsmonitor=false through the environment, so argv stays as callers
+      // wrote it: a repository that turns the monitor on otherwise gets a
+      // daemon per checkout looked at, which never exits (scripts/sync.mjs runGit).
+      const set = { GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never", GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", NO_COLOR: "1", LC_ALL: "C", ...(reads ? { GIT_OPTIONAL_LOCKS: "0" } : {}), ...(command === "git" ? { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.fsmonitor", GIT_CONFIG_VALUE_0: "false" } : {}) };
       // Windows names are not case-sensitive: an inherited "Git_Terminal_Prompt=1" must not sit beside ours.
       const inherited = Object.fromEntries(Object.entries(envOf()).filter(([name]) => !REDIRECTS.has(name.toUpperCase()) && !(name.toUpperCase() in set)));
       const options = withholdCredentials({ cwd, timeout, maxBuffer, windowsHide: true, env: { ...inherited, ...set } });

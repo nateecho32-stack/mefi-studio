@@ -1307,7 +1307,8 @@ export function parsePorcelain(text) {
 function runGit(command, args, options = {}) {
   return new Promise((resolve) => {
     try {
-      execFile(command, args, { maxBuffer: 1024 * 1024, ...options }, (error, stdout) => {
+      // No fsmonitor daemon for a background read (scripts/sync.mjs runGit).
+      execFile(command, command === "git" ? ["-c", "core.fsmonitor=false", ...args] : args, { maxBuffer: 1024 * 1024, ...options }, (error, stdout) => {
         const status = !error ? 0 : typeof error.code === "number" ? error.code : null;
         resolve({ status, stdout: typeof stdout === "string" ? stdout : String(stdout ?? ""), ...(error ? { error } : {}) });
       });

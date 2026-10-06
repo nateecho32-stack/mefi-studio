@@ -19,6 +19,8 @@
 //   4. In the smallest window a column is a drawer that stays inside the window,
 //      closes on Escape and on a press outside, and returns focus.
 //   5. Taking the frame away and building it again gives one frame.
+//   6. Studio's rail reaches every place in every window, the smallest included,
+//      and no word in it ends in "…".
 //
 // Network, permissions and child processes are blocked. The page's bridge is
 // synthetic (tests/fixtures/shell-render-electron.cjs builds it from preload.cjs's
@@ -353,6 +355,41 @@ app.whenReady().then(async () => {
   }
   report.configs = reportFor;
 
+  // ============ 2b. the rail reaches every place in every window, and says each word whole ============
+  // Studio's rail (Social's Home has no rail). Brought into view the way a person would (its list scrolls), each place's
+  // middle is the place itself: nothing covers it. At 600x560 at 150% the window is about 400x373 CSS px. A word that
+  // ends in "…" fails too: "Settings" needed 43 px and had 39.
+  if (!only || "rail".includes(only)) for (const size of SIZES) {
+    await resize(size);
+    await setup({ mode: "build", rail: "closed" });
+    const tag = `${label(size)}/build`;
+    const reach = await run(`
+      const shown = (node) => Boolean(node && !node.hidden && !node.closest("[hidden]") && node.getClientRects().length && getComputedStyle(node).visibility !== "hidden" && getComputedStyle(node).display !== "none");
+      const rail = document.getElementById("app-rail");
+      if (!shown(rail)) return { rail: null };
+      const places = [...rail.querySelectorAll(".app-rail-section > .app-rail-head, .app-rail-foot-item, :scope > button, :scope > div > button")].filter(shown);
+      const out = [], cut = [];
+      for (const node of places) {
+        node.scrollIntoView({ block: "nearest", inline: "nearest" });
+        const box = node.getBoundingClientRect(), x = box.left + box.width / 2, y = box.top + box.height / 2;
+        const top = document.elementFromPoint(x, y);
+        const name = node.getAttribute("aria-label") || node.textContent.trim() || node.id;
+        if (!(box.height >= 20 && y >= 0 && y <= innerHeight && top && (top === node || node.contains(top)))) out.push(name + ": " + (top ? (top.id || String(top.className).slice(0, 40) || top.tagName) : "nothing") + " over its middle (" + Math.round(x) + ", " + Math.round(y) + ")");
+        for (const word of node.querySelectorAll(".app-rail-text, .label")) if (shown(word) && word.textContent.trim() && word.scrollWidth > word.clientWidth + 0.5) cut.push(name + ": " + word.scrollWidth + " px of words in " + word.clientWidth);
+      }
+      rail.querySelector(".app-rail-sections")?.scrollTo?.(0, 0);
+      document.scrollingElement.scrollTop = 0;
+      return { rail: rail.id, places: places.map((node) => node.getAttribute("aria-label") || node.textContent.trim()), out, cut };
+    `);
+    if (size[2] === 1.5 || reach.out?.length || reach.cut?.length) await capture(`rail-${label(size)}.png`);
+    assert.ok(reach.rail, `${tag}: the rail is on screen`);
+    assert.ok(reach.places.length >= 7, `${tag}: the rail lists its places (${JSON.stringify(reach.places)})`);
+    assert.deepEqual(reach.out, [], `${tag}: every place in the rail can be reached (${JSON.stringify(reach.places)})`);
+    assert.deepEqual(reach.cut, [], `${tag}: every word in the rail is whole`);
+    assert.equal(reach.places.includes("Search"), false, `${tag}: Search has one home, the top bar's`);
+    await centre("shell-search");
+  }
+
   // ============ 3. every destination can be opened and lands inside what the frame leaves ============
   const walk = async (size, rail) => {
     await resize(size);
@@ -581,7 +618,10 @@ app.whenReady().then(async () => {
     await resize([1100, 720, 1]);
     state = await p();
     assert.equal(state.info.inspector.docked, true);
-    assert.equal(state.boxes.inspector[2], 1100 - 64 - 344 - 320, "it shrinks to leave the main area its 320");
+    // Measured against the page's own width: at 125% or 150% display scaling a
+    // 1100 px window comes out one CSS px wider (resize allows exactly that one
+    // pixel), and the inspector takes it, so the rule is checked as written.
+    assert.equal(state.boxes.inspector[2], state.inner[0] - 64 - 344 - 320, "it shrinks to leave the main area its 320");
     await resize([1000, 720, 1]);
     state = await p();
     assert.equal(state.info.inspector.drawer, true, "and below its own minimum it is a drawer");

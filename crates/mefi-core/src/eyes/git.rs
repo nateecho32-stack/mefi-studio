@@ -17,7 +17,8 @@ const MAX_OUTPUT: usize = 1024 * 1024;
 /// (status, stdout): status None when git could not start, timed out, or wrote too much.
 fn run_git(args: &[String]) -> (Option<i32>, String) {
     let mut command = Command::new("git");
-    command.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
+    // core.fsmonitor=false, as eyes.mjs's runGit: no daemon for a background read.
+    command.args(["-c", "core.fsmonitor=false"]).args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

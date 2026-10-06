@@ -6213,6 +6213,27 @@ body.appearance-settings-active[data-appearance-dock="right"] #toast-host { left
 .music-pl-item[data-drop="before"]::after { content: ""; position: absolute; top: -2px; left: 6px; right: 6px; height: 2px; border-radius: 2px; background: var(--gold-bright); box-shadow: 0 0 8px var(--gold); }
 .music-pl-items[data-drop="end"]::after { content: ""; height: 2px; margin: 2px 6px; border-radius: 2px; background: var(--gold-bright); box-shadow: 0 0 8px var(--gold); }
 @media (hover: none) { .music-pl-row-tools, .music-dropdown .music-pl-card-play { opacity: 1; transform: none; } }
+/* Share › Send it to friends: a room for the text, the Project hub for the link. */
+.music-pl-friends { display: grid; gap: 8px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--md-line); }
+.music-pl-friends > strong { color: var(--ivory); font: 600 12.5px/1.3 var(--font-ui); }
+.music-pl-friends small { color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.music-pl-friend-row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.music-pl-friend-row .music-pl-field { flex: 1 1 180px; }
+.music-dropdown .music-pl-friend-row select { box-sizing: border-box; width: 100%; min-width: 0; padding: 6px 8px; border: 1px solid var(--md-line); border-radius: 9px; font: 12px var(--font-ui); }
+.music-pl-friends-note { margin: 0; color: var(--gold-bright); font-size: 12px; line-height: 1.5; }
+.music-pl-friends-note[data-error="true"] { color: var(--bad); }
+.music-pl-friends > button { justify-self: start; }
+/* A shared playlist where friends see it: a room's chat, a Project hub card.
+   Friends pages keep text at 12px or more. */
+.music-pl-shared { display: grid; grid-template-columns: minmax(0, 132px) minmax(0, 1fr); align-items: start; gap: 12px; max-width: 540px; margin-top: 6px; padding: 10px; border: 1px solid var(--hairline); border-radius: 12px; background: color-mix(in srgb, var(--ivory) 4%, transparent); }
+.music-pl-shared .music-pl-cover { margin-top: 6px; }
+.music-pl-shared-words { display: grid; gap: 4px; min-width: 0; }
+.music-pl-shared-words > strong { color: var(--ivory); font: 600 13px/1.35 var(--font-ui); overflow-wrap: anywhere; }
+.music-pl-shared :is(.music-pl-kicker, .music-pl-meta, button, summary, li) { font-size: 12px; }
+.music-pl-shared .music-link-tools { margin-top: 4px; }
+.music-pl-shared-list summary { color: var(--muted); cursor: pointer; }
+.music-pl-shared-list ol { max-height: 180px; margin: 6px 0 0; padding-left: 20px; overflow-y: auto; color: var(--muted); line-height: 1.5; }
+@media (max-width: 560px) { .music-pl-shared { grid-template-columns: minmax(0, 1fr); } }
 .music-pl-save { position: absolute; z-index: 6; display: grid; gap: 8px; box-sizing: border-box; max-height: min(400px, calc(100% - 16px)); padding: 12px; overflow-y: auto; border: 1px solid var(--md-edge); border-radius: 14px; background: var(--panel-solid); box-shadow: 0 22px 50px -18px rgba(0, 0, 0, .85), 0 2px 8px rgba(0, 0, 0, .25); }
 .music-pl-save > header { display: grid; gap: 2px; min-width: 0; }
 .music-pl-save > header strong { color: var(--ivory); font: 600 13px/1.3 var(--font-ui); }
@@ -12830,9 +12851,9 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
 
 /* ---- the rail: the prototype's places (renderer/nav.js, renderRailV2) ----
    At rest each tile is its icon with its word beneath, at 12 px: Work, Map, Team and Friends at the top, and
-   Search, Settings and Help at the foot, as the prototype's railView draws them. The place you are in is a
-   tinted tile. Open (pinned, hovered or focused) the classic rail's rows stand, with every word and count at
-   12 px or more. The rail's geometry (64 px, 256 open) is the layout contract's and is not touched here. */
+   Settings and Help at the foot (the prototype's railView also put Search there; the top bar's Search is its one
+   home). The place you are in is a tinted tile. Open (pinned, hovered or focused) the classic rail's rows stand,
+   with every word and count at 12 px or more. The rail's geometry (64 px, 256 open) is the layout contract's and is not touched here. */
 html[data-frame] #app-rail { --fs-2xs: max(12px, calc(12px * var(--text-scale, 1))); }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head .app-rail-text,
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-foot-item, #app-rail-foot .update-pill) .label {
@@ -12840,12 +12861,18 @@ html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:
 }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 54px; border-radius: 10px; }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot-item { min-height: 50px; border-radius: 10px; }
+/* At rest a tile's word gets the rail's whole width: 4 px at the rail's sides instead of 10 and 2 px in the tile, so
+   "Settings", "Friends" and "Search" stay whole at 12 px (about 43 px in Segoe UI and 49 px in DejaVu Sans; 39 px was left). */
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) { padding-inline: 4px; }
+html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-head, .app-rail-foot-item) { padding-inline: 2px; }
 /* The smallest window at 150% zoom is about 373 CSS px tall: a tile keeps its icon and its word but not the tall minimum, so
    Work, Map, Team and Friends all stay in view (studio-ui.css's short-window rail, which the two rules above out-rank). */
 @media (max-height: 440px) {
-  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 32px; }
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 40px; }
 }
-html[data-frame] #app-rail .app-rail-search { margin-bottom: 0; }
+/* One home for Search: the top bar's (Ctrl K), in every window. The rail's copy stays in the page for a page without the
+   frame, and gives its room back to the places: in the smallest window a tile keeps 40 px instead of 32. */
+html[data-frame] #app-rail .app-rail-search { display: none; }
 html[data-frame] #app-rail .app-rail-section.current > .app-rail-head,
 html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); }
 html[data-frame] #app-rail .app-rail-section.current > .app-rail-head .glyph,
@@ -14831,7 +14858,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
-            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch keeps the mode you closed in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
@@ -74484,17 +74511,26 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (ids.length < 2 || ids.some((id) => !id)) return "";
     return `https://www.youtube.com/watch_videos?video_ids=${ids.join(",")}&title=${encodeURIComponent(list.name)}`;
   }
-  // Links sit in <…> so Discord shows the text, not a dozen previews.
-  function shareText(list, info) {
-    const lines = [`${SHARE_HEAD} ${list.name}`];
-    list.items.forEach((item, index) => {
+  // Links sit in <…> so Discord shows the text, not a dozen previews. With a
+  // `max` (a chat message's length) the last lines give way first; the
+  // YouTube link still names every video, so nothing is lost on the way back.
+  function shareText(list, info, { max = Infinity } = {}) {
+    const head = `${SHARE_HEAD} ${list.name}`;
+    const lines = list.items.map((item, index) => {
       const id = plainYouTube(item.url, info);
       const words = [item.title, item.channel && `· ${item.channel}`, item.duration && `· ${item.duration}`].filter(Boolean).join(" ");
-      lines.push(`${index + 1}. ${words ? `${words} ` : ""}<${id ? `https://youtu.be/${id}` : item.url}>`);
+      return `${index + 1}. ${words ? `${words} ` : ""}<${id ? `https://youtu.be/${id}` : item.url}>`;
     });
     const all = youtubeAll(list, info);
-    if (all) lines.push(`${PLAY_ALL} <${all}>`);
-    return lines.join("\n");
+    const tail = all ? `${PLAY_ALL} <${all}>` : "";
+    const join = (kept) => {
+      const left = lines.length - kept;
+      const more = left ? `…and ${left} more video${left === 1 ? "" : "s"}${all ? " in the YouTube link" : ""}` : "";
+      return [head, ...lines.slice(0, kept), more, tail].filter(Boolean).join("\n");
+    };
+    let kept = lines.length;
+    while (kept > 0 && join(kept).length > max) kept -= 1;
+    return join(kept);
   }
   // A shared list back from text: the share text above (whole, or pasted into
   // a one-line box that lost its line breaks), a YouTube watch_videos link,
@@ -74530,9 +74566,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       }
       items.push(item);
     }
-    if (!items.length && watch) {
+    // The YouTube link names every video: those the lines left out (a long
+    // list cut to fit a message, or the link on its own) join untitled.
+    if (watch) {
       const ids = String(watch.searchParams.get("video_ids") || "").split(",").filter((id) => /^[\w-]{11}$/.test(id));
-      for (const id of ids.slice(0, ITEM_LIMIT)) { const item = cleanItem({ url: `https://www.youtube.com/watch?v=${id}` }, info); if (item && !items.some((known) => known.url === item.url)) items.push(item); }
+      for (const id of ids) {
+        if (items.length >= ITEM_LIMIT) break;
+        const item = cleanItem({ url: `https://www.youtube.com/watch?v=${id}` }, info);
+        if (item && !items.some((known) => known.url === item.url)) items.push(item);
+      }
     }
     if (watch && !name) name = clean(watch.searchParams.get("title"), NAME_LIMIT);
     if (!items.length || !(head || watch || loose)) return null;
@@ -74834,6 +74876,186 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     mark(button("Copy as text", "primary mini", tools, () => copy(text, "Copied. Paste it in Discord, a room or any chat.")), "copy");
     if (all) button("Copy the YouTube link", "ghost mini", tools, () => copy(all, "Copied the YouTube link. It plays the whole list on YouTube, and Studio adds it back too."));
     if (text.length > DISCORD_MESSAGE) element("small", null, `That's longer than one Discord message (${DISCORD_MESSAGE.toLocaleString("en-US")} characters).${all ? " The YouTube link fits, and Studio reads it back too." : " Send it in two parts."}`, panel);
+    friendsBox = element("div", "music-pl-friends", null, panel);
+    friendsBox.setAttribute("aria-label", "Send it to friends");
+    friendsList = list;
+    // Rooms are looked up when Share opens on a list, and again after a minute.
+    if (friends.list !== keyOf(list) || Date.now() - friends.at > 60000) { friends.list = keyOf(list); friends.at = Date.now(); friends.note = ""; friends.go = null; void loadFriends(); }
+    else paintFriends();
+  }
+
+  // ---- Friends: post a list in a room, or put it on the Project hub. Both go
+  // through the bridge's room service calls (main.cjs "Rooms hub"), and
+  // neither needs anything new from the relay: a room gets the share text as
+  // a message (2,000 characters at most), the hub one YouTube link that plays
+  // every video. Studio shows either as a playlist again (card, fromLink).
+  const ROOM_TEXT_CHARS = 2000, HUB_LINK_CHARS = 512;
+  const FRIEND_REASONS = {
+    "links-not-allowed": "Sharing links opens after your first day in the Void Engine server.",
+    "already-shared": "This playlist is already on the Project hub.",
+    "owned-projects": "You have 5 things on the Project hub. Remove one there to add this.",
+    "daily-shares": "You have shared 3 things on the Project hub today. Try again tomorrow.",
+    "hub-full": "The Project hub is full right now.",
+    "bad-link": "The Project hub didn't take this playlist's link.",
+    "rate-limited": "Slow down a moment, then try again.",
+    "read-only": "Your account is read-only in the server right now.",
+    paused: "The room service is paused right now.",
+    "not-member": "You're not in that room any more.",
+    closed: "That room is closed.",
+    locked: "That room is locked.",
+    offline: "Not connected to the room service.",
+    timeout: "The room service didn't answer in time. Try again.",
+    auth: "Your Discord sign-in has run out. Sign in again in Friends.",
+    unsupported: "This room service doesn't have the Project hub yet.",
+  };
+  const friendReason = (answer, fallback) => FRIEND_REASONS[answer?.reason] || FRIEND_REASONS[answer?.error] || fallback;
+  // phase: idle, loading, unsupported, signed-out, offline, ready.
+  const friends = { phase: "idle", rooms: [], room: null, busy: false, note: "", error: false, go: null, list: null, at: 0 };
+  let friendsBox = null, friendsList = null;
+  const hubBridge = () => window.mefiStudio;
+  async function loadFriends() {
+    const hub = hubBridge();
+    if (typeof hub?.hubStatus !== "function" || typeof hub?.hubRoom !== "function") { friends.phase = "unsupported"; paintFriends(); return; }
+    friends.phase = "loading"; paintFriends();
+    let status = null;
+    try { status = (await hub.hubStatus())?.status ?? null; } catch {}
+    if (!status?.configured && !status?.communityConfigured) friends.phase = "unsupported";
+    else if (!status.linked) friends.phase = "signed-out";
+    else if (status.state !== "ready") friends.phase = "offline";
+    else {
+      let answer = null;
+      try { answer = await hub.hubRooms(); } catch {}
+      friends.rooms = (Array.isArray(answer?.rooms) ? answer.rooms : []).filter((room) => ["owner", "member"].includes(room?.you) && room.status === "active" && typeof room.id === "string");
+      if (!friends.rooms.some((room) => room.id === friends.room)) friends.room = friends.rooms.find((room) => room.id === "lobby")?.id ?? friends.rooms[0]?.id ?? null;
+      friends.phase = "ready";
+    }
+    paintFriends();
+  }
+  const goFriends = (place, extra = {}) => window.MefiNav?.go?.("friends-page", { place, ...extra });
+  function paintFriends() {
+    const box = friendsBox, list = friendsList;
+    if (!box?.isConnected || !list) return;
+    box.textContent = "";
+    element("strong", null, "Send it to friends", box);
+    if (friends.phase === "loading" || friends.phase === "idle") { element("small", null, "Looking for your rooms…", box); return; }
+    if (friends.phase === "unsupported") { element("small", null, "Rooms and the Project hub need the Studio desktop app's room service.", box); return; }
+    if (friends.phase === "signed-out") {
+      element("small", null, "Sign in with Discord in Friends to post this in a room or on the Project hub.", box);
+      button("Open Friends", "ghost mini", element("div", "music-link-tools", null, box), () => goFriends("lobby"));
+      return;
+    }
+    if (friends.phase === "offline") {
+      element("small", null, "Studio isn't connected to the room service right now.", box);
+      button("Connect", "ghost mini", element("div", "music-link-tools", null, box), async () => { try { await hubBridge().hubConnect?.(); } catch {} void loadFriends(); });
+      return;
+    }
+    // A room: the share text as a message.
+    const roomRow = element("div", "music-pl-friend-row", null, box);
+    if (friends.rooms.length) {
+      const label = element("label", "music-pl-field", null, roomRow);
+      element("span", null, "Post in a room", label);
+      const pick = element("select", null, null, label);
+      for (const room of friends.rooms) { const option = element("option", null, room.name, pick); option.value = room.id; option.selected = room.id === friends.room; }
+      pick.value = friends.room ?? "";
+      pick.addEventListener("change", () => { friends.room = pick.value; });
+      const post = button("Post", "ghost mini", roomRow, () => void postToRoom(list));
+      post.disabled = friends.busy || !list.items.length;
+    } else element("small", null, "You're not in any rooms yet: join one in Friends › Rooms.", roomRow);
+    // The Project hub: one YouTube link that plays the list.
+    const hubRow = element("div", "music-pl-friend-row", null, box);
+    const link = hubLink(list);
+    if (link) {
+      element("small", null, link.count < list.items.length ? `The Project hub keeps one link: it holds the first ${count(link.count)}.` : "Friends play it from the Project hub, and plays earn you both credits.", hubRow);
+      const add = button("Add to the Project hub", "ghost mini", hubRow, () => void addToHub(list));
+      add.disabled = friends.busy;
+    } else element("small", null, "Only playlists of YouTube videos go on the Project hub: it shares one YouTube link.", hubRow);
+    if (friends.note) {
+      const said = element("p", "music-pl-friends-note", friends.note, box);
+      said.setAttribute("role", "status"); said.dataset.error = String(friends.error);
+      if (friends.go) button(friends.go.label, "ghost mini", box, () => goFriends(friends.go.place, friends.go.extra));
+    }
+  }
+  // The hub's link: YouTube's play-them-all link for as many videos as fit.
+  function hubLink(list) {
+    const ids = list.items.map((item) => plainYouTube(item.url, api.info));
+    if (!ids.length || ids.some((id) => !id)) return null;
+    const title = encodeURIComponent(list.name);
+    for (let size = ids.length; size > 0; size -= 1) {
+      const url = `https://www.youtube.com/watch_videos?video_ids=${ids.slice(0, size).join(",")}&title=${title}`;
+      if (url.length <= HUB_LINK_CHARS) return { url, count: size };
+    }
+    return null;
+  }
+  async function friendCall(work, done) {
+    if (friends.busy) return;
+    friends.busy = true; friends.note = ""; friends.go = null; paintFriends();
+    let answer = null;
+    try { answer = await work(); } catch {}
+    friends.busy = false;
+    done(answer);
+    paintFriends();
+  }
+  function postToRoom(list) {
+    const room = friends.rooms.find((item) => item.id === friends.room);
+    if (!room) return Promise.resolve();
+    const text = shareText(list, api.info, { max: ROOM_TEXT_CHARS });
+    return friendCall(() => hubBridge().hubRoom("sendMessage", room.id, text), (answer) => {
+      friends.error = !answer?.ok;
+      friends.note = answer?.ok ? `Posted in ${room.name}. Friends there see it as a playlist they can play or save.` : `Not posted: ${friendReason(answer, "try again.")}`;
+      friends.go = answer?.ok ? { label: `Open ${room.name}`, place: "rooms", extra: { room: room.id } } : null;
+    });
+  }
+  function addToHub(list) {
+    const link = hubLink(list);
+    if (!link) return Promise.resolve();
+    const channels = [...new Set(list.items.slice(0, link.count).map((item) => item.channel).filter(Boolean))];
+    const blurb = clean(`A playlist of ${count(link.count)}${channels.length ? `: ${channels.slice(0, 6).join(", ")}${channels.length > 6 ? " and more" : ""}` : ""}.`, 300);
+    return friendCall(() => hubBridge().hubProjects("shareProject", { url: link.url, title: clean(list.name, 100), blurb, kind: "other" }), (answer) => {
+      friends.error = !answer?.ok;
+      friends.note = answer?.ok ? "It's on the Project hub. When a friend plays it for two minutes, you both earn credits." : `Not added: ${friendReason(answer, "try again.")}`;
+      friends.go = answer?.ok ? { label: "Open the Project hub", place: "hub" } : null;
+    });
+  }
+
+  // ---- A shared list where friends talk: a room message whose text is a
+  // shared playlist (rooms.js asks card), or a Project hub link to YouTube's
+  // play-them-all (project-hub.js asks fromLink and cardFor), shows as a
+  // playlist to play or keep.
+  const sameList = (a, b) => a.name === b.name && a.items.length === b.items.length && a.items.every((item, index) => item.url === b.items[index].url);
+  function keepShared(parsed) {
+    const known = store.lists.find((list) => sameList(list, parsed));
+    if (known) return { ok: true, id: known.id, already: true };
+    const list = createList(parsed.name, parsed.items, "shared");
+    if (!list) return { ok: false };
+    say(`${list.name} is in your playlists, under Music & video › Playlists.`);
+    paint();
+    return { ok: true, id: list.id };
+  }
+  function cardFor(parsed, { from = "", play = true, title = true } = {}) {
+    if (!api || !parsed?.items?.length) return null;
+    const card = element("section", "music-pl-shared");
+    card.setAttribute("aria-label", `Playlist: ${parsed.name}`);
+    cover(card, parsed, "music-pl-cover music-pl-shared-cover");
+    const words = element("div", "music-pl-shared-words", null, card);
+    if (title) { element("small", "music-pl-kicker", "Playlist", words); element("strong", null, parsed.name, words); }
+    const length = lengthLabel(parsed.items);
+    element("small", "music-pl-meta", [count(parsed.items.length), length && `about ${length}`, from && `shared by ${from}`].filter(Boolean).join(" · "), words);
+    const tools = element("div", "music-link-tools", null, words);
+    if (play) actionButton("play", "Play", "primary mini", tools, () => api.play(parsed.items, parsed.name)).setAttribute("aria-label", `Play ${parsed.name}`);
+    const saved = store.lists.some((list) => sameList(list, parsed));
+    const keep = button(saved ? "Saved" : "Save", "ghost mini", tools, () => {
+      const kept = keepShared(parsed);
+      if (kept.ok) { keep.textContent = "Saved"; keep.disabled = true; open.hidden = false; open.dataset.id = kept.id; }
+    });
+    keep.disabled = saved;
+    keep.setAttribute("aria-label", saved ? `${parsed.name} is in your playlists` : `Save ${parsed.name} to your playlists`);
+    const open = button("Open in Playlists", "ghost mini", tools, () => window.MefiPlaylists?.open?.(open.dataset.id || store.lists.find((list) => sameList(list, parsed))?.id || null));
+    open.hidden = !saved;
+    const more = element("details", "music-pl-shared-list", null, words);
+    element("summary", null, "The videos", more);
+    const ol = element("ol", null, null, more);
+    for (const item of parsed.items) element("li", null, [titleOf(item), item.channel].filter(Boolean).join(" · "), ol);
+    return card;
   }
   function copy(text, done) {
     try {
@@ -75074,6 +75296,26 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // that carry links (a room, a chat).
     shareText: (key) => { const list = init() ? listFor(key) : null; return list ? shareText(list, api.info) : ""; },
     parse: (text) => init() ? parseShare(text, api.info, { loose: true }) : null,
+    // Where friends talk: a room message that is a shared playlist, as a card
+    // to play or save (null for any other text); a Project hub link that is
+    // YouTube's play-them-all, as a playlist named after its card.
+    card: (text, options = {}) => {
+      if (!init() || typeof text !== "string" || !/Mefi Studio playlist:|youtube\.com\/watch_videos/i.test(text)) return null;
+      const parsed = parseShare(text, api.info);
+      return parsed ? cardFor(parsed, options) : null;
+    },
+    fromLink: (url, name = "") => {
+      if (!init()) return null;
+      let link;
+      try { link = new URL(String(url ?? "")); } catch { return null; }
+      if (link.protocol !== "https:" || !/^(?:www\.|m\.)?youtube\.com$/i.test(link.hostname) || link.pathname !== "/watch_videos") return null;
+      const parsed = parseShare(link.href, api.info);
+      const title = clean(name, NAME_LIMIT);
+      return parsed ? { ...parsed, name: title || parsed.name } : null;
+    },
+    cardFor: (parsed, options = {}) => init() ? cardFor(parsed, options) : null,
+    play: (parsed) => Boolean(init() && parsed?.items?.length && api.play(parsed.items, parsed.name)),
+    keep: (parsed) => init() && parsed?.items?.length ? keepShared(parsed) : { ok: false },
     model: { parseShare, shareText, youtubeAll, cleanList, lengthLabel, SHARE_HEAD, ITEM_LIMIT, LIST_LIMIT },
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
@@ -77696,7 +77938,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         more.setAttribute("aria-expanded", String(messageMenus.has(message.id)));
         head.append(more);
       }
-      const text = node("p", "rooms-message-text", readable(message, nameOf));
+      // A shared playlist shows as one to play or save (renderer/playlists.js).
+      const text = window.MefiPlaylists?.card?.(String(message.text ?? "")) || node("p", "rooms-message-text", readable(message, nameOf));
       item.append(head, text);
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
       if (messageMenus.has(message.id)) {
@@ -78349,7 +78592,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       by.append(badge(project.owner.rank));
       text.append(head, by);
       if (project.blurb) text.append(node("p", "project-hub-blurb", project.blurb));
-      text.append(node("span", "muted project-hub-meta", `${project.host} · ${plural(project.plays, "play")} · ${plural(project.stars, "star")} · ${KINDS.find(([id]) => id === project.kind)?.[1] ?? "Other"}`));
+      // A playlist (YouTube's play-them-all link) shows its videos and plays in Studio (renderer/playlists.js).
+      const playlist = window.MefiPlaylists?.fromLink?.(project.url, project.title);
+      const shelf = playlist && window.MefiPlaylists.cardFor?.(playlist, { play: false, title: false });
+      if (shelf) text.append(shelf);
+      text.append(node("span", "muted project-hub-meta", `${project.host} · ${plural(project.plays, "play")} · ${plural(project.stars, "star")} · ${playlist ? "Playlist" : KINDS.find(([id]) => id === project.kind)?.[1] ?? "Other"}`));
       row.append(text, actions(project));
       return row;
     }
@@ -78515,9 +78762,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
 
     async function play(project) {
+      // A playlist plays in Studio's own player; the play counts the same way.
+      const playlist = window.MefiPlaylists?.fromLink?.(project.url, project.title);
       await guard("Opening…", async () => {
-        const answer = await call("playProject", project.id);
-        status.textContent = answer?.ok ? `${project.title} opened in your browser. Play for ${Math.round((answer.minMs ?? 120000) / 60000)} minutes and it counts${project.owner.id === me?.user?.id ? "" : " for you both"}.` : why(answer, "That project could not be opened.");
+        const answer = playlist ? await call("playProject", project.id, { here: true }) : await call("playProject", project.id);
+        const minutes = Math.round((answer?.minMs ?? 120000) / 60000), counts = project.owner.id === me?.user?.id ? "" : " for you both";
+        if (playlist) {
+          window.MefiPlaylists.play(playlist);
+          status.textContent = answer?.ok ? `${project.title} is playing in Studio. Listen for ${minutes} minutes and it counts${counts}.` : `${project.title} is playing in Studio; this play won't count: ${why(answer, "the room service didn't answer.")}`;
+          return;
+        }
+        status.textContent = answer?.ok ? `${project.title} opened in your browser. Play for ${minutes} minutes and it counts${counts}.` : why(answer, "That project could not be opened.");
       });
     }
     async function star(project, on) {
@@ -79025,12 +79280,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const facts = [`${top.owner.name} · ${rankName(top.owner.rank)}`, `Shared ${when(top.createdAt)}`, KINDS[top.kind] ?? "project", top.week ? `${plural(top.weekPlays, "play")} this week` : plural(top.plays, "play"), plural(top.stars, "star")];
       by.textContent = facts.join(" · ");
       const play = button("Play", () => {
-        void Promise.resolve(window.mefiStudio?.hubProjects?.("playProject", top.id)).then((answer) => {
+        // A playlist (renderer/playlists.js) plays in Studio's own player; the play counts the same way.
+        const playlist = window.MefiPlaylists?.fromLink?.(top.url, top.title);
+        const asked = playlist ? window.mefiStudio?.hubProjects?.("playProject", top.id, { here: true }) : window.mefiStudio?.hubProjects?.("playProject", top.id);
+        void Promise.resolve(asked).then((answer) => {
           const hold = page.you.hold;
-          status.textContent = !answer?.ok ? "That project could not be opened."
-            : top.owner.id === meId ? "Opened your own project in your browser. Your own plays don't earn credits."
-            : hold ? `Opened in your browser. ${HOLD_WORDS[hold.reason] ?? "Credits start once your account is in good standing"}, so this play won't earn yet.`
-            : "Opened in your browser. After two minutes you both earn credits.";
+          if (playlist) window.MefiPlaylists.play(playlist);
+          const opened = playlist ? "Playing in Studio" : "Opened in your browser";
+          status.textContent = !answer?.ok ? (playlist ? "Playing in Studio; this play won't count right now." : "That project could not be opened.")
+            : top.owner.id === meId ? `${playlist ? "Playing your own playlist in Studio" : "Opened your own project in your browser"}. Your own plays don't earn credits.`
+            : hold ? `${opened}. ${HOLD_WORDS[hold.reason] ?? "Credits start once your account is in good standing"}, so this play won't earn yet.`
+            : `${opened}. After two minutes you both earn credits.`;
         }).catch(() => { status.textContent = "That project could not be opened."; });
       }, "ghost front-play", "friends-front-play");
       story.append(by, play);
@@ -89650,6 +89910,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // The report card and the logins are read each time their place opens (renderer/team-models.js).
     if (place.id === "seats") window.MefiTeamModels?.open?.(); else if (place.id === "providers") window.MefiTeamModels?.openProviders?.();
     window.MefiNav?.paintCurrent(); window.MefiScroll?.refresh();
+    // A way in to Routing (Search, Team's own links, a classic link) lands on it: Routing sits in More settings now
+    // (fileSeats), which opens at it instead of leaving the controls folded away under the seats.
+    if (!options.target && place.id === "seats" && pane === "routing") {
+      const more = $("agents-more"), routing = $("settings-routing");
+      if (more && routing && more.contains(routing)) { more.open = true; routing.scrollIntoView?.({ block: "start" }); }
+    }
     if (options.target) {
       const target = $(options.target); if (target && $("agents-overlay").contains(target)) { for (let el = target; el && el !== $("agents-body"); el = el.parentElement) if (el.tagName === "DETAILS") el.open = true; target.scrollIntoView?.({ block: "nearest" }); (target.nextElementSibling?.classList.contains("studio-select") ? target.nextElementSibling : target).focus?.({ preventScroll: true }); }
     }
@@ -92336,7 +92602,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const own = document.getElementById("settings-start-vibe");
       if (own && own.type === "checkbox") { own.checked = startBox.checked; own.dispatchEvent?.(new Event("change", { bubbles: true })); }
       else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
-      note(startBox.checked ? "Every launch starts in Social." : "Each launch keeps the mode you closed in.", "good");
+      note(startBox.checked ? "Every launch starts in Social." : "Each launch opens the mode you last used.", "good");
     });
     start.append(el("span", "vibe-set-label", "Always start in Social"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
     body.append(start);
@@ -94684,7 +94950,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const startSwitch = document.getElementById("settings-start-vibe");
   if (startSwitch) {
     startSwitch.checked = startsInVibe();
-    startSwitch.addEventListener("change", () => { setStartsInVibe(startSwitch.checked); window.MefiToast?.(startSwitch.checked ? "Every launch starts in Social." : "Each launch keeps the mode you closed in.", "info"); });
+    startSwitch.addEventListener("change", () => { setStartsInVibe(startSwitch.checked); window.MefiToast?.(startSwitch.checked ? "Every launch starts in Social." : "Each launch opens the mode you last used.", "info"); });
   }
 
   window.addEventListener("mefi:nav", paintRail);
