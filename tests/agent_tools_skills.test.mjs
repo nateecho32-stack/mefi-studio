@@ -15,6 +15,10 @@ const require = createRequire(import.meta.url);
 const tools = require("../scripts/agent-tools.cjs");
 const configs = require("../scripts/agent-tool-configs.cjs");
 const format = require("../scripts/skill-format.cjs");
+// What one model call was given, system and user together: with the prompt
+// cache on, the tool transcript rides at the end of the user content so the
+// system prompt stays the same bytes every round (scripts/agent-tools.cjs run).
+const whole = (prompt, input) => (typeof input === "string" ? `${prompt}\n${input}` : prompt);
 const PROXY = fileURLToPath(new URL("../scripts/agent-tools-mcp.cjs", import.meta.url));
 
 async function fixture(fn) {
@@ -35,7 +39,7 @@ test("use_skill is offered with the skills' names, and a loaded skill joins the 
   assert.ok(tool); assert.deepEqual(tool.inputSchema.properties.name.enum, ["bug-triage"]); assert.match(tool.description, /bug-triage: Reproduce a bug first/);
   assert.equal((await tools.definitions({}, "lead", { root, skills: false })).some((entry) => entry.name === "use_skill"), false);
   const systems = [];
-  const result = await tools.run({ root, role: "lead", settings: { agentTools: { lead: { webSearch: false, webRead: false } } }, system: "Return JSON", user: "Fix the crash", call: async (system) => {
+  const result = await tools.run({ root, role: "lead", settings: { agentTools: { lead: { webSearch: false, webRead: false } } }, system: "Return JSON", user: "Fix the crash", call: async (...asked) => { const system = whole(...asked);
     systems.push(system);
     if (systems.length === 1) return { ok: true, text: '{"studio_tool_calls":[{"name":"use_skill","arguments":{"name":"bug-triage"}}]}' };
     if (systems.length === 2) return { ok: true, text: '{"studio_tool_calls":[{"name":"use_skill","arguments":{"name":"bug-triage"}},{"name":"use_skill","arguments":{"name":"nope"}}]}' };
@@ -56,7 +60,7 @@ test("loaded skills share one budget per answer", () => fixture(async (root) => 
   const offered = [{ name: "a", description: "A" }, { name: "b", description: "B" }];
   tools.useSkills({ catalog: async () => offered, load: async ({ name }) => ({ name, text: name.repeat(9000) }) });
   const systems = [];
-  const result = await tools.run({ root, role: "desk", settings: { agentTools: { desk: { webSearch: false, webRead: false } } }, system: "s", user: "u", call: async (system) => {
+  const result = await tools.run({ root, role: "desk", settings: { agentTools: { desk: { webSearch: false, webRead: false } } }, system: "s", user: "u", call: async (...asked) => { const system = whole(...asked);
     systems.push(system);
     return systems.length === 1 ? { ok: true, text: '{"studio_tool_calls":[{"name":"use_skill","arguments":{"name":"a"}},{"name":"use_skill","arguments":{"name":"b"}}]}' } : { ok: true, text: "final" };
   } });
@@ -79,7 +83,7 @@ test("the calls of one turn run side by side, and their results keep the order t
   };
   const systems = [];
   const result = await Promise.race([
-    tools.run({ root, role: "lead", settings: {}, braveKey: "", fetchImpl, system: "s", user: "u", call: async (system) => {
+    tools.run({ root, role: "lead", settings: {}, braveKey: "", fetchImpl, system: "s", user: "u", call: async (...asked) => { const system = whole(...asked);
       systems.push(system);
       return systems.length === 1 ? { ok: true, text: '{"studio_tool_calls":[{"name":"web_search","arguments":{"query":"second"}},{"name":"web_search","arguments":{"query":"first"}}]}' } : { ok: true, text: "final" };
     } }),

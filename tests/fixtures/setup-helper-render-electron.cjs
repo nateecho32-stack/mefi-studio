@@ -4,7 +4,7 @@
 // at a desktop and a phone-narrow width, keeps Tab inside the dialog, saves
 // through the bridge and closes on Escape. No application main process or
 // live state is loaded; network, permissions and child processes are blocked.
-// With ?layout=v2 it also walks the first run's three-step welcome at 1920x1080 and at 600x560 zoomed 150%.
+// It also walks the first run's three-step welcome at 1920x1080 and at 600x560 zoomed 150%.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");
@@ -144,6 +144,10 @@ app.whenReady().then(async () => {
   await run("const input=[...document.querySelectorAll('.setup-helper-toggle')].find(row=>row.textContent.includes('Let workers ask the desk')).querySelector('input');input.click();");
   await until("window.setupFixture.calls().some(call=>call.name==='agentsSave')", "team save");
   report.calls = await run("return window.setupFixture.calls();");
+  // Esc in a field first only leaves the field (MefiNav), so it is pressed
+  // from the sheet's own button: where the Tab walk above ends depends on how
+  // many stops the section has, its "i" circles included.
+  await run("document.getElementById('setup-helper-close').focus();");
   await key("Escape");
   await until("!window.MefiSetupHelper.isOpen()", "Escape closes the helper");
   report.closedByEscape = true;

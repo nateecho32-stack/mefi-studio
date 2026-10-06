@@ -922,7 +922,7 @@ test("the Add menu lists the places the registry offers, this project's sessions
     "Command", "Fleet", "Sessions", "Agents", "Catalog", "Performance",
     "Settings",
   ]);
-  for (const hidden of ["Vibe", "Search", "Configuration", "Friends", "Appearance", "Hidden", "Shelved", "Done long ago"]) assert.equal(rowsOf(t).includes(hidden), false, `${hidden} is not a place a tab can be`);
+  for (const hidden of ["Vibe", "Social", "Search", "Configuration", "Friends", "Appearance", "Hidden", "Shelved", "Done long ago"]) assert.equal(rowsOf(t).includes(hidden), false, `${hidden} is not a place a tab can be`);
   assert.ok(pop.querySelectorAll(".ts-row")[0].querySelector("svg"), "a closed page has its glyph in the list, like every other row");
   assert.equal(hintOf(t, "Fleet"), "Open", "what already has a tab says so");
   assert.equal(hintOf(t, "Home"), "Pinned", "Home is always pinned");

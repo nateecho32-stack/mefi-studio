@@ -406,7 +406,7 @@ test("the panels table is read-only and comes from MefiShell when it is there, a
   env.size.close(); env.size.open({ focus: false });
   const table = () => env.at("panels").querySelectorAll("dt, dd").map((node) => node.textContent);
   assert.deepEqual(table(), ["List", "300 px", "Inspector", "420 px", "Tab strip", "38 px", "Status bar", "28 px", "Rail", "256 px"]);
-  assert.equal(env.at("panels").parentNode.querySelector("small").textContent, "in Vibe");
+  assert.equal(env.at("panels").parentNode.querySelector("small").textContent, "in Social");
   sizes.list = 0; sizes.tabs = 0;
   env.window.dispatchEvent({ type: "mefi:shell-layout" });
   assert.deepEqual(table().slice(0, 6), ["List", "closed", "Inspector", "420 px", "Tab strip", "off"], "it follows the shell while the page is open");
@@ -520,13 +520,13 @@ test("Settings > Appearance points at the page instead of keeping a Density list
 });
 
 // ---- the small edits that carry it ------------------------------------------------------------------------------------------------
-test("in the rail shell Size and density is a page of Settings: Back with no history goes to Settings, and Settings stays lit", async () => {
+test("Size and density is a page of Settings: Back with no history goes to Settings, and Settings stays lit", async () => {
   const source = await read("renderer/nav.js");
   const calls = [];
   const dests = new Map([["size", { id: "size", section: "settings" }], ["worktrees", { id: "worktrees", section: "work" }], ["skills", { id: "skills", section: "agents" }]]);
   const sections = { size: "settings", worktrees: "work", skills: "agents" };
   const document = { documentElement: { dataset: { shell: "rail" } } };
-  const env = vm.createContext({ document, get: (id) => dests.get(id), current: () => "size", historyState: () => ({ canBack: false }), back: () => calls.push("back"), vibeMode: () => false, sectionOf: (dest) => sections[dest?.id], v2Places: () => false, placeOf: (dest) => sections[dest?.id], go: (id) => calls.push(id) });
+  const env = vm.createContext({ document, get: (id) => dests.get(id), current: () => "size", historyState: () => ({ canBack: false }), back: () => calls.push("back"), vibeMode: () => false, sectionOf: (dest) => sections[dest?.id], placeOf: (dest) => sections[dest?.id], go: (id) => calls.push(id) });
   vm.runInContext(source.slice(source.indexOf("  const WORKSPACE_PAGES"), source.indexOf("  function syncPageInert")), env);
   vm.runInContext(source.slice(source.indexOf("  function close(id)"), source.indexOf("  function closeAll()")), env);
   env.close("size");
@@ -536,14 +536,12 @@ test("in the rail shell Size and density is a page of Settings: Back with no his
   calls.length = 0;
   env.historyState = () => ({ canBack: true }); env.current = () => "size"; env.close("size");
   assert.deepEqual(calls, ["back"], "with history it is history, like the other pages");
-  document.documentElement.dataset.shell = "classic";
-  assert.equal(vm.runInContext('isWorkspacePage({ id: "size" })', env), false, "in the classic shell it is a dialog");
 
   // the rail: Settings' own item is lit on it, as a section's head is lit on the section's pages
   const item = (nav, head = false) => { const node = { dataset: head ? { section: nav } : { nav }, attrs: {}, classList: { contains: () => head, toggle() {} }, setAttribute(key, value) { this.attrs[key] = value; }, removeAttribute(key) { delete this.attrs[key]; } }; return node; };
   const studio = item("studio"), tasks = item("palette");
   const rail = { hidden: false, querySelectorAll: (selector) => (selector.includes("app-rail-head") ? [studio, tasks] : []), contains: () => true };
-  const railEnv = vm.createContext({ document: { getElementById: () => rail, activeElement: null }, current: () => "size", sectionOf: () => "settings", v2Places: () => false, placeOf: () => "settings", get: () => ({}), paintLocalNav() {}, paintRecentTasks() {}, setRailStop() {}, restingStop() {} });
+  const railEnv = vm.createContext({ document: { getElementById: () => rail, activeElement: null }, current: () => "size", sectionOf: () => "settings", placeOf: () => "settings", get: () => ({}), paintLocalNav() {}, paintRecentTasks() {}, setRailStop() {}, restingStop() {} });
   vm.runInContext(source.slice(source.indexOf("  function paintRail() {"), source.indexOf("  // The rail is one tab stop")) + "\npaintRail();", railEnv);
   assert.equal(studio.attrs["aria-current"], "page");
   assert.equal(tasks.attrs["aria-current"], undefined);

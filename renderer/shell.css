@@ -72,7 +72,6 @@ html[data-frame] .shell-top {
 html[data-frame][data-ui-mode="vibe"] .shell-top { background: var(--studio-menu-fill, var(--bg)); backdrop-filter: var(--studio-menu-blur, none); border-bottom-color: color-mix(in srgb, var(--ivory) 7%, transparent); }
 /* The classic local navigation is not drawn in the frame: its pages are the list column's page list, Back and Forward
    go with them, and the bar's middle is the breadcrumb. */
-html[data-frame][data-shell="rail"] #app-local-nav { display: none !important; }
 html[data-frame] .shell-top-left, html[data-frame] .shell-top-right, html[data-frame] .shell-top-extra { display: flex; align-items: center; gap: 8px; flex: none; min-width: 0; }
 html[data-frame] .shell-top-extra:empty { display: none; }
 html[data-frame] .shell-top-right { margin-left: auto; }
@@ -175,6 +174,11 @@ html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:
 }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 54px; border-radius: 10px; }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot-item { min-height: 50px; border-radius: 10px; }
+/* The smallest window at 150% zoom is about 373 CSS px tall: a tile keeps its icon and its word but not the tall minimum, so
+   Work, Map, Team and Friends all stay in view (studio-ui.css's short-window rail, which the two rules above out-rank). */
+@media (max-height: 440px) {
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 32px; }
+}
 html[data-frame] #app-rail .app-rail-search { margin-bottom: 0; }
 html[data-frame] #app-rail .app-rail-section.current > .app-rail-head,
 html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); }
@@ -318,7 +322,7 @@ html[data-frame] .shell-menu-fine { margin: 0; color: var(--dim); font-size: var
 html[data-frame] .shell-menu-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 html[data-frame] .shell-action { height: 28px; padding: 0 10px; border-color: var(--hairline-strong); border-radius: 8px; color: var(--ivory); font-size: var(--frame-fs); }
 
-/* ---- Search (Ctrl K) in the frame: the prototype's palette (renderer/palette.js, "the 0.5 layout") ----
+/* ---- Search (Ctrl K) in the frame: the prototype's palette (renderer/palette.js, "the prototype's Search") ----
    In the free area like every layer (the layout contract keeps the list, the inspector and the status bar clear; the
    prototype's scrim covers the whole window), under the top bar and centred, 640 px wide: the box with its glass on a 52 px row, a heading where a
    group starts, one line per result (icon, name, and its state or key on the right in plain words), at
@@ -353,3 +357,12 @@ html[data-frame] #palette-overlay #palette-hint kbd { padding: 0 5px; border: 1p
   html[data-frame] .shell-split::after, html[data-frame] .shell-switch i { transition: none; }
 }
 html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[data-motion="off"][data-frame] .shell-scrim { animation: none; }
+
+/* The tab pages (renderer/booklet.js: the Model catalog, Performance, Activity, Settings) stay in the document's flow
+   under the frame's layers. While a layer is the page (Home, Vibe, the Map, a page of Work or Team, Friends) they are
+   not laid out at all: with only their visibility off they kept the document their height, so the whole window
+   scrolled and the scroll hint sat over the status bar on every page. The Settings and Appearance previews over the
+   Map keep them, as their own rules ask. */
+html[data-frame] body:is(.workspace-active, .vibe-active, .command-active):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head),
+html[data-frame] body:has(.workspace-page:not([hidden])):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head),
+html[data-frame] body:has(#friends-overlay:not([hidden])):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head) { display: none; }

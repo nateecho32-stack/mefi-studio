@@ -61,6 +61,7 @@ function environment({ status = { configured: true, linked: true, state: "ready"
   const api = bridge ? {
     hubStatus: async () => ({ ok: true, status }),
     hubConnect: async () => { calls.push(["connect"]); status = { ...status, state: "ready" }; return { ok: true, status }; },
+    hubSubscribe: (roomId, on, holder) => { calls.push(["subscribe", roomId, on, holder]); },
     hubRooms: async () => ({ ok: true, rooms: [] }),
     onHubEvent: (fn) => { hubEvent = fn; },
     hubRoom: async (method, ...args) => {
@@ -102,7 +103,7 @@ test("signed out, Friends is one card: Sign in with Discord links, connects and 
   const gate = card.find("friends-gate");
   assert.ok(gate, "the sign-in card");
   assert.equal(gate.find("friends-gate-title").textContent, "Friends");
-  assert.match(gate.textContent, /Nothing you type in a room is stored on the server\./);
+  assert.match(gate.textContent, /Studio's room service passes room messages along and keeps none of them\./);
   assert.match(gate.textContent, /You show as online while Studio is open\. Turn it off any time\./);
   gate.find("friends-gate-signin").click();
   await flush();
@@ -309,6 +310,58 @@ test("Building now: a small tree per friend who shares, and this member's own sw
   const plain = quiet.front.card();
   await flush();
   assert.equal(plain.byClass("front-building").length, 0, "nobody sharing: no section");
+});
+
+test("while it shows, The Lobby holds the Lobby room and reads again when someone arrives or leaves", async () => {
+  let reads = 0;
+  const env = environment({ status: { configured: true, linked: true, state: "ready", user: ME, front: true, lobby: true }, page: () => { reads += 1; return front(); } });
+  const card = env.front.card();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "subscribe"), ["subscribe", "lobby", true, "rooms"], "the Lobby room is held for its presence frames");
+  env.push({ type: "presence", roomId: "lobby", inStudio: [ME.id, "200000000000000001"] });
+  env.push({ type: "presence", roomId: "lobby", inStudio: [ME.id] });
+  env.push({ type: "presence", roomId: "room_other", inStudio: [] });
+  const soon = env.timers.filter((timer) => timer.ms !== 60_000 && timer.ms !== 3000);
+  assert.equal(soon.length, 1, "a burst of arrivals is one read, and other rooms do not count");
+  assert.ok(soon[0].ms >= 1500 && soon[0].ms <= 10_000);
+  soon[0].fn();
+  await flush();
+  assert.equal(reads, 2);
+  card.dispose();
+  card.dispose();
+  assert.deepEqual(env.calls.filter((call) => call[0] === "subscribe"), [["subscribe", "lobby", true, "rooms"], ["subscribe", "lobby", false, "rooms"]], "let go once, however often Friends closes it");
+});
+
+test("one way to say the connection: Connect only when it can help; the right nudge; this week's events", async () => {
+  const env = environment();
+  const said = (hub) => JSON.parse(JSON.stringify(env.front.hubState(hub)));
+  assert.deepEqual(said({ configured: true, linked: true, state: "error", error: "auth" }), { action: "signin", text: "Your Discord sign-in has run out. Sign in with Discord again." });
+  assert.equal(said({ configured: true, linked: true, state: "error", error: "version" }).action, "update", "an old Studio is told to update, not to Connect");
+  assert.equal(said({ configured: true, linked: true, state: "error", error: "not-member" }).action, "join");
+  assert.equal(said({ configured: true, linked: true, state: "offline", error: "network" }).action, "connect");
+  assert.equal(said({ configured: true, linked: true, state: "ready" }).action, null);
+  const old = environment({ status: { configured: true, linked: true, state: "error", error: "version", user: ME, front: true } });
+  const stale = old.front.card();
+  await flush();
+  assert.equal(stale.find("friends-front-connect"), null, "no Connect button that cannot help");
+  assert.match(stale.find("friends-front-status").textContent, /needs a newer Studio/);
+
+  const held = environment({ page: front({ you: { ...front().you, week: { earned: 0, plays: 0, stars: 0 }, projects: 0, hold: { reason: "new-member", until: null } } }) });
+  const heldCard = held.front.card();
+  await flush();
+  assert.match(heldCard.byClass("front-col")[2].textContent, /Credits start a week after you join the Void Engine server/);
+  const quiet = environment({ page: front({ you: { ...front().you, week: { earned: 0, plays: 0, stars: 0 }, projects: 2, hold: null } }) });
+  const quietCard = quiet.front.card();
+  await flush();
+  assert.match(quietCard.byClass("front-col")[2].textContent, /No plays yet this week/, "someone who already shared is not told to share");
+
+  const events = environment({ page: front({ events: { jam: { id: "jam_a", theme: "Tiny worlds", phase: "entries", entriesUntil: Date.now() + 86_400_000, endsAt: Date.now() + 5 * 86_400_000, entries: 4, entered: true }, cowork: null } }) });
+  const eventsCard = events.front.card();
+  await flush();
+  const row = eventsCard.byClass("front-events")[0];
+  assert.match(row.textContent, /This weekBuild Jam: Tiny worldsEntries open until \w+ · you're in · 4 entries/);
+  row.byClass("front-item")[0].click();
+  assert.deepEqual(JSON.parse(JSON.stringify(events.goes.at(-1))), ["friends-page", { place: "events" }]);
 });
 
 test("main lets the renderer read the front page through hub:room", () => {

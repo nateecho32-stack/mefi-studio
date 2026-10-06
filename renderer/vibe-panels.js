@@ -590,16 +590,16 @@
     const permissions = el("div"); body.append(permissions); window.MefiAutonomy?.mount(permissions, { full: true });
     const data = state.data;
     const mode = el("div", "vibe-set");
-    mode.append(el("span", "vibe-set-label", "Studio mode"));
+    mode.append(el("span", "vibe-set-label", "Mode"));
     const modes = el("div", "mode-switch vibe-set-mode");
-    modes.setAttribute("role", "radiogroup"); modes.setAttribute("aria-label", "Studio mode"); modes.dataset.mode = "vibe";
+    modes.setAttribute("role", "radiogroup"); modes.setAttribute("aria-label", "Mode"); modes.dataset.mode = "vibe";
     modes.append(el("i", "mode-thumb"));
-    for (const [key, label] of [["vibe", "Vibe"], ["build", "Build"]]) {
+    for (const [key, label] of [["vibe", "Social"], ["build", "Studio"]]) {
       const button = el("button", "", label);
       button.type = "button"; button.setAttribute("role", "radio"); button.dataset.uiMode = key; button.setAttribute("aria-checked", String(key === "vibe"));
       modes.append(button);
     }
-    mode.append(modes, el("span", "vibe-set-hint", "Build is the full studio: every board, model and setting."));
+    mode.append(modes, el("span", "vibe-set-hint", "Studio is for in-depth building: every board, model and setting."));
     body.append(mode);
 
     const themes = window.MefiMusic?.themes?.() ?? [];
@@ -632,7 +632,7 @@
     box.type = "checkbox"; box.setAttribute("role", "switch");
     box.checked = read("mefiStudio.commandHome") !== "0";
     box.addEventListener("change", () => setLaunch(box.checked));
-    launch.append(el("span", "vibe-set-label", "Open Vibe on launch"), box, el("span", "vibe-set-hint", "Off reopens the last page you used instead."));
+    launch.append(el("span", "vibe-set-label", "Open Social on launch"), box, el("span", "vibe-set-hint", "Off reopens the last page you used instead."));
     body.append(launch);
 
     // Vibe even after a day in Build (vibe.js LAUNCH_KEY), mirrored by
@@ -645,9 +645,9 @@
       const own = document.getElementById("settings-start-vibe");
       if (own && own.type === "checkbox") { own.checked = startBox.checked; own.dispatchEvent?.(new Event("change", { bubbles: true })); }
       else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
-      note(startBox.checked ? "Studio starts in Vibe every launch." : "Studio keeps the mode you close it in.", "good");
+      note(startBox.checked ? "Every launch starts in Social." : "Each launch keeps the mode you closed in.", "good");
     });
-    start.append(el("span", "vibe-set-label", "Always start in Vibe"), startBox, el("span", "vibe-set-hint", "Off keeps Build if you closed Studio in Build."));
+    start.append(el("span", "vibe-set-label", "Always start in Social"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
     body.append(start);
 
     // Key tips (renderer/key-tips.js): the small pop-ups naming each button's key.
@@ -700,7 +700,7 @@
       void api()?.prefsSet?.({ commandHome: on });
       try { localStorage.setItem("mefiStudio.commandHome", on ? "1" : "0"); } catch { /* private store */ }
     }
-    note(on ? "Studio opens on Vibe." : "Studio reopens the last page you used.", "good");
+    note(on ? "Every launch opens Social." : "Each launch reopens the last page you used.", "good");
   }
 
   // ---- a new app ----------------------------------------------------------------------
@@ -1112,7 +1112,7 @@
     // a fresh one, so the panel waits, then catches up. Your own moves paint.
     if (state.signature && $("body")?.querySelector?.(".danger-armed")) { clearTimeout(armedPaint); armedPaint = setTimeout(render, 3200); return; }
     state.signature = signature;
-    $("kicker").textContent = state.data.projectName || "Vibe";
+    $("kicker").textContent = state.data.projectName || "Social";
     $("title").textContent = view?.view === "task" ? "Task" : view?.view === "idea" ? "Idea" : view?.view === "family" ? "Plan" : TITLES[state.kind];
     $("back").hidden = !view;
     const body = $("body");

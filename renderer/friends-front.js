@@ -15,8 +15,11 @@
 // many tasks run and finished today, as a small tree); "Share what I'm
 // building" at the foot is this member's own switch (main's
 // hubBuildingShare), off until they turn it on. It reads again
-// every minute while it is on screen and the window can be seen, and stops
-// when Friends lets it go (dispose). Everything is text: names and titles go
+// every minute while it is on screen and the window can be seen, and sooner
+// when someone arrives or leaves: while it shows, it holds the Lobby room
+// (hubSubscribe "lobby", as Rooms does) and a presence frame there reads the
+// page again, at most every ten seconds. It lets go when Friends does
+// (dispose). Everything is text: names and titles go
 // in with textContent, and nothing from the relay becomes a link.
 //
 // Pop-ups (popups.hear, on the module's one hub listener, Friends open or
@@ -40,14 +43,39 @@
   // A steady colour per member, from their id.
   const hue = (id) => [...String(id)].reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) % 360, 7);
   const goPlace = (place, extra = {}) => window.MefiNav?.go?.("friends-page", { place, ...extra });
+  // "today" and "yesterday" by the calendar, not by 24-hour spans.
+  const startOfDay = (ms) => { const day = new Date(ms); day.setHours(0, 0, 0, 0); return day.getTime(); };
   const when = (ms) => {
     if (!Number.isFinite(ms)) return "";
-    const days = Math.floor((Date.now() - ms) / 86_400_000);
+    const days = Math.round((startOfDay(Date.now()) - startOfDay(ms)) / 86_400_000);
     return days <= 0 ? "today" : days === 1 ? "yesterday" : new Date(ms).toLocaleDateString([], { weekday: "long" });
   };
+  const HOLD_WORDS = {
+    "new-account": "Credits start when your Discord account is 30 days old",
+    "new-member": "Credits start a week after you join the Void Engine server",
+    "forgot-me": "Credits are paused for 30 days after Forget me",
+    "read-only": "Credits are paused while your account is read-only",
+  };
+
+  // ---- the room service connection, said once for every Friends place ----------
+  // What the connection is doing, in a sentence, and the one thing that helps:
+  // sign in again, join the server, update Studio, or Connect (only when a
+  // connection can actually be made). The Lobby, the Project hub and Your PCs use it.
+  function hubState(hub) {
+    if (!hub?.configured) return { action: null, text: "This copy of Studio can't reach the room service." };
+    if (!hub.linked) return { action: "signin", text: "Sign in with Discord to use Friends." };
+    if (hub.error === "not-member") return { action: "join", text: "Your Discord account isn't in the Void Engine server yet. Join it, then check again." };
+    if (hub.error === "auth") return { action: "signin", text: "Your Discord sign-in has run out. Sign in with Discord again." };
+    if (hub.error === "version") return { action: "update", text: "The room service needs a newer Studio. Update Studio, then come back." };
+    if (hub.state === "ready") return { action: null, text: "" };
+    if (hub.state === "connecting") return { action: null, text: "Connecting to the room service…" };
+    if (hub.error === "too-many-sockets") return { action: "connect", text: "Studio is open in too many places with this account. Close one, then Connect." };
+    return { action: "connect", text: hub.error ? "Not connected to the room service. Check your internet, then Connect." : "Not connected to the room service yet." };
+  }
 
   // ---- the sign-in card -------------------------------------------------------
-  function gate({ onSignedIn } = {}) {
+  // note: a line to start with (why signing in is asked again).
+  function gate({ onSignedIn, note = "" } = {}) {
     const root = node("section", "friends-gate");
     root.id = "friends-gate";
     root.setAttribute("aria-labelledby", "friends-gate-title");
@@ -55,10 +83,10 @@
     title.id = "friends-gate-title";
     const lead = node("p", "friends-gate-lead", "See who's online, join a room, and share what you make with people who build with Studio.");
     const actions = node("div", "friends-gate-actions");
-    const status = node("p", "friends-gate-status");
+    const status = node("p", "friends-gate-status", note);
     status.id = "friends-gate-status";
     status.setAttribute("role", "status");
-    const fine = node("p", "friends-gate-fine", "Studio asks Discord for your name and your Void Engine server roles. Nothing you type in a room is stored on the server.");
+    const fine = node("p", "friends-gate-fine", "Studio asks Discord for your name and your Void Engine server roles. Studio's room service passes room messages along and keeps none of them.");
     const points = node("ul", "friends-gate-points");
     for (const [strong, rest] of [["You show as online", " while Studio is open. Turn it off any time."], ["Your PCs and Studio Daily", " keep working without signing in."]]) {
       const item = node("li");
@@ -112,6 +140,8 @@
 
   // ---- Pop-ups --------------------------------------------------------------------
   const POPUPS_KEY = "mefiStudio.friendsPopups";
+  // Credits from community events (relay events.mjs), as a pop-up says them.
+  const EVENT_CREDITS = { together: "for building together", cowork: "for the cowork hour", jam: "from the Build Jam" };
   const popups = {
     on() { try { return globalThis.localStorage?.getItem(POPUPS_KEY) !== "0"; } catch { return true; } },
     set(on) { try { globalThis.localStorage?.setItem(POPUPS_KEY, on ? "1" : "0"); } catch { /* this window only */ } },
@@ -145,6 +175,7 @@
         case "credits":
           if (event.delta > 0 && event.reason === "played") popups.show(`Someone played your project: +${event.delta} credits`, "Project hub", "hub");
           else if (event.delta > 0 && event.reason === "starred") popups.show(`Someone starred your project: +${event.delta} credits`, "Project hub", "hub");
+          else if (event.delta > 0 && EVENT_CREDITS[event.reason]) popups.show(`+${event.delta} credits ${EVENT_CREDITS[event.reason]}`, "Events", "events");
           return;
         default:
       }
@@ -177,7 +208,9 @@
     }
     listen(api);
     let timer = null, seq = 0, tried = false, gone = false;
+    let holding = false, soon = null, readAt = 0; // the Lobby room held for its presence frames
     let page = null; // the last front page read
+    let meId = null; // this member, from hub:status
     let sharing = false; // "Share what I'm building", as main's hub:status says
     let code = null; // { roomId, code, link } for the member's own room
 
@@ -187,6 +220,8 @@
         timer = null;
         if (gone || root.isConnected === false) { dispose(); return; }
         if (typeof document !== "undefined" && document.visibilityState === "hidden") { schedule(); return; }
+        // Someone is using a control on the page (a switch, Copy invite): read later, not under their hands.
+        if (typeof document !== "undefined" && root.contains?.(document.activeElement) && document.activeElement !== root) { schedule(); return; }
         void load();
       }, REFRESH_MS);
     };
@@ -223,11 +258,14 @@
           return;
         }
         root.dataset.state = hub.state || "off";
-        status.textContent = hub.state === "connecting" ? "Connecting to the room service…" : "Not connected to the room service.";
-        body.replaceChildren(button("Connect", () => { tried = false; void Promise.resolve(api.hubConnect()).finally(() => load()); }, "ghost", "friends-front-connect"));
+        const said = hubState(hub);
+        if (said.action === "signin") { status.textContent = ""; body.replaceChildren(gate({ onSignedIn: () => { tried = false; void load(); }, note: said.text })); return; }
+        status.textContent = said.text;
+        body.replaceChildren(...(said.action === "connect" ? [button("Connect", () => { tried = false; void Promise.resolve(api.hubConnect()).finally(() => load()); }, "ghost", "friends-front-connect")] : []));
         return;
       }
       sharing = hub.shareBuilding === true;
+      meId = hub.user?.id ?? meId;
       if (!hub.front) {
         root.dataset.state = "unsupported";
         status.textContent = "This room service has no front page yet. Rooms and the Project hub still work.";
@@ -243,6 +281,8 @@
         return;
       }
       page = answer;
+      readAt = Date.now();
+      if (!holding && hub.lobby) { holding = true; api.hubSubscribe?.("lobby", true, "rooms"); }
       root.dataset.state = "ready";
       status.textContent = "";
       if (page.ownRoom && code?.roomId !== page.ownRoom.id) {
@@ -344,7 +384,11 @@
       by.textContent = facts.join(" · ");
       const play = button("Play", () => {
         void Promise.resolve(window.mefiStudio?.hubProjects?.("playProject", top.id)).then((answer) => {
-          status.textContent = answer?.ok ? "Opened in your browser. After two minutes you both earn credits." : "That project could not be opened.";
+          const hold = page.you.hold;
+          status.textContent = !answer?.ok ? "That project could not be opened."
+            : top.owner.id === meId ? "Opened your own project in your browser. Your own plays don't earn credits."
+            : hold ? `Opened in your browser. ${HOLD_WORDS[hold.reason] ?? "Credits start once your account is in good standing"}, so this play won't earn yet.`
+            : "Opened in your browser. After two minutes you both earn credits.";
         }).catch(() => { status.textContent = "That project could not be opened."; });
       }, "ghost front-play", "friends-front-play");
       story.append(by, play);
@@ -381,7 +425,11 @@
       if (you.week.plays) week.push(entry(`Your projects got ${plural(you.week.plays, "play")}`, `+${you.week.earned} credits this week`, () => goPlace("hub")));
       else if (you.week.earned) week.push(entry(`+${you.week.earned} credits this week`, "From playing friends' projects", () => goPlace("hub")));
       if (you.week.stars) week.push(entry(plural(you.week.stars, "new star"), "On your projects this week", () => goPlace("hub")));
-      if (!week.length) week.push(entry("Share a project to start earning", "Plays and stars earn you credits", () => goPlace("hub")));
+      if (!week.length) {
+        if (you.hold) week.push(entry(HOLD_WORDS[you.hold.reason] ?? "Credits start once your account is in good standing", you.hold.until ? `From ${new Date(you.hold.until).toLocaleDateString([], { day: "numeric", month: "long" })}` : "Plays and stars from friends count then", () => goPlace("hub")));
+        else if (!you.projects) week.push(entry("Share a project to start earning", "Plays and stars earn you credits", () => goPlace("hub")));
+        else week.push(entry("No plays yet this week", "Ask friends to play what you shared, and play theirs", () => goPlace("hub")));
+      }
       row.append(column("Your week", [mine, ...week], ""));
       return row;
     }
@@ -396,7 +444,7 @@
       tick.addEventListener("change", () => {
         void Promise.resolve(api.hubRoom("setOnlineVisible", tick.checked)).then((answer) => {
           if (answer?.ok) { page.visible = answer.visible; status.textContent = answer.visible ? "Friends can see you're online." : "You're hidden from Who's online."; }
-          else { tick.checked = !tick.checked; status.textContent = "That didn't save. Try again."; }
+          else { tick.checked = !tick.checked; status.textContent = "That didn't save. Check your connection and try again."; }
         }).catch(() => { tick.checked = !tick.checked; });
       });
       toggle.append(tick, node("span", "", "Show me as online"));
@@ -415,7 +463,7 @@
       shareTick.addEventListener("change", () => {
         void Promise.resolve(api.hubRoom("shareBuilding", shareTick.checked)).then((answer) => {
           if (answer?.ok) { sharing = answer.shareBuilding === true; status.textContent = sharing ? "Friends see your project's name and how many tasks run, never what they are." : "You stopped sharing what you're building."; }
-          else { shareTick.checked = !shareTick.checked; status.textContent = "That didn't save. Try again."; }
+          else { shareTick.checked = !shareTick.checked; status.textContent = "That didn't save. Check your connection and try again."; }
         }).catch(() => { shareTick.checked = !shareTick.checked; });
       });
       share.append(shareTick, node("span", "", "Share what I'm building"));
@@ -433,9 +481,33 @@
       return bar;
     }
 
+    // This week's community events (Friends › Events), when the room service runs them.
+    function eventsRow() {
+      const jam = page.events?.jam, cowork = page.events?.cowork;
+      if (!jam && !cowork) return null;
+      const box = node("section", "front-events");
+      box.setAttribute("aria-label", "This week");
+      box.append(node("h3", "front-col-title", "This week"));
+      const day = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleDateString([], { weekday: "long" }) : "");
+      const hour = (ms) => (Number.isFinite(ms) ? new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
+      if (jam) {
+        const phase = jam.phase === "entries" ? `Entries open until ${day(jam.entriesUntil)}${jam.entered ? " · you're in" : ""}` : jam.phase === "voting" ? `Voting until ${day(jam.endsAt)}` : "The results are in";
+        box.append(entry(`Build Jam: ${jam.theme}`, `${phase} · ${jam.entries ?? 0} ${jam.entries === 1 ? "entry" : "entries"}`, () => goPlace("events")));
+      }
+      if (cowork) {
+        const now = Date.now();
+        const on = Number.isFinite(cowork.startsAt) && cowork.startsAt <= now && (!Number.isFinite(cowork.endsAt) || cowork.endsAt > now);
+        box.append(entry("Cowork hour", on ? `On now · ${cowork.here ?? 0} here` : `Next at ${hour(cowork.startsAt)}`, () => goPlace("events")));
+      }
+      return box;
+    }
+
     function paint() {
       if (!page) return;
-      body.replaceChildren(...[mast(), onlineRow(), buildingNow(), lead(), columns(), foot()].filter(Boolean));
+      // A repaint gives keyboard focus back to the same control.
+      const focused = typeof document !== "undefined" && root.contains?.(document.activeElement) ? document.activeElement.id : null;
+      body.replaceChildren(...[mast(), onlineRow(), buildingNow(), eventsRow(), lead(), columns(), foot()].filter(Boolean));
+      if (focused) document.getElementById?.(focused)?.focus?.({ preventScroll: true });
       window.MefiScroll?.scan?.(root);
     }
 
@@ -443,12 +515,19 @@
     function hear(event) {
       if (gone || root.isConnected === false) { dispose(); return; }
       if (event?.type === "status" || event?.type === "credits" || event?.type === "played") void load();
+      // Someone arrived in or left the Lobby: read again, not more than once every ten seconds.
+      else if (event?.type === "presence" && event.roomId === "lobby" && !soon) {
+        soon = setTimeout(() => { soon = null; if (!gone) void load(); }, Math.max(1500, readAt + 10_000 - Date.now()));
+      }
     }
     function dispose() {
+      if (gone) return;
       gone = true;
       seq += 1;
       clearTimeout(timer);
+      clearTimeout(soon);
       timer = null;
+      if (holding) { holding = false; api.hubSubscribe?.("lobby", false, "rooms"); }
       if (current === handle) current = null;
     }
     const handle = { hear, dispose };
@@ -458,7 +537,7 @@
     return root;
   }
 
-  window.MefiFriendsFront = { gate, card, popups };
+  window.MefiFriendsFront = { gate, card, popups, hubState };
   // Pop-ups need the hub listener with Friends closed too.
   listen(bridge());
 })();

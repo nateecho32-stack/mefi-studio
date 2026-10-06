@@ -1243,7 +1243,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   // name, the Lobby, or just "in Studio"; an unlisted room is never named),
   // the rooms open now with how many are in each, the Lobby's crowd, the
   // member's own room for an invite code, and the hub's week (credits.front).
-  route('GET', '/v1/front', ({ actor }) => {
+  route('GET', '/v1/front', async ({ actor }) => {
+    const held = await credits.heldUntil(actor.uid);
     joinLobby(actor.uid);
     const ready = readySockets();
     const listed = new Map(store.all(`SELECT id, name, kind FROM rooms WHERE status = 'active' AND listed = 1`).map((row) => [row.id, row]));
@@ -1286,7 +1287,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       rooms: open.slice(0, FRONT.rooms),
       ownRoom: own ? { id: own.id, name: own.name } : null,
       visible: !onlineHidden(actor.uid),
-      ...credits.front(actor.uid),
+      ...credits.front(actor.uid, held),
       events: events.front(actor.uid),
     });
   });

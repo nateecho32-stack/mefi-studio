@@ -6,8 +6,8 @@
 // which is about 400 CSS px), Build and Vibe, the menu closed and pinned, and
 // what is drawn is measured, not assumed:
 //
-//   1. v1 (the default) has no frame at all: no element, no attribute, no inline
-//      variable, and the way in (the Search action, the Settings switch) is there.
+//   1. The frame is the only layout: it is built at launch, and there is no way
+//      back to the classic one (no Search action, no Settings switch).
 //   2. v2: every region is in the page, its real box is the room MefiNav.layout
 //      says it was given, nothing leaves the window or overlaps, the top bar holds
 //      all its controls inside itself, no text is under 12 px, no scroller reserves
@@ -18,7 +18,7 @@
 //      back after a reload; Vibe and Build swap presets; Ctrl M switches the mode.
 //   4. In the smallest window a column is a drawer that stays inside the window,
 //      closes on Escape and on a press outside, and returns focus.
-//   5. Turning v2 off removes the frame and turning it on again builds it once.
+//   5. Taking the frame away and building it again gives one frame.
 //
 // Network, permissions and child processes are blocked. The page's bridge is
 // synthetic (tests/fixtures/shell-render-electron.cjs builds it from preload.cjs's
@@ -33,7 +33,7 @@ const root = process.env.MEFI_SHELL_FIXTURE;
 if (!root || !path.isAbsolute(root)) throw new Error("An isolated shell fixture directory is required");
 const studio = path.resolve(__dirname, "..", "..");
 const only = process.env.MEFI_SHELL_ONLY || "";
-const report = { errors: [], networkAttempts: [], processAttempts: [], v1: {}, configs: {}, walks: {}, interactions: {}, shots: [], complete: false };
+const report = { errors: [], networkAttempts: [], processAttempts: [], configs: {}, walks: {}, interactions: {}, shots: [], complete: false };
 app.setName("Shell Render Fixture");
 for (const name of ["userData", "sessionData", "crashDumps"]) {
   const directory = path.join(root, name); fs.mkdirSync(directory, { recursive: true }); app.setPath(name, directory);
@@ -58,7 +58,6 @@ const MODES = ["build", "vibe"];
 const RAILS = ["closed", "pinned"];
 const label = ([width, height, zoom]) => `${width}x${height}@${zoom}`;
 const REGION_IDS = ["shell-frame", "shell-top", "shell-list", "shell-inspector", "shell-tabs", "shell-status", "shell-main", "shell-scrim", "shell-split-rail", "shell-split-list", "shell-split-inspector"];
-const LAYOUT_KEY = "mefiStudio.shell.layout.v1";
 
 // What the page reports about the frame, run in the renderer. Boxes are [left, top, width, height] in CSS px, 0.01 rounded, or null when not on screen.
 function probe() {
@@ -254,31 +253,11 @@ app.whenReady().then(async () => {
   };
   const p = async () => run("return window.__shellProbe();");
 
-  // ============ 1. v1: no frame ============
+  // ============ 1. and 2. the frame, the only layout ============
   await load({ capture: "1" });
   await run(`window.__shellProbe = ${probe.toString()};`);
-  {
-    const v1 = await run(`return {
-      active: window.MefiShell.active(), layout: document.documentElement.dataset.layout ?? null, frame: document.documentElement.dataset.frame ?? null,
-      elements: ${JSON.stringify(REGION_IDS)}.filter((id) => document.getElementById(id)),
-      inline: ['--shell-list-w', '--shell-inspector-w', '--shell-tabs-h', '--shell-status-h', '--frame-top-l', '--frame-top-r'].filter((name) => document.documentElement.style.getPropertyValue(name)),
-      action: (() => { const record = window.MefiNav.get('layout-switch'); return record ? { kind: record.kind, label: record.label, palette: record.showIn?.palette } : null; })(),
-      keyRows: window.MefiNav.list().filter((record) => record.id.startsWith('shell-key-')).length,
-      box: Boolean(document.getElementById('settings-layout-v2')), checked: document.getElementById('settings-layout-v2')?.checked ?? null,
-      narrow: document.documentElement.hasAttribute('data-frame-narrow'), stored: localStorage.getItem(${JSON.stringify(LAYOUT_KEY)}),
-    };`);
-    assert.deepEqual(v1, { active: false, layout: null, frame: null, elements: [], inline: [], action: { kind: "action", label: "Switch layout: 0.5 or classic", palette: true }, keyRows: 0, box: true, checked: false, narrow: false, stored: null }, `v1 has no frame and keeps the way in: ${JSON.stringify(v1)}`);
-    await run("await window.MefiNav.go('tasks');"); await settle();
-    await run("window.dispatchEvent(new Event('resize'));"); await settle();
-    assert.equal(await run(`return ${JSON.stringify(REGION_IDS)}.filter((id) => document.getElementById(id)).length;`), 0, "a page and a resize do not build it");
-    report.v1 = v1;
-  }
-
-  // ============ 2. v2: the frame ============
-  await load({ capture: "1", layout: "v2" });
-  await run(`window.__shellProbe = ${probe.toString()};`);
   await until("window.MefiShell.active()", "the frame is built at launch");
-  assert.equal(await run("return document.getElementById('settings-layout-v2').checked;"), true, "the Settings switch says v2 is on");
+  assert.deepEqual(await run("return [document.documentElement.dataset.layout, Boolean(window.MefiNav.get('layout-switch')), Boolean(document.getElementById('settings-layout-v2'))];"), ["v2", false, false], "the 0.5 layout, with no way back to the classic one");
 
   const checkFrame = (state, tag, { mode, rail }) => {
     const [W, H] = state.inner;
@@ -701,20 +680,9 @@ app.whenReady().then(async () => {
     assert.ok(state.boxes.status && state.boxes.status[2] >= state.inner[0] - 1, "the status bar spans the smallest window");
   }
 
-  // ============ 10. the way in, and turning v2 off and on again ============
+  // ============ 10. taking the frame away and building it again ============
   {
     await resize([1440, 900, 1]);
-    await setup({ mode: "build", rail: "closed" });
-    assert.equal(await run("return document.getElementById('settings-layout-v2').checked;"), true, "the switch says v2 is on");
-    await run("window.MefiNav.get('layout-switch').run();");
-    await sleep(120);
-    const live = await run(`return { frame: Boolean(document.getElementById('shell-frame')), attr: document.documentElement.dataset.frame ?? null, layout: document.documentElement.dataset.layout ?? null, saved: localStorage.getItem('mefiStudio.layout'), inline: ['--shell-list-w', '--shell-inspector-w', '--shell-tabs-h', '--shell-status-h', '--frame-top-l', '--frame-top-r'].filter((name) => document.documentElement.style.getPropertyValue(name)), active: window.MefiShell.active(), usable: window.MefiNav.usable() };`);
-    assert.deepEqual([live.frame, live.attr, live.layout, live.saved, live.inline, live.active], [false, null, null, "v1", [], false], `the action saves classic and takes the frame away at once: ${JSON.stringify(live)}`);
-    // The window reloads by itself a moment later; the launch's own ?layout=v2 wins, so the frame is back, built once.
-    await until("window.MefiNav && window.MefiShell && window.MefiShell.active() && !window.MefiBoot?.isActive?.()", "the window reloaded into v2", 20000);
-    await run(`window.__shellProbe = ${probe.toString()};`);
-    assert.equal(await run("return document.querySelectorAll('#shell-frame').length;"), 1);
-    assert.equal(await run("return localStorage.getItem('mefiStudio.layout');"), "v1", "the choice made in the window outlived the reload");
     // Off and on again through the module: one frame, the same pages.
     await setup({ mode: "build", rail: "closed" });
     await run("window.MefiShell.disable();"); await settle();

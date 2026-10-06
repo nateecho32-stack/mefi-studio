@@ -12,6 +12,25 @@ function appendLog(row, line, { at = Date.now(), kind = "status" } = {}) {
   return row;
 }
 
+// A coding CLI's own session (scripts/cli-stream.cjs applyEvent: the id Claude
+// Code was started under, Codex's thread) with the route facts a later attempt
+// must match to resume it, and the run's token totals. `sessionId` stays the
+// OpenCode session the watchdog, the verifier and Open session read; these are
+// bounded copies beside it, never the live objects.
+function cliSessionRecord(session) {
+  if (!session?.id) return null;
+  return {
+    cli: text(session.cli, 20) || null, id: text(session.id, 100), model: text(session.model, 120),
+    ...(session.reportedModel ? { reportedModel: text(session.reportedModel, 120) } : {}),
+    account: session.account ? text(session.account, 80) : null, cwd: session.cwd ? text(session.cwd, 400) : null,
+    at: Number.isFinite(session.at) ? session.at : null,
+  };
+}
+function usageRecord(usage) {
+  const count = (value) => (Number.isFinite(value) && value > 0 ? Math.floor(value) : 0);
+  return usage ? { input: count(usage.input), output: count(usage.output), cacheRead: count(usage.cacheRead), cacheCreate: count(usage.cacheCreate) } : null;
+}
+
 function checkpoint(entry, now = Date.now()) {
   const prior = entry.resumeCheckpoint;
   return {
@@ -20,6 +39,8 @@ function checkpoint(entry, now = Date.now()) {
     pid: entry.ownerPid, workerPid: entry.pid || null, startedAt: entry.startedAt, at: now,
     scope: backlog.buildScope(entry.ref), pending: false,
     sessionId: entry.sessionId || null,
+    ...(entry.cliSession?.id ? { cliSession: cliSessionRecord(entry.cliSession) } : {}),
+    ...(entry.cliUsage ? { usage: usageRecord(entry.cliUsage) } : {}),
     progress: Number.isFinite(entry.progress) ? Math.max(0, Math.min(1, entry.progress)) : null,
     todos: rows(entry.todos ?? prior?.todos).filter(Boolean).slice(0, 40).map((todo) => ({ content: text(todo.content, 500), status: text(todo.status, 40) })),
     outputTail: rows(entry.outputTail?.length ? entry.outputTail : prior?.outputTail).slice(-8).map((line) => text(line, 500)),
@@ -125,4 +146,4 @@ function brief(row, maxChars = 2200) {
   return details.join("\n").slice(0, maxChars);
 }
 
-module.exports = { checkpoint, held, recover, compare, brief, appendLog, settleActiveTool, retireTimedOutTool, ACTIVE_TOOL_SETTLE_MS };
+module.exports = { checkpoint, held, recover, compare, brief, appendLog, settleActiveTool, retireTimedOutTool, ACTIVE_TOOL_SETTLE_MS, cliSessionRecord, usageRecord };

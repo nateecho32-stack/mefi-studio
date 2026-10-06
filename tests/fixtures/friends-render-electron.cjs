@@ -6,8 +6,7 @@
 // with a real pointer at 1920x1080 and measures: the list in the prototype's order, the current row, the breadcrumb
 // (Friends / <place>), the page's title and the line under it, the one card that shows, nothing wider than the page,
 // and no text under 12 px. The rail's Friends, Search's Rooms, Your PCs and Playground, and the companion's Friends
-// bubble land on the page; a tab per place. A second launch without ?layout=v2 opens the companion's Friends bubble as
-// it was. Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
+// bubble land on the page; a tab per place. Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
 // process or live state is loaded; network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
@@ -113,7 +112,16 @@ app.whenReady().then(async () => {
     lastJam: { id: "jam_w2908", theme: "Echoes", endsAt: now - 86_400_000, pool: 120, results: [{ userId: "200000000000000002", name: "Jabilee", place: 1, why: "place", amount: 57, paid: 57, projectId: "proj_c" }] },
     cowork: { id: "cowork_d1h18", roomId: "room_hour", startsAt: now - 1_200_000, endsAt: now + 2_400_000, started: true, joined: false, here: 3, checks: 0, checksDone: 1, checksNeeded: 2, attendees: 0, amount: 4 },
     nextCowork: now + 8 * 3_600_000, together: { ticks: 1, needed: 3, amount: 4, everyMs: 600_000 }, budget: { budget: 275, paid: 8, left: 267, active: 3 } } };
-  const roomReplies = { requests: { ok: true, requests: [] }, invites: { ok: true, invites: [] }, messages: { ok: true, hasMore: false, messages: [] }, front, roomCode: { ok: true, code: "KQ7M-2PXD", link: "https://mefi-relay.mefi-studio.workers.dev/join/KQ7M2PXD" } };
+  // Friday jam's chat: two friends, a mention of this member, one of someone this Studio has no name for, and this member's own.
+  const ME_ID = "123456789012345678";
+  const chat = [
+    { id: "500000000000000001", author: { id: "200000000000000001", name: "Maxwell", viaStudio: true }, text: "Anyone up for a jam tonight?", createdAt: now - 50 * 60_000, editedAt: null, mentions: [], attachments: [] },
+    { id: "500000000000000002", author: { id: "200000000000000002", name: "Jabilee", viaStudio: true }, text: "Me! <@123456789012345678> you in?", createdAt: now - 45 * 60_000, editedAt: null, mentions: [{ id: ME_ID, name: "Mefi" }], attachments: [] },
+    { id: "500000000000000003", author: { id: ME_ID, name: "Mefi", viaStudio: true }, text: "Yes, bringing the new sprite tool.\nIt's on the Project hub.", createdAt: now - 40 * 60_000, editedAt: null, mentions: [], attachments: [] },
+    { id: "500000000000000004", author: { id: "200000000000000001", name: "Maxwell", viaStudio: true }, text: "Ask <@200000000000000099> too, they made the tileset.", createdAt: now - 30 * 60_000, editedAt: null, mentions: [], attachments: [] },
+    { id: "500000000000000005", author: { id: "200000000000000002", name: "Jabilee", viaStudio: true }, text: "See you at 8.", createdAt: now - 10 * 60_000, editedAt: null, mentions: [], attachments: [] },
+  ];
+  const roomReplies = { requests: { ok: true, requests: [] }, invites: { ok: true, invites: [] }, messages: { ok: true, hasMore: true, messages: chat }, front, roomCode: { ok: true, code: "KQ7M-2PXD", link: "https://mefi-relay.mefi-studio.workers.dev/join/KQ7M2PXD" } };
   const names = await bridgeNames();
   const preload = path.join(root, "friends-preload.cjs");
   fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const roomReplies=${JSON.stringify(roomReplies)};const eventReplies=${JSON.stringify(eventReplies)};const names=${JSON.stringify(names)};const calls=[];
@@ -182,11 +190,14 @@ app.whenReady().then(async () => {
       crumbs: [...document.querySelectorAll('.shell-trail .shell-crumb')].map((node) => node.textContent.trim()),
       sheet: box(overlay), nav: box(document.getElementById('shell-pages')),
       pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 || document.body.scrollWidth > innerWidth + 1,
+      // The window itself never scrolls under a page: the classic tab pages beneath are not laid out.
+      docScroll: [document.scrollingElement.scrollHeight, innerHeight],
       sideways: overlay ? overlay.scrollWidth > overlay.clientWidth + 1 : false, small, wide,
       hub: document.getElementById('agent-hub')?.hidden === false,
     };`;
   const problems = (m, tag) => [
     ...(m.pageOverflow ? [`${tag}: the page overflows the window`] : []),
+    ...(m.docScroll[0] > m.docScroll[1] + 1 ? [`${tag}: the whole window scrolls (${m.docScroll[0]} over ${m.docScroll[1]})`] : []),
     ...(m.sideways ? [`${tag}: the page scrolls sideways ${JSON.stringify(m.wide)}`] : []),
     ...m.small.map((line) => `${tag}: text under 12 px: ${line}`),
     ...m.wide.map((line) => `${tag}: past the page's right edge: ${line}`),
@@ -194,24 +205,6 @@ app.whenReady().then(async () => {
   const found = [];
   const go = (id, params) => run(`window.MefiNav.go(${JSON.stringify(id)}${params ? `, ${JSON.stringify(params)}` : ""});`);
   const placeIs = (place) => `document.getElementById('friends-overlay')?.hidden === false && document.getElementById('friends-overlay').dataset.place === ${JSON.stringify(place)} && window.MefiNav.current() === 'friends-page'`;
-
-  // ---- v1: the same Friends page, with its places as tabs and a Close of its own ---------------------
-  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
-  await until("window.MefiNav && window.MefiCompanionHub && !window.MefiBoot?.isActive?.()", "studio ready (v1)");
-  await resize(1920, 1080);
-  await go("friends");
-  await until("document.getElementById('friends-overlay')?.hidden === false && document.getElementById('friends-overlay').dataset.place === 'lobby'", "Friends opens the Friends page in the classic layout too, at The Lobby");
-  report.v1 = await run(`const shown = (el) => Boolean(el && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
-    return { bubble: document.getElementById('agent-hub')?.hidden === false, places: window.MefiCompanionHub.friendsPlaces(), route: window.MefiNav.get('friends-page')?.hidden?.(),
-      tabs: [...document.querySelectorAll('#friends-place-tabs .friends-place-tab')].filter(shown).map((tab) => tab.textContent + (tab.getAttribute('aria-current') === 'page' ? ' *' : '')),
-      close: shown(document.getElementById('friends-place-close')) };`);
-  assert.deepEqual(report.v1, { bubble: false, places: null, route: true, tabs: ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub", "Events"], close: true }, "with the layout off, Friends is the same page: tabs for its places and a Close, no bubble");
-  await click("#friends-place-tab-hub");
-  await until("document.getElementById('friends-overlay').dataset.place === 'hub' && document.getElementById('project-hub')", "the Project hub tab");
-  await capture("friends-v1-hub-1920x1080.png");
-  await click("#friends-place-close");
-  await until("document.getElementById('friends-overlay').hidden === true", "Close leaves the page");
-  report.steps.push("v1 opens the page");
 
   // ---- v2 ------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
@@ -285,6 +278,32 @@ app.whenReady().then(async () => {
   await until(placeIs("pcs") + " && document.getElementById('pc-sync-title') && !document.getElementById('friends-gate')", "Your PCs needs no sign-in");
   await run("window.friendsFixture.signedIn(true);");
   report.steps.push("the Lobby and the sign-in card");
+  // An open room: one header, the chat filling the page above one composer, at three sizes.
+  report.room = [];
+  for (const [width, height, zoom] of [[1920, 1080, 1], [1100, 720, 1], [600, 560, 1.5]]) {
+    await resize(width, height, zoom);
+    await go("friends-page", { place: "rooms", room: "room_jam" });
+    await until(placeIs("rooms") + " && document.getElementById('rooms')?.dataset.view === 'room' && document.querySelectorAll('#rooms .rooms-message').length === 5", `Friday jam opens at ${width}x${height}@${zoom}`);
+    await sleep(500);
+    const room = await run(`const box = (node) => node.getBoundingClientRect();
+      const log = document.querySelector('#rooms .rooms-messages'), composer = document.querySelector('#rooms .rooms-composer'), overlay = document.getElementById('friends-overlay');
+      return { log: Math.round(box(log).height), overlay: overlay.clientHeight, composerTop: Math.round(box(composer).top), composerBottom: Math.round(box(composer).bottom), inner: innerHeight,
+        texts: [...document.querySelectorAll('#rooms .rooms-message-text')].map((node) => node.textContent), names: document.querySelectorAll('#rooms .rooms-room-name').length,
+        status: document.getElementById('rooms-status').textContent, earlier: document.getElementById('rooms-earlier')?.hidden === false, send: Boolean(document.querySelector('#rooms .rooms-composer #rooms-send')) };`);
+    room.size = `${width}x${height}@${zoom}`;
+    report.room.push(room);
+    await capture(`friends-room-${width}x${height}@${zoom}.png`);
+    assert.equal(room.names, 1, `${room.size}: the room's name once, in its header`);
+    assert.equal(room.status, "", `${room.size}: no second copy of the name in the status line`);
+    assert.ok(room.composerTop >= 0 && room.composerBottom <= room.inner + 1, `${room.size}: the composer is on screen ${JSON.stringify(room)}`);
+    assert.ok(room.log >= room.overlay * (zoom > 1 ? 0.25 : 0.45), `${room.size}: the chat takes most of the height ${JSON.stringify(room)}`);
+    assert.ok(room.send && room.earlier, `${room.size}: Send sits in the composer and Load earlier is at the top of the log`);
+    assert.ok(room.texts.includes("Me! @Mefi you in?") && room.texts.includes("Ask @someone too, they made the tileset."), `${room.size}: mentions read as names, an unknown one as @someone`);
+    found.push(...problems(await run(measure), `the open room at ${room.size}`));
+  }
+  await resize(1920, 1080);
+  await go("friends-page", { place: "lobby" });
+  report.steps.push("an open room fills the page");
   // The layout contract's other sizes.
   for (const [width, height, zoom] of [[1440, 900, 1], [1100, 720, 1], [600, 560, 1.5]]) {
     await resize(width, height, zoom);
@@ -298,6 +317,24 @@ app.whenReady().then(async () => {
       if (id === "pcs" || wrong.length) await capture(`friends-${id}-${width}x${height}@${zoom}.png`);
     }
   }
+  // A light palette (the app's own custom colours): every place, and an open room, still fit with no text under 12 px.
+  await resize(1440, 900);
+  assert.equal(await run("return window.MefiMusic.applyCustomColors({ accent: '#8A5A00', background: '#F4F0E6', surface: '#FFFFFF', text: '#1D1B17' });"), true);
+  await sleep(1800); // the colours glide in
+  assert.equal(await run("return document.documentElement.dataset.studioThemeTone;"), "light");
+  for (const [id] of PLACES) {
+    await go("friends-page", { place: id });
+    await until(placeIs(id), `${id} in a light palette`);
+    await sleep(400);
+    found.push(...problems(await run(measure), `${id} in a light palette`));
+    await capture(`friends-light-${id}-1440x900.png`);
+  }
+  await go("friends-page", { place: "rooms", room: "room_jam" });
+  await until(placeIs("rooms") + " && document.querySelectorAll('#rooms .rooms-message').length === 5", "an open room in a light palette");
+  await sleep(400);
+  found.push(...problems(await run(measure), "an open room in a light palette"));
+  await capture("friends-light-room-1440x900.png");
+  report.steps.push("a light palette");
   assert.deepEqual(found, [], "every Friends place fits at every size, with no text under 12 px");
   await resize(1920, 1080);
   report.complete = true;

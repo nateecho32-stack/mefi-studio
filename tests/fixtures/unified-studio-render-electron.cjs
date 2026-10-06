@@ -116,30 +116,30 @@ app.whenReady().then(async () => {
   await until("window.MefiAgents && window.MefiCompanionUI?.managed()", "unified startup");
   // Home controls must clear the fixed navigation, and each Live/Workflows
   // destination must remain reachable and identify the view actually shown.
+  // In the 0.5 layout Home's own controls are on its chat view (Today stands in for the rest), and the classic Agents
+  // navigation (its Live and Workflows menus and the section pickers) is gone: Trace and the Agent Brain's views are pages
+  // of the frame, reached by their routes, Search and the Map's bar.
   await run("window.MefiVibe.setMode('build');window.MefiVibe.closeNotes();");
   for (const [width, height] of [[1440, 900], [600, 560]]) {
     window.setContentSize(width, height);
-    await run("await window.MefiNav.go('workspace');");
-    await until("window.MefiWorkspace.isActive()", "Build Home");
+    await run("await window.MefiNav.go('workspace',{view:'chat'});");
+    await until("window.MefiWorkspace.isActive() && !document.getElementById('workspace-layer').hidden", "Build Home");
     for (const selector of ['#workspace-pause', '#workspace-activity-toggle', '#workspace-layer .ws-project-actions > summary']) {
       assert.ok(await reachable(selector), `${width}: Home control is reachable: ${selector}`);
     }
     await capture(`navigation-home-${width}.png`);
-    await run("await window.MefiNav.go('command');document.querySelector('[data-agent-section=live]').click();");
-    const trace = await run("const button=[...document.querySelectorAll('#agents-menu-live button')].find(button=>button.textContent==='Trace');if(!button)return false;button.click();return true;");
-    assert.ok(trace, `${width}: Live menu opens Trace`);
+    // Trace is a Team place in the 0.5 layout (Team › Inspect), and each place keeps its own history.
+    await run("await window.MefiNav.go('agents',{section:'setup',pane:'connections'});await window.MefiNav.go('trace');");
     await until("!document.getElementById('trace-overlay').hidden", "Trace opens");
     await capture(`navigation-trace-${width}.png`);
     assert.ok(await reachable('#trace-search'), `${width}: Trace search is reachable`);
     assert.ok(await reachable('#trace-close'), `${width}: Trace Back is reachable`);
-    assert.ok(await run("return document.getElementById('trace-heading').getBoundingClientRect().top>=document.getElementById('app-local-nav').getBoundingClientRect().bottom;"), `${width}: Trace heading clears navigation`);
-    assert.equal(await run("return document.querySelector('.agents-subsection-picker').selectedOptions[0].text;"), 'Trace');
+    assert.ok(await run("return document.getElementById('trace-heading').getBoundingClientRect().top>=window.MefiNav.usable().top-1;"), `${width}: Trace heading clears the frame's bars`);
     await run("document.getElementById('trace-close').click();");
-    assert.equal(await run("return window.MefiNav.current();"), 'command', 'Trace Back returns to its previous Agents view');
-    for (const [tab, section, label] of [['live', 'live', 'Pipelines'], ['playbook', 'workflows', 'Playbook'], ['map', 'workflows', 'Project map'], ['live', 'live', 'Pipelines']]) {
+    assert.deepEqual(await run("return [window.MefiNav.current(),window.MefiAgents.params().pane];"), ['agents', 'connections'], 'Trace Back returns to the Team view it came from');
+    for (const tab of ['live', 'playbook', 'map', 'live']) {
       await run(`await window.MefiNav.go('agent-brain',{tab:${JSON.stringify(tab)}});`);
-      assert.equal(await run("return document.querySelector('.agents-section-picker').value;"), section, `${width}: ${label} section`);
-      assert.equal(await run("return document.querySelector('.agents-subsection-picker').selectedOptions[0].text;"), label, `${width}: selected view follows loaded content`);
+      assert.ok(await run(`const pane=document.getElementById('agent-brain-${tab}');return document.querySelector('[data-brain-tab=${tab}]')?.getAttribute('aria-selected')==='true'&&!pane.hidden&&pane.getClientRects().length>0;`), `${width}: the ${tab} view is the one shown, and its tab says so`);
     }
   }
   report.navigationReachable = true;
@@ -147,55 +147,18 @@ app.whenReady().then(async () => {
   await run("await window.MefiNav.go('agents');");
   await until("!document.getElementById('agents-overlay').hidden", "Agents overview");
   await capture("unified-overview.png");
-  // Native pointer travel must reveal children without navigating or shifting content.
-  await run("await window.MefiNav.go('command');");
-  const navState = () => run("return {route:window.MefiNav.current(),open:[...document.querySelectorAll('.agents-nav-subsections')].filter(el=>!el.hidden).map(el=>el.id),height:document.getElementById('app-local-nav').getBoundingClientRect().height};");
-  const pointAt = (selector) => run(`const box=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:Math.round(box.x+box.width/2),y:Math.round(box.y+box.height/2)};`);
-  assert.deepEqual((await navState()).open,[]);
-  const navHeight = (await navState()).height;
-  assert.ok(navHeight<=64,'children do not reserve a second row');
-  await capture('glass-command.png');
-  contents.sendInputEvent({type:'mouseMove',...await pointAt('[data-agent-section=setup]')});
-  await until("document.querySelector('[data-agent-section=setup]').getAttribute('aria-expanded')==='true'",'setup hover');
-  assert.equal((await navState()).route,'command','hover does not navigate');
-  const menuBox = await run("const b=document.getElementById('agents-menu-setup').getBoundingClientRect();return {x:Math.round(b.x+20),y:Math.round(b.y-3)};");
-  contents.sendInputEvent({type:'mouseMove',...menuBox}); await sleep(260);
-  assert.deepEqual((await navState()).open,['agents-menu-setup'],'connecting gap remains interactive');
-  contents.sendInputEvent({type:'mouseMove',...await pointAt('#agents-menu-setup button:nth-child(2)')}); await sleep(260);
-  assert.equal((await navState()).height,navHeight);
-  await capture('glass-navigation-hover.png');
-  const providerPoint = await pointAt('#agents-menu-setup button:nth-child(2)');
-  contents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...providerPoint}); contents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,...providerPoint});
-  await until("window.MefiAgents.params().pane==='connections' && !document.getElementById('agents-overlay').hidden",'child selection');
-  assert.deepEqual((await navState()).open,[]);
-  contents.sendInputEvent({type:'mouseMove',...await pointAt('[data-agent-section=live]')});
-  await until("!document.getElementById('agents-menu-live').hidden",'live hover');
-  contents.sendInputEvent({type:'mouseMove',x:1100,y:400});
-  await until("document.getElementById('agents-menu-live').hidden",'leaving dismisses children');
-  assert.deepEqual((await navState()).open,[],'leaving dismisses children');
-  await run("const parent=document.querySelector('[data-agent-section=live]');parent.focus();parent.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));");
-  assert.equal(await run("return document.activeElement.textContent;"),'Command');
-  await run("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));");
-  assert.equal(await run("return document.activeElement.textContent;"),'Overhead');
-  await run("document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));");
-  assert.deepEqual((await navState()).open,[]);
-  assert.equal(await run("return document.activeElement.dataset.agentSection;"),'live');
-  assert.equal((await navState()).route,'agents','Escape only closes the menu');
-  await run("document.querySelector('[data-agent-section=models]').click();");
-  assert.deepEqual((await navState()).open,['agents-menu-models'],'click also opens children');
-  contents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,x:1100,y:400}); contents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,x:1100,y:400});
-  await until("document.getElementById('agents-menu-models').hidden",'outside click dismisses');
-  assert.deepEqual((await navState()).open,[],'outside click dismisses');
+  // (The classic Agents navigation's hover menus, their keyboard and the section pickers were checked here; the 0.5 layout has
+  // none of them: Team is twelve places in the frame's list column, tests/team_render.test.mjs.)
   await run("await window.MefiNav.go('tasks');await window.MefiNav.go('agents',{section:'setup',pane:'connections'});");
-  assert.ok(await run("return !!document.querySelector('[data-agent-section=live]');"),'navigation survives leaving and returning to Agents');
-  report.hoverNavigation=true;
+  await until("window.MefiAgents.params().pane==='connections' && !document.getElementById('agents-overlay').hidden",'Agents opens on a pane after leaving it');
   await run("await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
   await until("document.querySelector('#agents-role-grid input')", "team configuration");
   await capture("unified-team.png");
   await run("const name=document.getElementById('agents-team-name');name.value='My independent team';name.dispatchEvent(new Event('input',{bubbles:true}));await window.MefiNav.go('agents',{section:'setup',pane:'behavior'});await window.MefiNav.back();");
   report.draftRetained = await run("return window.MefiAgents.params().pane==='team' && document.getElementById('agents-team-name').value==='My independent team';"); assert.ok(report.draftRetained);
   await run("await window.MefiNav.forward();");
-  assert.equal(await run("return window.MefiAgents.params().pane;"), "behavior");
+  // The 0.5 Team holds Behavior in its Overview place (agents.js TEAM_PLACES), and Forward returns there.
+  assert.equal(await run("return window.MefiAgents.teamPlace()?.id;"), "overview", "Forward returns to the place that holds Behavior");
   await run("await window.MefiNav.go('agents',{section:'setup',pane:'routing'});");
   assert.equal(await run("return window.MefiNav.historyState().canForward;"),false);
   report.noStartOnSetup = await run("return !window.unifiedFixture.calls().some(call=>['assistantControl','assistantAutopilot'].includes(call.name));"); assert.ok(report.noStartOnSetup);
@@ -230,12 +193,18 @@ app.whenReady().then(async () => {
   await run("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));");
   assert.equal(await run("return !document.querySelector('.studio-choice-popup')&&!document.getElementById('companion-panel').hidden;"),true,'Escape closes dropdown before companion');
   await run("window.MefiCompanion.close();document.activeElement.blur();");
+  // In the 0.5 frame the orb rests in the rail's foot, so a drag takes it out onto the page; the release still ends the drag
+  // (the orb stops following the pointer) and saves where it was let go.
+  const orbBox = "const r=document.getElementById('companion-orb').getBoundingClientRect();return {x:Math.round(r.x),y:Math.round(r.y)};";
   const beforeDrag=await run("const r=document.getElementById('companion-orb').getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)};");
   contents.sendInputEvent({type:'mouseMove',...beforeDrag});
   contents.sendInputEvent({type:'mouseDown',button:'left',clickCount:1,...beforeDrag});
   contents.sendInputEvent({type:'mouseMove',x:beforeDrag.x+130,y:beforeDrag.y-120});
   contents.sendInputEvent({type:'mouseUp',button:'left',clickCount:1,x:beforeDrag.x+130,y:beforeDrag.y-120}); await sleep(120);
   assert.ok(await run("return window.unifiedFixture.calls().some(call=>call.name==='companionPrefs'&&call.value.pinned===true&&call.value.anchor.x>0);"),'drag pins the saved position');
+  const dropped = await run(orbBox);
+  contents.sendInputEvent({type:'mouseMove',x:beforeDrag.x+260,y:beforeDrag.y-200}); await sleep(80);
+  assert.deepEqual(await run(orbBox), dropped, 'the release ends the drag: the orb stays where it was let go');
   await run("Object.defineProperty(document,'hidden',{value:true,configurable:true});document.dispatchEvent(new Event('visibilitychange'));");
   assert.equal(await run("return document.getElementById('companion-orb').hasAttribute('data-suspended');"),true,'hidden window suspends the companion');
   await run("Object.defineProperty(document,'hidden',{value:false,configurable:true});document.dispatchEvent(new Event('visibilitychange'));await window.mefiStudio.companionPrefs({pinned:false,roaming:false});await window.MefiCompanion.refresh();");
@@ -319,7 +288,9 @@ app.whenReady().then(async () => {
   await until("document.querySelectorAll('#agent-brain-map .ab-index-item').length===18",'populated project map');
   await run("await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));"); await sleep(160);
   await capture('unified-map-600.png');
-  assert.ok(await run("const pane=document.getElementById('agent-brain-map'),stage=pane.querySelector('.agent-brain-map-stage');return getComputedStyle(pane).overflowY==='hidden'&&stage.clientHeight>35&&stage.scrollHeight<=stage.clientHeight+2;"),'map has one bounded viewport');
+  const mapViewport = await run("const pane=document.getElementById('agent-brain-map'),stage=pane.querySelector('.agent-brain-map-stage'),free=window.MefiNav.usable(),box=(node)=>{const r=node.getBoundingClientRect();return {top:Math.round(r.top),bottom:Math.round(r.bottom),h:Math.round(r.height)};};const rows=[];for(let el=stage;el&&el!==document.body;el=el.parentElement){const s=getComputedStyle(el);rows.push({id:el.id||String(el.className).slice(0,40),...box(el),oy:s.overflowY,display:s.display});}return {ok:getComputedStyle(pane).overflowY==='hidden'&&stage.clientHeight>35&&stage.scrollHeight<=stage.clientHeight+2,overflowY:getComputedStyle(pane).overflowY,client:stage.clientHeight,scroll:stage.scrollHeight,free:{top:free.top,bottom:free.bottom},rows,kids:[...pane.children].map(el=>({id:el.id||String(el.className).slice(0,40),...box(el)})),sheet:[...(pane.closest('.agent-brain-sheet')?.children||[])].map(el=>({id:el.id||String(el.className).slice(0,40),...box(el)})),tools:[...document.getElementById('agent-brain-map-tools').querySelectorAll('*')].filter(el=>el.getClientRects().length&&el.children.length===0).map(el=>({id:el.id||String(el.className).slice(0,30),t:el.textContent.trim().slice(0,20),...box(el)}))};");
+  report.mapViewport = mapViewport;
+  assert.ok(mapViewport.ok,`map has one bounded viewport: ${JSON.stringify(mapViewport)}`);
   const keyboardCamera = await run("return window.MefiAgentBrain.mapState().camera.y;");
   await run("document.getElementById('agent-brain-map-canvas').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',shiftKey:true,bubbles:true}));");
   await until("!window.MefiAgentBrain.mapState().moving", 'keyboard camera settles');
@@ -367,10 +338,10 @@ app.whenReady().then(async () => {
     const layout = await run("const sheet=document.querySelector('.agents-sheet').getBoundingClientRect(),body=document.getElementById('agents-body'),foot=document.getElementById('agents-save-bar').getBoundingClientRect();return {w:innerWidth,h:innerHeight,sheet:{left:sheet.left,right:sheet.right,top:sheet.top,bottom:sheet.bottom},foot:foot.bottom,overflow:document.documentElement.scrollWidth>innerWidth+1,canScroll:body.scrollHeight>body.clientHeight,scrollbar:getComputedStyle(body).scrollbarWidth};");
     report.layouts.push({width,height,zoom,preset,...layout});
     assert.ok(!layout.overflow&&layout.sheet.left>=0&&layout.sheet.right<=layout.w+1&&layout.sheet.top>=0&&layout.sheet.bottom<=layout.h+1&&layout.foot<=layout.h+1,JSON.stringify(report.layouts.at(-1)));
-    assert.ok(await run("return [...document.querySelectorAll('.agents-navigation button')].filter(el=>el.getClientRects().length).every(el=>{const r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&r.height>=28;});"),'navigation fits at '+width+' / '+zoom);
     if (layout.h<=520) {
+      // The rail's four places in the 0.5 layout: Work, Map, Team and Friends.
       const primary = await run("const list=document.getElementById('app-rail-sections');list.scrollTop=0;const box=list.getBoundingClientRect();return {top:box.top,bottom:box.bottom,heads:[...list.querySelectorAll('.app-rail-head')].map(el=>{const r=el.getBoundingClientRect();return {id:el.dataset.nav,top:r.top,bottom:r.bottom,height:r.height};})};");
-      assert.deepEqual(primary.heads.map(head=>head.id), ['workspace','tasks','agents','friends']);
+      assert.deepEqual(primary.heads.map(head=>head.id), ['workspace','command','agents','friends']);
       assert.ok(primary.heads.every(head=>head.top>=primary.top-1&&head.bottom<=primary.bottom+1&&head.height>=28),'primary destinations stay visible at '+width+' / '+zoom+': '+JSON.stringify(primary));
     }
     if (zoom===1&&preset==='studio') await capture(`unified-team-${width}.png`);
@@ -379,8 +350,8 @@ app.whenReady().then(async () => {
   // Friends child even when the expanded section list has to scroll.
   const friendsMotionWasOff=await run("const off=document.body.classList.contains('no-motion');document.body.classList.add('no-motion');return off;");
   report.friendsNavigation=[];
-  // Each opens the Friends page at its place (one home in both layouts), the page's title focused.
-  for (const [id, place] of [['the-lobby','lobby'],['rooms','rooms'],['your-pcs','pcs'],['playground','playground'],['project-hub','hub']]) {
+  // Friends is a page of its own (renderer/companion-hub.js openPlace), not the companion's bubble: each way in opens it at its place.
+  for (const [id, heading, place] of [['the-lobby','#friends-front','lobby'],['rooms','#rooms-title','rooms'],['your-pcs','#pc-sync-title','pcs'],['playground','#friends-title','playground'],['project-hub','#project-hub-title','hub']]) {
     const keyboard = await run(`
       const rail=document.getElementById('app-rail'),head=rail.querySelector('.app-rail-head[data-section=friends]');
       document.documentElement.dataset.railDrawer='';head.focus();
@@ -393,9 +364,11 @@ app.whenReady().then(async () => {
     `);
     assert.equal(keyboard.id,id);assert.ok(keyboard.height>=28&&keyboard.top>=0&&keyboard.bottom<=keyboard.viewport+1&&keyboard.hit,'Friends keyboard target is reachable: '+JSON.stringify(keyboard));
     await run("document.activeElement.click();");
-    await until(`document.getElementById('friends-overlay')?.hidden===false&&document.getElementById('friends-overlay').dataset.place===${JSON.stringify(place)}`,`Friends opens ${id}`);
-    // The Lobby's own masthead is its title (the page heading steps aside there): its body shows instead.
-    assert.ok(await reachable(place==='lobby'?'#friends-place-body':'#friends-place-title'),'the Friends page shows: '+id);
+    // The page's own title names the place and takes the focus (the card's heading steps aside under it; on The Lobby the
+    // page's title steps aside for the front page's masthead, still focused); the card is the place's own.
+    await until(`!document.getElementById('friends-overlay')?.hidden&&document.getElementById('friends-overlay').dataset.place===${JSON.stringify(place)}&&document.querySelector(${JSON.stringify(heading)})&&document.activeElement?.id==='friends-place-title'`,`Friends opens ${id}`);
+    assert.ok(await reachable(place==='lobby'?'#friends-place-body':'#friends-place-title'),'Friends place is named on screen: '+id);
+    assert.ok(await run(`const card=document.querySelector(${JSON.stringify(heading)})?.closest('#friends-place-body > *');const r=card?.getBoundingClientRect();return Boolean(r&&r.width>100&&r.height>${place==='lobby'?1:28}&&r.top<innerHeight);`),'Friends card is visible: '+id);
     report.friendsNavigation.push(id);
     await run("window.MefiNav.closeAll();await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
   }

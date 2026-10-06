@@ -39,6 +39,122 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The social review's fixes land with the polish: say what helps, why a play earned nothing, one vocabulary
+
+Branch `wip/social-polish-2` in `C:\wt\polish2`: wip/social-polish (a676b05, Windows CI green) + 67e5898, the fixes from
+the "Engine optimization and social features" session's review of the social side (string ids in hub-client; one
+hubState() so Connect shows only when it can help; a play's why from the relay to the Project hub; private first
+rooms; The Lobby's own nudges, focus kept across reads, calendar days, this week's events row; one vocabulary; 12 px
+bubble labels; Play/Star labels; arrow keys in the tab rows; Search words), with main 0661f8c merged (119bc83:
+CHANGELOG keeps both sides, TESTRUNS rows from both and main's archived row, rotated; booklet.html regenerated).
+
+Run through `npm run test:one` (the machine-wide test lease) on 119bc83: companion_hub_render, friends_render and
+friends_two_render (the two Studios meeting end to end) 1/1 each, rooms_ui, friends_front_ui (13, new: the connection
+sentences, the nudges, the events row), project_hub_ui (play reasons), hub_client (17, new: missing ids refused),
+hub_host, relay_credits (the play's why), relay_connect, relay_e2e, booklet_build and module_purity: 165 tests, 165
+pass. Also pc_remote_ui, pc_sync_ui, together_ui, friends_mod_ui, friends_navigation, relay_core, app_rail,
+onboarding and palette_layout_v2 on 67e5898. `npm run check` ok. Windows CI runs the full gate on the landing commit
+before the fast-forward; the relay is redeployed with it (front().you.projects and hold, the play's why).
+## 2026-10-06 The Social/Studio names, the scroll fix, the social polish and the models page land while the PCs are offline
+
+Landed by the planning chat (cloud, Linux, Node 24.21.0) after the owner's PC became unreachable at 02:35 UTC. Each
+branch's tip had green Windows CI: ui/social-studio-names 2ee0106 (merge e2d2034); fix/doc-scroll ace7d22 (efec563,
+plus bf0d0ce: the rule split so every selector starts with html[data-frame], the one pin its CI failed);
+wip/social-polish a676b05 (1e54cc5; tabs.js keeps main's agents block and takes "lobby"); wip/models bc490ff (6c9126b;
+both sides kept in main.cjs, executor-core.cjs, agents.js and build-booklet.mjs, the teamLayout() calls dropped since the
+classic layout is gone; d9dad85 updates cli_deadline_host's pin). booklet.html rebuilt after each merge. Hosted Windows
+CI green on 1e54cc5 and d9dad85; main fast-forwarded to d9dad85.
+
+Here, as a non-root user under xvfb: npm run check ok, lint 0 errors (47 warnings, as before), audit 0/0, test:fast ok.
+Every real-window suite, one at a time, before the merges (55494c6) and after them: agent_setup_render, sessions_render
+and today_render failed only after them, each on a fixture that described the old state. Agent setup opened Seats and
+models without a target, and the seat rows now fold under More settings (c385a65 names the row, as an old way in does).
+Sessions pinned " · Vibe" and "Build · task" (c385a65, 15bfec3). Today asserted that Tab never leaves the document,
+which held only because the order walked into the Model catalog's 28 controls under the frame's layers; with
+fix/doc-scroll the order wraps once through the document and back to the frame, which 15bfec3 allows, pinning that no
+stop lands under the layers. After the fixes all three pass; sessions_render's "the keyboard starts on the open
+project" failed once and passed twice, the known flake. Failing on Linux both before and after, and ok on Windows per
+the ui/v2-only row: team_render (Providers sideways at 600x560@1.5), unified_studio_render and project_map_render (the
+map at 600x560@1.5), settings_render (Report a problem's panels at 600x560@1.5), workflow_render (the authoring layout
+at 600) and command_render (task pixels): Linux fonts and software rendering. friends_render and friends_two_render
+pass; their screenshots show the open room as a chat app, rooms as cards, each place's own icon, two Studios catching
+up after one was away, and no scroll arrow over the status bar.
+
+## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
+
+Branch `wip/social-polish` in `C:\wt\polish` (bea5ec9 an open room like a chat app, rooms as cards, Friends icons,
+plain words; 671b1b8 the two-Studio proof and The Lobby following who arrives), main merged (1de784f, clean;
+booklet.html regenerated and equal).
+
+The two-person flow, recorded (tests/friends_two_render.test.mjs, new): one Electron process plays two PCs, two real
+windows in the 0.5 layout with their own user data (separate session partitions), each bridge reaching its own copy
+of main.cjs's real Rooms hub block, and the real relay between them (relay/node/adapter.mjs: the Worker, the Hub
+object, SQLite, scripted Discord). Both meet in The Lobby and see each other online; PC one makes "Two PC test" from
+New room and reads its invite code from the room's menu; PC two joins with the code typed in lower case with a space;
+they chat both ways with Enter and see each other's face in the room; PC two closes Studio, PC one sends two more, PC
+two comes back and the two missed messages are filled in from PC one's copy (the relay keeps none); PC one starts
+Listen together and PC two hears the shared player; PC one shares a project from the Project hub and PC two plays it:
+the link opens in the browser, two minutes on PC one gets "Someone played your project: +5 credits" and its Lobby
+shows 5 credits, PC two's shows 2. 1/1, about 40 s.
+
+Polish checked in real windows (friends_render): an open room with five messages (a mention of this member, one of
+someone unnamed, and this member's own) at 1920x1080, 1100x720 and 600x560 at 150%: the room's name once, the chat
+taking most of the height, the composer on screen with Send inside it, Load earlier at the top of the log, mentions as
+names and "@someone"; every Friends place at 1920x1080, 1440x900, 1100x720 and 600x560 at 150% in Chrome, and every
+place plus an open room in a light palette, with no text under 12 px and nothing wider than the page.
+
+Run alone here on the merge: friends_render, companion_hub_render, friends_two_render and unified_studio_render 1/1
+each; rooms_ui 14/14, friends_front_ui 12/12, friends_mod_ui 4/4, friends_navigation 8/8, project_hub_ui 7/7, app_rail
+40/40, onboarding 43/43, tabs_strip 66/66, module_purity 63/63, booklet_build 5/5, hub_host 14/14, relay_connect 6/6.
+`npm run check` ok. Windows CI runs the full gate on the landing commit before the fast-forward.
+## 2026-10-06 The studio log kept on disk and Trace's Load older (S2) land on main
+
+Branch `land/s2-log` in a cloud session (Linux, Node 24.21.0), stacked on S12 over main f1934aa (first gated over 00d32ca): the parked "not
+shippable" slice 9782c8c re-applied (one conflict in traceRead, both sides kept) and finished (2611874): main.cjs's "Log
+core" block, which the WIP's hooks called but never had (lazy require, the core opening 1.5 s after ready, early lines
+bounded at 5,000, smoke and capture launches under their own profile, worker output and assistant ticks at debug
+level); a fix in segment-archive.cjs (a month whose index was lost was invisible to reads until its next seal; open()
+now re-indexes it from the members' headers); and Trace's Load older (renderer/trace.js, template, booklet rebuilt).
+
+Logging cost (main.cjs's own logLine and "Log core" code, a 200,000-line burst, two rounds): 2.9-4.3 us per logLine
+on the main thread before, 5.4-6.0 us after; total CPU 0.55-0.87 s before, 1.74-1.83 s after with the async writes
+and credential masking; 15.5 MB of segments, 1.22 MB once sealed (12.7x); newest 250 lines 5.4 ms (14-15 ms from a
+sealed archive), a problems page 15-20 ms, a page 90% back 51-60 ms. Kill switches MEFI_STUDIO_LOG_CORE=0 and
+settings.logs.keep false (memory only, as before), settings.logs.level for the threshold; all pinned.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main). `npm run
+test:fast` with mefi-core built, on the final tree: 7270 tests, 7234 pass, 34 skipped, 2 fail: rust_parity_git's two, as on clean main
+with the same binary (for the Rust chat). New: segment_archive 15/15 (a crash after each of the six seal steps keeps
+every record exactly once and the month zcat-readable, a half-written member past the index, torn lines, month
+rollover, a lost index readable at open, the lock, the exit path), log_core 9/9 (with local-dirs: OneDrive refused by
+env and by segment, case-blind on Windows, the userData fallback), log_core_host 7/7, trace 9/9 (+ Load older);
+alerts_wiring and report_wiring keep their start order. Python contracts 248 OK (3 skipped). Electron under xvfb as a
+non-root user: startup_render, renderer_startup and renderer_recovery 21 pass, 1 skipped.
+
+## 2026-10-06 Live CLI progress and prompts a provider can cache (S12) land on main
+
+Branch `land/s12-cli` in a cloud session (Linux, Node 24.21.0) over main f1934aa (first gated over 0b051b8; merged with skills everywhere, whose loaded skills stay beside the system prompt while the transcript moves to the user text): the parked "not shippable" slice
+f7c8f42 re-applied by hand (main's worker prompt, tool loop and Codex app-server harness had moved), finished and
+tested (5ddb52d). Fixed on the way: a fresh Claude session UUID per attempt (the WIP reused one, which Claude Code
+refuses on a retry); live progress decided for every run so a CLI fallback attempt streams too; picture messages keep
+the old tool-loop order; seat fallbacks receive the user content so a tool round's transcript survives them.
+
+Prompt size (tests/prompt_cache.test.mjs, the prefix two consecutive requests share; no prompt got longer): two
+workers' prompts 5 -> 4,241 of 4,615 characters; two chat turns (30-card board, 16-message thread) 12 -> 4,128 of
+4,167; two tool rounds with a 3,080-character user message 3,292 -> 6,373 of 6,499. Kill switches
+MEFI_STUDIO_PROMPT_CACHE=0 / settings.ai.promptCache false (every old byte back) and MEFI_STUDIO_LIVE_PROGRESS=0 /
+settings.executor.liveProgress false (text mode), both pinned. Live progress was checked against Claude Code
+stream-json and codex --json event shapes in fixtures, not against a real CLI run here.
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as main). `npm run
+test:fast` with mefi-core built: 7129 tests, 7093 pass, 34 skipped, 2 fail: rust_parity_git "the actions answer like
+the JavaScript" and "the chip's host answers like git-host.cjs", as on clean main with the same binary (Linux git;
+for the Rust chat). New: cli_stream 10/10, executor_live_progress 4/4 (the real spawnNextJob: a chunked Claude stream
+sets session, todos, tool and usage, the sentinel counts once, the attempt keeps cliSession and usage; the switch off
+keeps the text command line; the app server is untouched), prompt_cache 14/14. Updated pins: agent_tools,
+agent_tools_project and agent_tools_skills (read the whole request), mentions_host, tools/test_mefi_studio_routing.py. The executor, agent
+tools, task oversight and outside-work suites 658/658 (1 skipped). Python contracts 248 OK (3 skipped).
+
 ## 2026-10-06 Test runs take turns on one PC, size to free memory and start the slowest suites first
 
 Branch `wip/test-lease` (C:\wt\coop) off 00d32ca: `scripts/test-lease.mjs` (a machine-wide lease board in
@@ -203,6 +319,36 @@ module_purity, preload_fanout 114/114 together; preload_fanout 17/17 after the o
 progress delivers the board at once, untouched cards keep their objects, progress that moves no card delivers
 nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
 (no Electron in the container); judged on the Windows "Studio checks" run of this commit.
+
+## 2026-10-05 The 0.5 layout is the only layout: the classic layout's code goes, every window fixture runs the 0.5 layout
+
+Branch `ui/v2-only` (gated in `C:\wt\ui-v2only`, merged with main up to f1934aa in `C:\wt\v2m` as 8e4a501). Owner
+chose to remove the classic layout at 0.5.0. The switch and its ways back go (setLayout/setShell, ?layout=,
+MEFI_STUDIO_LAYOUT, the Settings and Search toggles); the classic code goes (nav.js's v1 paths, the classic rail,
+local navigation, dock, sheet links, tab row, footer and help button; the classic Search rows; the Agents navigation;
+the companion hub's Friends section and the Friends page's tab row and Close; Command's .cmd-top with its Ambience,
+View and Agent settings popovers, telemetry pills and corner usage panel; the CSS long tail, ~2,600 net lines of app
+code). Every Electron fixture launches the 0.5 layout; layout_contract_render and its v1 record are retired. Real bugs
+the converted fixtures found are fixed: Team seat rows at 1100, Fleet's fit at 1100, the Project map at 600x560@150%,
+Today's box, an Inbox question without options, the orb drag, the slim rail, the Settings strip, the plan page header,
+Activity over the chat box, Today's permissions popover, the inspector's Team card, the empty Map's Start button,
+hidden key tips, the Inbox keeping the focus on the need pill when its first card was a question without options so
+Escape never closed it (a47ac39), and main's new skills chip pushing Build it off Today's row at 1440x900 (aae6947).
+
+Hosted CI (Windows, the whole Node/Python/check/lint/audit chain; the 43 real-window suites skipped there): green on
+0da4dfd (37397654824), dc5264f (37398953883), 574fa9d (37399987736), 8b5eacb (37401397849) and 8e4a501
+(37402884931). Here, every Electron suite one at a time on 0da4dfd: 44 of 45 ok; shell_render timed out at "Escape
+closed the Inbox" while clean main d71e1e0 passed that step (control run), fixed in a47ac39, after which it stops
+where clean main stops on this PC ("it shrinks to leave the main area its 320", the display-scaling case). npm run
+check and npm run audit on 0da4dfd: exit 0 (audit 0 errors, 0 warnings); npm run check on 8b5eacb and 8e4a501: ok.
+After the merges with main 33c3c4e, d71e1e0, d55269f and f1934aa: friends_render, companion_hub_render,
+settings_render, size_render, skills_render, team_render, today_render, unified_studio_render, workflow_render ok on
+8b5eacb; builder_render (failed on 8b5eacb, the skills chip), today_render, workflow_render ok on aae6947;
+command_render, media_browser_render, media_window_render ok on 8e4a501; Friends, rail and Today unit suites 89/89 and
+59/59. sessions_render failed at "the keyboard starts on the open project" on 8b5eacb and on clean main f1934aa (both
+runs fast, ~45 s) and passed on main d71e1e0, b79b4bc and 0661f8c and on this branch's b632757 (154 s): the timing
+flake an older row here already saw at that step. performance_render, startup_render and renderer_recovery ok on
+b632757 (main's studio log on disk and Trace).
 
 ## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
 
@@ -377,149 +523,6 @@ project", passes alone again, 122 s). rust_parity_snapshots ran inside the
 gate and passed (3/3; the twin-repository test took 127 s under load, the
 case the time-limit scale is for). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check`
 ok.
-
-## 2026-10-04 Today in both modes closer to the 0.5 prototype: Build's Home and Vibe's board
-
-Branch `ui/today` in `C:\wt\ui-today` (off land/ui-chrome 74bf360,
-node_modules junctioned), pushed as wip/ui-today: 0b52d4c Build's Today
-(Home with no session open: the greeting and "What's next for <project>?",
-Home's own box borrowed with Add files or an image, the permission mode,
-Talk it over and Build it, the starters and Suggest a next step, Needs you,
-Running now, Finished while you were away; the classic Home is the route's
-"chat" view), 75b3dfa Vibe's Today (the prototype's board: four columns that
-say when they are empty, a waiting card as its session, results under
-Review, Build it with its key, "Today, the board").
-
-`npm run check` ok (271 targets), lint 0 errors (no warning in the touched
-files), `npm run audit` 0 findings. `npm run test:fast` at 0b52d4c's tree
-under heavy load: 6950 tests, 6926 pass, 14 skipped, 8 fail, 2 cancelled,
-all in six host suites that took 700-860 s each (attempt_review_host,
-attempt_snapshots_host, git_actions, pc_vault, rust_parity_git,
-rust_parity_repo): 137 tests, 134 pass, 3 skipped, 0 fail alone.
-
-Full `npm test` at 75b3dfa: Node 6952 tests, 6934 pass, 14 skipped, 4 fail
-(attempt_review_host 2, attempt_snapshots_host, rust_parity_snapshots,
-sync_changes: 63 tests, 60 pass, 3 skipped, 0 fail alone); Electron lane 75:
-72 pass, 1 skipped, 2 fail, layout_contract_render (viewport 1921x1081) and
-shell_render ("373 !== 372" at 1100 px), both as on clean main on this PC;
-sessions_render (with its new Today gallery: Build's Today at 1920x1080 and
-1100x720, 600x560 at 1 and 1.5, Vibe's board, every text 12 px or more and
-4.5:1 in all eleven themes for both) and today_render pass; Python 248 OK
-(1 skipped); path lock ok.
-Captures (1920x1080) in `C:\wt\gap\after-today\final\`, prototype-left
-side-by-sides in `C:\wt\gap\after-today\compare\`.
-## 2026-10-04 The v2 Settings, first run and plan draft page land on main
-
-Branch `land/ui-settings` in `C:\wt\land-ui`: origin/main 349802a with
-wip/ui-settings cd17a4f merged file by file (CHANGELOG keeps both sides'
-entries; TESTRUNS keeps every row of both, checked heading by heading, with a
-row main had rotated left in the October archive only; booklet.html
-regenerated).
-
-Full `npm test` on d2d5ae4 (a Today agent's fixture ran beside it for its
-first minutes): Node 6950 tests, 6934 pass, 14 skipped, 2 fail, both pass
-alone: rust_parity_snapshots (3/3; under load one side's 10 s `rev-parse HEAD`
-timed out and made its start picture without a parent: same tree, other
-commit id) and sync_changes (5/5; a push to a local bare repo failed under
-memory pressure). Electron lane 76: 72 pass, 1 skipped, 3 fail:
-layout_contract_render and shell_render (as on clean main on this PC) and
-tree_dynamics_render, which fails now and then on this PC (failed once alone
-here, then passed 3 times alone; the branch's own run saw it fail on c01604e
-too). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run
-check` ok. Side-by-sides: `C:\wt\gap\after-settings\compare\`.
-
-## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
-
-Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,
-node_modules junctioned), three commits: 70bc565 Settings filed into the
-prototype's places (booklet.js, styles.css, template wrappers, report.js),
-4ac04f8 the three-step first run (setup-helper.js/.css), 7d268b0 a Backlog
-plan opens as its own draft page (planning.js/.css, one line of sessions.js).
-New Electron fixture `settings_render` (MEFI_SETTINGS_CAPTURE_DIR); the
-setup_helper_render and planning_render fixtures gained a v2 phase each; new
-shared `tests/fixtures/text-probe.cjs` (no text under 12 px, 4.5:1 against
-what is painted behind it).
-
-`npm run check` ok (271 targets), `npm run audit` 0 findings, lint: no
-warning in a changed file. `npm run test:fast` before each commit: 6923/6909
-pass/0 fail; 6929/6913 pass/2 fail (attempt_review_host and
-attempt_snapshots_host under load: 55 tests, 52 pass, 0 fail alone); 6933/6919
-pass/0 fail (14 skipped each). Full `npm test` on 7d268b0: Node 6933 tests,
-6917 pass, 14 skipped, 2 fail under load (update_host_bridge 8/8 and
-rust_parity_snapshots 3/3 alone); Electron lane 76: 72 pass, 1 skipped, 3
-fail: layout_contract_render (viewport 1921x1081) and shell_render (as on
-clean main on this PC), tree_dynamics_render (fails alone, and on c01604e
-too); command_render 1/1; eyes_toggle_electron 0/1 (fails on c01604e too);
-occlusion_probe 2/2; Python 248 OK (1 skipped); path lock ok.
-settings_render, setup_helper_render and planning_render pass in the run.
-Captures in `C:\wt\gap\after-settings\v2\` (settings, first-run,
-plan-draft); prototype captures in `C:\wt\gap\after-settings\proto\`; the
-prototype beside v2 in `C:\wt\gap\after-settings\compare\`.
-
-## 2026-10-04 The v2 status bar, Search and one Inbox land on main
-
-Branch `land/ui-chrome` in `C:\wt\land-ui`: origin/main c01604e with
-wip/ui-chrome f9e758c merged (only TESTRUNS.md conflicted: both rows kept,
-newest first, one more older row rotated). The branch's own run was at
-05b5c63; cd4444a fixed what it found (Search's layer kept to the free area,
-the Python palette contract), so the whole tree was gated again here.
-
-Full `npm test` on 74bf360: Node 6934 tests, 6920 pass, 14 skipped, 0 fail;
-Electron lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render
-(viewport 1921x1081) and shell_render (stops at "it shrinks to leave the main
-area its 320: 373 !== 372" at 1100 px), both as on clean main on this PC;
-Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check` ok
-(271 targets); booklet rebuilt with no drift. Side-by-sides with the
-prototype: `C:\wt\gap\after-chrome\compare\`.
-
-## 2026-10-04 The v2 chrome closer to the 0.5 prototype: status bar, Search, one Inbox
-
-Branch `ui/chrome` in `C:\wt\ui-chrome` (off land/ui-work-view fe59dd3,
-node_modules junctioned), pushed as wip/ui-chrome: 9947295 status bar (the
-machine's load from machine:status, the prototype's order, the rule before
-the meters, "5 h" and "Week"), 64854cc Search (the prototype's palette over
-the same registry: twelve rows, groups, the frame's, strip's, New task and
-permission-mode records), 05b5c63 one Inbox (the pill, status bar, Home's
-chip, the tabs and the session list's Needs you read one list; the
-prototype's cards; Work › Inbox), cd4444a Search kept to the free area and
-the Python palette contract updated (both found by the full run).
-
-`npm run check` ok (271 targets), lint 0 errors (44 warnings, none in the
-touched files), `npm run audit` 0 findings. `npm run test:fast` at cd4444a's
-tree: 6934 tests, 6919 pass, 14 skipped, 1 fail (rust_parity_snapshots
-"snapshot host", 73 s under load: 3/3 alone; untouched by this branch).
-Python contracts 248 OK (1 skipped) after the palette contract's update.
-
-Full `npm test` at 05b5c63 (quiet machine): Node 6934 tests, 6920 pass, 14
-skipped, 0 fail; Electron lane 75: 72 pass, 1 skipped, 2 fail:
-layout_contract_render (viewport 1921x1081, as on clean main here) and
-shell_render (Search's layer spanned the window; fixed in cd4444a, then
-shell_render alone reached and stopped at the known 1 px check at 1100 px,
-"373 !== 372", as on clean main); Python 1 fail (the palette contract read
-the old span; fixed in cd4444a); path lock ok. Electron suites alone after
-cd4444a: sessions_render pass (93 s, with its new chrome gallery: the bar's
-order and words, Search's groups and rows, one count everywhere, the Inbox
-popover and Work › Inbox at 1920x1080 and 600 px, every text 12 px or more
-and 4.5:1 in all eleven themes); today_render (53 s) and tabs_render (118 s)
-passed alone before it and in the full run.
-Captures (1920x1080) in `C:\wt\gap\after-chrome\final\`, prototype-left
-side-by-sides in `C:\wt\gap\after-chrome\compare\`.
-## 2026-10-04 The v2 Work view lands on main with Rust stage 2
-
-Branch `land/ui-work-view` in `C:\wt\land-ui`: origin/main 90661df (Rust stage
-2's five ports) with wip/ui-work-view 898fe49 merged (only TESTRUNS.md
-conflicted: both new rows kept, newest first, one more older row rotated),
-plus fe59dd3: a key hint inside a filled button takes the button's ink (New
-task's "Ctrl N" was pale on teal, under 4.5:1; shell_frame_css pins it).
-
-Full `npm test` on fe59dd3: Node 6900 tests, 6885 pass, 14 skipped, 1 fail
-(project_preview, the whole file in 0.9 s under load: 18/18 alone); Electron
-lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render and shell_render
-(viewport 1921x1081, as on clean main on this PC); Python 248 OK; path lock
-ok; `npm run audit` 0 findings; `npm run check` ok (271 targets).
-sessions_render with captures passes (1/1); 1920x1080 captures in
-`C:\wt\shots\land-ui\`, the Work view beside the prototype in
-`C:\wt\gap\after-work\compare\`.
 
 ## Read Before Any Tests
 

@@ -4,7 +4,6 @@ import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("../renderer/onboarding.js", import.meta.url), "utf8");
-const navSource = await readFile(new URL("../renderer/nav.js", import.meta.url), "utf8");
 const KEY = "mefiStudio.walkthrough.v2";
 const LEGACY_KEY = "mefiStudio.walkthrough.v1";
 // Stop order: Scan, Your workspace, First map, Connections, Create, Monitor, Review.
@@ -732,24 +731,6 @@ test("a failed map still lets the assistant be asked by hand, and the panels sta
   assert.equal(env.el("activity").hidden, true);
 });
 
-test("workspace tool menu groups destinations and excludes duplicated sidebar links", () => {
-  const env = environment(); vm.runInContext(navSource, env.context);
-  const target = env.get("workspace-tool-links");
-  env.context.window.MefiNav.renderWorkspaceTools(target);
-  // The same sections as the rail: Analyzer sits with the Work tools and the
-  // Profiler with Settings, its diagnostics.
-  assert.deepEqual(target.children.map((group) => group.attrs["aria-label"]), ["Work", "Agents", "Settings"]);
-  const buttons = target.querySelectorAll("button");
-  const destinations = buttons.map((button) => button.dataset.nav);
-  for (const id of ["ideas", "explorer", "eyes", "overhead", "analyzer", "profiler", "booklet", "graph"]) assert.ok(destinations.includes(id));
-  const groupOf = (id) => target.children.find((group) => group.querySelectorAll("button").some((button) => button.dataset.nav === id))?.attrs["aria-label"];
-  assert.equal(groupOf("analyzer"), "Work");
-  assert.equal(groupOf("profiler"), "Settings");
-  // pinned at the top of the sidebar or in its bottom row, so never repeated in the grid
-  for (const id of ["workspace", "command", "tasks", "plans", "brains", "studio", "music", "onboarding"]) assert.ok(!destinations.includes(id));
-  assert.equal(new Set(destinations).size, destinations.length);
-});
-
 test("a machine without OpenCode is still configured: the scan shows auto setup's route and Use this setup stays available", async () => {
   const auto = { ok: true, applied: false, planned: true, summary: "Assistant on Claude Code CLI, fixed model defaults, builders on Claude Code.", notes: ["No assistant key saved: the assistant answers through the Claude Code CLI's own subscription login."] };
   const { host, calls } = bridge({
@@ -860,13 +841,13 @@ test("in Vibe mode the Create and Review walks use Vibe's box and Tasks panel, n
   assert.equal(env.document.activeElement, env.get("vibe-input"));
   assert.equal(env.query("#vibe-input").classList.contains("walkthrough-focus"), true);
   assert.equal(env.query("#workspace-input").classList.contains("walkthrough-focus"), false);
-  assert.match(env.el("coach-copy").textContent, /Vibe's box .*Build it/);
+  assert.match(env.el("coach-copy").textContent, /Social's box .*Build it/);
   env.el("coach-next").click(); // Monitor
   env.el("coach-next").click(); // Review
   assert.deepEqual(panels, [["tasks", { fold: "done" }]]);
   assert.equal(env.get("workspace-review").clicks, 0);
   assert.equal(env.query("#vibe-panel").classList.contains("walkthrough-focus"), true);
-  assert.match(env.el("coach-copy").textContent, /Tasks in Vibe/);
+  assert.match(env.el("coach-copy").textContent, /Tasks in Social/);
   // The suggested first task lands in the box the user actually sees.
   env.get("workspace-project-name").textContent = "My project";
   env.guide.open();

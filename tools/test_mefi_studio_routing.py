@@ -255,7 +255,8 @@ class MefiStudioRoutingTests(unittest.TestCase):
         self.assertNotIn("ZAI_MODEL_HEAVY", route, "the heavy model is overseer/improve, not a 24/7 worker")
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn("executorRunEnv({ cliOverride: subtaskCli })", spawn)
-        self.assertIn("opencode run --auto${route.modelArgs}", self.core)
+        self.assertIn('opencode run --auto${route.modelArgs ?? ""}${variant}', self.core)
+        self.assertIn("modelLadder.effortArgs(", self.core, "OpenCode's --variant is the attempt's thinking, from the ladder's fixed words")
         self.assertIn("env: route.env", self.core, "a route adds its own environment")
         self.assertIn("env: { ...process.env, ...invocation.env }", spawn)
         self.assertIn("executorCore.cliInvocation(route, cli, prompt", spawn)
@@ -312,8 +313,12 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # drafts, the analyzer read), which may ride Claude Code alone.
         cli = _function_body(self.main, "cliAssistantCall")
         self.assertIn("cliAssistantCall(route, system, user, maxTokens", fetch)
-        # The call rides whichever Claude Code login answers (cliAccountTurn).
-        self.assertIn("claudeCompletion(system, said, route.model, login)", cli)
+        # The call rides whichever Claude Code login answers (cliAccountTurn):
+        # the login's options carry its folder, the caller's deadline and the
+        # call's thinking level.
+        self.assertIn("const options = { ...login,", cli)
+        self.assertIn("claudeCompletion(system, said, route.model, thinking)", cli)
+        self.assertIn("const thinking = thinkingEffort ? { ...options, effort: thinkingEffort } : options;", cli)
         self.assertIn("cliAccountTurn", cli, "a topped-out login hands the call to the next")
         # Only CLIs whose reply path runs outside the project with native
         # action tools off may answer data-only calls: every text CLI in
@@ -324,7 +329,9 @@ class MefiStudioRoutingTests(unittest.TestCase):
         # Builders: same subscription login, agentic print mode, prompt on stdin.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "claude"', self.core)
-        self.assertIn('"-p", "--output-format", "text", "--dangerously-skip-permissions"', self.core, "nobody is at the keyboard to approve an edit")
+        # Text mode, or with live progress stream-json (scripts/cli-stream.cjs
+        # decodes it); permissions are skipped either way.
+        self.assertIn('const args = ["-p", "--output-format", ...(live ? ["stream-json", "--verbose", ...session] : ["text"]), "--dangerously-skip-permissions"', self.core, "nobody is at the keyboard to approve an edit")
         self.assertIn('chosenCli === "claude"', _function_body(self.main, "executorRunEnv"))
         self.assertIn("claudeCliAvailable", _function_body(self.main, "executorRunEnv"))
         self.assertIn("claude: true", _function_body(self.main, "executorRunEnv"))
@@ -348,12 +355,13 @@ class MefiStudioRoutingTests(unittest.TestCase):
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "codex"', body)
         cli = _function_body(self.main, "cliAssistantCall")
-        self.assertIn("codexCompletion(system, said, route.model, login)", cli)
+        self.assertIn("const options = { ...login,", cli)
+        self.assertIn("codexCompletion(system, said, route.model, thinking)", cli)
         # Builders: approvals and the sandbox bypassed because nobody is at the
         # keyboard, plain stdout so the sentinel protocol stays readable.
         spawn = _function_body(self.main, "spawnNextJob")
         self.assertIn('cli === "codex"', self.core)
-        self.assertIn('"exec", "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never"', self.core)
+        self.assertIn('"exec", ...(live ? ["--json"] : []), "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never"', self.core)
         route = _function_body(self.main, "executorRunEnv")
         self.assertIn('chosenCli === "codex"', route)
         self.assertIn("codexCliAvailable", route)
@@ -413,7 +421,7 @@ class MefiStudioRoutingTests(unittest.TestCase):
         body = _function_body(self.main, "resolveAiRoute")
         self.assertIn('provider === "antigravity"', body)
         cli = _function_body(self.main, "cliAssistantCall")
-        self.assertIn("antigravityCompletion(system, said, route.model)", cli)
+        self.assertIn("antigravityCompletion(system, said, route.model, options)", cli, "no thinking level: Antigravity takes none")
         # A picture on the message is only named to a CLI, in one plain line.
         self.assertIn('const said = typeof imageCliText === "function" ? imageCliText(user) : user;', cli)
         # Builders: agentic print mode, permissions skipped, model before -p.

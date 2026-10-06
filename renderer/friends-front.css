@@ -55,6 +55,7 @@
 .front-tree-leaf { width: 7px; height: 7px; border-radius: 50%; }
 .front-tree-leaf.run { background: var(--live); }
 .front-tree-leaf.done { background: color-mix(in srgb, var(--good) 45%, transparent); }
+.front-events { display: grid; gap: 2px; }
 .front-kicker { margin: 0 0 6px; font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
 .front-lead-title { margin: 0; max-width: 24ch; font: 700 clamp(26px, 2.5vw, 40px)/1.08 var(--front-serif); letter-spacing: -0.015em; text-wrap: balance; }
 .front-dek { margin: 10px 0 0; max-width: 62ch; font: 400 16px/1.5 var(--front-serif); color: var(--muted); }

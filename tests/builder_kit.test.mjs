@@ -236,7 +236,7 @@ test("sendWords does what each purpose of the box means: a dated note, a questio
   assert.deepEqual(clean(a.calls.toasts.at(-1)), ["Saved. Its next run reads it.", "good"]);
 
   assert.equal(await a.B.sendWords(row, "ask", "What is left?", { data: a.data }), true);
-  assert.deepEqual(clean(a.api.calls.find((call) => call[0] === "assistantMessage")), ["assistantMessage", 'About the task "Add a sitemap" (t1): What is left?', "p1", { view: "Build · task", companion: "Mefi", taskId: "t1" }], "no pictures: the call is exactly what it always was");
+  assert.deepEqual(clean(a.api.calls.find((call) => call[0] === "assistantMessage")), ["assistantMessage", 'About the task "Add a sitemap" (t1): What is left?', "p1", { view: "Studio · task", companion: "Mefi", taskId: "t1" }], "no pictures: the call is exactly what it always was");
   assert.equal(a.B.asks("t1").length, 1, "the question and its reply are kept for the feed");
   assert.equal(a.B.asks("t1")[0].reply, "Sent. The reply is in the chat.");
 

@@ -21,7 +21,7 @@
     { id: "exec", title: "Files & Exec", about: "How work runs: builders, parallel workers, worktrees, tools, skills and approvals.", words: /\b(worker|workers|builder|builders|parallel|worktree|worktrees|executor|tool|tools|mcp|skill|skills|desk|delegat\w*|pipeline|pipelines|verify|approval|approve|build|queue|autopilot|backlog|permission|elevated|swarm|cluster)\b/i },
     { id: "web", title: "Web & Community", about: "Everything that reaches out: the web, updates, Discord and listening rooms.", words: /\b(web|link|links|discord|community|update|updates|release|github|browser|radio|stream|together|youtube|spotify)\b/i },
     { id: "storage", title: "Storage", about: "What Studio keeps: projects, data, backups, pruning and cleanup.", words: /\b(project|projects|data|storage|backup|prune|pruning|compact\w*|cache|folder|clean\w*|archive)\b/i },
-    { id: "ui", title: "UI & Surfaces", about: "How Studio looks and sounds: themes, nodes, motion, glass, Vibe and what opens on launch.", words: /\b(appearance|theme|themes|colou?rs?|node|nodes|motion|blur|glass|layout|sound|audio|music|vibe|launch|home|font|scale|companion|name|camera|ambient)\b/i },
+    { id: "ui", title: "UI & Surfaces", about: "How Studio looks and sounds: themes, nodes, motion, glass, Social and what opens on launch.", words: /\b(appearance|theme|themes|colou?rs?|node|nodes|motion|blur|glass|layout|sound|audio|music|vibe|social|studio|mode|launch|home|font|scale|companion|name|camera|ambient)\b/i },
     { id: "dev", title: "Dev & Meta", about: "Diagnostics, logs, performance and everything else.", words: /./ },
   ];
   // The page a setting lives on files it first; only a page that mixes

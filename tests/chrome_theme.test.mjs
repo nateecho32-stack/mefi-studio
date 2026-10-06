@@ -165,8 +165,8 @@ test("the metal goes on primary buttons and chosen segments, and the selection i
     assert.equal(bar.widths[3], "2px", `${part}: 2px wide`);
     assert.ok(bar.widths[0] !== "0" && bar.widths[0] === bar.widths[2], `${part}: clear of the corners at both ends`);
   }
-  // The open tab, the inspector's tabs and the local navigation: a 2px line of the holo on the bottom edge only.
-  for (const part of [".ts-item[data-active]", ".sx-ptab.on", ".sx-itab.on", '#app-local-nav .app-local-link[aria-current="page"]']) {
+  // The open tab and the inspector's tabs: a 2px line of the holo on the bottom edge only.
+  for (const part of [".ts-item[data-active]", ".sx-ptab.on", ".sx-itab.on"]) {
     const line = imageOf(part);
     assert.ok(line, `${part} has a holo underline`);
     assert.equal(line.source, "--chrome-holo", part);
@@ -192,7 +192,7 @@ test("the metal goes on primary buttons and chosen segments, and the selection i
   // the plain edge is the base rule's, or Vibe's own rim.)
   for (const image of images.filter((one) => one.source !== "--chrome-holo-hairline" && !one.selectors.every((selector) => selector.includes('[data-ui-mode="vibe"]')))) assert.match(image.body, /var\(--chrome-edge\)/, `${image.selectors[0]} keeps the plain chrome edge under its holo one`);
   const fallback = selectorsWith(/border-(?:left|bottom)-color: var\(--chrome-edge\)[\s\S]*border-image: var\(--chrome-holo/);
-  for (const part of [".sx-row[data-selected]", '.shell-page[aria-current="page"]', ".sx-ptab.on", ".sx-itab.on", '#app-local-nav .app-local-link[aria-current="page"]', '.music-theme[aria-pressed="true"]']) assert.ok(fallback.includes(part), `${part}: a border of its own, in the plain chrome edge`);
+  for (const part of [".sx-row[data-selected]", '.shell-page[aria-current="page"]', ".sx-ptab.on", ".sx-itab.on", '.music-theme[aria-pressed="true"]']) assert.ok(fallback.includes(part), `${part}: a border of its own, in the plain chrome edge`);
   // A glyph can only take a colour: the current page's and the open tab's icons stay plain chrome.
   const glyphs = selectorsWith(/^\s*color: var\(--chrome-edge\)/);
   for (const part of ['.shell-page[aria-current="page"] .glyph', ".ts-item[data-active] .ts-ico"]) assert.ok(glyphs.includes(part), part);

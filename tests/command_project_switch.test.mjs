@@ -14,7 +14,7 @@ function environment({ active = false } = {}) {
   let resolveReady = null;
   const ready = () => new Promise((resolve) => { resolveReady = resolve; });
   let readyCalls = 0;
-  const calls = { graph: 0, telemetry: 0, feed: 0 };
+  const calls = { graph: 0, feed: 0 };
   const state = {
     active,
     projectId: null,
@@ -37,7 +37,6 @@ function environment({ active = false } = {}) {
     Promise,
     window: { MefiTree: { ready: () => { readyCalls += 1; return ready(); } } },
     refreshGraph: () => { calls.graph += 1; },
-    updateTelemetry: () => { calls.telemetry += 1; },
     renderFeed: () => { calls.feed += 1; },
   });
   vm.runInContext(listener, context);
@@ -83,7 +82,6 @@ test("a real switch resets layout state and rebuilds only after the tree reload 
   env.finishReady();
   await env.state.readyPromise;
   assert.equal(env.calls.graph, 1);
-  assert.equal(env.calls.telemetry, 1);
 });
 
 test("a hidden Command view still resets but does not repaint its feed", async () => {

@@ -100,6 +100,8 @@ const holderOf = (value) => (HOLDERS.includes(value) ? value : "default");
 
 const OPAQUE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const SNOWFLAKE = /^\d{17,20}$/;
+// An id from the relay: a string first, so a missing one ("undefined") never passes.
+const opaqueId = (value) => typeof value === "string" && OPAQUE_ID.test(value);
 const ONE_LINE = /^[^\x00-\x1f\x7f]*$/;
 // The Discord remote's shapes (docs/remote.md).
 const REMOTE_COMMANDS = Object.freeze(["status", "needs", "made", "digest", "say", "pause", "resume", "button"]);
@@ -151,7 +153,7 @@ function listenSession(value) {
   const label = line(value.label, 120);
   const host = user(value.host);
   const positionMs = count(value.positionMs, MAX_POSITION_MS);
-  if (!OPAQUE_ID.test(String(value.id)) || !url || !label || !host || positionMs == null) return null;
+  if (!opaqueId(value.id) || !url || !label || !host || positionMs == null) return null;
   if (!LISTEN_PROVIDERS.includes(value.provider) || typeof value.playing !== "boolean") return null;
   if (!Number.isFinite(value.updatedAt) || !Number.isFinite(value.startedAt)) return null;
   // `title` is the hub's own lookup (oEmbed) and may arrive a moment later.
@@ -160,7 +162,7 @@ function listenSession(value) {
 }
 
 function roomSummary(value) {
-  if (!object(value) || !OPAQUE_ID.test(String(value.id)) || !line(value.name, 80)) return null;
+  if (!object(value) || !opaqueId(value.id) || !line(value.name, 80)) return null;
   return {
     id: value.id, name: value.name, kind: value.kind === "cowork" ? "cowork" : "hangout",
     status: ["active", "locked", "closed"].includes(value.status) ? value.status : "active",
@@ -191,7 +193,7 @@ function roomMessage(value) {
     replyTo: SNOWFLAKE.test(String(value.replyTo)) ? String(value.replyTo) : null,
     // The relay's signature (feature "messages.signed"), kept so this copy can
     // later fill another member's gap or back a report.
-    ...(OPAQUE_ID.test(String(value.sig ?? "")) ? { sig: value.sig } : {}),
+    ...(opaqueId(value.sig) ? { sig: value.sig } : {}),
   };
 }
 
@@ -215,14 +217,14 @@ function wireMessage(value) {
 
 function joinRequest(value) {
   const requester = object(value) ? user(value.requester) : null;
-  if (!requester || !OPAQUE_ID.test(String(value.id)) || !OPAQUE_ID.test(String(value.roomId))) return null;
+  if (!requester || !opaqueId(value.id) || !opaqueId(value.roomId)) return null;
   if (!["pending", "approved", "denied", "cancelled"].includes(value.status) || !Number.isFinite(value.createdAt)) return null;
   return { id: value.id, roomId: value.roomId, requester, note: text(value.note, 300), status: value.status, createdAt: value.createdAt, decidedAt: Number.isFinite(value.decidedAt) ? value.decidedAt : null };
 }
 
 function roomInvite(value) {
   const invitedBy = object(value) ? user(value.invitedBy) : null;
-  if (!invitedBy || !OPAQUE_ID.test(String(value.id)) || !OPAQUE_ID.test(String(value.roomId)) || !line(value.roomName, 80)) return null;
+  if (!invitedBy || !opaqueId(value.id) || !opaqueId(value.roomId) || !line(value.roomName, 80)) return null;
   if (!["pending", "accepted", "declined", "revoked", "expired"].includes(value.status) || !Number.isFinite(value.expiresAt)) return null;
   return { id: value.id, roomId: value.roomId, roomName: value.roomName, invitedBy, status: value.status, expiresAt: value.expiresAt };
 }
@@ -266,7 +268,7 @@ function remoteButtons(value) {
 }
 // A command from the hub, or null. main checks `from` against its own session.
 function remoteCommand(value) {
-  if (!object(value) || !OPAQUE_ID.test(String(value.requestId ?? "")) || !SNOWFLAKE.test(String(value.from ?? "")) || !REMOTE_COMMANDS.includes(value.command)) return null;
+  if (!object(value) || !opaqueId(value.requestId) || !SNOWFLAKE.test(String(value.from ?? "")) || !REMOTE_COMMANDS.includes(value.command)) return null;
   const out = { requestId: value.requestId, from: String(value.from), command: value.command, sentAt: Number.isFinite(value.sentAt) ? value.sentAt : null };
   if (typeof value.text === "string") out.text = text(value.text, 2000);
   if (BUTTON_ID.test(String(value.buttonId ?? ""))) out.buttonId = value.buttonId;
@@ -281,7 +283,7 @@ function remotePcs(value) {
 
 // A project card from the relay's hub, or null.
 function projectCard(value) {
-  if (!object(value) || !OPAQUE_ID.test(String(value.id)) || !object(value.owner) || !SNOWFLAKE.test(String(value.owner.id))) return null;
+  if (!object(value) || !opaqueId(value.id) || !object(value.owner) || !SNOWFLAKE.test(String(value.owner.id))) return null;
   const url = listenUrl(value.url);
   const title = line(value.title, 100);
   if (!url || !title) return null;
@@ -302,7 +304,7 @@ function rankOf(value) {
 const specialOf = (value) => (Array.isArray(value) ? value.filter((key) => RANK_KEY.test(String(key))).slice(0, 12) : []);
 // The Lobby front page from the relay (GET /v1/front), every part checked.
 function frontPage(data) {
-  const place = (value) => (object(value) && OPAQUE_ID.test(String(value.id)) && line(value.name, 80) ? { id: value.id, name: value.name, kind: value.kind === "cowork" ? "cowork" : "hangout" } : null);
+  const place = (value) => (object(value) && opaqueId(value.id) && line(value.name, 80) ? { id: value.id, name: value.name, kind: value.kind === "cowork" ? "cowork" : "hangout" } : null);
   const list = (value, shape, max) => (Array.isArray(value) ? value.map(shape).filter(Boolean).slice(0, max) : []);
   const person = (item) => {
     const who = user(item);
@@ -327,7 +329,12 @@ function frontPage(data) {
     top: top ? { ...top, week: data.top.week === true, weekPlays: count(data.top.weekPlays, 1e9) ?? 0, weekStars: count(data.top.weekStars, 1e9) ?? 0 } : null,
     fresh: list(data?.fresh, projectCard, 10),
     rankUps: list(data?.rankUps, rankUp, 10),
-    you: { balance: count(you.balance, 1e12) ?? 0, lifetime: count(you.lifetime, 1e12) ?? 0, rank: rankOf(you.rank), week: { earned: count(you.week?.earned, 1e9) ?? 0, plays: count(you.week?.plays, 1e9) ?? 0, stars: count(you.week?.stars, 1e9) ?? 0 } },
+    you: {
+      balance: count(you.balance, 1e12) ?? 0, lifetime: count(you.lifetime, 1e12) ?? 0, rank: rankOf(you.rank),
+      week: { earned: count(you.week?.earned, 1e9) ?? 0, plays: count(you.week?.plays, 1e9) ?? 0, stars: count(you.week?.stars, 1e9) ?? 0 },
+      projects: count(you.projects, 1000) ?? 0,
+      hold: object(you.hold) && CREDIT_HOLDS.includes(you.hold.reason) ? { reason: you.hold.reason, until: Number.isFinite(you.hold.until) ? you.hold.until : null } : null,
+    },
     events: eventsFront(data?.events),
   };
 }
@@ -634,14 +641,14 @@ function createHubClient(options = {}) {
         return;
       }
       case "listen": {
-        if (!OPAQUE_ID.test(String(frame.roomId))) return;
+        if (!opaqueId(frame.roomId)) return;
         const current = frame.session == null ? null : listenSession(frame.session);
         if (frame.session != null && !current) return;
         emit({ type: "listen", roomId: frame.roomId, session: current, sentAt: Number.isFinite(frame.sentAt) ? frame.sentAt : null, receivedAt: now() });
         return;
       }
       case "presence":
-        if (OPAQUE_ID.test(String(frame.roomId)) && Array.isArray(frame.inStudio)) emit({ type: "presence", roomId: frame.roomId, inStudio: frame.inStudio.filter((id) => SNOWFLAKE.test(String(id))).slice(0, 100) });
+        if (opaqueId(frame.roomId) && Array.isArray(frame.inStudio)) emit({ type: "presence", roomId: frame.roomId, inStudio: frame.inStudio.filter((id) => SNOWFLAKE.test(String(id))).slice(0, 100) });
         return;
       case "room": {
         const room = roomSummary(frame.room);
@@ -649,27 +656,27 @@ function createHubClient(options = {}) {
         return;
       }
       case "membership":
-        if (OPAQUE_ID.test(String(frame.roomId)) && ["joined", "left", "removed", "closed"].includes(frame.state)) emit({ type: "membership", roomId: frame.roomId, userId: String(frame.userId ?? ""), state: frame.state });
+        if (opaqueId(frame.roomId) && ["joined", "left", "removed", "closed"].includes(frame.state)) emit({ type: "membership", roomId: frame.roomId, userId: String(frame.userId ?? ""), state: frame.state });
         return;
       // A friend's companion card (null when it went home). The card is passed
       // on as received; main reads it through companion-friends.readCard.
       // `direct` marks a card sent to this member alone (the hub keeps `to`).
       case "companion":
-        if (OPAQUE_ID.test(String(frame.roomId)) && SNOWFLAKE.test(String(frame.from))) emit({ type: "companion", roomId: frame.roomId, from: String(frame.from), card: object(frame.card) ? frame.card : null, direct: frame.to != null, receivedAt: now() });
+        if (opaqueId(frame.roomId) && SNOWFLAKE.test(String(frame.from))) emit({ type: "companion", roomId: frame.roomId, from: String(frame.from), card: object(frame.card) ? frame.card : null, direct: frame.to != null, receivedAt: now() });
         return;
       case "message":
       case "messageUpdate": {
         const message = roomMessage(frame.message);
-        if (OPAQUE_ID.test(String(frame.roomId)) && message) emit({ type: frame.type, roomId: frame.roomId, message });
+        if (opaqueId(frame.roomId) && message) emit({ type: frame.type, roomId: frame.roomId, message });
         return;
       }
       case "messageDelete":
-        if (OPAQUE_ID.test(String(frame.roomId)) && SNOWFLAKE.test(String(frame.messageId))) emit({ type: "messageDelete", roomId: frame.roomId, messageId: String(frame.messageId) });
+        if (opaqueId(frame.roomId) && SNOWFLAKE.test(String(frame.messageId))) emit({ type: "messageDelete", roomId: frame.roomId, messageId: String(frame.messageId) });
         return;
       // Peer history (feature "history.peer"): the relay asks this Studio for
       // what it holds of a room before `before`; main answers with historyReply.
       case "historyRequest":
-        if (features.includes("history.peer") && OPAQUE_ID.test(String(frame.roomId)) && OPAQUE_ID.test(String(frame.requestId)) && rooms.has(frame.roomId)) {
+        if (features.includes("history.peer") && opaqueId(frame.roomId) && opaqueId(frame.requestId) && rooms.has(frame.roomId)) {
           emit({ type: "historyRequest", roomId: frame.roomId, requestId: frame.requestId, before: SNOWFLAKE.test(String(frame.before ?? "")) ? String(frame.before) : null });
         }
         return;
@@ -687,7 +694,7 @@ function createHubClient(options = {}) {
         return;
       // Another member's copy of a room's messages, each checked by the relay.
       case "history":
-        if (OPAQUE_ID.test(String(frame.roomId)) && Array.isArray(frame.messages)) {
+        if (opaqueId(frame.roomId) && Array.isArray(frame.messages)) {
           emit({ type: "history", roomId: frame.roomId, messages: frame.messages.slice(0, HISTORY_REPLY_MESSAGES).map(roomMessage).filter(Boolean), hasMore: frame.hasMore === true });
         }
         return;
@@ -704,7 +711,7 @@ function createHubClient(options = {}) {
       // A cowork room's live file claims, all of them, after every change and
       // once right after subscribing (scripts/cowork.cjs reads each lease).
       case "claims":
-        if (OPAQUE_ID.test(String(frame.roomId)) && Array.isArray(frame.leases)) emit({ type: "claims", roomId: frame.roomId, leases: frame.leases.slice(0, 200).map(cowork.lease).filter(Boolean) });
+        if (opaqueId(frame.roomId) && Array.isArray(frame.leases)) emit({ type: "claims", roomId: frame.roomId, leases: frame.leases.slice(0, 200).map(cowork.lease).filter(Boolean) });
         return;
       case "hubState":
         paused = frame.paused === true;
@@ -777,7 +784,7 @@ function createHubClient(options = {}) {
   }
   const refused = (answer) => ({ ok: false, error: answer.error, ...(answer.reason ? { reason: answer.reason } : {}), ...(answer.retryAfter != null ? { retryAfter: answer.retryAfter } : {}) });
   const bad = () => Promise.resolve({ ok: false, error: "bad-request" });
-  const id = (value) => OPAQUE_ID.test(String(value ?? ""));
+  const id = (value) => opaqueId(value);
   async function simple(method, path, body) {
     const answer = await authed(method, path, body);
     return answer.ok ? { ok: true } : refused(answer);
@@ -1009,11 +1016,11 @@ function createHubClient(options = {}) {
       const answer = await authed("GET", "/v1/admin/reports");
       if (!answer.ok) return refused(answer);
       const reports = Array.isArray(answer.data.reports) ? answer.data.reports.map((item) => {
-        if (!object(item) || !OPAQUE_ID.test(String(item.id))) return null;
+        if (!object(item) || !opaqueId(item.id)) return null;
         return {
           id: item.id, kind: item.kind === "project" ? "project" : "message",
-          roomId: OPAQUE_ID.test(String(item.roomId)) ? item.roomId : null, messageId: SNOWFLAKE.test(String(item.messageId)) ? String(item.messageId) : null,
-          projectId: OPAQUE_ID.test(String(item.projectId)) ? item.projectId : null,
+          roomId: opaqueId(item.roomId) ? item.roomId : null, messageId: SNOWFLAKE.test(String(item.messageId)) ? String(item.messageId) : null,
+          projectId: opaqueId(item.projectId) ? item.projectId : null,
           author: user(item.author), reporter: user(item.reporter), reason: text(item.reason, 500), text: typeof item.text === "string" ? text(item.text, 2000) : null,
           verified: item.verified === true, createdAt: Number.isFinite(item.createdAt) ? item.createdAt : null,
         };
@@ -1127,7 +1134,8 @@ function createHubClient(options = {}) {
       if (!features.includes("projects") || !id(projectId) || typeof token !== "string" || token.length > 64) return { ok: false, error: "bad-request" };
       const answer = await authed("POST", `/v1/projects/${projectId}/played`, { token });
       if (!answer.ok) return refused(answer);
-      return { ok: true, counted: answer.data.counted === true, credited: { owner: count(answer.data.credited?.owner, 1e6) ?? 0, you: count(answer.data.credited?.you, 1e6) ?? 0 } };
+      const why = ["own", "maker-held", "limit", ...CREDIT_HOLDS].includes(answer.data.why) ? answer.data.why : null;
+      return { ok: true, counted: answer.data.counted === true, credited: { owner: count(answer.data.credited?.owner, 1e6) ?? 0, you: count(answer.data.credited?.you, 1e6) ?? 0 }, why };
     },
     async star(projectId, on = true) {
       if (!features.includes("projects") || !id(projectId)) return { ok: false, error: "bad-request" };
@@ -1177,7 +1185,7 @@ function createHubClient(options = {}) {
     // `holder` names the part of Studio asking (HOLDERS; anything else is
     // "default"). Holding a room twice is one hold.
     subscribe(roomId, holder = "default") {
-      if (!OPAQUE_ID.test(String(roomId))) return false;
+      if (!opaqueId(roomId)) return false;
       const holders = rooms.get(roomId) ?? new Set();
       const first = !holders.size;
       holders.add(holderOf(holder));
@@ -1195,7 +1203,7 @@ function createHubClient(options = {}) {
     },
     // Starts or steers a room's shared player; answers { ok } or { ok: false, reason }.
     listen(roomId, fields = {}) {
-      if (!OPAQUE_ID.test(String(roomId)) || !LISTEN_ACTIONS.includes(fields.action)) return Promise.resolve({ ok: false, reason: "bad-request" });
+      if (!opaqueId(roomId) || !LISTEN_ACTIONS.includes(fields.action)) return Promise.resolve({ ok: false, reason: "bad-request" });
       const frame = { type: "listen", roomId, action: fields.action };
       if (fields.action === "start") {
         const url = listenUrl(fields.url);
@@ -1243,7 +1251,7 @@ function createHubClient(options = {}) {
     remoteReply(requestId, message, buttons = [], done = true) {
       const body = remoteText(message);
       const list = remoteButtons(buttons);
-      if (!remoteReady() || !OPAQUE_ID.test(String(requestId ?? "")) || !body || !list) return false;
+      if (!remoteReady() || !opaqueId(requestId) || !body || !list) return false;
       return send({ type: "remoteReply", requestId, text: body, ...(list.length ? { buttons: list } : {}), ...(done === false ? { done: false } : {}) });
     },
     // An alert for the member's DMs; the hub drops a repeated key for an hour.

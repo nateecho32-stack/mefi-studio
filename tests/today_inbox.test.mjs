@@ -145,6 +145,25 @@ test("words of your own: the box answers with text, an empty box does nothing, a
   assert.deepEqual(u.callsOf("assistantAnswer"), [{ id: "q1", optionId: "say", text: "Ignore the case", projectId: "p1" }], "the option and the words go together");
 });
 
+test("a question with no options of its own is answered in words: its box is open from the start, with no link and no empty choices", async () => {
+  const t = await loadToday({ data: board({ needs: [needQuestion({ options: [] })] }) });
+  await open(t);
+  const card = cardOf(t, "question:q1");
+  const form = card.querySelector("form");
+  assert.ok(form, "the Inbox is where it is decided, so it takes an answer here");
+  assert.equal(form.hidden, false, "the box is open: there are no options to read first");
+  assert.equal(card.querySelector(".today-own-words"), null, "no link, not even a hidden one: the Inbox focuses a card's first button, and a hidden one cannot take it");
+  assert.equal(card.querySelector(".today-need-options"), null, "no empty group of options");
+  assert.equal(card.querySelectorAll(".today-option").length, 0);
+  const input = card.querySelector(".today-need-input");
+  assert.equal(input.placeholder, "Your answer…");
+  input.value = "Sage, the calm one";
+  input.trigger("input");
+  form.trigger("submit"); await t.settle();
+  assert.deepEqual(t.callsOf("assistantAnswer"), [{ id: "q1", text: "Sage, the calm one", projectId: "p1", optionId: null }]);
+  assert.match(words(cardOf(t, "question:q1")), /Decided · Answered: Sage, the calm one/);
+});
+
 test("Enter in the box sends it, and a half-typed answer survives a push that changes another card", async () => {
   const t = await loadToday({ data: board({ needs: [needQuestion(), needQuestion({ id: "q2", title: "Second question?", context: { taskId: "t2", taskTitle: "Other" } })] }) });
   await open(t);

@@ -64,7 +64,7 @@
       action: "Walk me to the task box", route: "task", secondary: "Explore a plan", secondaryRoute: "plans",
       station: "This is the task box for the selected project. Describe the result and how you will check it, or open Use a task outline for a guided shape. I do not send anything from here.",
       // Vibe (the default) hides Build's workspace, so the walk uses its box.
-      vibeStation: "This is Vibe's box for the selected project. Describe the result and how you will check it, then choose Build it to save it as a task, or Talk it over to discuss it first. I do not send anything from here.",
+      vibeStation: "This is Social's box for the selected project. Describe the result and how you will check it, then choose Build it to save it as a task, or Talk it over to discuss it first. I do not send anything from here.",
       note: "These buttons open the editor and the plan sheet. They do not submit a task or start a planning request.",
       target: "#workspace-input", vibeTarget: "#vibe-input", done: "Task box found",
     },
@@ -83,7 +83,7 @@
       points: ["Open Review in Your work to read the result, evidence and next actions. Inspect the project changes and run any remaining acceptance checks.", "If work needs attention, read its reason first. Correct the connection, brief or prerequisite, then use its retry control when you are ready.", "Keep failed work available for diagnosis. Task history can recover an earlier brief; it does not roll back your project files."],
       action: "Walk me to Review", route: "review",
       station: "This is Review in Your work. Open a finished task to read the result and evidence, then run any remaining acceptance checks. Tasks that need attention keep their reason and retry controls here.",
-      vibeStation: "This is Tasks in Vibe. Open a task under Done to read the result and evidence, then run any remaining acceptance checks. Work that needs attention waits under Needs you with its reason.",
+      vibeStation: "This is Tasks in Social. Open a task under Done to read the result and evidence, then run any remaining acceptance checks. Work that needs attention waits under Needs you with its reason.",
       note: "You can reopen this guide from Start here at the foot of the menu, or from Settings or Shortcuts. Completing the guide does not mark any task done.",
       target: "#workspace-review", vibeTarget: "#vibe-panel", done: "Review found",
     },
@@ -647,6 +647,9 @@
     if (!overlay) return;
     state = { ...state, status: "reading", mode: "sheet" };
     save(); render();
+    // The account step's fine print sits behind an "i" at its heading (MefiUi.tuck, studio-ui.js); the
+    // step's own words and its live line under the tool choice stay in view.
+    window.MefiUi?.tuck?.($("cli-setup"));
     const coachEl = $("coach");
     if (coachEl) coachEl.hidden = true;
     clearHighlight();

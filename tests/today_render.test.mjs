@@ -1,8 +1,8 @@
 // Today and the Inbox in a real renderer, layout v2 in Vibe mode: a copied booklet and a synthetic
 // bridge that keeps a world of its own (tests/fixtures/today-render-electron.cjs). Today fits five
 // window sizes with the node tree behind it; the Inbox popover and page fit, read and act through
-// the bridge; nothing overflows, no scroller reserves width, no text is under 12 px; and layout v1
-// is left exactly as it was. Set MEFI_TODAY_CAPTURE_DIR to an absolute folder to keep the screenshots.
+// the bridge; nothing overflows, no scroller reserves width, and no text is under 12 px.
+// Set MEFI_TODAY_CAPTURE_DIR to an absolute folder to keep the screenshots.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
@@ -17,7 +17,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("Today fits five window sizes over the node tree, the Inbox popover and page fit and act through the bridge, nothing overflows or reads under 12 px, and v1 is untouched", { skip: !canRun, timeout: 540000 }, async (t) => {
+test("Today fits five window sizes over the node tree, the Inbox popover and page fit and act through the bridge, nothing overflows or reads under 12 px", { skip: !canRun, timeout: 540000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-today-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));

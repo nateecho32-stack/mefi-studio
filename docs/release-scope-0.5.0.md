@@ -114,7 +114,7 @@ candidate moves to 0.5.x instead of holding the release.
 | --- | --- | --- |
 | Subscriptions and agent routing | `wip/models` | On today's `main`, in CI |
 | Credits that cannot be farmed; the Lobby front page and one Sign in with Discord card; no Discord roles needed (Flame rank lists a room, moderators are named accounts) | `wip/credits-guard` (includes `wip/social`) | Windows CI green; landing with the relay redeployed. Nothing waits on Discord role IDs any more |
-| Load times and agents sending only what is new: row push deltas (S3), startup marks and a settings cache (S1), live CLI progress and the prompt cache (S12), the log core (S2) | `wip/s3-row-push`, `wip/s1-boot-startup-marks`, `wip/s12-cli-stream`, `wip/s2-log-core` | Partial, parked on a 3 October base. Being finished one at a time, measured before and after. S1's cache sits in front of settings, which the Rust host also reads, so the parity rule applies |
+| Load times and agents sending only what is new: row push deltas (S3), startup marks and a settings cache (S1), live CLI progress and the prompt cache (S12), the log core (S2) | on `main` (S3 619f01c, S1 6f2c154, S12 5ddb52d, S2 2611874); the old `wip/s3-row-push`, `wip/s1-boot-startup-marks`, `wip/s12-cli-stream` and `wip/s2-log-core` are superseded | Landed 6 October, measured in TESTRUNS and docs/performance.md. Each has a kill switch: `MEFI_STUDIO_FULL_PUSHES=1`, `MEFI_STUDIO_STARTUP_MARKS=0`, `MEFI_STUDIO_SETTINGS_CACHE=0`, `MEFI_STUDIO_LIVE_PROGRESS=0`, `MEFI_STUDIO_PROMPT_CACHE=0`, `MEFI_STUDIO_LOG_CORE=0`. Try by hand: a Claude Code or Codex run shows its steps live; Trace's Load older reads past the ring |
 | Vibe and Build as two modes of one shell | in progress | The labels are yours to decide (below) |
 | Two real-window suites red on the PCs, even on clean `main`: `layout_contract_render` (the window opens at 1921x1081) and `shell_render` (one pixel at 1100 px) | tests | Display-scaling rounding; to be fixed without weakening what they check. Hosted CI skips them |
 | Linux CI (`studio-linux.yml`) red since 4 October | `tests/rust_modules.test.mjs` (image-store folder), `tests/package_host.test.mjs` (`.exe` name) | Two Rust-side tests assume Windows paths. Windows CI is green |
@@ -145,10 +145,11 @@ decision, and each has an owner-side default already in the code.
 - After pulling, delete the local branches `git branch --merged origin/main`
   lists. On GitHub, only delete a branch that is in `main` or `gh-pages`, never
   one listed under "Still to land" above.
-- The full `npm test` on the PCs fails only in `layout_contract_render` and
-  `shell_render`, as on clean `main`, until the fix above lands; any other
-  failure is new. `project_map_render` and `settings_render` also fail on the
-  Linux lane at 600x560 and 150% zoom, with or without this work.
+- The full `npm test` on the PCs fails only in `shell_render`, as on clean
+  `main`, until the fix above lands (`layout_contract_render` was retired with
+  the classic layout); any other failure is new. `project_map_render` and
+  `settings_render` also fail on the Linux lane at 600x560 and 150% zoom, with
+  or without this work.
 - Measure startup once (`tools/benchmark_startup.py`) so the load-time work has
   a number to beat.
 

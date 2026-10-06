@@ -15,9 +15,8 @@
 //      page under a menu alone, the focus ring, typing in the Add menu, the cap's Undo toast, Search and Configuration;
 //   3. real pages: each tab opens the page it stands for (sheets, Home, Agents with its panes, a session), and going
 //      back through the nav's own history moves the strip;
-//   4. the tabs survive a reload; v1 (no layout attribute) draws, stores and listens to nothing; the host's switch
-//      turns the management off; Ctrl+W closes the tab and not the window, where a page that does not take the key
-//      loses its window (so the test can see a close at all).
+//   4. the tabs survive a reload; the host's switch turns the management off; Ctrl+W closes the tab and not the window,
+//      where a page that does not take the key loses its window (so the test can see a close at all).
 //
 // Network, permissions and child processes are blocked. Screenshots: the test file's capture folder variable.
 const { app, BrowserWindow, Menu, session } = require("electron");
@@ -698,8 +697,8 @@ app.whenReady().then(async () => {
   await sleep(300);
   const vibe = await strip();
   assert.ok(vibe.strip.y >= -0.5 && vibe.strip.b <= vibe.usable.top + 0.5, "Vibe: the strip is at the top of the window, over the page");
-  assert.equal(await run("return window.MefiNav.get('workspace').short;"), "Vibe", "in Vibe the nav calls Home by its own name");
-  assert.deepEqual(vibe.items.filter((item) => item.home).map((item) => item.title), [await run("return window.MefiToday ? 'Today' : 'Vibe';")], "and the first tab says the same, until the Today board (where it is in the window) gives it its name");
+  assert.equal(await run("return window.MefiNav.get('workspace').short;"), "Social", "in Social the nav calls Home by its own name");
+  assert.deepEqual(vibe.items.filter((item) => item.home).map((item) => item.title), [await run("return window.MefiToday ? 'Today' : 'Social';")], "and the first tab says the same, until the Today board (where it is in the window) gives it its name");
   await capture("tabs-vibe.png");
   await run("await window.MefiNav.go('workspace');");
   await setup("build"); await home();
@@ -773,35 +772,7 @@ app.whenReady().then(async () => {
   await run("window.MefiNav.closeAll(); localStorage.removeItem('fx.tabsOff');");
 
   // ===================================================================================================================================
-  // 8. v1: nothing is drawn, heard or stored
-  // ===================================================================================================================================
-  // (the v2 page is stopped first, so nothing of it is left to write as it goes away)
-  await run("window.MefiTabs.stop(); for (const key of Object.keys(localStorage)) if (key.startsWith('mefiStudio.tabs.') || key === 'mefiStudio.layout') localStorage.removeItem(key);");
-  await window.loadFile(bookletFile, { query: { capture: "1", layout: "v1", home: "sessions" } });
-  await until("window.MefiNav && window.MefiVibe && window.MefiWorkspace && window.MefiTasks && window.MefiTabs && !window.MefiBoot?.isActive?.()", "v1 is up");
-  await sleep(600);
-  const v1 = await run(`return {
-    layout: document.documentElement.dataset.layout || null, running: window.MefiTabs.running(), list: window.MefiTabs.list(), strips: document.querySelectorAll('.ts-strip, .ts-pop').length,
-    shell: Boolean(document.getElementById('fx-region-tabs')), variable: document.documentElement.style.getPropertyValue('--shell-tabs-h'), card: window.MefiTabs.configCard(), save: window.MefiTabs.saveState(),
-  };`);
-  assert.deepEqual(v1, { layout: null, running: false, list: [], strips: 0, shell: false, variable: "", card: null, save: null }, "layout v1: no strip, no shell region, no variable, nothing to ask");
-  await run("await window.MefiNav.go('fleet'); await window.__fx?.tick?.(); await window.MefiNav.go('plans'); await new Promise((resolve) => setTimeout(resolve, 200));");
-  await run("await window.MefiNav.go('workspace');");
-  for (const [code, modifiers] of [["T", ["control"]], ["W", ["control"]], ["Tab", ["control"]], ["1", ["control"]], ["T", ["control", "shift"]]]) await key(code, modifiers);
-  await sleep(300);
-  assert.deepEqual(await stored(), [], "v1 writes no tab key, whatever you do");
-  assert.equal(await run("return document.querySelectorAll('.ts-strip, .ts-pop').length === 0 && window.MefiNav.state.transient === null;"), true, "and its keys are nobody's");
-  await run("await window.MefiConfig.open({ category: 'ui' });");
-  await until("document.querySelector('#config-pane input[type=\"range\"]')", "v1: Configuration › UI & Surfaces opens with its interface scale");
-  assert.equal(await run("return document.querySelector('#config-pane .ts-card') === null;"), true, "and without a Tab behaviour card: there is no strip to set");
-  await run("window.MefiNav.closeAll();");
-  assert.equal(await run("return window.MefiNav.saveResume().tabs;"), null, "a v1 reload record has no tabs in it");
-  assert.equal(await run("return JSON.parse(localStorage.getItem('mefiStudio.resume')).tabs;"), null, "and neither has what it stored");
-  assert.deepEqual(report.errors, []);
-  report.v1Untouched = true;
-
-  // ===================================================================================================================================
-  // 9. Ctrl+W and the window's own menu. Only a visible, focused window acts on a menu accelerator (a hidden, inactive or offscreen one does
+  // 8. Ctrl+W and the window's own menu. Only a visible, focused window acts on a menu accelerator (a hidden, inactive or offscreen one does
   //    not, which a probe on this platform showed), so two small windows are shown for a moment: the real application menu template from
   //    main.cjs is set, and Ctrl+W is sent to a page that ignores it (its window must close: the control, which proves the check can
   //    see a close at all) and to a page that takes it with preventDefault, as the strip does (its window must stay).

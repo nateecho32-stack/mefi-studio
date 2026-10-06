@@ -160,7 +160,6 @@
     sort: document.getElementById("sort"),
     cards: document.getElementById("cards"),
     count: document.getElementById("count"),
-    footer: document.getElementById("footer-meta"),
     alsoTracked: document.getElementById("also-tracked"),
     alsoTrackedBody: document.getElementById("also-tracked-body"),
     banner2: null,
@@ -381,7 +380,6 @@
     const source = state.source === "baked" ? "built-in data" : `the ${state.source}`;
     els.status.textContent = `${doc.models.length} models · ${roster} live${when ? ` · updated ${when}` : ""} · from ${source}`;
     els.status.title = `Catalog hash ${doc.hash.slice(0, 8)}`;
-    els.footer.textContent = `catalog hash ${doc.hash.slice(0, 12)} · roster ${doc.rosterHash.slice(0, 12)}`;
   }
 
   // Picks: four highlights worked out from the catalog itself, legacy models
@@ -587,7 +585,6 @@
         requestAnimationFrame(() => state.graph?.redraw());
       });
     }
-    document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.tab === name));
     document.getElementById("tab-booklet").hidden = name !== "booklet";
     document.getElementById("tab-graph").hidden = name !== "graph";
     document.getElementById("tab-eyes").hidden = name !== "eyes";
@@ -824,7 +821,7 @@
   function settingsControlLabel(control) {
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
-    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
+    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName) && !node.classList?.contains?.("info-pop")).map((node) => node.textContent ?? "").join(" ") : "";
     return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? settingsButtonLabel(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
   function settingsEntries() {
@@ -841,7 +838,8 @@
         if (label) entries.push({ id: card.id, label, category, terms: `${words} ${card.id.replace(/-/g, " ")}` });
       }
       for (const control of pane.querySelectorAll("input, select, textarea, button")) {
-        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion")) continue;
+        // An info circle (MefiUi.tuck) is the help of the setting beside it, not a setting of its own.
+        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion, .info-dot")) continue;
         const label = settingsControlLabel(control);
         if (!label) continue;
         if (!control.id) control.id = `settings-control-${category}-${++settingsControlSerial}`;
@@ -929,29 +927,27 @@
     if (theme) theme.hidden = true;
     move(document.getElementById("jev-enabled")?.closest?.("label"), document.getElementById("settings-behavior-controls"));
     for (const id of ["proactive-mode", "memory-align", "loop-guard", "loop-guard-apply"]) move(document.getElementById(id)?.closest?.("label"), document.getElementById("settings-behavior-controls"));
-    for (const id of ["idle-backdrop", "idle-bubbles", "idle-card-style", "idle-ambient-zen"]) move(document.getElementById(id)?.closest?.("label"), document.getElementById("settings-tree-controls"));
-    for (const id of ["idle-profile", "idle-zen"]) move(document.getElementById(id)?.closest?.("label"), document.getElementById("settings-audio-controls"));
-    const ambience = document.getElementById("idle-ambience-pop");
-    if (ambience && !ambience.dataset.settingsTrimmed) {
-      ambience.dataset.settingsTrimmed = "true";
-      for (const group of ambience.querySelectorAll(".pop-group")) if (!group.querySelector("select, input, button")) group.remove();
-      for (const divider of ambience.querySelectorAll("hr")) divider.remove();
-      const appearanceLink = ambience.querySelector(".pop-link");
-      if (appearanceLink) {
-        appearanceLink.textContent = "Appearance settings";
-        appearanceLink.dataset.nav = "studio";
-        appearanceLink.dataset.navParams = JSON.stringify({ section: "appearance" });
-        appearanceLink.title = "Open Settings › Appearance";
-      }
-      const audioLink = ambience.querySelectorAll(".pop-link")[1] ?? document.createElement("button");
-      audioLink.type = "button"; audioLink.className = "ghost mini pop-link"; audioLink.textContent = "Audio settings";
-      audioLink.dataset.nav = "studio"; audioLink.dataset.navParams = JSON.stringify({ section: "audio" });
-      if (!(audioLink.parentElement ?? audioLink.parentNode)) ambience.appendChild(audioLink);
-    }
+    // The node tree's Backdrop, Speech bubbles, Card style and Zen mode, and the bells' Profile and Zen bells, are written
+    // in their Settings cards (#settings-tree-controls, #settings-audio-controls); idle.js wires them.
     window.MefiMusic?.mountSettings?.({ look: document.getElementById("settings-appearance-media") });
     const browser = document.getElementById("studio-browser");
     if (browser) browser.hidden = Boolean(window.mefiStudio?.launchStudio);
     for (const note of document.querySelectorAll("[data-desktop-message]")) note.hidden = Boolean(window.mefiStudio?.launchStudio);
+  }
+  // A setting's long how-to words move behind an "i" at the end of its title (MefiUi.tuck, studio-ui.js), so a place
+  // shows its controls first. Connections, Models and Automation are the Team pages' (renderer/agents.js takes their
+  // cards there and tucks them) and Community is renderer/community.js's, so they are marked to stay as they are. One
+  // call for all of Settings: tuck reads every title's style before it moves anything, and a call per card read it
+  // again after each card's moves (about 20 ms of style each, 120 ms on the first paint). Every paint while Settings
+  // shows runs it: rows drawn since (Appearance's media) are tucked, rows already tucked stay as they are.
+  const SETTINGS_UNTUCKED = ["settings-category-connections", "settings-category-models", "settings-category-automation", "settings-community"];
+  function tuckSettings() {
+    const tuck = window.MefiUi?.tuck, sections = document.getElementById("settings-sections");
+    // Not before the page has loaded: renderer/nav.js chooses the layout then, and Settings is filed for it (a
+    // reopened Settings paints earlier, while a title the 0.5 layout hides, like Report's, still shows).
+    if (typeof tuck !== "function" || !sections || document.readyState === "loading") return;
+    for (const id of SETTINGS_UNTUCKED) document.getElementById(id)?.setAttribute?.("data-keep-visible", "");
+    tuck(sections);
   }
   function paintSettingsRows() {
     mountSettingsControls();
@@ -973,6 +969,8 @@
     }
     for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsPane(settingsCategory);
     if (document.getElementById("tab-studio")?.hidden === false) {
+      // Only once Settings shows: by then the layout is chosen and filed, and tuck reads which titles it shows.
+      tuckSettings();
       window.MefiMusic?.activateSettings?.(query ? null : settingsPane(settingsCategory));
       if (settingsCategory === "automation") void loadSettingsAutomation();
       if (!query) openSettingsPlace(settingsCategory);
@@ -2237,14 +2235,6 @@
     const pick = event.target.closest?.(".catalog-pick[data-id]");
     if (pick) revealModel(pick.dataset.id);
   });
-  document.getElementById("tabs").addEventListener("click", (event) => {
-    const tab = event.target.closest(".tab");
-    if (!tab) return;
-    // Route through nav so a tab click also closes an open sheet and leaves the
-    // Command view with a "return" marker on #nav-command.
-    if (window.MefiNav) window.MefiNav.go(tab.dataset.tab, {}, { source: "tabs" });
-    else showTab(tab.dataset.tab);
-  });
   wireSettingsNav();
   registerSettingsSearch();
   // renderer/nav.js sets the 0.5 layout once the page has loaded: Settings is
@@ -2314,10 +2304,6 @@
       window.MefiNav?.release?.("help");
     }
   };
-  document.getElementById("help-btn").addEventListener("click", () => {
-    if (window.MefiNav) window.MefiNav.toggle("help");
-    else toggleHelp();
-  });
   helpOverlay.addEventListener("click", (event) => {
     if (event.target === helpOverlay) toggleHelp(false);
   });

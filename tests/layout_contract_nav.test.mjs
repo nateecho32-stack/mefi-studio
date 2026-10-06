@@ -3,7 +3,7 @@
 // the fold rule and usable(). The whole of nav.js runs here against the shared
 // fake DOM, with a computed style that answers the way styles.css does (the
 // fold rule included), so these break when the script and the stylesheet drift.
-// Real geometry is tests/layout_contract_render.test.mjs.
+// Real geometry is tests/shell_render.test.mjs (the frame in a real window).
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
@@ -14,12 +14,12 @@ import { createDom } from "./fixtures/renderer-dom.mjs";
 // The sources are read with LF line ends whatever the checkout made of them (Windows may give CRLF), since some checks look at lines.
 const lf = (text) => text.replace(/\r\n/g, "\n");
 const source = lf(await readFile(new URL("../renderer/nav.js", import.meta.url), "utf8"));
-const RAIL_IDS = ["app-rail", "app-rail-brand", "app-rail-sections", "app-rail-foot", "app-rail-pin", "app-local-nav", "vibe-rail", "workspace-sidebar", "workspace-layer"];
+const RAIL_IDS = ["app-rail", "app-rail-brand", "app-rail-sections", "app-rail-foot", "app-rail-pin", "shell-top", "vibe-rail", "workspace-sidebar", "workspace-layer"];
 const REGION_VARIABLES = { list: "--shell-list-w", inspector: "--shell-inspector-w", tabs: "--shell-tabs-h", status: "--shell-status-h" };
 
 // A window of `width` x `height` CSS px with the rail shell on: the rail's real
-// box, the local navigation's, and a computed style for the root and the body.
-function load({ search = "", stored = {}, width = 1440, height = 900, matchMedia = true, rail = 64, localH = 56, railBox, navBox, vibeBox, layoutSearch } = {}) {
+// box, the frame's top bar's, and a computed style for the root and the body.
+function load({ search = "", stored = {}, width = 1440, height = 900, matchMedia = true, rail = 64, localH = 56, railBox, topBox, vibeBox, layoutSearch } = {}) {
   const { document, get } = createDom({ ids: RAIL_IDS });
   const lookupId = document.getElementById;
   document.getElementById = (id) => lookupId(id) ?? document.querySelector(`#${id}`);
@@ -33,7 +33,7 @@ function load({ search = "", stored = {}, width = 1440, height = 900, matchMedia
   const box = (left, top, right, bottom) => (right - left > 0 && bottom - top > 0 ? { left, top, right, bottom, width: right - left, height: bottom - top } : { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
   const boxes = {
     "app-rail": () => railBox ?? box(0, 0, rail, window.innerHeight),
-    "app-local-nav": () => navBox ?? box(rail, 0, window.innerWidth, localH),
+    "shell-top": () => topBox ?? box(rail, 0, window.innerWidth, localH),
     "vibe-rail": () => vibeBox ?? box(0, 0, 0, 0),
   };
   for (const [id, measure] of Object.entries(boxes)) get(id).getBoundingClientRect = measure;
@@ -80,51 +80,37 @@ const v2 = (options = {}) => { const page = load(options); page.nav.applyLayout(
 // What the vm's objects say, in this realm, so deepStrictEqual compares values and not prototypes.
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-test("the writer: v2 by default (0.5), a saved v1 kept, ?layout= for one launch, and diagnostic launches stay v1 unless asked", () => {
+test("the writer: the 0.5 layout at every launch (0.5.0); no query, saved choice or shell choice brings the classic one back", () => {
   const cases = [
-    // [search, stored, expected, why]
-    ["", {}, true, "nothing saved: the 0.5 layout"],
-    ["", { "mefiStudio.layout": "v1" }, false, "saved v1: someone chose the classic layout, and keeps it"],
-    ["", { "mefiStudio.layout": "v2" }, true, "saved v2"],
-    ["", { "mefiStudio.layout": "banana" }, true, "a saved value nobody wrote is the default"],
-    ["?layout=v2", {}, true, "the parameter alone"],
-    ["?layout=v2", { "mefiStudio.layout": "v1" }, true, "the parameter wins over a saved v1"],
-    ["?layout=v1", { "mefiStudio.layout": "v2" }, false, "the parameter wins over a saved v2"],
-    ["?layout=v3", { "mefiStudio.layout": "v2" }, true, "an unknown parameter is ignored, the saved choice stays"],
-    ["?capture=1", {}, false, "a capture launch is v1"],
-    ["?smoke=1", {}, false, "a smoke launch is v1"],
-    ["?capture=1", { "mefiStudio.layout": "v2" }, false, "a capture launch stays v1 even when v2 is saved"],
-    ["?smoke=1", { "mefiStudio.layout": "v2" }, false, "a smoke launch stays v1 even when v2 is saved"],
-    ["?capture=1&layout=v2", { "mefiStudio.layout": "v1" }, true, "a diagnostic launch that asks gets v2"],
-    ["?smoke=1&layout=v2", {}, true, "smoke that asks gets v2"],
-    ["?layout=v2&capture=1", {}, true, "in either order"],
-    ["?capture=0", { "mefiStudio.layout": "v2" }, true, "capture=0 is not a diagnostic launch"],
-    ["?shell=classic&layout=v2", {}, true, "it does not depend on the shell choice"],
+    // [search, stored, why]
+    ["", {}, "a plain launch"],
+    ["", { "mefiStudio.layout": "v1" }, "a classic choice saved before 0.5.0 is not read"],
+    ["?layout=v1", {}, "?layout= is not read"],
+    ["?capture=1", {}, "a capture launch"],
+    ["?smoke=1", {}, "a smoke launch"],
+    ["?shell=classic", { "mefiStudio.shell": "classic" }, "the classic shell choice is not read either"],
   ];
-  for (const [search, stored, expected, why] of cases) {
+  for (const [search, stored, why] of cases) {
     const { nav, root } = load({ search, stored });
-    assert.equal(nav.applyLayout(), expected, `${search || "(no query)"} ${JSON.stringify(stored)}: ${why}`);
-    assert.equal(root.dataset.layout, expected ? "v2" : undefined, `${why}: the attribute`);
+    assert.equal(nav.applyLayout(), true, `${search || "(no query)"} ${JSON.stringify(stored)}: ${why}`);
+    assert.equal(root.dataset.layout, "v2", `${why}: the attribute`);
   }
-  // A store that throws, and no location at all, are the default: the 0.5 layout.
+  // A store that throws, and no location at all, are the same.
   const { document } = createDom({ ids: RAIL_IDS });
   const bare = vm.createContext({ window: { innerWidth: 500, innerHeight: 400, addEventListener() {} }, document: { ...document, readyState: "loading", addEventListener() {} }, console, localStorage: { getItem() { throw new Error("blocked"); } } });
   vm.runInContext(source, bare);
-  assert.equal(bare.window.MefiNav.applyLayout(), true, "a blocked store and no location: the default, v2");
+  assert.equal(bare.window.MefiNav.applyLayout(), true, "a blocked store and no location: v2");
 });
 
 test("data-shell keeps its one writer and its one value: the layout is a second attribute", () => {
-  const { nav, root } = load({});
-  assert.equal(nav.applyShell(), true);
+  const { nav, root } = load({ search: "?shell=classic", stored: { "mefiStudio.shell": "classic" } });
+  assert.equal(nav.applyShell(), true, "the rail is the only shell, whatever was asked or saved");
   assert.equal(root.dataset.shell, "rail");
   nav.applyLayout(true);
   assert.equal(root.dataset.shell, "rail", "v2 is not a third data-shell value");
   assert.equal(root.dataset.layout, "v2");
   nav.applyLayout(false);
-  assert.equal(root.dataset.shell, "rail", "turning the layout off leaves the shell alone");
-  nav.setShell(false);
-  nav.applyLayout(true);
-  assert.equal(root.dataset.shell, undefined, "classic stays the absence of the attribute, whatever the layout");
+  assert.equal(root.dataset.shell, "rail", "a suite that turns the layout off leaves the shell alone");
 });
 
 test("the layout has one writer in the renderer, and data-shell is only ever given the value rail", async () => {
@@ -152,12 +138,12 @@ test("the layout has one writer in the renderer, and data-shell is only ever giv
   assert.deepEqual(shellValues, ['nav.js: "rail"'], `data-shell is given one value, rail, in one place: ${shellValues.join("; ")}`);
 });
 
-test("v1 wires nothing: no attribute, no inline style, no listener, and the setter does nothing", () => {
-  for (const [search, stored] of [["", { "mefiStudio.layout": "v1" }], ["?capture=1", { "mefiStudio.layout": "v2" }]]) {
+test("a page a suite looks at without the frame wires nothing: no attribute, no inline style, no listener, and the setter does nothing", () => {
+  for (const [search, stored] of [["", {}], ["?capture=1", {}]]) {
     const page = load({ search, stored });
     page.nav.applyShell();
     const before = page.added.length;
-    page.nav.applyLayout();
+    page.nav.applyLayout(false);
     assert.equal(page.added.length, before, "no listener");
     assert.equal(page.root.dataset.layout, undefined);
     assert.equal(page.root.dataset.layoutFold, undefined);
@@ -178,7 +164,7 @@ test("v2 with no region built leaves no trace either: zeros in the stylesheet, n
   assert.deepEqual(page.props, {});
   assert.equal(page.root.dataset.layoutFold, undefined, "a wide window folds nothing");
   assert.deepEqual(plain(page.nav.layout.used()), { list: 0, inspector: 0, tabs: 0, status: 0 });
-  assert.deepEqual(plain(page.nav.usable()), plain(load({}).nav.usable()), "with the regions at 0 the free area is v1's");
+  assert.deepEqual(plain(page.nav.usable()), { left: 64, top: 56, right: 1440, bottom: 900, width: 1376, height: 844 }, "with the regions at 0 the free area is right of the rail and under the top bar");
   assert.equal(page.events.filter((type) => type === "resize").length, 0, "nothing resized");
 });
 
@@ -303,14 +289,14 @@ test("the fold rule in styles.css is the one in nav.js, and the variables and ed
 });
 
 test("usable(): in v1 exactly what the rail readers measured, in v2 clear of the regions", () => {
-  // v1: the right of the rail's box, below the local navigation's, to the window's other edges.
+  // The layout off (only a suite does that): the right of the rail's box to the window's other edges.
   const build = load({ width: 1440, height: 900 });
-  assert.deepEqual(JSON.parse(JSON.stringify(build.nav.usable())), { left: 64, top: 56, right: 1440, bottom: 900, width: 1376, height: 844 });
+  assert.deepEqual(JSON.parse(JSON.stringify(build.nav.usable())), { left: 64, top: 0, right: 1440, bottom: 900, width: 1376, height: 900 });
   // The open rail covers the page, and its real box is what the readers used.
   const open = load({ width: 1440, height: 900, railBox: { left: 0, top: 0, right: 256, bottom: 900, width: 256, height: 900 } });
   assert.equal(open.nav.usable().left, 256);
   // No rail on screen (Vibe's own page, the classic shell): the window.
-  const bare = load({ width: 1440, height: 900, railBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }, navBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 } });
+  const bare = load({ width: 1440, height: 900, railBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 }, topBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 } });
   assert.deepEqual(JSON.parse(JSON.stringify(bare.nav.usable())), { left: 0, top: 0, right: 1440, bottom: 900, width: 1440, height: 900 });
   // Nothing in the document at all (a page before its markup): still an answer.
   const empty = vm.createContext({ window: { innerWidth: 500, innerHeight: 400, addEventListener() {} }, document: { documentElement: { dataset: {} }, readyState: "loading", addEventListener() {}, getElementById: () => null }, console });
@@ -333,7 +319,7 @@ test("usable(): in v1 exactly what the rail readers measured, in v2 clear of the
   const pinned = v2({ width: 1440, height: 900, rail: 256 });
   pinned.nav.layout.set("list", 280);
   assert.equal(pinned.nav.usable().left, 536);
-  // The local navigation's own height follows the section (agents is 60px).
+  // The top bar's height is the variable's (--shell-local-h).
   const agents = v2({ width: 1440, height: 900, localH: 60 });
   agents.nav.layout.set("tabs", 36);
   assert.equal(agents.nav.usable().top, 96);
@@ -344,11 +330,11 @@ test("usable(): in v1 exactly what the rail readers measured, in v2 clear of the
   const vibeHome = v2({ width: 1440, height: 900, rail: 72, railBox: { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 } });
   vibeHome.nav.layout.set("list", 280);
   assert.equal(vibeHome.nav.usable().left, 280, "with no rail on screen only the list is chrome");
-  // Nor is there a local navigation there: the tab strip starts at the window's top, and the free area under it.
+  // Nor is there a top bar there: the tab strip starts at the window's top, and the free area under it.
   const none = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
-  const vibeStrip = v2({ width: 1440, height: 900, rail: 72, railBox: none, navBox: none });
+  const vibeStrip = v2({ width: 1440, height: 900, rail: 72, railBox: none, topBox: none });
   vibeStrip.nav.layout.set("tabs", 36);
-  assert.equal(vibeStrip.nav.usable().top, 36, "with no local navigation on screen the strip is all there is above");
+  assert.equal(vibeStrip.nav.usable().top, 36, "with no top bar on screen the strip is all there is above");
 });
 
 test("usable() reads the variables the layers read, so a value in the root's style is what it reports", () => {
@@ -393,34 +379,26 @@ test("turning v2 on and off tells whoever measures the window, and off puts ever
   assert.equal(page.listeners.resize.length, 1, "and is not doubled by asking twice");
 });
 
-test("setLayout saves the person's choice and applies it; the launch parameter still wins next time", () => {
+test("there is no setter for a layout choice any more, and applyLayout stores nothing", () => {
   const page = load({});
-  assert.equal(page.nav.setLayout("v2"), true);
-  assert.equal(page.store.get("mefiStudio.layout"), "v2");
-  assert.equal(page.root.dataset.layout, "v2");
-  assert.equal(page.nav.setLayout("v1"), false);
-  assert.equal(page.store.get("mefiStudio.layout"), "v1");
-  assert.equal(page.root.dataset.layout, undefined);
-  assert.equal(page.nav.setLayout("anything"), false, "only v2 turns it on");
-  const next = load({ stored: { "mefiStudio.layout": "v2" }, search: "?layout=v1" });
-  assert.equal(next.nav.applyLayout(), false);
+  assert.equal(typeof page.nav.setLayout, "undefined");
+  page.nav.applyLayout();
+  assert.equal(page.store.has("mefiStudio.layout"), false);
 });
 
-test("init applies the layout right after the shell, and v1 launches stay silent", () => {
+test("init applies the layout right after the shell, at every launch", () => {
   const launch = (options) => { const page = load(options); page.document.readyState = "complete"; page.nav.init(); return page; };
-  const v1 = launch({ stored: { "mefiStudio.layout": "v1" } });
-  assert.equal(v1.root.dataset.layout, undefined);
-  assert.equal(v1.root.dataset.shell, "rail");
-  assert.ok(!v1.events.includes("mefi:layout"), "v1 announces nothing");
-  const on = launch({ stored: { "mefiStudio.layout": "v2" } });
-  assert.equal(on.root.dataset.layout, "v2");
-  assert.equal(on.root.dataset.shell, "rail", "next to the shell, not instead of it");
-  assert.ok(on.events.indexOf("mefi:shell") < on.events.indexOf("mefi:layout"), "after applyShell");
+  for (const stored of [{}, { "mefiStudio.layout": "v1" }]) {
+    const on = launch({ stored });
+    assert.equal(on.root.dataset.layout, "v2", `${JSON.stringify(stored)}: the 0.5 layout`);
+    assert.equal(on.root.dataset.shell, "rail", "next to the shell, not instead of it");
+    assert.ok(on.events.indexOf("mefi:shell") < on.events.indexOf("mefi:layout"), "after applyShell");
+  }
 });
 
-test("the shell exports the contract: layout, usable, applyLayout and setLayout", () => {
+test("the shell exports the contract: layout, usable and applyLayout", () => {
   const { nav } = load({});
-  for (const name of ["layout", "usable", "applyLayout", "setLayout"]) assert.ok(name in nav, `MefiNav.${name}`);
+  for (const name of ["layout", "usable", "applyLayout"]) assert.ok(name in nav, `MefiNav.${name}`);
   for (const name of ["get", "set", "used", "fold", "on", "reset"]) assert.equal(typeof nav.layout[name], "function", `MefiNav.layout.${name}`);
   assert.equal(Object.isFrozen(nav.layout), true, "the setter object is not rewritten by a region");
 });

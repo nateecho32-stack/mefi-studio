@@ -25,6 +25,8 @@ const source = await readFile(new URL("../renderer/git-sync.js", import.meta.url
 const styles = await readFile(new URL("../renderer/git-sync.css", import.meta.url), "utf8");
 const navSource = await readFile(new URL("../renderer/nav.js", import.meta.url), "utf8");
 const vibeSource = await readFile(new URL("../renderer/vibe.js", import.meta.url), "utf8");
+const shellSource = await readFile(new URL("../renderer/shell.js", import.meta.url), "utf8");
+const sessionsSource = await readFile(new URL("../renderer/sessions.js", import.meta.url), "utf8");
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const flush = async () => { for (let i = 0; i < 40; i += 1) await Promise.resolve(); await settle(); for (let i = 0; i < 40; i += 1) await Promise.resolve(); };
@@ -89,8 +91,9 @@ function load({ state = "ahead", over, replies, taken, account, ghInstalled, wid
     await flush();
   };
   const fire = (name, event = {}) => { for (const fn of [...(listeners[name] ?? [])]) fn({ type: name, ...event }); };
+  // The row most cases mount the plain chip in (no variant); the list column's and Vibe's are made by their own cases.
   const nav = new Node("nav");
-  nav.id = "app-local-nav";
+  nav.id = "chip-row";
   body.append(nav);
   const h = { fake, dom, document, body, window, sync: window.MefiGitSync, nav, timers, toasts, composed, stored, clock, advance, fire, listeners };
   h.q = (selector, root = document) => root.querySelector(selector);
@@ -104,7 +107,7 @@ function load({ state = "ahead", over, replies, taken, account, ghInstalled, wid
   h.status = () => document.querySelector("#git-sync-status").textContent;
   h.alert = () => document.querySelector("#git-sync-alert").textContent;
   h.text = (node) => node.textContent;
-  h.mount = () => h.sync.mount(nav, { variant: "bar" });
+  h.mount = () => h.sync.mount(nav);
   h.open = async () => { await h.chip().click(); await flush(); return h.pop(); };
   return h;
 }
@@ -174,11 +177,12 @@ test("nothing draws without a project or a bridge, and a project switch forgets 
   assert.equal(g.chip().dataset.state, "in-sync");
 });
 
-test("the chip goes at the tail of the bar and back there after the bar is rebuilt; in Vibe it follows New app", async () => {
+test("the chip goes at the tail of its row and back there after the row is rebuilt; in Vibe it follows New app", async () => {
   const h = await ready();
   const first = h.nav.children[h.nav.children.length - 1];
   assert.equal(first, h.chip().parentNode);
-  assert.equal(first.dataset.variant, "bar");
+  assert.equal(first.dataset.variant, undefined, "no variant asked for: the plain tone chip");
+  assert.equal(h.sync.mount(new h.nav.constructor("div"), { variant: "bar" }).dataset.variant, undefined, "the section bar's variant is gone: an unknown one is the plain chip");
   h.nav.textContent = "";
   h.nav.append(new h.nav.constructor("button"));
   h.mount();
@@ -222,12 +226,15 @@ test("in the 0.5 frame's list column the chip carries the branch before the stat
   assert.match(styles, /\.gs-slot\[data-variant="list"\] \.gs-chip:not\(\.gs-chip-static\) \.gs-chip-label \{ display: inline; \}/, "that keeps its words in a small window");
 });
 
-test("nav.js and vibe.js hand the chip its place, and the stylesheet keeps the chip's rules", () => {
-  assert.match(navSource, /window\.MefiGitSync\?\.mount\?\.\(nav, \{ variant: "bar" \}\)/);
+test("vibe.js and the frame's list column (shell.js, sessions.js) hand the chip its place, and the stylesheet keeps the chip's rules", () => {
   assert.match(vibeSource, /window\.MefiGitSync\?\.mount\?\.\(\$\("new-app"\)\?\.parentNode, \{ after: \$\("new-app"\), variant: "vibe" \}\)/);
+  assert.match(shellSource, /window\.MefiGitSync\?\.mount\?\.\(pages\.git, \{ variant: "list" \}\)/, "a section's page list");
+  assert.match(sessionsSource, /window\.MefiGitSync\?\.mount\?\.\(panel\.git, \{ variant: "list" \}\)/, "a session list's head");
+  assert.doesNotMatch(navSource, /MefiGitSync/, "nav.js draws no section bar, so it mounts no chip");
   assert.match(styles, /@media \(max-width: 899px\)[^}]*\{[^}]*\.gs-chip:not\(\.gs-chip-static\) \{[^}]*width: 36px/, "under 900px the chip is a 36px glyph");
   assert.match(styles, /\.gs-chip:not\(\.gs-chip-static\) \.gs-chip-label \{ display: none; \}/, "and its words go");
-  assert.match(styles, /body\.command-zen \.gs-slot, html:not\(\[data-shell="rail"\]\) \.gs-slot \{ display: none; \}/, "hidden in Zen and the classic shell");
+  assert.match(styles, /body\.command-zen \.gs-slot \{ display: none; \}/, "hidden in Zen");
+  assert.doesNotMatch(styles, /data-shell/, "the rail is the only shell: nothing hides the chip outside it");
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)[\s\S]*\.gs-spin, \.gs-arc, \.gs-march \{ animation: none; \}/);
   assert.match(styles, /\.gs-slot\[data-variant="vibe"\] \.gs-chip \{[^}]*height: 36px/, "36px in Vibe");
   assert.match(styles, /\.gs-chip \{[^}]*min-height: 26px/, "26px tone chip elsewhere");
@@ -1368,15 +1375,13 @@ test("the renderer never calls an Array method on a live DOM list (a NodeList ha
   assert.match(source, /Array\.from\(root\.querySelectorAll\(FOCUSABLE\)\)\.filter/, "the focus trap's list is copied");
 });
 
-test("the stylesheet keeps the touch sizes, the chip's place before the task shortcuts, and the light palette's contrast fixes", () => {
+test("the stylesheet keeps the touch sizes and the light palette's contrast fixes, and nothing of the section bar", () => {
   const coarse = styles.slice(styles.lastIndexOf("@media (pointer: coarse)"));
   assert.match(coarse, /\.gs-slot \.gs-chip:not\(\.gs-chip-static\) \{ min-width: 44px; min-height: 44px; \}/, "the chip is 44px each way, glyph-only too");
   assert.match(coarse, /:is\(\.gs-pop, \.gs-sheet\) :is\(button, a\.gs-link, \.gs-input, \.gs-ack\) \{ min-height: 44px; \}/, "the popover's and the dialogs' controls");
   assert.match(coarse, /:is\(\.gs-pop, \.gs-sheet\) button\.gs-icon \{ min-width: 44px; \}/, "and the close buttons");
   assert.ok(styles.lastIndexOf("@media (pointer: coarse)") > styles.indexOf(".gs-dialog-head button.gs-icon"), "after the rules it must outrank");
-  assert.match(styles, /\.gs-slot\[data-variant="bar"\] \{ order: 98;[^}]*position: sticky/, "in the bar, before the task shortcuts (order 99)");
-  assert.match(styles, /#app-local-nav:has\(> \.gs-slot\[data-variant="bar"\]:not\(\[hidden\]\)\) > \.app-task-context \{ margin-left: 0; \}/, "which then follow the chip instead of sharing the free space");
-  assert.doesNotMatch(styles, /\.gs-slot\[data-variant="bar"\] \{[^}]*background: var\(--bg\)/, "no solid patch against the bar's glass");
+  assert.doesNotMatch(styles, /data-variant="bar"|#app-local-nav|\.app-task-context/, "the section bar, its chip and its task shortcuts are gone, and their rules with them");
   assert.match(styles, /:root\[data-studio-theme-tone="light"\] button\.gs-seg-item\[aria-checked="true"\] \{ color: var\(--ivory\); \}/, "gold-bright on the selected tint is 3.8:1 on a light palette");
   assert.match(styles, /button\.gs-held \{ opacity: \.4; cursor: not-allowed; \}/);
   assert.match(styles, /\.gs-sheet\.sheet \{[^}]*width: min\(var\(--gs-w, 480px\), calc\(100vw - var\(--shell-x0, 0px\) - var\(--shell-x1, 0px\) - 32px\)\)/, "the overlay is moved over by the rail (and, in layout v2, the regions: --shell-x0 and --shell-x1 are the free area's edges): at 600px a sheet 568 wide ran 32px off the right edge");

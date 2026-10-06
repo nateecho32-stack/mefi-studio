@@ -2502,8 +2502,7 @@
     const height = area ? area.bottom : window.innerHeight || 768;
     const roof = area ? area.top : 0;
     const anchor = dropdownAnchor?.getBoundingClientRect?.();
-    const strip = dropdownAnchor?.closest?.(".cmd-tools")?.getBoundingClientRect?.();
-    const bottom = anchor?.height ? Math.max(anchor.bottom, strip?.bottom || 0) : 64;
+    const bottom = anchor?.height ? anchor.bottom : 64;
     const above = anchor?.height ? Math.max(0, anchor.top - 8 - edge - roof) : 0;
     const below = height - bottom - 8 - edge;
     const flip = below < 280 && above > below && above >= 240;
@@ -2598,8 +2597,7 @@
     if (document.body.classList.contains("command-zen")) return;
     if (!els.dropdown.hidden) { if (!hover) { pinAudioDropdown(); els.dropdown.focus({ preventScroll: true }); } return; }
     if (state.opened) close();
-    const toolbar = document.getElementById?.("idle-music-toggle");
-    dropdownAnchor = anchor || (toolbar?.getBoundingClientRect?.().width ? toolbar : document.getElementById?.("settings-audio-open"));
+    dropdownAnchor = anchor || document.getElementById?.("settings-audio-open");
     dropdownFocus = document.activeElement;
     // Native browser views receive their own mouse events, so Studio cannot
     // reliably tell a pointer entering the website from one leaving the menu.
@@ -2701,7 +2699,7 @@
     if (lastLink) { state.link = lastLink; state.source = "link"; }
     else if (prefs.source === "radio") state.source = "radio";
     build();
-    for (const id of ["idle-music-toggle", "settings-audio-open"]) bindAudioHover(document.getElementById(id));
+    bindAudioHover(document.getElementById("settings-audio-open"));
     window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
     applyTheme(prefs.theme, false);
     syncTreePreferences(false); render(); renderMediaMenu();

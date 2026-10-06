@@ -1,7 +1,9 @@
 "use strict";
 
 // Home's message box in a real Chromium: a copied booklet and a synthetic bridge.
-// It opens Home in the classic layout and in the sessions layout and checks the
+// It opens Home in the classic layout and in the sessions layout (in the 0.5
+// frame Home is Today, whose own Add files button is checked first; the rest
+// runs on Home's chat view, where the whole box lives) and checks the
 // real geometry and the real event order that a fake DOM can not: the Attach
 // picture button is on screen and (in the sessions layout) on the control row,
 // a dropped picture becomes a thumbnail with a remove button, the @ # / popup
@@ -148,6 +150,10 @@ app.whenReady().then(async () => {
   const oneRow = (row) => Math.abs(row.attach - row.send) < 6 && Math.abs(row.modes - row.send) < 6;
   const inViewport = (b, m, label) => assert.ok(b.x >= -1 && b.y >= -1 && b.r <= m.inner.w + 1 && b.b <= m.inner.h + 1, `${label} is inside the window: ${JSON.stringify(b)} in ${JSON.stringify(m.inner)}`);
 
+  // In the 0.5 layout Build's Home is Today, which borrows Home's box and draws its own row under the words (one "Add files or an
+  // image" for Home's Attach picture and Add files buttons); the whole box, with its purpose switch and Send, is Home's chat view
+  // (the page Talk it over opens). Today is checked first, then everything below runs on the chat view.
+  const todayBox = () => run("const today = document.getElementById('today-build'), form = document.getElementById('workspace-form'), add = document.getElementById('today-build-attach'); const box = (node) => { const r = node.getBoundingClientRect(); return { x: r.left, y: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; }; const shown = (node) => Boolean(node) && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden'; return { today: shown(today), inside: Boolean(today && form && today.contains(form) && form.contains(add)), add: shown(add) ? box(add) : null, form: shown(form) ? box(form) : null, homeAttach: shown(document.querySelector('.composer-attach-button')), inner: { w: innerWidth, h: innerHeight } };");
   const open = async (query, layout) => {
     await window.loadFile(path.join(root, "renderer", "booklet.html"), { query });
     await run("Object.defineProperty(document,'hidden',{value:false,configurable:true});document.dispatchEvent(new Event('visibilitychange'));");
@@ -157,6 +163,13 @@ app.whenReady().then(async () => {
     await until("window.MefiWorkspace.isActive()", `Home (${layout})`);
     if (layout === "sessions") await until("document.documentElement.dataset.homeLayout === 'sessions'", "the sessions layout is adopted");
     else assert.equal(await run("return document.documentElement.dataset.homeLayout || '';"), "", "the classic layout has no layout mark");
+    await until("document.getElementById('today-build') && !document.getElementById('today-build').hidden && document.getElementById('today-build-attach')", `Home is Today (${layout})`);
+    const today = await todayBox();
+    assert.ok(today.inside, `Today's row is inside Home's own box (${layout})`);
+    assert.ok(today.add && today.add.w >= 28 && today.add.h >= 24 && today.add.x >= today.form.x - 1 && today.add.r <= today.form.r + 1 && today.add.b <= today.inner.h + 1, `Today's Add files or an image has a size, inside the box and the window (${layout}): ${JSON.stringify(today)}`);
+    assert.equal(today.homeAttach, false, `Home's own Attach picture is not shown a second time in Today (${layout})`);
+    await run("await window.MefiNav.go('workspace', { view: 'chat' });");
+    await until("document.getElementById('today-build').hidden && !document.getElementById('workspace-layer').hidden && document.querySelector('.ws-main')?.contains(document.getElementById('workspace-form'))", `Home's chat view has the box back (${layout})`);
     await until("document.querySelector('.composer-attach') && document.querySelector('.composer-mentions') && document.querySelector('.composer-picker')", `the box is bound (${layout})`);
     await sleep(250);
   };

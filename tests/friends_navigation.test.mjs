@@ -1,3 +1,6 @@
+// The companion's Friends bubble (renderer/companion-hub.js): Friends is a place of its own, so asking the hub for it
+// (the bubble, a menu's Friends entry with a target) closes the hub and goes to the Friends page at that place; the
+// hub never builds the Friends cards itself. The page's own walk is tests/friends_render.test.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -68,9 +71,9 @@ function load({ delayed = false } = {}) {
   };
 }
 
-// Friends is one page in both layouts (renderer/companion-hub.js openPlace):
-// the companion's Friends bubble and its targets open that page at a place,
-// one card at a time, with the places as tabs and a Close of its own.
+// Friends is a page of its own (renderer/companion-hub.js openPlace): the
+// companion's Friends bubble and its targets open that page at a place, one
+// card at a time; the frame's list column lists the places.
 for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pcs"], ["playground", "Playground", "playground"], ["hub", "Project hub", "hub"], ["events", "Events", "events"]]) {
   test(`Friends ${target} opens the Friends page at that place, not the bubbles`, () => {
     const loaded = load();
@@ -82,23 +85,29 @@ for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", 
     assert.equal(page.dataset.place, target);
     assert.equal(loaded.document.querySelector("#friends-place-title").textContent, title);
     assert.deepEqual(loaded.made, [kind], "only the place's own card is built");
-    const tabs = [...loaded.document.querySelector("#friends-place-tabs").children];
-    assert.deepEqual(tabs.filter((tab) => !tab.hidden).map((tab) => tab.textContent), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events"], "Moderation shows only to moderators");
-    assert.deepEqual(tabs.filter((tab) => tab.hidden).map((tab) => tab.textContent), ["Moderation"]);
-    assert.deepEqual(tabs.filter((tab) => tab.getAttribute("aria-current") === "page").map((tab) => tab.dataset.place), [target]);
+    assert.equal(loaded.document.querySelector("#friends-place-tabs"), null, "the list column lists the places: no tabs of the page's own");
+    const places = [...loaded.hub.friendsPlaces()];
+    assert.deepEqual(places.map((place) => place.label), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events"], "Moderation shows only to moderators");
+    assert.deepEqual(places.filter((place) => place.current).map((place) => place.id), [target]);
   });
 }
 
-test("a tab swaps the card and lets the last one go; Close releases the page", () => {
+test("another place swaps the card and lets the last one go; closing releases the page", () => {
   const loaded = load();
   loaded.hub.open({ section: "friends", target: "rooms" });
-  loaded.document.querySelector("#friends-place-tab-pcs").click();
+  loaded.window.MefiNav.go("friends-page", { place: "pcs" });
   assert.equal(loaded.page().dataset.place, "pcs");
   assert.deepEqual(loaded.made, ["rooms", "pcs"]);
   assert.deepEqual(loaded.disposed, ["rooms"], "Rooms let go of its open room");
-  loaded.document.querySelector("#friends-place-close").click();
+  loaded.window.MefiNav.closeAll();
   assert.equal(loaded.page().hidden, true);
   assert.deepEqual(loaded.disposed, ["rooms", "pcs"]);
+});
+
+test("a target nobody knows lands on The Lobby, Friends' front page", () => {
+  const loaded = load();
+  loaded.hub.open({ section: "friends", target: "somewhere" });
+  assert.equal(loaded.page().dataset.place, "lobby");
 });
 
 test("the companion's menu still opens its bubbles; an open menu gives way to the Friends page", () => {
@@ -120,4 +129,11 @@ test("a room asked for by name opens in Rooms, even when Rooms is already up; th
   loaded.window.MefiNav.go("friends-page", { place: "rooms" });
   assert.deepEqual(loaded.asked, ["abc123", "lobby", null], "Rooms painted again for each named room, and without one on coming back");
   assert.deepEqual(loaded.made, ["rooms", "rooms", "pcs", "rooms"]);
+});
+
+test("any navigation closes the open bubbles", () => {
+  const loaded = load();
+  loaded.hub.open();
+  loaded.fire("mefi:nav", { detail: { id: "tasks", action: "open" } });
+  assert.equal(loaded.hub.isOpen(), false);
 });

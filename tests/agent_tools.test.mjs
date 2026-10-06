@@ -14,6 +14,11 @@ import { spawn } from "node:child_process";
 import { ReadableStream } from "node:stream/web";
 import { createDom } from "./fixtures/renderer-dom.mjs";
 
+// What one model call was given, system and user together: with the prompt
+// cache on, the tool transcript rides at the end of the user content so the
+// system prompt stays the same bytes every round (scripts/agent-tools.cjs run).
+const whole = (prompt, input) => (typeof input === "string" ? `${prompt}\n${input}` : prompt);
+
 async function fixture(fn) {
   const temp = await fs.realpath(os.tmpdir());
   const root = await fs.mkdtemp(path.join(temp, "mefi-tool-test-"));
@@ -50,7 +55,7 @@ test("project reads reject traversal, hidden state, aliases into state and large
 test("tool turns execute allowed requests, preserve final formats and never expand permissions", () => fixture(async (root) => {
   await fs.writeFile(path.join(root, "README.md"), "untrusted facts");
   let turns = 0;
-  const result = await tools.run({ root, role: "desk", settings: { agentTools: { desk: { webSearch: false, projectRead: true } } }, system: "Return final JSON", user: "Question", call: async (system) => {
+  const result = await tools.run({ root, role: "desk", settings: { agentTools: { desk: { webSearch: false, projectRead: true } } }, system: "Return final JSON", user: "Question", call: async (...asked) => { const system = whole(...asked);
     turns++;
     if (turns === 1) return { ok: true, text: JSON.stringify({ studio_tool_calls: [{ name: "project_read", arguments: { path: "README.md" } }, { name: "web_search", arguments: { query: "secret" } }] }) };
     assert.match(system, /untrusted facts/); assert.match(system, /not allowed/);
@@ -118,8 +123,9 @@ test("real host seat fallback keeps the seat's skills and permissions across res
   });
   vm.runInContext(source.slice(source.indexOf("const SEAT_DEFAULTS"), source.indexOf("// ---- the Policy Lab's observation-only recorder")), context);
   const heard = [];
-  const result = await context.seatFetch("companion", "System", "Question", 1000, { onTool: (tool) => heard.push(`${tool.name}:${tool.ok}`), fallback: async (system) => {
-    prompts.push(system);
+  const result = await context.seatFetch("companion", "System", "Question", 1000, { onTool: (tool) => heard.push(`${tool.name}:${tool.ok}`), fallback: async (system, _fromSeat, input) => {
+    // The seat passes the user content on: in a tool round it holds the transcript.
+    prompts.push(whole(system, input));
     return { ok: true, text: prompts.length === 1 ? '{"studio_tool_calls":[{"name":"project_read","arguments":{"path":"README.md"}}]}' : '{"answer":"Complete"}' };
   } });
   assert.deepEqual(skills, ["companion"]); assert.equal(result.ok, true); assert.equal(result.toolTrace[0].ok, true);
@@ -172,7 +178,7 @@ test("real direct HTTP path executes tool turns through provider fallback and ke
   vm.runInContext(source.slice(source.indexOf("async function httpAssistantCall("), source.indexOf("// Circuit breakers for the host's own model calls")), context);
   const result = await context.httpAssistantCall({ provider: "custom", model: "primary", fallbacks: [{ provider: "custom", model: "fallback" }] }, "Return JSON", "Question", 1000);
   assert.equal(result.text, '{"answer":"Researched"}'); assert.equal(requests.length, 4); assert.equal(result.toolTrace[0].ok, true);
-  assert.match(requests[3].body.messages[0].content, /HTTP research evidence/);
+  assert.match(requests[3].body.messages.map((message) => message.content).join("\n"), /HTTP research evidence/);
 }));
 
 // 2026-09-29 dogfood: Zen gpt-6-luna answered Vibe's Talk with these two
@@ -187,7 +193,7 @@ test("tool envelopes wrapped in stray text, code fences or repeats still run, on
   const replies = [...LEAKED, '```json\n{"studio_tool_calls":[{"name":"project_read","arguments":{"path":"README.md"}}]}\n```', '{"studio_tool_calls":[{"name":"project_read","arguments":{"path":"README.md"}}]}\n\nThe roadmap plans nothing yet.'];
   for (const reply of replies) {
     const prompts = [];
-    const result = await tools.run({ root, role: "companion", settings, system: "Answer plainly", user: "What is planned?", braveKey: "", fetchImpl: async () => new Response(rss), call: async (system) => { prompts.push(system); return { ok: true, text: prompts.length === 1 ? reply : "Planned: the Fleet page." }; } });
+    const result = await tools.run({ root, role: "companion", settings, system: "Answer plainly", user: "What is planned?", braveKey: "", fetchImpl: async () => new Response(rss), call: async (...asked) => { const system = whole(...asked); prompts.push(system); return { ok: true, text: prompts.length === 1 ? reply : "Planned: the Fleet page." }; } });
     assert.equal(result.text, "Planned: the Fleet page.", reply); assert.equal(prompts.length, 2, reply);
     assert.deepEqual(result.toolTrace.map((item) => item.ok), [true], "a repeated identical call runs once");
     assert.match(prompts[1], /Untrusted tool transcript/);
@@ -198,7 +204,7 @@ test("a reply that still asks for tools is never returned as the answer", () => 
   const base = { root, role: "companion", settings: {}, user: "What is planned?", braveKey: "", fetchImpl: async () => new Response(rss) };
   // Budget spent: one last turn without tools gives the answer.
   const prompts = [];
-  const answered = await tools.run({ ...base, system: "Answer plainly", call: async (system) => { prompts.push(system); return { ok: true, text: /Studio tools are finished/.test(system) ? "Planned: the Fleet page." : LEAKED[prompts.length % 2] }; } });
+  const answered = await tools.run({ ...base, system: "Answer plainly", call: async (...asked) => { const system = whole(...asked); prompts.push(system); return { ok: true, text: /Studio tools are finished/.test(system) ? "Planned: the Fleet page." : LEAKED[prompts.length % 2] }; } });
   assert.equal(answered.text, "Planned: the Fleet page."); assert.equal(prompts.length, 6); assert.equal(answered.toolTrace.length, 4);
   assert.doesNotMatch(prompts[5], /Available tools/); assert.match(prompts[5], /Untrusted tool transcript/);
   // The last turn asks again: a clean failure the callers already handle.
@@ -211,7 +217,7 @@ test("a reply that still asks for tools is never returned as the answer", () => 
   assert.equal(cut.text, "Final."); assert.equal(turns, 2); assert.equal(cut.toolTrace.length, 0);
   // Five calls in one turn: three run, the rest are reported as skipped.
   const asks = [];
-  const many = await tools.run({ ...base, system: "s", call: async (system) => { asks.push(system); return { ok: true, text: asks.length === 1 ? JSON.stringify({ studio_tool_calls: [1, 2, 3, 4, 5].map((n) => ({ name: "web_search", arguments: { query: `q${n}` } })) }) : "Done." }; } });
+  const many = await tools.run({ ...base, system: "s", call: async (...asked) => { const system = whole(...asked); asks.push(system); return { ok: true, text: asks.length === 1 ? JSON.stringify({ studio_tool_calls: [1, 2, 3, 4, 5].map((n) => ({ name: "web_search", arguments: { query: `q${n}` } })) }) : "Done." }; } });
   assert.equal(many.text, "Done."); assert.equal(many.toolTrace.length, 3); assert.match(asks[1], /"skipped":2/);
 }));
 test("plain answers that mention JSON are returned unchanged", () => fixture(async (root) => {
@@ -238,7 +244,7 @@ test("web_read is its own switch, on by default like search, and offered to the 
   assert.deepEqual((await tools.definitions({ agentTools: { companion: { webSearch: false, webRead: true } } }, "companion")).map((tool) => tool.name), ["web_read"]);
   await assert.rejects(tools.execute("web_read", { url: "https://example.com/" }, { settings: off, role: "companion", lookup: publicDns, fetchImpl: async () => page("x") }), /not allowed/);
   let seen;
-  await tools.run({ role: "companion", settings: {}, system: "s", user: "u", call: async (system) => { seen = system; return { ok: true, text: "Done" }; } });
+  await tools.run({ role: "companion", settings: {}, system: "s", user: "u", call: async (...asked) => { const system = whole(...asked); seen = system; return { ok: true, text: "Done" }; } });
   assert.match(seen, /"name":"web_read"/);
 });
 test("web_read refuses local, private and metadata addresses before any request", async () => {
@@ -303,7 +309,7 @@ test("web_read pages a long page in parts cut at line ends, and the loop passes 
   await assert.rejects(tools.readPage("https://example.com/notes.md", { ...options, part: first.parts + 1 }), new RegExp(`has ${first.parts} parts`));
   await assert.rejects(tools.readPage("https://example.com/notes.md", { ...options, part: 0 }), /whole number/);
   const prompts = [];
-  const result = await tools.run({ root, role: "companion", settings: {}, system: "s", user: "What is planned in https://example.com/notes.md?", ...options, call: async (system) => {
+  const result = await tools.run({ root, role: "companion", settings: {}, system: "s", user: "What is planned in https://example.com/notes.md?", ...options, call: async (...asked) => { const system = whole(...asked);
     prompts.push(system);
     return { ok: true, text: prompts.length === 1 ? '{"studio_tool_calls":[{"name":"web_read","arguments":{"url":"https://example.com/notes.md","part":3}}]}' : "Item 899 is planned." };
   } });
@@ -391,7 +397,7 @@ test("web_read opens only links from the request or earlier results, never ones 
     [["web_read", { url: "https://linked.example/page" }], ["web_read", { url: "https://linked.example/a" }]],
   ];
   const prompts = [];
-  const result = await tools.run({ root, role: "companion", settings: {}, system: "Answer plainly", user: "Summarize https://example.com/docs.", braveKey: "", lookup: publicDns, fetchImpl, call: async (system) => {
+  const result = await tools.run({ root, role: "companion", settings: {}, system: "Answer plainly", user: "Summarize https://example.com/docs.", braveKey: "", lookup: publicDns, fetchImpl, call: async (...asked) => { const system = whole(...asked);
     prompts.push(system);
     const calls = turns[prompts.length - 1];
     return { ok: true, text: calls ? JSON.stringify({ studio_tool_calls: calls.map(([name, args]) => ({ name, arguments: args })) }) : "The Fleet page is planned." };

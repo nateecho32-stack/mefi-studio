@@ -12,7 +12,7 @@ const feedSource = source.slice(source.indexOf("  function feedLine("), source.i
 const preferenceSource = source.slice(source.indexOf("  async function autopilotPrefs("), source.indexOf("  // A message must always produce a reply"));
 const chatSource = source.slice(source.indexOf("  function commandChatActivity("), source.indexOf("  // The right-side chat log:"));
 function environment({ assistant = {}, full = {}, backlog = null, requests = [], nodes = [], bridge = {}, timers = {} } = {}) {
-  const el = Object.fromEntries(["feed", "feedDot", "feedState", "feedNow", "feedMetrics", "feedAttention", "feedQueue", "feedQueueCount", "feedAgents", "feedAgentsCount", "feedAgentsSection", "feedRecentAgents", "feedRecentCount", "feedRecentList", "feedMenu", "feedDrop", "feedList", "feedMeta", "feedActivity", "feedParallel", "feedBuildMode", "feedAgentMode", "feedAgentModeNote"].map((key) => [key, new Element()]));
+  const el = Object.fromEntries(["feed", "feedDot", "feedState", "feedNow", "feedMetrics", "feedAttention", "feedQueue", "feedQueueCount", "feedAgents", "feedAgentsCount", "feedAgentsSection", "feedRecentAgents", "feedRecentCount", "feedRecentList", "feedMenu", "feedDrop", "feedList", "feedMeta", "feedActivity"].map((key) => [key, new Element()]));
   const state = { active: false, feedDirty: true, assistant, requests, nodes, feed: [], tasks: [], backlog, backlogRevision: 0, backlogReadAt: 0, backlogReadPending: false, feedMenuOpen: false };
   const navigations = [];
   const context = vm.createContext({
@@ -21,7 +21,7 @@ function environment({ assistant = {}, full = {}, backlog = null, requests = [],
     autopilotJobs: (assistant) => Array.isArray(assistant?.running) ? assistant.running : assistant?.running ? [assistant.running] : [],
     assistantFull: () => full, agentHex: () => "#abc", agoShort: () => "just now", agoLabel: () => "just now",
     chatMode: () => false, paintChatLog() {}, nav: (...args) => navigations.push(args), setFeedMenu() {},
-    updateAssistantPill() {}, renderInfo() {},
+    renderInfo() {},
     setTimeout: timers.setTimeout || setTimeout, clearTimeout: timers.clearTimeout || clearTimeout,
   });
   vm.runInContext(`${preferenceSource}\n${chatSource}\n${feedSource}\nthis.api = { commandJobDetail, commandQueue, renderFeed, refreshCommandBacklog, commandChatActivity, changeBuildParallel, createBuildParallelControl, changeBuildMode, changeAgentMode };`, context);
@@ -35,18 +35,14 @@ test("Agent mode saves only coordination, serializes changes and preserves pause
   const calls = []; let finish;
   const pending = new Promise((resolve) => { finish = resolve; });
   const env = environment({ assistant: { mode: "swarm", enabled: false, execute: false }, bridge: { assistantAutopilot: (patch) => { calls.push(patch); return pending; } } });
-  env.renderFeed();
-  assert.equal(env.el.feedAgentMode.value, "swarm");
-  assert.match(env.el.feedAgentModeNote.textContent, /one builder per ready task/);
   const saving = env.changeAgentMode("cluster");
-  assert.equal(env.el.feedAgentMode.disabled, true);
-  assert.equal(env.el.feedAgentMode.attrs["aria-busy"], "true");
-  assert.equal(await env.changeAgentMode("swarm"), false);
+  assert.equal(env.state.agentModeSaving, true, "a save is in flight");
+  assert.equal(await env.changeAgentMode("swarm"), false, "a second change waits for the first");
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ mode: "cluster" }]);
   finish({ mode: "cluster", enabled: false, execute: false });
   assert.equal(await saving, true);
-  assert.equal(env.el.feedAgentMode.value, "cluster");
-  assert.equal(env.el.feedAgentMode.disabled, false);
+  assert.equal(env.state.assistant.mode, "cluster");
+  assert.equal(env.state.agentModeSaving, false);
   assert.equal(env.state.assistant.execute, false);
   assert.equal(env.state.assistant.enabled, false);
 });
@@ -58,7 +54,7 @@ test("Agent mode recovers saved preference after lost acknowledgement and ignore
     assistantStatus: async () => ({ ok: true, status: { mode: "cluster" } }),
   } });
   assert.equal(await env.changeAgentMode("cluster"), false);
-  assert.equal(env.el.feedAgentMode.value, "cluster");
+  assert.equal(env.state.assistant.mode, "cluster", "the read-back adopts the mode that was saved");
   assert.equal(await env.changeAgentMode("unrecognized"), false);
   const late = environment({ assistant: { mode: "swarm" }, bridge: {
     assistantAutopilot: async () => ({ ok: false }),
@@ -68,17 +64,16 @@ test("Agent mode recovers saved preference after lost acknowledgement and ignore
   late.state.assistant = { mode: "swarm", execute: false };
   finishRead({ ok: true, status: { mode: "cluster", execute: true } });
   assert.equal(await saving, false);
-  assert.equal(late.el.feedAgentMode.value, "swarm");
+  assert.equal(late.state.assistant.mode, "swarm", "a newer push wins over the late read-back");
   assert.equal(late.state.assistant.execute, false);
 });
 
-test("Cluster shows actual task preparation, helper failures and the shared focus", () => {
+test("Cluster shows actual task preparation, helper failures and the focused task", () => {
   const env = environment({ assistant: { mode: "cluster", enabled: true, execute: true,
     clusterFocus: { source: "task", id: "focus", title: "Improve search" },
     clusterAgents: [{ id: "planner", role: "planner", status: "running", taskId: "focus", taskTitle: "Improve search", step: "Inspecting entry points" }, { id: "reviewer", role: "reviewer", status: "failed", step: "Provider unavailable" }],
   } });
   env.renderFeed();
-  assert.match(env.el.feedAgentModeNote.textContent, /agents focus on: Improve search/);
   assert.equal(env.el.feedState.textContent, "task preparation");
   assert.match(env.el.feedNow.textContent, /Task preparation.*Improve search.*Inspecting entry points/);
   assert.equal(env.el.feedAgentsCount.textContent, "1 need attention");
@@ -89,7 +84,6 @@ test("Cluster shows actual task preparation, helper failures and the shared focu
   env.state.assistant.clusterFocus = null;
   env.state.assistant.running = [{ taskId: "a", title: "Current A" }, { taskId: "b", title: "Current B" }];
   env.state.feedDirty = true; env.renderFeed();
-  assert.match(env.el.feedAgentModeNote.textContent, /current workers finish/);
   assert.equal(env.el.feedNow.children.length, 2);
 });
 
@@ -257,12 +251,12 @@ test("Parallel build selection saves capacity only, serializes clicks and preser
   const calls = [];
   const answer = new Promise((yes) => { resolve = yes; });
   const env = environment({ assistant: { parallel: 2, adaptiveParallel: false, execute: false, enabled: false }, bridge: { assistantAutopilot: (patch) => { calls.push(patch); return answer; } } });
-  env.renderFeed();
-  assert.equal(env.el.feedParallel.value, "2");
-  env.el.feedParallel.value = "3";
+  const picker = env.createBuildParallelControl().children.find((child) => child.tagName === "select");
+  assert.equal(picker.value, "2");
+  picker.value = "3";
   const saving = env.changeBuildParallel("3");
-  assert.equal(env.el.feedParallel.disabled, true);
-  assert.equal(env.el.feedParallel.attrs["aria-busy"], "true");
+  assert.equal(picker.disabled, true);
+  assert.equal(picker.attrs["aria-busy"], "true");
   assert.equal(await env.changeBuildParallel("1"), false);
   assert.equal(calls.length, 1);
   assert.deepEqual(Object.keys(calls[0]), ["adaptiveParallel", "parallel"]);
@@ -270,8 +264,8 @@ test("Parallel build selection saves capacity only, serializes clicks and preser
   assert.equal(calls[0].parallel, 3);
   resolve({ parallel: 3, adaptiveParallel: false, execute: false, enabled: false });
   assert.equal(await saving, true);
-  assert.equal(env.el.feedParallel.disabled, false);
-  assert.equal(env.el.feedParallel.value, "3");
+  assert.equal(picker.disabled, false);
+  assert.equal(picker.value, "3");
   assert.equal(env.state.assistant.execute, false);
   assert.equal(env.state.assistant.enabled, false);
 });
@@ -279,23 +273,22 @@ test("Parallel build selection saves capacity only, serializes clicks and preser
 test("Parallel build errors restore the authoritative value and reject out-of-range input", async () => {
   let calls = 0;
   const env = environment({ assistant: { parallel: 2, adaptiveParallel: false }, bridge: { assistantAutopilot: async () => { calls += 1; throw new Error("Connection interrupted"); } } });
-  env.renderFeed();
-  env.el.feedParallel.value = "3";
+  const picker = env.createBuildParallelControl().children.find((child) => child.tagName === "select");
+  picker.value = "3";
   assert.equal(await env.changeBuildParallel("3"), false);
-  assert.equal(env.el.feedParallel.value, "2");
-  assert.equal(env.el.feedParallel.disabled, false);
+  assert.equal(picker.value, "2");
+  assert.equal(picker.disabled, false);
   for (const value of ["0", "4", "2.5", "invalid"]) assert.equal(await env.changeBuildParallel(value), false);
   assert.equal(calls, 1);
 });
 
-test("Machine managed is the default and opting into a manual limit updates both capacity controls", async () => {
+test("Machine managed is the default and opting into a manual limit updates the capacity control", async () => {
   const calls = [];
   const env = environment({ assistant: { parallel: 2, execute: false, enabled: false }, bridge: { assistantAutopilot: async (patch) => { calls.push(patch); return { ...env.state.assistant, ...patch }; } } });
   env.renderFeed();
   const detail = env.createBuildParallelControl();
   const picker = detail.children.find((child) => child.tagName === "select");
-  assert.equal(env.el.feedParallel.value, "machine", "legacy saved width does not imply manual mode");
-  assert.equal(picker.value, "machine");
+  assert.equal(picker.value, "machine", "legacy saved width does not imply manual mode");
   assert.equal(picker.children[0].textContent, "Machine managed");
   assert.equal(picker.attrs["aria-label"], "Build scheduling capacity");
   assert.match(picker.title, /while Studio remains responsive/);
@@ -305,14 +298,12 @@ test("Machine managed is the default and opting into a manual limit updates both
   await flush();
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ adaptiveParallel: false, parallel: 3 }]);
   assert.equal(picker.value, "3");
-  assert.equal(env.el.feedParallel.value, "3");
   assert.equal(await env.changeBuildParallel("machine"), true);
   assert.deepEqual(JSON.parse(JSON.stringify(calls[1])), { adaptiveParallel: true });
   assert.equal(env.state.assistant.parallel, 3, "automatic mode preserves the saved manual cap");
   assert.equal(env.state.assistant.execute, false);
   assert.equal(env.state.assistant.enabled, false);
   assert.equal(picker.value, "machine");
-  assert.equal(env.el.feedParallel.value, "machine");
 });
 
 test("Machine-managed builders show actual concurrency and machine holds without inventing a slot limit", () => {
@@ -336,18 +327,14 @@ test("Build mode saves only approval preference, serializes input and keeps sche
   const calls = []; let finish;
   const result = new Promise((resolve) => { finish = resolve; });
   const env = environment({ assistant: { autoBuild: true, enabled: false, execute: false }, bridge: { assistantAutopilot: (patch) => { calls.push(patch); return result; } } });
-  env.renderFeed();
-  assert.equal(env.el.feedBuildMode.value, "auto");
-  env.el.feedBuildMode.value = "verify";
   const saving = env.changeBuildMode("verify");
-  assert.equal(env.el.feedBuildMode.disabled, true);
-  assert.equal(env.el.feedBuildMode.attrs["aria-busy"], "true");
-  assert.equal(await env.changeBuildMode("auto"), false);
+  assert.equal(env.state.buildModeSaving, true, "a save is in flight");
+  assert.equal(await env.changeBuildMode("auto"), false, "a second change waits for the first");
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [{ autoBuild: false }]);
   finish({ autoBuild: false, enabled: false, execute: false });
   assert.equal(await saving, true);
-  assert.equal(env.el.feedBuildMode.value, "verify");
-  assert.equal(env.el.feedBuildMode.disabled, false);
+  assert.equal(env.state.assistant.autoBuild, false);
+  assert.equal(env.state.buildModeSaving, false);
   assert.equal(env.state.assistant.execute, false);
   assert.equal(env.state.assistant.enabled, false);
 });
@@ -355,11 +342,9 @@ test("Build mode saves only approval preference, serializes input and keeps sche
 test("Failed mode saves restore the saved choice; Verify first never guesses pending requests are ready", async () => {
   let calls = 0;
   const env = environment({ assistant: { autoBuild: false }, bridge: { assistantAutopilot: async () => { calls += 1; throw new Error("Connection interrupted"); } } });
-  env.renderFeed();
-  env.el.feedBuildMode.value = "auto";
   assert.equal(await env.changeBuildMode("auto"), false);
-  assert.equal(env.el.feedBuildMode.value, "verify");
-  assert.equal(env.el.feedBuildMode.disabled, false);
+  assert.equal(env.state.assistant.autoBuild, false, "the saved choice stands");
+  assert.equal(env.state.buildModeSaving, false);
   assert.equal(await env.changeBuildMode("unknown"), false);
   assert.equal(calls, 1);
   assert.equal(env.commandQueue({ autoBuild: false }, [{ id: "unapproved", status: "open", title: "Needs review" }], null).length, 0);
@@ -373,8 +358,8 @@ test("a lost build-mode acknowledgement recovers the actual saved mode through a
   } });
   assert.equal(await env.changeBuildMode("verify"), false);
   assert.equal(reads, 1);
-  assert.equal(env.el.feedBuildMode.value, "verify");
-  assert.equal(env.el.feedBuildMode.disabled, false);
+  assert.equal(env.state.assistant.autoBuild, false, "the read-back adopts the mode that was saved");
+  assert.equal(env.state.buildModeSaving, false);
   assert.equal(env.state.assistant.execute, false);
 });
 
@@ -389,7 +374,7 @@ test("a failed mode recovery cannot overwrite a newer pushed status", async () =
   env.state.assistant = { autoBuild: false, execute: false };
   finishStatus({ ok: true, status: { autoBuild: true, execute: true } });
   assert.equal(await saving, false);
-  assert.equal(env.el.feedBuildMode.value, "verify");
+  assert.equal(env.state.assistant.autoBuild, false, "a newer push wins over the late read-back");
   assert.equal(env.state.assistant.execute, false);
 });
 

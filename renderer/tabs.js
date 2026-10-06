@@ -53,12 +53,11 @@
   const CAP_RANGE = Object.freeze([3, 12]); // and 0, "no limit", one step past the top
   // Which params say which place. Everything else (a filter, a task selected on the
   // Task board, a card to scroll to) is where you are inside the page, not another tab.
-  // Agents is one sheet with two faces: its overview, and Setup with four panes.
-  // In the 0.5 layout Agents is Team, one tab per place (renderer/agents.js, TEAM_PLACES): its Overview is the Team tab.
+  // Agents is Team, one tab per place (renderer/agents.js, TEAM_PLACES): its Overview is the Team tab, and an old
+  // { section, pane } is the place that holds that pane now.
   // Friends in the 0.5 layout is one tab per place too (renderer/companion-hub.js, FRIENDS_PLACES).
   const IDENTITY = Object.freeze({ workspace: Object.freeze(["view", "taskId", "projectId"]), agents: Object.freeze(["section", "pane", "place"]), "friends-page": Object.freeze(["place"]) });
   const friendsPlaceOf = (id) => safe(() => window.MefiCompanionHub?.FRIENDS_PLACES?.find?.((place) => place.id === id) ?? null, null);
-  const AGENT_PANES = Object.freeze({ connections: "Connections", team: "Team", routing: "Routing", behavior: "Behavior" });
   const teamPlaceOf = (id) => safe(() => window.MefiAgents?.TEAM_PLACES?.find?.((place) => place.id === id && Array.isArray(place.panes)) ?? null, null);
   const TONES = Object.freeze({ ask: "warn", run: "live", check: "info", done: "good", dropped: "dim", wait: "dim", ready: "dim" });
 
@@ -126,13 +125,13 @@
       if (params.view === "task" && params.taskId) return { id, params: { view: "task", taskId: params.taskId, ...(params.projectId ? { projectId: params.projectId } : {}) } };
       return { id, params: params.view === "chat" ? { view: "chat" } : {} };
     }
-    if (id === "agents" && v2()) {
+    if (id === "agents") {
       // One tab per Team place: an old { section, pane } is the place that holds that pane now (MefiAgents.teamPlace).
+      // The Overview, and a place nobody can name, is the Team tab.
       const at = teamPlaceOf(params.place) ? params.place : safe(() => window.MefiAgents?.teamPlace?.("agents", params)?.id ?? null, null);
-      if (teamPlaceOf(at)) return { id, params: at === "overview" ? {} : { place: at } };
+      return { id, params: teamPlaceOf(at) && at !== "overview" ? { place: at } : {} };
     }
-    if (id === "agents") return { id, params: params.section === "setup" ? { section: "setup", pane: AGENT_PANES[params.pane] ? params.pane : "team" } : {} };
-    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "rooms" } };
+    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "lobby" } };
     return { id, params };
   }
   // The key two routes share when they are the same place (the project is fixed by the set, so it is not in it).
@@ -195,10 +194,11 @@
     if (route.id === "workspace") return { title: route.params.view === "chat" ? "Chat" : homeTitle(), glyph: route.params.view === "chat" ? "g-spark" : "g-home" };
     const dest = safe(() => window.MefiNav?.get?.(route.id), null);
     let title = words(dest?.short || dest?.label || rec.title || route.id, 40);
-    if (route.id === "agents" && route.params.pane) title = `Agents · ${AGENT_PANES[route.params.pane]}`;
-    else if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
+    if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
     else if (route.id === "friends-page") title = words(friendsPlaceOf(route.params.place)?.label || title, 40);
-    return { title, glyph: dest?.glyph || "g-frame" };
+    // A Friends tab wears its place's own icon (The Lobby's people, Rooms' chat), not the page's.
+    const placeGlyph = route.id === "friends-page" ? friendsPlaceOf(route.params.place)?.glyph : null;
+    return { title, glyph: placeGlyph || dest?.glyph || "g-frame" };
   }
 
   // ---- the model ---------------------------------------------------------------------
@@ -1349,7 +1349,7 @@
   function onInput(event) {
     const target = event.target;
     if (event.isTrusted === false) return; // the app replaying a draft into a field is not you typing
-    if (!target || !isTyping(target) || target.closest?.(".ts-pop, .ts-strip, #palette-overlay, #config-overlay, #help-overlay, #walkthrough-overlay, #app-rail, #app-local-nav")) return;
+    if (!target || !isTyping(target) || target.closest?.(".ts-pop, .ts-strip, #palette-overlay, #config-overlay, #help-overlay, #walkthrough-overlay, #app-rail")) return;
     if (cur().prev) keep(S.active);
   }
   function onDouble(event) {

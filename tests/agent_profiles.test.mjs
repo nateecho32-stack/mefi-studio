@@ -111,3 +111,17 @@ test("real dispatch restores an interrupted attempt's team before resolving its 
   assert.equal(resolved.executorCli, "codex"); assert.equal(resolved.aiProvider, "zen");
   assert.equal(next.autopilot.jobs[0].agentConfiguration.configuration.executorCli, "codex");
 });
+
+// Kind-of-job routes (scripts/model-kinds.cjs) are written by Try it / Stop and
+// by trials as they are judged; Apply on a page's draft never undoes them.
+test("saving a team keeps the saved kind routes whatever the draft says", () => {
+  const settings = base();
+  const route = { cli: "claude", model: "sonnet", by: "studio", trial: { size: 5, from: 10, baseline: { wins: 8, losses: 36 } }, kept: null };
+  settings.agentKinds = { "coding-explore": route };
+  assert.ok(save(settings, "a", { ...profiles.extract(settings), agentKinds: {} }, { scope: "defaults" }).ok, "a stale draft without the route");
+  assert.deepEqual(settings.agentKinds, { "coding-explore": route }, "the defaults keep the route");
+  assert.ok(save(settings, "a", { aiProvider: "claude", agentKinds: { "coding-analyze": { cli: "codex", model: "" } } }).ok);
+  assert.deepEqual(profiles.effective(settings, "a").agentKinds, { "coding-explore": route }, "a project's first save copies the routes it already followed");
+  assert.equal(profiles.effective(settings, "a").aiProvider, "claude");
+  assert.match(profiles.validate({ agentKinds: { planning: { cli: "claude" } } }), /Unknown kind of job/);
+});

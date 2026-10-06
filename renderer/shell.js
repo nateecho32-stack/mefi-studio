@@ -227,7 +227,7 @@
     if (vibe === "vibe" || vibe === "build") return vibe;
     return rootEl()?.dataset?.uiMode === "vibe" ? "vibe" : "build";
   };
-  const modeWords = (mode) => (mode === "vibe" ? "Vibe" : "Build");
+  const modeWords = (mode) => (mode === "vibe" ? "Social" : "Studio");
   const isColumn = (name) => name === "list" || name === "inspector";
 
   // ---- the regions: the DOM ---------------------------------------------------------------
@@ -615,12 +615,12 @@
     parts.listToggle.id = "shell-list-toggle";
     parts.listToggle.append(icon("panelL"));
     // The app's own mode switch look (vibe.css); the click and the keys are this module's.
-    parts.group = el("div", "mode-switch shell-mode", { role: "radiogroup", "aria-label": "Studio mode", "data-mode": "build" });
+    parts.group = el("div", "mode-switch shell-mode", { role: "radiogroup", "aria-label": "Mode", "data-mode": "build" });
     parts.group.append(el("i", "mode-thumb", { "aria-hidden": "true" }));
     for (const mode of MODES) {
       const choice = button("shell-mode-choice", null, (event) => { event?.stopPropagation?.(); event?.preventDefault?.(); setMode(mode); }, { role: "radio", "aria-checked": "false", "data-ui-mode": mode });
       choice.setAttribute("aria-label", modeWords(mode));
-      choice.setAttribute("title", mode === "vibe" ? "Vibe: a calm board that is easy to keep an eye on (Ctrl M)" : "Build: list, thread and inspector, in depth (Ctrl M)");
+      choice.setAttribute("title", mode === "vibe" ? "Social: friends, and a light eye on your agents (Ctrl M)" : "Studio: in-depth building with the list, thread and inspector (Ctrl M)");
       choice.append(icon(mode === "vibe" ? "spark" : "build"), text("span", "", modeWords(mode)));
       choice.addEventListener("keydown", (event) => modeKeys(event, mode));
       parts.group.append(choice);
@@ -766,10 +766,10 @@
   }
 
   // ---- the page list: the section's pages, in the list column ----------------------------------------
-  // What the classic bar listed between Back and Forward: the routes MefiNav keeps for the section (LOCAL_ROUTES), or for
-  // Agents its sections and their views (MefiAgents.navModel, so a pane or a tab is reachable as before). Home has none:
-  // its list is the session list. While the page list shows, the column's panels make way (html[data-pages] on the column)
-  // and MefiShell.pages() says so, so the session list does not draw for nobody.
+  // What the classic bar listed between Back and Forward: the routes MefiNav keeps for the section (LOCAL_ROUTES); Team's
+  // places are teamModel's, below. Home has none: its list is the session list. While the page list shows, the column's
+  // panels make way (html[data-pages] on the column) and MefiShell.pages() says so, so the session list does not draw for
+  // nobody.
   function sectionOfRoute(n, id) {
     const routes = n?.LOCAL_ROUTES;
     if (!routes || typeof routes !== "object") return null;
@@ -879,11 +879,6 @@
     let title = null;
     try { title = dest ? n?.sectionLabel?.(dest) ?? null : null; } catch { title = null; }
     title = String(title || section.charAt(0).toUpperCase() + section.slice(1));
-    if (section === "agents" && typeof window.MefiAgents?.navModel === "function") {
-      let groups = null;
-      try { groups = window.MefiAgents.navModel(id); } catch { groups = null; }
-      if (Array.isArray(groups) && groups.length) return { section, title, groups: groups.map((group) => ({ id: String(group.id), label: String(group.label), current: Boolean(group.current), run: group.run, views: (Array.isArray(group.views) ? group.views : []).map((view) => ({ label: String(view.label), current: Boolean(view.current), run: view.run })) })) };
-    }
     const pages = (n.LOCAL_ROUTES[section] || []).map((route) => n.get?.(route)).filter(Boolean).map((page) => ({
       id: String(page.id), label: String(page.short || page.label || page.id), glyph: typeof page.glyph === "string" ? page.glyph : null,
       badge: typeof page.badge === "string" ? page.badge : null, alert: typeof page.alert === "string" ? page.alert : null, current: page.id === id,
@@ -951,16 +946,10 @@
         pages.title.textContent = model.title;
         pages.root.setAttribute("aria-label", `${model.title} pages`);
         if (model.rows) {
-          // A place's list (settingsModel, teamModel, mapModel): headings over groups, rows with the place's glyph.
+          // A place's list (settingsModel, teamModel, friendsModel): headings over groups, rows with the place's glyph.
           for (const row of model.rows) {
             if (row.kind === "heading") rows.push(text("h3", "shell-pages-group", row.label));
             else rows.push(pageButton(row.label, row.current, (event) => row.run?.(event), { key: row.key, glyph: row.glyph, sub: row.sub, open: row.open, quiet: row.quiet }));
-          }
-        } else if (model.groups) {
-          for (const group of model.groups) {
-            if (!group.views.length) { rows.push(pageButton(group.label, group.current, () => group.run?.(), { key: `group:${group.id}` })); continue; }
-            rows.push(text("h3", `shell-pages-group${group.current ? " is-current" : ""}`, group.label));
-            group.views.forEach((view, at) => rows.push(pageButton(view.label, view.current, () => view.run?.(), { key: `${group.id}:${at}`, sub: true })));
           }
         } else for (const page of model.pages) rows.push(pageButton(page.label, page.current, () => n?.go?.(page.id), { key: page.id, glyph: page.glyph, badge: page.badge, alert: page.alert }));
       }
@@ -1379,7 +1368,7 @@
     }
     menu.parts.tabs.toggleButton.setAttribute("aria-checked", String(prefs.tabs.open));
     const cell = (other, name) => (state.prefs[other][name].open ? `${state.prefs[other][name].w} px` : "closed");
-    const grid = ["", "Build", "Vibe", "List", cell("build", "list"), cell("vibe", "list"), "Inspector", cell("build", "inspector"), cell("vibe", "inspector")];
+    const grid = ["", "Studio", "Social", "List", cell("build", "list"), cell("vibe", "list"), "Inspector", cell("build", "inspector"), cell("vibe", "inspector")];
     menu.table.replaceChildren(...grid.map((value, at) => text(at < 3 || at % 3 === 0 ? "span" : "b", at < 3 ? "shell-grid-head" : "", value)));
   }
   // Size and density is the SIZE page's; until it says how to open it, Configuration's UI & Surfaces is where the scale lives.
@@ -1544,7 +1533,7 @@
     const n = nav();
     if (state.keyRows || !n?.register) return;
     state.keyRows = true;
-    for (const [key, id, label] of [["Ctrl M", "shell-key-mode", "Switch between Vibe and Build"], ["Ctrl B", "shell-key-list", "Show or hide the list"], ["[", "shell-key-inspector", "Show or hide the inspector"]]) {
+    for (const [key, id, label] of [["Ctrl M", "shell-key-mode", "Switch between Social and Studio"], ["Ctrl B", "shell-key-list", "Show or hide the list"], ["[", "shell-key-inspector", "Show or hide the inspector"]]) {
       try { n.register({ id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false }, hidden: () => !state.on }); } catch { /* the sheet is optional */ }
     }
   }
@@ -1558,9 +1547,9 @@
     const base = { kind: "action", layer: null, section: "home", group: "layout", key: null, keyMatch: () => false, badge: null, showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, hidden: () => !state.on };
     const run = () => (state.live ?? readLive()).run;
     const rows = [
-      { ...base, id: "shell-do-mode", chord: "Ctrl M", paletteGroup: "Actions", paletteBrowse: 4, searchTerms: "mode vibe build switch calm in depth",
-        get label() { return currentMode() === "vibe" ? "Switch to Build" : "Switch to Vibe"; }, get glyph() { return currentMode() === "vibe" ? "g-wrench" : "g-spark"; },
-        desc: "Vibe is the calm board; Build is the list, the thread and the inspector", run: () => setMode(currentMode() === "vibe" ? "build" : "vibe") },
+      { ...base, id: "shell-do-mode", chord: "Ctrl M", paletteGroup: "Actions", paletteBrowse: 4, searchTerms: "mode social studio vibe build switch friends calm in depth",
+        get label() { return currentMode() === "vibe" ? "Switch to Studio" : "Switch to Social"; }, get glyph() { return currentMode() === "vibe" ? "g-wrench" : "g-spark"; },
+        desc: "Social is for friends and a light eye on your agents; Studio is for in-depth building", run: () => setMode(currentMode() === "vibe" ? "build" : "vibe") },
       { ...base, id: "shell-do-pause", paletteGroup: "Actions", paletteBrowse: 2, glyph: null, searchTerms: "pause resume hold stop new work agents start",
         get label() { const now = run(); return now === "paused" ? "Resume new work" : now === "off" ? "Start agents" : "Pause new work"; },
         desc: "Hold all new work; running jobs finish normally", hidden: () => !state.on || run() === null, run: () => togglePause() },
@@ -1666,36 +1655,10 @@
     }
   }
 
-  // ---- the way in (this runs with v2 off too) -------------------------------------------------------------
-  // A Settings switch and a Search action: each saves the choice through MefiNav.setLayout and reloads,
-  // as builder.js's layout switch does, so every module starts in the layout it was asked for.
-  function switchLayout(next) {
-    const n = nav();
-    if (!n?.setLayout) return false;
-    const to = next === "v2" ? "v2" : "v1";
-    n.setLayout(to);
-    window.MefiToast?.(to === "v2" ? "Switching to the 0.5 layout. Studio reloads to do it." : "Going back to the classic layout. Studio reloads to do it.", "info");
-    setTimeout(() => { try { n.saveResume?.(); } catch { /* resume is optional */ } try { window.location.reload(); } catch { /* no reload here */ } }, 350);
-    return true;
-  }
-  function wayIn() {
-    nav()?.register?.({
-      id: "layout-switch", label: "Switch layout: 0.5 or classic", short: "Layout", kind: "action", layer: null, section: "settings", group: "system",
-      glyph: "g-frame", badge: null, desc: "The 0.5 layout adds a list, an inspector, tabs and a status bar around every page. Studio reloads to switch.",
-      searchTerms: "layout 0.5 classic v1 v2 new shell list inspector tabs status bar panels frame switch try",
-      showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
-      run: () => switchLayout(layoutOn() ? "v1" : "v2"),
-    });
-    const box = document.getElementById?.("settings-layout-v2");
-    if (box) {
-      box.checked = layoutOn();
-      box.addEventListener("change", () => { const wanted = box.checked; if (!switchLayout(wanted ? "v2" : "v1")) box.checked = !wanted; });
-    }
-  }
+  // The 0.5 layout is Studio's only layout (0.5.0): there is no switch back to the classic one.
   function start() {
     if (state.armed) return;
     state.armed = true;
-    wayIn();
     if (layoutOn()) enable();
   }
 

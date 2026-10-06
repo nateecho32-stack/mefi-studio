@@ -11,9 +11,11 @@
 //     timeout and size cap, and a wire that fails never fails the paper.
 //   - offline with an older paper on disk: that paper, marked stale. Offline
 //     with none: an empty paper (lead null) carrying Studio's own items.
-//   - edit(system, user), when given, may improve the paper after it is
-//     printed (scripts/daily-news.cjs applyEditor); the edited paper is saved
-//     and pushed through onChange, never waited for.
+//   - edit(system, user, { timeoutMs }), when given, may improve the paper
+//     after it is printed (scripts/daily-news.cjs applyEditor); the edited
+//     paper is saved and pushed through onChange, never waited for. The
+//     editor is given up on after editTimeoutMs, and told so, so a model
+//     call behind it can stop then too.
 //   - start() checks at least hourly and refreshes once a day after 06:00 on
 //     the local clock while Studio runs; stop() ends that.
 const path = require("node:path");
@@ -155,7 +157,7 @@ function createDailyNews({
     const limit = deadline(editTimeoutMs);
     try {
       const { system, user } = news.editorPrompt(paper);
-      const reply = await Promise.race([Promise.resolve().then(() => edit(system, user)), limit.promise]);
+      const reply = await Promise.race([Promise.resolve().then(() => edit(system, user, { timeoutMs: editTimeoutMs })), limit.promise]);
       if (current !== paper || !(await isEnabled())) return;
       if (typeof reply !== "string" || !reply.trim()) return;
       const edited = news.applyEditor(paper, reply);

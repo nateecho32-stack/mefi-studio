@@ -50,31 +50,9 @@
     try { localStorage.setItem(`mefiStudio.taskContext.${projectId}`, JSON.stringify(selected)); } catch { /* Optional persistence. */ }
     if (previous?.taskId !== taskId || previous?.title !== selected.title) {
       window.dispatchEvent(new CustomEvent("mefi:task-context", { detail: { ...selected } }));
-      paintTaskContext();
     }
     return { ...selected };
   }
-  function paintTaskContext() {
-    const nav = document.getElementById("app-local-nav");
-    if (!nav || nav.hidden) return;
-    let row = document.getElementById("app-task-context");
-    if (!row) { row = document.createElement("div"); row.id = "app-task-context"; row.className = "app-task-context"; nav.insertBefore(row, nav.firstChild); }
-    const context = taskContext();
-    row.hidden = !["work", "agents"].includes(nav.dataset.section);
-    // In Vibe mode Home is Vibe (go() lands there), so the button says so.
-    const homeLabel = vibeMode() ? "Vibe" : "Home";
-    const signature = JSON.stringify([context, current(), homeLabel]);
-    if (row.dataset.signature === signature) return;
-    row.dataset.signature = signature; row.textContent = "";
-    const home = document.createElement("button"); home.type = "button"; home.className = "ghost mini"; home.textContent = homeLabel;
-    home.addEventListener("click", () => go("workspace")); row.append(home);
-    if (context) {
-      const task = document.createElement("button"); task.type = "button"; task.className = "ghost mini";
-      task.textContent = current() === "tasks" ? "Current task" : "Open current task";
-      task.title = context.title; task.addEventListener("click", () => go("tasks", { taskId: context.taskId, projectId: context.projectId })); row.append(task);
-    }
-  }
-
   // A record with no key, or a multi-character display key such as "Ctrl K",
   // needs its own keyMatch or it never matches (spec 2.2).
   const defaultKeyMatch = (key) => (event) =>
@@ -173,22 +151,17 @@
   // "Community" for community, "Assistant" for the assistant's commands.
   function sectionLabel(dest) {
     if (!dest) return null;
-    // In the 0.5 layout a record is named by its place: Team for Agents, Map for the Command view.
-    if (v2Places()) return placeLabel(placeOf(dest, AS_FILED));
-    return SECTIONS.get(sectionOf(dest)) ?? null;
+    // A record is named by its place: Team for Agents, Map for the Command view.
+    return placeLabel(placeOf(dest, AS_FILED));
   }
 
   // The rail's top-to-bottom order, for lists that sort by section.
   function sectionRank(dest) {
-    if (v2Places()) {
-      const at = [...PLACES.keys()].indexOf(placeOf(dest, AS_FILED));
-      return at < 0 ? PLACES.size : at;
-    }
-    const at = [...SECTIONS.keys()].indexOf(sectionOf(dest));
-    return at < 0 ? SECTIONS.size : at;
+    const at = [...PLACES.keys()].indexOf(placeOf(dest, AS_FILED));
+    return at < 0 ? PLACES.size : at;
   }
 
-  // ---- the 0.5 layout's places (html[data-layout="v2"]) --------------------
+  // ---- the places --------------------------------------------------------
   // The prototype (docs/prototype/mefi-studio-0.5-v5.html: railView and the
   // WHERE_WENT table) has four places on the rail, Work, Map, Team and
   // Friends, with Search, Settings and Help at its foot. They are a reading of
@@ -196,10 +169,8 @@
   // Work › Today); the Command view, Fleet and the Agent brain's live
   // pipelines are Map; everything else that was Agents is Team, and the Agent
   // brain's Playbook and Project map are Team › Workflows. A record keeps its
-  // section, so the menus, the shortcut sheet and the classic layout read as
-  // they did. placeOf() is what the rail, the breadcrumb, the page list, the
-  // history within a place and Search's groups go by while the layout is on.
-  const v2Places = () => document.documentElement?.dataset?.layout === "v2";
+  // section; placeOf() is what the rail, the breadcrumb, the page list, the
+  // history within a place and Search's groups go by.
   const PLACES = new Map([
     ["work", "Work"],
     ["map", "Map"],
@@ -217,7 +188,7 @@
   const AS_FILED = Object.freeze({ tab: "live" });
   function placeOf(dest, params) {
     const section = sectionOf(dest);
-    if (!dest || !v2Places()) return section;
+    if (!dest) return section;
     if (section === "home" || section === "work") return "work";
     if (section === "command") return "map";
     if (section !== "agents") return section;
@@ -232,10 +203,10 @@
     ...[
       ["friends", "Friends", "g-orbit", "Rooms, your PCs and companion playdates", null],
       ["the-lobby", "The Lobby", "g-community", "Who's online, rooms open now and what friends are making", "lobby"],
-      ["rooms", "Rooms", "g-orbit", "Room chat, invitations and requests to join", "rooms"],
+      ["rooms", "Rooms", "g-chat", "Room chat, invitations and requests to join", "rooms"],
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
-      ["project-hub", "Project hub", "g-orbit", "Share and play members' projects, credits and ranks", "hub"],
+      ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
     ].map(([id, label, glyph, desc, target]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
       searchTerms: `friends ${label} ${desc}`,
@@ -250,19 +221,19 @@
     },
     {
       // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): The Lobby, Rooms, Your PCs, Playground or the Project hub, one at a time.
-      // go("friends") and its five ways in land here while the layout is on (friendsPages in go()); Search lists them.
+      // go("friends") and its five ways in land here (friendsPages in go()); Search lists them.
       id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
-      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends rooms pcs playground",
-      showIn: showIn({}), hidden: () => !v2Places(), element: "friends-overlay", focus: "#friends-place-title",
+      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends lobby rooms chat invite code online pcs playground project hub credits ranks events moderation",
+      showIn: showIn({}), element: "friends-overlay", focus: "#friends-place-title",
       open: (params) => window.MefiCompanionHub?.openPlace?.(params), close: () => window.MefiCompanionHub?.closePlace?.(), isOpen: () => overlayOpen("friends-overlay"),
     },
     {
       // In Vibe mode Home is Vibe (go() lands there), so Search, Shortcuts
       // and the rail name it that instead of listing Home and Vibe twice.
-      id: "workspace", get label() { return vibeMode() ? "Vibe" : "Home"; }, get short() { return vibeMode() ? "Vibe" : "Home"; }, kind: "view", layer: null,
+      id: "workspace", get label() { return vibeMode() ? "Social" : "Home"; }, get short() { return vibeMode() ? "Social" : "Home"; }, kind: "view", layer: null,
       commandPrimary: true, section: "home",
       group: "surfaces", key: "H", get glyph() { return vibeMode() ? "g-spark" : "g-home"; }, badge: null,
-      get desc() { return vibeMode() ? "The calm front door: talk or build from one box, see what's building and what needs you" : "Project overview, conversation and work queue"; },
+      get desc() { return vibeMode() ? "Friends, and a light eye on your agents: talk or build from one box, see what's building and what needs you" : "Project overview, conversation and work queue"; },
       searchTerms: "home vibe project folder conversation chat give task review done",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       open: () => window.MefiWorkspace?.enter?.(), close: () => window.MefiWorkspace?.exit?.(),
@@ -270,9 +241,9 @@
     },
     {
       id: "command",
-      // The 0.5 layout calls it the Map (WHERE_WENT: "Command view" → Map); the route and its key stay.
-      get label() { return v2Places() ? "Map" : "Command view"; },
-      get short() { return v2Places() ? "Map" : "Command"; },
+      // The prototype calls it the Map (WHERE_WENT: "Command view" → Map); the route and its key stay.
+      label: "Map",
+      short: "Map",
       kind: "view",
       layer: null,
       section: "agents",
@@ -863,7 +834,7 @@
   }
 
   const WORKSPACE_PAGES = new Set(["tasks", "plans", "ideas", "brains", "analyzer", "worktrees", "explorer", "trace", "fleet", "overhead", "agent-brain", "skills", "agents", "today", "inbox"]);
-  const isWorkspacePage = (dest) => document.documentElement?.dataset?.shell === "rail" && WORKSPACE_PAGES.has(dest?.id);
+  const isWorkspacePage = (dest) => WORKSPACE_PAGES.has(dest?.id);
   // Settings' Size and density page (renderer/size.js, registered only in layout v2) is a page of the workspace too.
   WORKSPACE_PAGES.add("size");
   function syncPageInert() {
@@ -881,7 +852,7 @@
     else registry.push(dest);
     // community.js registers at DOMContentLoaded, after init() drew the rail:
     // a late arrival with a place in the rail redraws it.
-    if (document.documentElement?.dataset?.shell === "rail" && railSection(dest)) queueRailRender();
+    if (railSection(dest)) queueRailRender();
     return dest;
   }
 
@@ -930,8 +901,8 @@
     entry.scroll = Array.from(document.querySelectorAll?.("[id]") || []).filter((el) => !el.hidden && (el.scrollTop || el.scrollLeft)).map((el) => [el.id, el.scrollTop, el.scrollLeft]);
     entry.focus = document.activeElement?.id || null;
   }
-  // What a history belongs to: its section, or in the 0.5 layout its place (Map and Team each keep their own, Home is Work's).
-  const historyScope = (dest, params) => (v2Places() ? placeOf(dest, params) : sectionOf(dest));
+  // What a history belongs to: its place (Map and Team each keep their own, Home is Work's).
+  const historyScope = (dest, params) => placeOf(dest, params);
   function rememberRoute(id, params = {}) {
     if (historyRestoring) return;
     const dest = get(id), section = historyScope(dest, params);
@@ -982,20 +953,6 @@
   }
   const back = () => travelHistory(-1);
   const forward = () => travelHistory(1);
-  function paintHistory(nav) {
-    let controls = nav.querySelector?.(".studio-history");
-    if (!controls) {
-      controls = document.createElement("div"); controls.className = "studio-history"; controls.setAttribute("role", "group"); controls.setAttribute("aria-label", "Section history");
-      for (const [name, glyph, run] of [["Back", "←", back], ["Forward", "→", forward]]) {
-        const button = document.createElement("button"); button.type = "button"; button.className = "ghost mini";
-        button.textContent = glyph; button.dataset.history = name.toLowerCase(); button.setAttribute("aria-label", `${name} within this section`); button.title = `${name} within this section (Alt ${name === "Back" ? "←" : "→"})`; button.addEventListener("click", run); controls.append(button);
-      }
-      nav.insertBefore(controls, nav.firstChild);
-    }
-    const status = historyState();
-    controls.querySelector('[data-history="back"]').disabled = !status.canBack;
-    controls.querySelector('[data-history="forward"]').disabled = !status.canForward;
-  }
   document.addEventListener("keydown", (event) => {
     if (!event.altKey || event.ctrlKey || event.metaKey || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
     event.preventDefault(); event.stopPropagation(); if (event.key === "ArrowLeft") back(); else forward();
@@ -1050,7 +1007,7 @@
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Vibe" : "Command";
+      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Social" : "Command";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -1061,7 +1018,7 @@
     if (WORKSPACE_PAGES.has(id)) {
       const exit = document.getElementById(`${id}-close`);
       const label = exit?.querySelector(".label");
-      const name = page ? `Back within ${(v2Places() ? placeLabel(placeOf(dest)) : SECTIONS.get(sectionOf(dest))) || "this section"}` : "Close";
+      const name = page ? `Back within ${placeLabel(placeOf(dest)) || "this section"}` : "Close";
       if (label) label.textContent = page ? "Back" : "Close";
       if (exit) { exit.title = `${name} (Esc)`; exit.setAttribute("aria-label", name); }
       exit?.querySelector("use")?.setAttribute("href", page ? "#g-back" : "#g-close");
@@ -1122,7 +1079,7 @@
     } else if (window.MefiWorkspace?.isActive?.()) {
       document.getElementById("workspace-layer")?.focus?.({ preventScroll: true });
     } else {
-      (document.querySelector(".tab.active") ?? document.getElementById("nav-command"))?.focus?.();
+      (document.querySelector?.('#app-rail [aria-current="page"]') ?? document.body)?.focus?.({ preventScroll: true });
     }
     if (layer) state.focusReturn[layer] = null;
     dispatchNav(id, "close", {});
@@ -1139,8 +1096,8 @@
       // it goes there instead of stopping on Build's section home.
       if (vibeMode()) return go("vibe");
       // A page of Settings (Size and density) has no history when it was opened from Configuration or Search: back to Settings.
-      // In the 0.5 layout Fleet and the live pipelines are pages of the Map, so the Map is what is behind them.
-      const home = v2Places() && placeOf(get(id)) === "map" ? "command" : sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
+      // Fleet and the live pipelines are pages of the Map, so the Map is what is behind them.
+      const home = placeOf(get(id)) === "map" ? "command" : sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
       if (id !== home) return go(home);
       return;
     }
@@ -1169,11 +1126,10 @@
     // The prototype's names for routes that already exist: go("team") is the Agents page, go("map") the Command view.
     if (id === "team") id = "agents";
     else if (id === "map") id = "command";
-    // In the 0.5 layout Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The
-    // Lobby and each way in at its own place; the classic layout gets there through the companion hub's open().
-    // (Spelled out here, not shared: suites run go() on its own.)
+    // Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The Lobby and each
+    // way in at its own place. (Spelled out here, not shared: suites run go() on its own.)
     const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
-    if (globalThis.document?.documentElement?.dataset?.layout === "v2" && Object.hasOwn(friendsPages, id)) {
+    if (Object.hasOwn(friendsPages, id)) {
       params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
     }
@@ -1199,7 +1155,6 @@
     if (id === "tasks" && !params.taskId && !params.filter && !params.readiness && context) params = { ...params, taskId: context.taskId, projectId: context.projectId };
     if (id === "command" && !params.preserveSelection && !params.selected && !params.sessionId && !params.rail && (params.taskId || context?.taskId)) params = { ...params, selected: `task:${params.taskId || context.taskId}` };
     if (dest.kind !== "action" && dest.layer !== "transient" && options.history !== false) rememberRoute(id, params);
-    const navCommand = document.getElementById("nav-command");
     if (dest.kind === "action") {
       dest.run?.(params, options);
       dispatchNav(id, "open", params);
@@ -1213,7 +1168,6 @@
       if (id !== "vibe") window.MefiVibe?.exit?.();
       if (id !== "command" && idleActive()) window.MefiIdle?.exit?.();
       state.returnTo = null;
-      navCommand?.classList.remove("return");
       const opened = dest.open?.(params);
       dispatchNav(id, "open", params);
       return opened;
@@ -1225,7 +1179,6 @@
       if (idleActive()) {
         window.MefiIdle?.exit?.();
         state.returnTo = "command";
-        navCommand?.classList.add("return");
         // Only a deep link needs explaining; a plain tab click speaks for itself.
         if (params && Object.keys(params).length) window.MefiToast?.("D returns to Command", "info");
       }
@@ -1246,11 +1199,15 @@
     return dest.open?.(params);
   }
 
-  // The surface under any sheet: the workspace, or the active tab.
+  // The tab page on show: the one #tab-* section booklet.js's showTab left visible.
+  const TAB_PAGES = Object.freeze(["booklet", "graph", "eyes", "studio"]);
+  const shownTab = () => TAB_PAGES.find((name) => document.getElementById?.(`tab-${name}`)?.hidden === false) ?? null;
+
+  // The surface under any sheet: the workspace, or the tab page on show.
   function underlyingView() {
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
     if (window.MefiVibe?.isActive?.()) return "vibe";
-    const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    const tab = shownTab();
     return tab === "graph" ? modelRoute : tab;
   }
 
@@ -1267,10 +1224,9 @@
       window.MefiIdle?.exit?.();
       return go(from);
     }
-    // In the 0.5 layout the Command view is the Map, a place of its own: leaving it goes back within the Map
+    // The Command view is the Map, a place of its own: leaving it goes back within the Map
     // (Fleet, the pipelines), else to the page it was opened from, as it does from Home.
-    if (v2Places()) { if (historyState().canBack) return back(); }
-    else if (sectionOf(get(current())) === "agents") { if (historyState().canBack) return back(); return go("agents"); }
+    if (historyState().canBack) return back();
     const destination = state.commandFrom && state.commandFrom !== "command" ? state.commandFrom : "workspace";
     state.commandFrom = null;
     window.MefiIdle?.exit?.();
@@ -1443,91 +1399,6 @@
     return button;
   }
 
-  // The "More tools" summary every menu shares: a glyph, the label and a chevron
-  // that the stylesheet turns while the menu is open.
-  function moreSummary(className) {
-    const summary = document.createElement("summary");
-    if (className) summary.className = className;
-    summary.append(glyphNode("g-more"));
-    const label = document.createElement("span");
-    label.className = "label";
-    label.textContent = "More tools";
-    summary.append(label);
-    const chevron = glyphNode("g-chev");
-    chevron.setAttribute("class", "glyph chev");
-    summary.append(chevron);
-    return summary;
-  }
-
-  function separator(className) {
-    const element = document.createElement("span");
-    element.className = className;
-    element.setAttribute("aria-hidden", "true");
-    return element;
-  }
-
-  // The More tools menus group by the same sections as the rail. Home rides
-  // with Work, the foot's Community with Help, and anything else unfiled
-  // lands in Settings.
-  const MENU_GROUPS = ["Work", "Agents", "Friends", "Settings", "Help"];
-  function menuGroup(dest) {
-    const section = sectionOf(dest);
-    if (section === "home") return "Work";
-    if (section === "community") return "Help";
-    const label = SECTIONS.get(section);
-    return MENU_GROUPS.includes(label) ? label : "Settings";
-  }
-
-  function appendGrouped(target, destinations, buttonClass) {
-    for (const label of MENU_GROUPS) {
-      const items = destinations.filter((dest) => menuGroup(dest) === label);
-      if (!items.length) continue;
-      const group = document.createElement("div");
-      group.className = "nav-menu-group";
-      group.setAttribute("role", "group");
-      group.setAttribute("aria-label", label);
-      const title = document.createElement("span");
-      title.className = "nav-menu-heading";
-      title.textContent = label;
-      group.append(title);
-      for (const dest of items) group.append(navButton(dest, buttonClass));
-      target.append(group);
-    }
-  }
-
-  function renderWorkspaceTools(target) {
-    const element = target ?? document.getElementById("workspace-tool-links");
-    if (!element) return;
-    element.textContent = "";
-    // Workspace, Command, Task board, Plans and Brain maps are pinned at the
-    // top of the sidebar and Settings / Music sit in its bottom row, so none
-    // repeat here.
-    // A page hidden in this layout (the 0.5 layout's Friends page in the classic one) is not offered either.
-    appendGrouped(element, list().filter((dest) =>
-      !["workspace", "command", "tasks", "plans", "brains", "studio", "music"].includes(dest.id) &&
-      dest.kind !== "action" && (dest.layer !== "transient" || dest.id === "profiler") && !dest.hidden?.()), "ghost");
-    paintBadges(element);
-  }
-
-  function renderDock(target) {
-    const element = target ?? document.getElementById("cmd-dock");
-    if (!element) return;
-    element.textContent = "";
-    const destinations = list({ showIn: "dock" });
-    for (const dest of destinations.filter((item) => item.commandPrimary)) element.append(navButton(dest, "dock-item"));
-    element.append(separator("dock-sep"));
-    const more = document.createElement("details");
-    more.id = "cmd-more-tools";
-    more.className = "cmd-more-tools";
-    const summary = moreSummary("dock-item");
-    const links = document.createElement("div");
-    links.className = "cmd-more-links";
-    appendGrouped(links, destinations.filter((item) => !item.commandPrimary), "dock-item");
-    more.append(summary, links);
-    element.append(more);
-    paintBadges(element);
-  }
-
   // ---- the one rail --------------------------------------------------------
   // docs/ux-audit.md, Phase 3: one navigation surface for the whole app instead
   // of a tabs row, a dock and a hover sidebar that each render the registry
@@ -1538,24 +1409,14 @@
   // the shortcut sheet and the palette use), and RAIL_SLOTS places the late
   // arrivals whose kind would otherwise keep them out (Community).
   //
-  // It is the default. html[data-shell="rail"] (applyShell) is what turns it
-  // on, and "classic" — ?shell=classic, or the palette's switch, remembered —
-  // brings back the tabs row, the Command dock and the hover sidebar for anyone
-  // who needs them while the rail beds in.
-  const SHELL_KEY = "mefiStudio.shell";
+  // It is the only shell: html[data-shell="rail"] (applyShell) turns it on at every launch.
   const RAIL_PIN_KEY = "mefiStudio.railPinned";
-  // Each head is its target's own button and draws the target's glyph, so a
-  // section and its main destination never show two different icons.
-  const RAIL_SECTIONS = [
-    { id: "home", label: "Home", target: "workspace" },
-    { id: "work", label: "Work", target: "tasks" },
-    { id: "agents", label: "Agents", target: "agents" },
-    { id: "friends", label: "Friends", target: "friends" },
-  ];
-  // The 0.5 layout's rail (the prototype's railView): Work, Map, Team and Friends, each a place (placeOf). Work opens
+  // The sections whose records the rail draws: a late registration in one of them redraws it.
+  const RAIL_SECTION_IDS = new Set(["home", "work", "agents", "friends"]);
+  // The rail (the prototype's railView): Work, Map, Team and Friends, each a place (placeOf). Work opens
   // Home, which is Work › Today, and keeps the count the Work head had; the Map keeps the Command view's live dot and
   // Team the Agents head's count of decisions waiting. The glyphs are the prototype's (a list, a graph, two people, a
-  // speech bubble); the routes are the ones the classic rail opens.
+  // speech bubble).
   const RAIL_PLACES = [
     { id: "work", label: "Work", target: "workspace", glyph: "g-tasks", badges: "tasks" },
     { id: "map", label: "Map", target: "command", glyph: "g-command", badges: "command" },
@@ -1567,8 +1428,7 @@
     // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
     work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
-    // The 0.5 layout's Friends page (its places are drawn by renderer/shell.js friendsModel); the classic layout's Friends
-    // entries are actions, so this section never shows there.
+    // The Friends page (its places are drawn by renderer/shell.js friendsModel).
     friends: ["friends-page"],
     settings: ["studio"],
   });
@@ -1595,43 +1455,13 @@
     // board has no selected task that could otherwise update this context.
     if (!(window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) && taskProjectId !== projectId) {
       taskProjectId = projectId;
-      paintTaskContext();
     }
     paintRecentTasks();
   }
 
   function paintRecentTasks() {
     // Build's sessions layout lists the whole board itself (builder.js).
-    if (window.MefiBuilder?.paintRail?.()) return;
-    const list = document.getElementById("app-rail-recent-list");
-    if (!list) return;
-    const projectId = (window.MefiWorkspace?.activeProjectId?.() || window.MefiWorkspace?.state?.activeId) || taskProjectId || recentProjectId;
-    const rows = recentTasks.get(projectId) || [];
-    const selected = taskContext(projectId);
-    const held = list.contains(document.activeElement) ? document.activeElement : null;
-    const existing = new Map(Array.from(list.querySelectorAll("button")).map((button) => [`${button.dataset.projectId}:${button.dataset.taskId}`, button]));
-    const wanted = new Set(rows.map((task) => `${projectId}:${task.id}`));
-    for (const [key, button] of existing) if (!wanted.has(key)) button.remove();
-    rows.forEach((task, index) => {
-      let button = existing.get(`${projectId}:${task.id}`);
-      if (!button) {
-        button = document.createElement("button"); button.type = "button";
-        button.className = "app-rail-item app-rail-recent-task"; button.tabIndex = -1;
-        button.dataset.taskId = task.id; button.dataset.projectId = projectId;
-        const label = document.createElement("span"); label.className = "label"; button.append(label);
-        button.addEventListener("click", () => go("tasks", { taskId: task.id, projectId, title: button.title }));
-      }
-      button.querySelector(".label").textContent = task.label;
-      button.title = task.title;
-      button.setAttribute("aria-pressed", String(selected?.taskId === task.id));
-      if (list.children[index] !== button) { button.remove(); list.insertBefore(button, list.children[index] || null); }
-    });
-    const empty = document.getElementById("app-rail-recent-empty");
-    if (empty) empty.hidden = rows.length > 0;
-    if (held && document.activeElement !== held) {
-      if (list.contains(held)) focusRailButton(held);
-      else document.querySelector('#app-rail .app-rail-head[data-section="work"]')?.focus?.();
-    }
+    window.MefiBuilder?.paintRail?.();
   }
 
   // The 0.5 layout's Help menu, in the prototype's order (HELP_ITEMS): the walkthrough, the setup guide, the keys, what
@@ -1644,9 +1474,9 @@
     if (ownKey(RAIL_SLOTS, dest.id)) return RAIL_SLOTS[dest.id];
     if (["studio", "palette", "help", "onboarding"].includes(dest.id)) return "foot";
     // Late arrivals the 0.5 layout's Help menu lists redraw the rail, as Community does.
-    if (v2Places() && HELP_MENU_V2.some(([id]) => id === dest.id)) return "foot";
+    if (HELP_MENU_V2.some(([id]) => id === dest.id)) return "foot";
     if (dest.kind === "action") return null;
-    return RAIL_SECTIONS.some((item) => item.id === sectionOf(dest)) ? sectionOf(dest) : null;
+    return RAIL_SECTION_IDS.has(sectionOf(dest)) ? sectionOf(dest) : null;
   }
 
   // A rail head in the 0.5 layout: the place's own word and glyph on the route it opens, with the count it keeps.
@@ -1738,56 +1568,8 @@
     const kept = Array.from(foot.children ?? []).filter((child) => !child.classList?.contains?.("app-rail-foot-item") && child.id !== "app-help-menu");
     sections.textContent = "";
     foot.textContent = "";
-    // The 0.5 layout draws the prototype's rail; the classic one below is what it was.
-    if (v2Places()) {
-      renderRailV2(sections, foot, kept, helpWasOpen);
-      window.MefiBuilder?.decorateRail?.({ sections, foot });
-      paintBadges(document.getElementById("app-rail"));
-      paintRail();
-      return;
-    }
-    const compose = document.createElement("button"); compose.type = "button";
-    compose.id = "app-rail-compose"; compose.className = "app-rail-item app-rail-compose";
-    compose.title = "New task"; compose.setAttribute("aria-label", "New task");
-    compose.append(glyphNode("g-add"));
-    const composeLabel = document.createElement("span"); composeLabel.className = "label"; composeLabel.textContent = "New task"; compose.append(composeLabel);
-    compose.addEventListener("click", () => window.MefiWorkspace?.composeTask?.());
-    const search = navButton(get("palette"), "app-rail-item app-rail-search");
-    const vibe = get("vibe") ? navButton(get("vibe"), "app-rail-item app-rail-vibe", { key: false }) : null;
-    if (vibe) { vibe.id = "app-rail-vibe"; vibe.title = "Vibe: the calm front door"; vibe.querySelector(".label").textContent = "Vibe mode"; }
-    sections.append(...[vibe, compose, search].filter(Boolean));
-    for (const section of RAIL_SECTIONS) {
-      const target = get(section.target);
-      const group = document.createElement("div");
-      group.className = "app-rail-section";
-      group.dataset.section = section.id;
-      const head = navButton(target, "app-rail-head", { key: false });
-      head.dataset.section = section.id;
-      head.setAttribute("aria-label", section.label);
-      head.title = section.label;
-      const label = head.querySelector(".label");
-      label.className = "app-rail-text";
-      label.textContent = section.label;
-      group.append(head);
-      if (section.id === "friends") {
-        const children = document.createElement("div");
-        children.className = "app-rail-children app-rail-friends";
-        children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
-        group.append(children);
-      }
-      sections.append(group);
-    }
-    const recent = document.createElement("div"); recent.className = "app-rail-recent app-rail-children";
-    recent.setAttribute("role", "group"); recent.setAttribute("aria-label", "Recent tasks");
-    const recentHeading = document.createElement("span"); recentHeading.className = "app-rail-heading"; recentHeading.textContent = "Recent tasks";
-    const recentList = document.createElement("div"); recentList.id = "app-rail-recent-list";
-    const recentEmpty = document.createElement("span"); recentEmpty.id = "app-rail-recent-empty"; recentEmpty.textContent = "Your tasks will appear here";
-    recent.append(recentHeading, recentList, recentEmpty); sections.append(recent);
-    foot.append(navButton(get("studio"), "app-rail-item app-rail-foot-item"));
-    const { help, menu } = helpMenu(helpWasOpen, ["onboarding", "help", "community"].map((id) => [get(id), null]).filter(([dest]) => dest));
-    foot.append(help, menu, ...kept);
-    // Build's sessions layout adds the mode switch, the work list and you.
+    // The prototype's rail; Build's sessions layout adds the mode switch, the work list and you.
+    renderRailV2(sections, foot, kept, helpWasOpen);
     window.MefiBuilder?.decorateRail?.({ sections, foot });
     paintBadges(document.getElementById("app-rail"));
     paintRail();
@@ -1804,42 +1586,10 @@
     return true;
   }
 
-  function paintLocalNav(section, id) {
-    let nav = document.getElementById("app-local-nav");
-    if (!nav) {
-      nav = document.createElement("nav");
-      nav.id = "app-local-nav";
-      document.body.append(nav);
-      nav.addEventListener("keydown", (event) => {
-        if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
-        const parentRow = event.target?.closest?.(".agents-nav-sections");
-        const buttons = Array.from(parentRow ? parentRow.querySelectorAll("[data-agent-section]") : nav.querySelectorAll("button")).filter((button) => !button.closest?.("[hidden]"));
-        const at = buttons.indexOf(event.target?.closest?.("button"));
-        const index = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (at + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
-        event.preventDefault(); event.stopPropagation();
-        buttons[index]?.focus?.();
-      });
-    }
-    const routes = LOCAL_ROUTES[section];
-    nav.hidden = !routes || document.documentElement.dataset.shell !== "rail";
+  // The classic bar of a section's pages is gone (the frame's list column holds a place's pages); what is left is the
+  // section mark the stylesheets and the frame read.
+  function paintLocalNav(section) {
     document.body.dataset.navSection = section || "home";
-    if (!routes) return;
-    nav.setAttribute("aria-label", `${SECTIONS.get(section)} views`);
-    if (nav.dataset.section !== section) {
-      nav.dataset.section = section;
-      nav.textContent = "";
-      if (section !== "agents" || !window.MefiAgents?.paintNav) for (const route of routes) { const dest = get(route); if (dest) nav.append(navButton(dest, "app-local-link", { key: false })); }
-    }
-    if (section === "agents") window.MefiAgents?.paintNav?.(nav, id);
-    paintHistory(nav);
-    for (const button of nav.querySelectorAll("button[data-nav]")) {
-      if (button.dataset.nav === id) button.setAttribute("aria-current", "page");
-      else button.removeAttribute("aria-current");
-    }
-    paintBadges(nav);
-    paintTaskContext();
-    // The Git sync chip rides at the tail of the bar (renderer/git-sync.js).
-    window.MefiGitSync?.mount?.(nav, { variant: "bar" });
   }
 
   function paintRail() {
@@ -1847,8 +1597,8 @@
     if (!rail || rail.hidden) return;
     const id = current();
     const section = sectionOf(get(id));
-    // The 0.5 layout's rail lights the place (Home is Work's, the Command view the Map's).
-    const place = v2Places() ? placeOf(get(id)) : section;
+    // The rail lights the place (Home is Work's, the Command view the Map's).
+    const place = placeOf(get(id));
     for (const group of rail.querySelectorAll(".app-rail-section")) group.classList.toggle("current", group.dataset.section === place);
     for (const button of rail.querySelectorAll(".app-rail-head, .app-rail-foot-item[data-nav]")) {
       // Settings stays lit on its own pages (Size and density), as a section's head does.
@@ -1898,21 +1648,8 @@
     if (list?.style) list.style.display = "";
   }
 
-  // Vibe has one frame, its own rail on the rail shell's geometry; the
-  // classic-tabs choice is kept, and only shapes Build.
+  // The rail is Studio's only shell (0.5.0): the classic tabs shell and its switch are gone.
   function vibeMode() { return window.MefiVibe?.mode?.() === "vibe"; }
-  function shellOn() {
-    return vibeMode() || shellPreferred();
-  }
-  function shellPreferred() {
-    try {
-      const param = new URLSearchParams(location.search).get("shell");
-      if (param) return param !== "classic";
-      return localStorage.getItem(SHELL_KEY) !== "classic";
-    } catch {
-      return true;
-    }
-  }
 
   // A pinned rail takes its open width from the page. Below this window width
   // it yields and behaves unpinned, opening over the page on hover or focus;
@@ -1943,26 +1680,17 @@
     if (changed || force) window.dispatchEvent(new Event("resize"));
   }
 
-  function applyShell(on = shellOn()) {
+  function applyShell() {
     const rail = document.getElementById("app-rail");
     if (!rail) return false;
-    const root = document.documentElement;
-    if (on) root.dataset.shell = "rail";
-    else delete root.dataset.shell;
-    rail.hidden = !on;
-    const local = document.getElementById("app-local-nav");
-    if (local) local.hidden = !on;
+    document.documentElement.dataset.shell = "rail";
+    rail.hidden = false;
     let pinned = true;
     try { pinned = localStorage.getItem(RAIL_PIN_KEY) !== "0"; } catch { /* use the wide-window default */ }
-    setRailPinned(on && pinned, { save: false });
-    if (on) renderRail();
-    window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: on } }));
-    return on;
-  }
-
-  function setShell(on) {
-    try { localStorage.setItem(SHELL_KEY, on ? "rail" : "classic"); } catch { /* this launch only */ }
-    return applyShell(Boolean(on) || vibeMode());
+    setRailPinned(pinned, { save: false });
+    renderRail();
+    window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: true } }));
+    return true;
   }
 
   // ---- the layout contract -----------------------------------------------
@@ -1979,7 +1707,6 @@
   // the fold rule for small windows, and usable(), the rectangle a floating
   // thing keeps inside. This is the only writer of html[data-layout] and of
   // html[data-layout-fold]; tests/layout_contract_nav.test.mjs pins that.
-  const LAYOUT_KEY = "mefiStudio.layout";
   const LAYOUT_REGIONS = Object.freeze({
     list: Object.freeze({ variable: "--shell-list-w", max: 420, folds: true }),
     inspector: Object.freeze({ variable: "--shell-inspector-w", max: 640, folds: true }),
@@ -1998,21 +1725,9 @@
   let layoutApplied = { list: 0, inspector: 0, tabs: 0, status: 0 };
   let layoutResize = null;
 
-  // ?layout=v1|v2 wins for one launch. A diagnostic launch (?smoke=1,
-  // ?capture=1) stays v1 unless it asks, so the render fixtures see the layout
-  // they were written for; otherwise the saved choice, and v1 by default.
-  function layoutChoice() {
-    try {
-      const search = String(location.search || "");
-      const param = new URLSearchParams(search).get("layout");
-      if (param === "v1" || param === "v2") return param;
-      if (/[?&](?:smoke|capture)=1(?:&|$)/.test(search)) return "v1";
-      // The 0.5 layout is the default: only a saved classic choice (the Settings switch, Search's "Switch layout") keeps v1.
-      return localStorage.getItem(LAYOUT_KEY) === "v1" ? "v1" : "v2";
-    } catch {
-      return "v2";
-    }
-  }
+  // The 0.5 layout is Studio's only layout (0.5.0): every launch, a diagnostic one too, opens in it. The classic layout,
+  // its switch, ?layout= and a saved choice are gone.
+  function layoutChoice() { return "v2"; }
   const layoutOn = () => document.documentElement?.dataset?.layout === "v2";
   const viewportSize = () => ({
     w: Number(window.innerWidth) || document.documentElement?.clientWidth || 0,
@@ -2107,15 +1822,15 @@
     }
   }
 
-  // The writer of html[data-layout]: v2 on or off, now. init() asks the launch
-  // (layoutChoice), setLayout() the person's saved choice.
+  // The writer of html[data-layout]: init() turns the 0.5 layout on (layoutChoice). A suite may pass false to see the
+  // page without the frame.
   function applyLayout(on = layoutChoice() === "v2") {
     const root = document.documentElement;
     if (!root) return false;
     const was = layoutOn();
     if (on) root.dataset.layout = "v2"; else delete root.dataset.layout;
     // The rail has its places in the 0.5 layout (renderRailV2): draw it again when the layout changes under it.
-    if (Boolean(on) !== was && root.dataset.shell === "rail") renderRail();
+    if (Boolean(on) !== was) renderRail();
     wireLayout(Boolean(on));
     if (on) paintLayout(); else if (was) clearLayout();
     if (on || was) announceLayout(false);
@@ -2124,11 +1839,6 @@
     if (on) window.MefiSessions?.attach?.(); else if (was) window.MefiSessions?.detach?.();
     // ---- end of sessions ----
     return Boolean(on);
-  }
-  function setLayout(choice) {
-    const next = choice === "v2" ? "v2" : "v1";
-    try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* this launch only */ }
-    return applyLayout(next === "v2");
   }
 
   // The one way a region claims room: set("list", 280). The value is cut to
@@ -2169,15 +1879,15 @@
       const rect = document.getElementById?.(id)?.getBoundingClientRect?.();
       return rect && rect.width > 0 && rect.height > 0 ? rect : null;
     };
-    const rail = box("app-rail"), bar = box("app-local-nav");
-    let left = rail ? rail.right : 0, top = bar ? bar.bottom : 0, right = w, bottom = h;
+    const rail = box("app-rail");
+    let left = rail ? rail.right : 0, top = 0, right = w, bottom = h;
     if (layoutOn()) {
       paintLayout();
       const length = (name, from) => cssLength(name, from) ?? 0;
       left = Math.max(left, railRest() + (cssLength("--shell-list-w") ?? layoutApplied.list));
-      // The strip sits under the local navigation, or at the window's top where there is none (Vibe's own Home);
-      // the 0.5 shell's top bar (renderer/shell.js) is that row on every page, so with it the strip sits under it.
-      top = Math.max(top, (bar || box("shell-top") ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
+      // The strip sits under the frame's top bar (renderer/shell.js), or at the window's top where there is none
+      // (Vibe's own Home).
+      top = Math.max(top, (box("shell-top") ? length("--shell-local-h", document.body || document.documentElement) : 0) + (cssLength("--shell-tabs-h") ?? layoutApplied.tabs));
       right = w - (cssLength("--shell-inspector-w") ?? layoutApplied.inspector);
       bottom = h - (cssLength("--shell-status-h") ?? layoutApplied.status);
     }
@@ -2249,81 +1959,6 @@
     }
   }
 
-  register({
-    id: "shellRail",
-    label: "Switch navigation: rail or classic",
-    short: "Navigation",
-    kind: "action",
-    layer: null,
-    section: "settings",
-    group: "system",
-    key: null,
-    glyph: "g-pin",
-    badge: null,
-    desc: "Swap the navigation rail for the classic tabs row, Command dock and hover sidebar, or back",
-    searchTerms: ["shell", "sidebar", "navigation", "menu", "layout"],
-    showIn: showIn({ palette: true }),
-    // Vibe always shows the rail, so there it flips the choice Build will use.
-    run: () => setShell(vibeMode() ? !shellPreferred() : document.documentElement.dataset.shell !== "rail"),
-  });
-
-  function renderTools(target) {
-    const element = target ?? document.getElementById("nav-tools");
-    if (!element) return;
-    element.textContent = "";
-    appendGrouped(element, list({ showIn: "tools" }), "tool");
-    paintBadges(element);
-    watchToolsWidth(element);
-  }
-
-  let toolsObserver = null;
-  function watchToolsWidth(element) {
-    const tabs = document.getElementById("tabs");
-    if (!tabs || typeof ResizeObserver !== "function" || toolsObserver) return;
-    const fit = () => {
-      // Measure uncompacted, or the cluster could never expand again.
-      element.classList.remove("compact");
-      if (tabs.scrollWidth > tabs.clientWidth) element.classList.add("compact");
-    };
-    let queued = false;
-    toolsObserver = new ResizeObserver(() => {
-      if (queued) return;
-      queued = true;
-      // Deferred so the measure/write pair cannot re-enter the observer.
-      requestAnimationFrame(() => {
-        queued = false;
-        fit();
-      });
-    });
-    toolsObserver.observe(tabs);
-    // "Back to Command" and the progress dot widen #nav-command without resizing
-    // the row itself, and a stale fit would push the cluster under #tree-rail.
-    const home = document.getElementById("nav-command");
-    if (home) toolsObserver.observe(home);
-    fit();
-  }
-
-  // Both arguments are optional: with none, every [data-sheet-links] container
-  // is filled from its own data-sheet-links id. The Explorer's static cluster
-  // carries no attribute and is therefore left alone.
-  function renderSheetLinks(target, selfId) {
-    const containers = target ? [target] : Array.from(document.querySelectorAll("[data-sheet-links]"));
-    for (const container of containers) {
-      const self = selfId ?? container.dataset?.sheetLinks;
-      if (!self) continue;
-      container.textContent = "";
-      const menu = document.createElement("details");
-      menu.className = "studio-more";
-      menu.append(moreSummary());
-      const links = document.createElement("div");
-      links.className = "studio-more-links";
-      appendGrouped(links, list({ showIn: "tools" }).filter((dest) => dest.layer === "sheet" && dest.id !== self), "dock-item small");
-      menu.append(links);
-      container.append(menu);
-      paintBadges(container);
-    }
-  }
-
   function helpRow(key, text) {
     const fragment = document.createDocumentFragment();
     fragment.append(keyCap(key));
@@ -2359,8 +1994,8 @@
       const heading = document.createElement("h4");
       heading.className = "help-group";
       heading.id = `help-section-${index}`;
-      // The 0.5 layout's words for the same groups: Home is Work's, Agents is Team (with the Map's page), Command view is the Map.
-      heading.textContent = v2Places() ? ({ "Home & Work": "Work", Agents: "Team and Map", "Command view": "Map" })[title] ?? title : title;
+      // The places' words for the groups: Home is Work's, Agents is Team (with the Map's page), Command view is the Map.
+      heading.textContent = ({ "Home & Work": "Work", Agents: "Team and Map", "Command view": "Map" })[title] ?? title;
       group.setAttribute("aria-labelledby", heading.id);
       group.append(heading);
       for (const dest of items) {
@@ -2370,27 +2005,6 @@
       if (title === "Help") group.append(helpRow("Esc", ESC_HELP));
       element.append(group);
     });
-  }
-
-  function hintLine() {
-    const parts = [];
-    const command = get("command");
-    if (command?.key) parts.push(`${command.key} ${command.short}`);
-    const tabs = list({ group: "surfaces" }).filter((dest) => dest.kind === "tab" && dest.key);
-    if (tabs.length) parts.push(`${tabs[0].key}–${tabs[tabs.length - 1].key} tabs`);
-    const tools = list({ group: "tools" })
-      .filter((dest) => dest.key)
-      .map((dest) => dest.key);
-    if (tools.length) parts.push(`${tools.join(" ")} tools`);
-    if (get("palette")) parts.push("⌃K jump");
-    if (get("help")) parts.push("? shortcuts");
-    return parts.join(" · ");
-  }
-
-  function renderFooter(target) {
-    const element = target ?? document.getElementById("footer-keys");
-    if (!element) return;
-    element.textContent = hintLine();
   }
 
   // ---- motion switch -----------------------------------------------------
@@ -2428,64 +2042,10 @@
 
   // ---- tab rail roving focus ---------------------------------------------
 
-  // The four surface tabs are one tab stop: the roving tabindex sits on the
-  // active tab while focus is elsewhere and on whatever arrowing last focused
-  // once inside. Left/Right walk the rail, Home/End jump to the ends, and
-  // Enter/Space activate through the native button click booklet.js routes to
-  // go(). Only tabindex and the section-4 outline move, so nothing reflows.
-  function tabRail() {
-    return Array.from(document.querySelectorAll("#tabs .tab"));
-  }
-
-  function setRovingTab(tabs, current) {
-    for (const tab of tabs) tab.tabIndex = tab === current ? 0 : -1;
-  }
-
-  function rove(tabs, index) {
-    const next = tabs[((index % tabs.length) + tabs.length) % tabs.length];
-    if (!next) return;
-    setRovingTab(tabs, next);
-    next.focus({ preventScroll: true });
-  }
-
-  function wireTabRail() {
-    const rail = document.getElementById("tabs");
-    if (!rail) return;
-    const tabs = tabRail();
-    if (!tabs.length) return;
-    setRovingTab(tabs, tabs.find((tab) => tab.classList.contains("active")) ?? tabs[0]);
-    rail.addEventListener("keydown", (event) => {
-      if (event.altKey || event.ctrlKey || event.metaKey) return;
-      const current = document.activeElement?.closest?.(".tab");
-      if (!current || !rail.contains(current)) return;
-      const at = tabs.indexOf(current);
-      if (at < 0) return;
-      if (event.key === "ArrowLeft") rove(tabs, at - 1);
-      else if (event.key === "ArrowRight") rove(tabs, at + 1);
-      else if (event.key === "Home") rove(tabs, 0);
-      else if (event.key === "End") rove(tabs, tabs.length - 1);
-      else return; // Enter/Space fall through to the button's own click
-      event.preventDefault();
-    });
-    // Keys 1–4 and palette jumps change tabs without moving focus; keep the
-    // single tab stop on the surface actually showing so Tab always lands there.
-    window.addEventListener("mefi:nav", (event) => {
-      if (event.detail?.action !== "open") return;
-      if (get(event.detail?.id)?.kind !== "tab") return;
-      const focused = document.activeElement?.closest?.(".tab");
-      if (focused && rail.contains(focused)) return;
-      const target = tabs.find((tab) => tab.dataset.tab === event.detail.id);
-      if (target) setRovingTab(tabs, target);
-    });
-  }
-
   // ---- input -------------------------------------------------------------
 
   document.addEventListener("click", (event) => {
     if (!event.target?.closest?.("#app-help-menu, #app-help-toggle")) closeHelpMenu();
-    for (const menu of document.querySelectorAll(".studio-more[open], .cmd-more-tools[open]")) {
-      if (!menu.contains(event.target)) menu.open = false;
-    }
     const button = event.target?.closest?.("[data-nav], [data-nav-close]");
     if (!button) return;
     const closeId = button.dataset.navClose;
@@ -2502,18 +2062,11 @@
         params = {};
       }
     }
-    if (button.classList.contains("app-rail-head") && v2Places()) {
+    if (button.classList.contains("app-rail-head")) {
       // A place's head goes back to where you were in it, and from inside it to its own first page:
       // Work to Today, Map to the Map, Team to its Overview.
       const place = button.dataset.section, fallback = button.dataset.nav;
       const target = placeOf(get(current())) === place ? { id: fallback, params: {} } : lastSectionRoute(place, fallback);
-      go(target.id, target.params);
-    } else if (button.classList.contains("app-rail-head")) {
-      const section = button.dataset.section;
-      const fallback = section === "agents" ? "command" : button.dataset.nav;
-      const target = sectionOf(get(current())) === section
-        ? { id: fallback, params: {} }
-        : lastSectionRoute(section, fallback);
       go(target.id, target.params);
     } else go(button.dataset.nav, params);
     const menu = button.closest("details");
@@ -2636,9 +2189,8 @@
       window.MefiSidebar.close({ restoreFocus: true });
       return;
     }
-    // Command's own More tools menu is the fallback only while Command is on
-    // top; a sheet above it must not have Esc (and focus) pulled out from under it.
-    const more = document.activeElement?.closest?.(".studio-more[open], .cmd-more-tools[open], .surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget) ?? (top() === "command" ? document.getElementById("cmd-more-tools") : null);
+    // An open tools menu (the one focus is in, else the first one on screen) closes first.
+    const more = document.activeElement?.closest?.(".surface-tools[open]") ?? Array.from(document.querySelectorAll?.(".surface-tools[open]") ?? []).find(visibleNavTarget);
     if (event.key === "Escape" && more?.open) {
       event.preventDefault();
       more.open = false;
@@ -2666,8 +2218,7 @@
         close("palette");
         return;
       }
-      if (event.target?.matches?.("#idle-search")) window.MefiIdle?.clearSearch?.();
-      else field.blur?.();
+      field.blur?.();
       // An open layer covers the constellation, so keep focus inside that dialog
       // instead of parking it on the canvas underneath (the guard from E15).
       const covering = state.transient ?? state.sheet;
@@ -2712,7 +2263,7 @@
     if (idleActive()) return "command";
     if (window.MefiWorkspace?.isActive?.()) return "workspace";
     if (window.MefiVibe?.isActive?.()) return "vibe";
-    const tab = document.querySelector?.(".tab.active")?.dataset?.tab ?? null;
+    const tab = shownTab();
     return tab === "graph" ? modelRoute : tab;
   }
 
@@ -2729,10 +2280,10 @@
   // ---- the 0.5 layout's Map pages (the prototype's mapView "maptools") ----
   // Map, Fleet and Pipelines are one place with a switch over each page. The Map draws its own over the tree
   // (renderer/idle.js #map-bar); Fleet's and the Agent brain's heads get the same three buttons here, made once per head
-  // and marked on every paint. Pipelines is the Agent brain's live tab. Without the layout nothing is added.
+  // and marked on every paint. Pipelines is the Agent brain's live tab.
   const MAP_SWITCH = [["command", "Map", null], ["fleet", "Fleet", null], ["agent-brain", "Pipelines", { tab: "live" }]];
   function syncMapSwitch(id = current()) {
-    if (!v2Places() || typeof document.querySelectorAll !== "function") return;
+    if (typeof document.querySelectorAll !== "function") return;
     const tab = (() => { try { return window.MefiAgentBrain?.tab?.() ?? null; } catch { return null; } })();
     for (const head of document.querySelectorAll("#fleet-overlay .sheet-head, #agent-brain-overlay .sheet-head")) {
       let group = head.querySelector?.(".map-pages");
@@ -2767,9 +2318,8 @@
 
   // ---- page header -------------------------------------------------------
   // The tab pages share one header. It names the page you are on and, when
-  // Command sent you there, offers the way back: the classic tabs row keeps
-  // that marker on #nav-command, which the rail shell hides. Painted from
-  // go()'s own announcement, so every route that opens a page is covered.
+  // Command sent you there, offers the way back. Painted from go()'s own
+  // announcement, so every route that opens a page is covered.
   let pageFromCommand = false;
   function paintPage(detail) {
     const dest = detail?.action === "open" ? get(detail.id) : null;
@@ -3503,15 +3053,10 @@
 
   function init() {
     watchMotion();
-    renderTools();
-    renderDock();
     applyShell();
     applyLayout();
     wireRail();
-    renderSheetLinks();
     paintCurrent();
-    renderFooter();
-    wireTabRail();
     paintBadges();
     refreshBadges();
     window.mefiStudio?.onTasks?.((tasks) => setBadge("tasks", openTasks(tasks)));
@@ -3519,7 +3064,6 @@
       if (!payload?.activeId || payload.activeId === taskProjectId) return;
       taskProjectId = payload.activeId;
       window.dispatchEvent(new CustomEvent("mefi:task-context", { detail: taskContext() || { projectId: taskProjectId, taskId: null } }));
-      paintTaskContext();
       paintRecentTasks();
     });
     window.addEventListener("mefi:task-context", paintRecentTasks);
@@ -3542,7 +3086,6 @@
     window.addEventListener("mefi:command", (event) => {
       if (!event.detail?.active) return;
       state.returnTo = null;
-      document.getElementById("nav-command")?.classList.remove("return");
       paintBadges(document.querySelector("#idle-hud"));
     });
     // A backstop only: the push subscriptions above carry the live numbers, and
@@ -3586,7 +3129,7 @@
       const wait = booting() ? 1500 : busy ? 5000 : KEY_HINT_QUIET_MS - (now - quietSince);
       if (wait > 0 && tries++ < 120) { setTimeout(attempt, wait); return; }
       try { localStorage.setItem(KEY_HINT_STORE, "1"); } catch { /* the tip may show again next launch */ }
-      const home = vibeMode() ? "Vibe" : "workspace";
+      const home = vibeMode() ? "Social" : "workspace";
       window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D Command view, T task board. Press ? for the full list.`, "info", {
         duration: 12000,
         action: { label: "Show keys", run: () => go("help") },
@@ -3616,9 +3159,6 @@
     setBadge,
     refreshBadges,
     paintBadges,
-    renderDock,
-    renderTools,
-    renderWorkspaceTools,
     renderRail,
     paintLocalNav,
     LOCAL_ROUTES,
@@ -3626,24 +3166,19 @@
     railSection,
     sectionLabel,
     sectionRank,
-    // The 0.5 layout's places: placeOf(record, params) is "work", "map", "team", ... (the section with v2 off).
+    // The places: placeOf(record, params) is "work", "map", "team", ...
     placeOf: (dest, params) => placeOf(typeof dest === "string" ? get(dest) : dest, params),
     placeLabel,
     PLACES: Object.freeze(Object.fromEntries(PLACES)),
     RAIL_SLOTS,
     applyShell,
-    setShell,
     applyLayout,
-    setLayout,
     layout,
     usable,
     setRailPinned,
     paintCurrent,
     current,
-    renderSheetLinks,
     renderHelp,
-    renderFooter,
-    hintLine,
     handleKey,
     typeScope,
     typeInto,

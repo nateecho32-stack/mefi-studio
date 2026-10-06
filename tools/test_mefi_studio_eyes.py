@@ -815,7 +815,7 @@ console.log(JSON.stringify({
             with self.subTest(marker=marker):
                 self.assertIn(marker, self.styles)
         self.assertIn('id="tree-rail"', self.template)
-        self.assertIn('data-tab="eyes"', self.template)
+        self.assertIn('id="tab-eyes"', self.template)
         self.assertIn("__BOOKLET_STYLES__", self.template)
 
     def test_dump_against_fixture_database(self):

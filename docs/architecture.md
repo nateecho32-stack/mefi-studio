@@ -35,7 +35,7 @@ Worker stream parsing deduplicates an exact handoff title and brief within one
 run, because a CLI may repeat its final answer on stdout and stderr. Different
 titles or briefs retain separate handoffs.
 
-In the optional 0.5 shell, short Build session panels keep at least 60px of
+In the optional 0.5 shell, short Studio session panels keep at least 60px of
 conversation visible when the composer controls are expanded. The controls
 scroll within the composer and preserve its unsent draft.
 
@@ -46,12 +46,12 @@ First map offers connection recovery in place and can use the local project
 scan through the selected provider without OpenCode. Scan and First map also
 offer **I have an API key or a local model server**: the guide walks to
 Connections and, once a usable key is saved (or you choose **Back to the
-scan**), scans again so **Use this setup** can map with that route. In Vibe
-mode the Create and Review walks use Vibe's own box and Tasks panel. See
+scan**), scans again so **Use this setup** can map with that route. In Social
+mode the Create and Review walks use Social's own box and Tasks panel. See
 [Guided CLI setup](cli-setup.md) for configuration scope, account limits and
 the text-session controls.
 
-Home and Vibe composers accept dropped text/code files and an **Add files**
+Home and Social composers accept dropped text/code files and an **Add files**
 picker. Plans supports the same imports in the outcome, interview answer,
 evidence and specification fields. Contents are inserted as labelled, editable
 text in the draft; review or remove them before sending or saving. Each import
@@ -64,7 +64,7 @@ Plans remembers the selected plan (including a new unsaved draft) separately
 for each project, restores the viewed stage when its workflow has not advanced,
 and offers **Continue where you left off** to focus it. Saved decisions,
 interview answers, drafts and task handoffs remain in their existing stores.
-Vibe also saves an independent composer draft per project. Planning replies
+Social also saves an independent composer draft per project. Planning replies
 read fresh, bounded project excerpts plus README/build/architecture context,
 with private paths excluded and credentials redacted. Exact file mentions
 receive priority. Earlier human answers remain available on resumed interviews;
@@ -72,7 +72,7 @@ over-budget context is refused rather than silently dropping requirements.
 
 Agent setup now exposes per-role web search, web page reads, project reads
 and MCP tool allowlists beside selected skills. **Read web pages you link**
-(`web_read`, on by default) lets chat, Vibe sizing, Plans and the other roles
+(`web_read`, on by default) lets chat, Social sizing, Plans and the other roles
 read a page you paste or a search found: public `http`/`https` addresses
 only, local and private ones refused, 15 seconds and 512 KB per read, and a
 long page in parts. The host executes bounded research turns
@@ -114,7 +114,7 @@ to keep overlapping content readable. Focus, Studio and Atmosphere adjust the
 surface depth and corners; Glass and Glow remain independent controls.
 Zero Glass intensity makes reading surfaces solid. Background video adds a
 stronger tint beneath page text, menus and navigation, including Home and
-Vibe. Appearance changes retain the playing media element. Agent settings
+Social. Appearance changes retain the playing media element. Agent settings
 respond to their panel width; narrow Tools menus fit within the action row.
 The sticky Settings categories clear the fixed local navigation and use a
 dense fill so scrolled content cannot show through their labels.
@@ -147,12 +147,12 @@ recovery. Provider quota limits still belong to the provider account.
 
 ## Permission modes
 
-The composer chip, Vibe Settings, companion Settings, Agents Overview and
-the permission-mode palette action edit the same global policy. Vibe's
+The composer chip, Social Settings, companion Settings, Agents Overview and
+the permission-mode palette action edit the same global policy. Social's
 Decided for you panel explains choices and exposes Undo plus the For you
 list. Suggestions highlight an offered answer; one-line options focus a
 text field. Offers and Yes/No confirmations also work inside the conversation.
-Model strengths appear in Agents routing and as one line in Vibe's Team.
+Model strengths appear in Agents routing and as one line in Social's Team.
 
 The global `settings.autonomy` stores a mode and six elevated switches. Always
 ask computes a suggestion; Accept per task delegates worker questions only
@@ -222,10 +222,11 @@ settings and per-model work-kind summaries for the shared controls.
 | Term | Meaning |
 | --- | --- |
 | **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
+| **Social** and **Studio** | Studio's two modes (Ctrl M switches). **Social** is for vibing with friends and keeping a light eye on agents: Today's board, the box that talks or builds, Friends and the dock. **Studio** is for in-depth building with the social features still there: the session list, the thread, the inspector and every page. Until 0.5 they were called Vibe and Build; the code (`renderer/vibe.js`, `MefiVibe.mode()`) and the stored setting still say `vibe` and `build`, so settings, deep links and tests carry over. |
 | **Layout contract** | The room the shell keeps for a session list, an inspector, a tab strip and a status bar that are not built yet: four `--shell-*` sizes (all 0), four derived edges the pages read, `html[data-layout="v2"]` to turn them on, one setter (`MefiNav.layout.set`) and one free-area rectangle (`MefiNav.usable()`). See `docs/unified-studio.md`. |
-| **Today** | Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`), in both modes. In Vibe ("Today, the board"): the greeting and the box that builds or talks, then the prototype's board, four columns that each say when they are empty: **Needs you**, **Running**, **Review** and **Done** (what finished today). In Build, with no session open: the greeting and "What's next for <project>?", Home's own box with **Add files or an image**, the permission mode, **Talk it over** and **Build it** (Ctrl Enter), the four ways to start and **Suggest a next step**, the first thing that **Needs you**, **Running now** and **Finished while you were away**. Build's earlier Home (the conversation, the queue, Activity and the preview) is the **Chat** page of the same route. See Getting around. |
+| **Today** | Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`), in both modes. In Social ("Today, the board"): the greeting and the box that builds or talks, then the prototype's board, four columns that each say when they are empty: **Needs you**, **Running**, **Review** and **Done** (what finished today). In Studio, with no session open: the greeting and "What's next for <project>?", Home's own box with **Add files or an image**, the permission mode, **Talk it over** and **Build it** (Ctrl Enter), the four ways to start and **Suggest a next step**, the first thing that **Needs you**, **Running now** and **Finished while you were away**. Studio's earlier Home (the conversation, the queue, Activity and the preview) is the **Chat** page of the same route. See Getting around. |
 | **Inbox** | Everything that waits on the owner in one list (`MefiToday.openInbox`): open questions and permissions, approvals, finished work to check and tasks that stopped. "N need you" is the digest the app already keeps (`assistantState.needsYou`, the list the taskbar count is read from), never a second counter: the pill, the status bar, Home's chip, the tabs and the session list's Needs you all read it. It opens as a popover under the top bar's pill (Ctrl J) or stays open as a page, **Work › Inbox**. See Getting around. |
-| **Frame (layout v2)** | What `renderer/shell.js` (`window.MefiShell`) draws in the contract's room when the 0.5 layout is on: a top bar (list toggle, Vibe and Build switch, where you are, Search, "N need you", "N working", inspector toggle), the list and inspector columns with splitters and, in a small window, drawers, the tab strip's row, `main` for other modules' pages, and a status bar with the Layout menu. Vibe and Build each keep their own widths. Turned on in Settings ("Try the 0.5 layout"), in Search ("Switch layout"), by `?layout=v2` or by `MEFI_STUDIO_LAYOUT=v2`. See `docs/unified-studio.md`. |
+| **Frame (layout v2)** | What `renderer/shell.js` (`window.MefiShell`) draws in the contract's room when the 0.5 layout is on: a top bar (list toggle, Social and Studio switch, where you are, Search, "N need you", "N working", inspector toggle), the list and inspector columns with splitters and, in a small window, drawers, the tab strip's row, `main` for other modules' pages, and a status bar with the Layout menu. Social and Studio each keep their own widths. Turned on in Settings ("Try the 0.5 layout"), in Search ("Switch layout"), by `?layout=v2` or by `MEFI_STUDIO_LAYOUT=v2`. See `docs/unified-studio.md`. |
 | **Tab strip** (layout v2) | The row of tabs in the shell's tab region: Home pinned at the left, the pages and sessions you add, pins that stay, one italic preview tab, and Studio closing what you finished with (Undo, Recently closed, Ctrl+Shift+T). A tab is a remembered place, not a live page. Switches in Configuration › UI & Surfaces › Tab behaviour; see "Tabs you add and pin". |
 | **Worktree** | Another folder holding the same project on its own branch, so two pieces of work never share files. Task runs make one each (`.mefi/worktrees/<runId>` on `mefi/<runId>`) while "Give each run its own worktree" is on; **Work › Worktrees** lists them all and merges or removes them. |
 | **Attempt review** | What Studio keeps around each builder attempt: a **picture** of the folder at its start and end (private git refs, only on this PC), the list of **changed files** with Accept and Revert, the **advisory checks** that ran after it and **before and after shots** of the project preview. It is the "Changes and checks" section of a task's Evidence tab. |
@@ -241,7 +242,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Notifications** | Settings › General: Windows alerts for what waits on you (only while Studio is not in front), the taskbar flash and count, and quiet hours shared with the Discord remote. |
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. Empty, it lists what you last opened (**Recent**); `task …` or `idea …` adds one on Enter. |
 | **Help** | The menu-foot popover containing onboarding, shortcuts and Community. These destinations are also available through Search; late-registered Community remains supported by the navigation registry. |
-| **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. |
+| **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. A scout whose route is a coding CLI makes no call (no CLI answers within its 8 s), and the card keeps its local matches. |
 | **Idea** | A note in the feature-idea inbox; it becomes a task only when you or **Work through backlog** promote it. One you typed yourself (Search's `idea …`) reads **From you**. |
 | **Plan** | A structured route from an unclear idea to tasks: unknowns, decisions, a specification you approve, then tasks. |
 | **Recently deleted** | The list of tasks and ideas you deleted in this project, kept 30 days (at most 50, oldest dropped first). Each keeps its whole record and its place, so it comes back as it was, never over a card that is there again. |
@@ -299,14 +300,17 @@ settings and per-model work-kind summaries for the shared controls.
   yesterday's paper shows marked as such. Settings › General › Daily news on
   the launch screen turns it off, and with it every fetch.
 
-- Studio has two modes, switched at the top of Vibe, from the foot of Vibe's
-  rail, or with **Switch to Build** in Search. **Vibe** is the calm front
-  door: one box to talk it over with Mefi or build it as a task, cards for
-  what needs you, what is building, what just finished and fresh ideas, and a
-  dock. **Build** is the full studio described below. The choice is
-  remembered during updates. New launches start in Vibe unless **Always
-  start in Vibe** is turned off in Settings.
-- Vibe shows only what has something to say. A card appears while it has
+- Studio has two modes, switched at the top of Social, from the foot of Social's
+  rail, or with **Switch to Studio** in Search. **Social** is for vibing with
+  friends and keeping a light eye on agents: one box to talk it over with Mefi
+  or build it as a task, cards for what needs you, what is building, what just
+  finished and fresh ideas, and a dock. **Studio** is for in-depth building,
+  with the social features still there: the full workspace described below.
+  The choice is remembered during updates. New launches start in Social unless
+  **Always start in Social** is turned off in Settings. (Until 0.5 the modes
+  were called Vibe and Build; the code and the stored settings still say
+  `vibe` and `build`.)
+- Social shows only what has something to say. A card appears while it has
   rows (Freshly done covers what finished in the last half day, by when it
   finished, and never work you dropped) and a quiet project gets one
   calm line instead of empty boxes. The dock always has Tasks, Team and More;
@@ -314,22 +318,22 @@ settings and per-model work-kind summaries for the shared controls.
   fresh ones wait. With cards up on a short window the greeting and the
   starter chips step aside.
 - First-time key tips show beside controls and fade after their key or the
-  tip is pressed. Settings can turn them off or show them again. Vibe's
+  tip is pressed. Settings can turn them off or show them again. Social's
   Needs you drawer also handles plan interview questions and results waiting
   for a slow check; its top bar mirrors a waiting app update.
-- Vibe's menus are its own (`renderer/vibe-panels.js`): Tasks, Plans, Ideas,
+- Social's menus are its own (`renderer/vibe-panels.js`): Tasks, Plans, Ideas,
   Team and Settings open as a compact panel beside the front door, one side
   panel at a time with the conversation and the decision drawer, and a wide
   window moves the cards over to make room. Rows open their detail (Back or
-  **Esc** steps out); each action uses the host call its Build page uses: a
+  **Esc** steps out); each action uses the host call its Studio page uses: a
   task can be started, stopped, dropped or given a note for its next attempt
   (its saved notes reach the worker's brief), a finished one sent back with
   **Ask for a change** (a follow-up naming the task, added under the draft
   already in the box with the caret where the change goes; the finished task
   stays as it is), an idea built, kept or dismissed. Team shows who is
   building and each seat's model, with Start, Resume or Pause. **Full view**
-  opens the Build page for the same thing inside Vibe's rail. The status pill
-  opens what it names, and a decision toast answers in Vibe's drawer.
+  opens the Studio page for the same thing inside Social's rail. The status pill
+  opens what it names, and a decision toast answers in Social's drawer.
 - **Build it** sizes the request (`main.cjs` `vibeBuild`,
   `scripts/request-sizing.cjs`). A short single change is one card at once; a
   bigger one gets one call to the lead seat, which may answer with two to six
@@ -337,14 +341,14 @@ settings and per-model work-kind summaries for the shared controls.
   (`task-delegation.cjs` `admitIntake`) as its delegated slices, with the
   owner's origin, so each step gets the slice brief and the prerequisite gate,
   and the card waits for them and runs last as the integration and check.
-  Vibe's **Plan in flight** card and the Plans panel follow the steps; when
+  Social's **Plan in flight** card and the Plans panel follow the steps; when
   permission settings require approval, waiting steps are one Needs you row, started together
   with their reviewed scopes, and **Make it one task** (two presses) drops the
   unstarted steps so the card runs whole. Anything that cannot be sized keeps
   it one card, and the strip says why (the lead took too long, no lead model
   answered, the plan had too many steps) rather than that the lead chose one
   task.
-- **MEFI — Modify, Experiment, Fix, Improve** gives Vibe four starting points
+- **MEFI — Modify, Experiment, Fix, Improve** gives Social four starting points
   for evolving the open project, including Studio itself when its repository
   is selected. Pick an approach, describe the change, then talk it over or
   **Build it**. The approach and selected map area stay with that project's
@@ -355,7 +359,7 @@ settings and per-model work-kind summaries for the shared controls.
   direction typed over the draft makes the set read-only until it is asked
   again. Asking for or saving suggestions does not queue work. The existing
   Build action and permission settings still control execution.
-- Vibe's long waits are live (`renderer/vibe-flow.js`). **Suggest a next
+- Social's long waits are live (`renderer/vibe-flow.js`). **Suggest a next
   step** and Build it's sizing each show a strip: its stages (Read the
   project, Think it over, Suggest next steps; Take a look, Plan the steps, Put
   it on the board), the files read or the steps planned as they arrive, which
@@ -375,11 +379,11 @@ settings and per-model work-kind summaries for the shared controls.
   you). The Plans panel's plan view is a timeline
   with who is on each step and which step each waiting one waits for. **Make
   it one task** there is the same single host transaction as the drawer's.
-- **New app** (the + beside Vibe's project picker, `projects:create`) makes an
+- **New app** (the + beside Social's project picker, `projects:create`) makes an
   empty folder under `~/Mefi Apps` (never inside Studio's own repository),
   starts git and a README in it, opens it as the project and sends the
   description through Build it.
-- Vibe's **Tasks** panel switches between List and Lanes. The lanes show
+- Social's **Tasks** panel switches between List and Lanes. The lanes show
   Needs you, Ready, Building, Checking, Later and Done, with live counts;
   questions stay above the board. Queue controls pause new work, resume agents
   and choose Automatic capacity or a manual worker limit. Running jobs finish
@@ -393,15 +397,15 @@ settings and per-model work-kind summaries for the shared controls.
   them requires fresh build approval. Running, checking and finished tasks are
   read only. Unsaved details survive live updates and failed saves, and stale
   conflicting edits are refused by the host.
-- Nothing you click in Vibe mode leaves it. Every other page, whether opened
+- Nothing you click in Social mode leaves it. Every other page, whether opened
   from Full view, Watch, Search, a key, the companion or a link inside
-  another page, opens inside Vibe's own narrow rail instead of Build's menu:
-  the spark at its top returns to Vibe, and the Build switch at its foot is
-  the only way out of the mode. Home is Vibe, so **H**, every Home button and
+  another page, opens inside Social's own narrow rail instead of Studio's menu:
+  the spark at its top returns to Social, and the Studio switch at its foot is
+  the only way out of the mode. Home is Social, so **H**, every Home button and
   a restored session land there. Leaving Command goes back to the page it was
   opened from, and **Back** on a Work page with nothing behind it returns to
-  Vibe. Build's classic-tabs choice is kept for Build; Vibe always uses its rail.
-- **Answer** on a decision under Needs you opens it beside Vibe: what is asked,
+  Social. Studio's classic-tabs choice is kept for Studio; Social always uses its rail.
+- **Answer** on a decision under Needs you opens it beside Social: what is asked,
   the task it blocks, the last lines the agent saw, and its options with the
   recommended one first, or a box for your own words. An answer goes through
   the same call as Command's Ask tab, then the drawer moves to the next
@@ -410,10 +414,10 @@ settings and per-model work-kind summaries for the shared controls.
   `today.css`; with `html[data-layout="v2"]` absent nothing of it renders,
   listens, polls or calls the host). Today is a second reader of the picture
   `renderer/vibe.js` already keeps (`MefiVibe.data()` and `watch()`), so the front
-  door, its panels and the board never disagree. In Vibe it moves the front
+  door, its panels and the board never disagree. In Social it moves the front
   door's own greeting, box, starting points and notices into its page (they
   are put back when it stops, so Build it, Suggest a next step and the drafts
-  keep going through Vibe's code) and draws under them the prototype's board,
+  keep going through Social's code) and draws under them the prototype's board,
   four columns that stay drawn while a project is open and say when they are
   empty: **Needs you** (the Inbox's decisions), **Running**, **Review**
   (results ready to review, which stay in the Inbox and its count, then work
@@ -425,12 +429,12 @@ settings and per-model work-kind summaries for the shared controls.
   min", the question (or what holds it) in a box of its own, then its first two
   options or the app's first two actions for it (its go-ahead, Try again, It's
   done) and **More**, which opens it in the Inbox. A running card says who is
-  on it, for how long and what it is doing. The greeting says "· Vibe", the
+  on it, for how long and what it is doing. The greeting says "· Social", the
   question is in plain ink, the line that says the box's keys sits under it and
   **Build it** carries its key. The live node tree stays behind it. In Build the same board is the **Today** page (registry
-  route `today`, hidden in Vibe where it is the front door).
-  In Build, Home with no session open is Today as the prototype draws it
-  (`mountHome`): the greeting and "What's next for <project>?" (Vibe's own
+  route `today`, hidden in Social where it is the front door).
+  In Studio, Home with no session open is Today as the prototype draws it
+  (`mountHome`): the greeting and "What's next for <project>?" (Social's own
   words, from `data()`), then Home's own box, `workspace.js`'s form, borrowed
   while Today shows and put back when it goes, so its drafts, pictures, `@ # /`
   picker and host calls stay Home's. Under the words one row: **Add files or an
@@ -441,9 +445,9 @@ settings and per-model work-kind summaries for the shared controls.
   "Task added" line and View task stay under the box). Enter talks it over,
   Ctrl Enter builds it, Shift Enter is a new line (`MefiWorkspace.send(purpose)`
   sends without switching the box's purpose or its drafts). **Modify**,
-  **Experiment**, **Fix** and **Improve** start the words with Vibe's own
+  **Experiment**, **Fix** and **Improve** start the words with Social's own
   starters (`MefiVibe.intents()`), and **Suggest a next step** asks the same
-  look Vibe's box asks for (`planning:explore`, suggestions only) and offers up
+  look Social's box asks for (`planning:explore`, suggestions only) and offers up
   to three, each with **Add to the draft**. Then **Needs you**, the first thing
   that waits on you (a result to review is under Finished) answered in place
   with its first two options or the app's first two actions, and **Open task**;
@@ -469,7 +473,7 @@ settings and per-model work-kind summaries for the shared controls.
   or a done reopens; Mefi's own decisions undo through `autonomy:undo`, from the
   footer). The popover is anchored to the pill (`openInbox(anchor)`; upward from
   a bar at the foot), holds the keyboard while it is open (J and K, digits,
-  Enter, Esc; Studio's and Vibe's one-key shortcuts stay out of it) and is also
+  Enter, Esc; Studio's and Social's one-key shortcuts stay out of it) and is also
   **Work › Inbox**, a page of Work's own (route `inbox`, in Work's page list and
   breadcrumb; its tab carries the count), the cards two abreast in the page's
   own width. It is the one list of what waits on you: `MefiToday.count()` and
@@ -484,7 +488,7 @@ settings and per-model work-kind summaries for the shared controls.
   A click on a Windows notification lands on the task, or on the
   Inbox when several were told (`alerts:open` carries `count`, `alerts.js` asks
   `MefiToday.openFromAlert`). Nothing is stored.
-- Vibe can run on its own. When something holds every agent back, a banner
+- Social can run on its own. When something holds every agent back, a banner
   under the box names it and carries its fix: **Start agents** after a launch
   that left them off (the launch screen's Open with Start agents off), **Resume** when new
   work is paused, **Try now** during a worker-start cooldown, **Restart
@@ -502,16 +506,16 @@ settings and per-model work-kind summaries for the shared controls.
   as "checking its work"; a check still running after half an hour is listed
   under Needs you as **Still checking**: the check has run longer than usual,
   and you can look at the checks or mark it done if you checked it yourself.
-  Every action uses the host call its Build surface uses, and the drawer moves
+  Every action uses the host call its Studio surface uses, and the drawer moves
   forward to the next thing waiting. `MefiVibe.snapshot()` reads the same state
   (what holds the agents, what needs you, what is building) for tests and
   automation.
-- In Vibe mode every menu takes Vibe's look (rounder, denser glass, an accent
+- In Social mode every menu takes Social's look (rounder, denser glass, an accent
   rim, pill selection): Search, Shortcuts, the project panel, the section bar
   and its hover menus, Command's pop-overs, dropdowns and toasts. Search and
-  Shortcuts list Home once, as **Vibe** on `H`. Settings › General has a
+  Shortcuts list Home once, as **Social** on `H`. Settings › General has a
   **Studio mode** switch that changes mode in place, and the launch switch
-  there reads **Open Vibe on launch** (off opens Watch).
+  there reads **Open Social on launch** (off opens Watch).
 - Click the companion or press **Escape** on a workspace page to open its
   compact bubble menu over the current view. The center returns to Studio;
   six bubbles each do one job: **Talk** (chat, with What are you doing? /
@@ -737,7 +741,7 @@ settings and per-model work-kind summaries for the shared controls.
   `.motion-ghost` copies. `swap()` moves between views (panel to panel,
   list to detail, category to category) by fading the old view out fast and
   bringing the new one in from the side you went. Both read layout only
-  when something on screen could move. Vibe's cards, panels, chat and dock,
+  when something on screen could move. Social's cards, panels, chat and dock,
   Configuration, Trace and the Habits panel use it.
 - Each agent's **Skills, tools & habits** panel (Agents › Setup) now ends
   with **Habits** (`scripts/habits.cjs`): six short behaviour rules with
@@ -773,7 +777,12 @@ settings and per-model work-kind summaries for the shared controls.
   window's warnings and errors. Each channel shows its size and problem
   count; a channel is searched, tailed (100 to 2000 lines), filtered by level
   and by source tag (`[agents]`, `[assistant]`, `[tools]`…) and followed every
-  two seconds while the sheet is in view. The rules live in
+  two seconds while the sheet is in view. The studio log, the assistant's log
+  and the window's warnings are also kept on disk in this PC's local folder
+  (never inside OneDrive; `main.cjs` "Log core", `scripts/log-core.cjs`,
+  sealed into monthly gzip archives that are never deleted), so **Load older**
+  pages the studio channel back past the ring, newest first, pausing Follow;
+  **Open file** shows that folder. The rules live in
   `scripts/trace.cjs`, the reads in `main.cjs` `trace:channels` / `trace:read`.
   In the rail layout it is a full page below the navigation bar; Back returns
   to the previous Agents view. The classic layout keeps its dialog behavior.
@@ -1205,7 +1214,7 @@ failed process stays an error and cannot produce briefing requests.
   deleted. A worktree starts from HEAD, so a run does not see other sessions'
   uncommitted work until it lands. Besides the environment switch, "Give each
   run its own worktree" (settings.executor.worktreeRuns; the Worktree chip in
-  Build's composer and a switch on the page below) turns it on.
+  Studio's composer and a switch on the page below) turns it on.
 - **Work › Worktrees** (renderer/worktrees.js; main.cjs "Worktrees";
   scripts/worktrees.mjs reads, scripts/worktree-actions.mjs writes) lists every
   worktree of the open project, worst first, and says which hold work only this
@@ -1224,7 +1233,7 @@ failed process stays an error and cannot produce briefing requests.
   `git worktree prune`. Every action names a folder from the list and the host
   only acts on a folder git lists for the open project. `npm run worktrees`
   prints the same table (`--json` for other tools); it changes nothing. In
-  Build's task list a task whose run has a worktree wears a small branch mark
+  Studio's task list a task whose run has a worktree wears a small branch mark
   (`MefiWorktrees.peek()`, at most one quiet read every 8 s; the page announces
   `mefi:worktrees` when its list changes, and a project change drops the list).
 - **A task's usage and its time limit** (the **Usage & limit** fold in a task's
@@ -1289,7 +1298,7 @@ failed process stays an error and cannot produce briefing requests.
   channel refuses, a message naming a picture is refused, and the box asks once
   at start and shows no button. `assistant:image-read { id }` gives one saved
   picture back as a data URL (with its name, type, size and dimensions, never a
-  path) so Build's thread can show what a message or a brief carries: only an id
+  path) so Studio's thread can show what a message or a brief carries: only an id
   the store saved, only while a project is open, only when the record and the
   bytes still agree, and refused by the same switch.
 - **@ # / in a message** (Home's message box: `renderer/composer-picker.js`,
@@ -1842,7 +1851,7 @@ failed process stays an error and cannot produce briefing requests.
   each card names its grouping evidence. Unmatched work stays in **To explore**.
   Branches can be collapsed and searched, and regroup as files are discovered
   or work changes status without editing the original idea or task.
-  **Work with Mefi** prepares a contextual Vibe draft. The system inspector's
+  **Work with Mefi** prepares a contextual Social draft. The system inspector's
   **Modify / Experiment / Fix / Improve** buttons do the same for a chosen area.
   **Work here** prepares a task draft with the selected system, part or file;
   selected files also have **Copy path**. A pipeline names the systems it touches.
@@ -2269,7 +2278,7 @@ holds the policy, activation steps and service setup.
 ### Git sync: Push, Pull and GitHub linking
 
 The **Git chip** (`renderer/git-sync.js`, `window.MefiGitSync`) sits beside the
-project name on Vibe's home and at the end of the section bar on every other
+project name on Social's home and at the end of the section bar on every other
 page. It draws one **model** the host builds and pushes on `git:state`: an id
 from a fixed table of 31 states (in sync, "2 to push", "3 to pull", both
 changed, only on this PC, no commits yet, signed out, held back, and so on),
@@ -2456,7 +2465,7 @@ the script starts nothing: no element, listener, timer, stored key or host call
   which place. Only those are identity: Home (`workspace`, no view), Chat, one
   session (`view: "task"`, `taskId`) and, for Agents, its overview or one of
   its four Setup panes. A filter or a card to scroll to is where you are inside
-  a page, never another tab. Vibe is Home in another mode, so it is the same
+  a page, never another tab. Social is Home in another mode, so it is the same
   tab. Friends, Search and Configuration are not places and never get a tab.
   Opening a tab asks `MefiNav.go(id, params)` for the page; Home asks for its own
   view (`{ view: "home" }`), because in Build a bare `go("workspace")` brings
@@ -2517,7 +2526,7 @@ the script starts nothing: no element, listener, timer, stored key or host call
   (Home, pins and the tab you are on never fold). Its height comes from `--d-tab`
   (28 to 48, 38 without SIZE) through `MefiShell.resize("tabs", px)`.
 - **Where the page starts.** The strip is `--shell-tabs-h` high (0 in v1), under
-  the local navigation, or at the window's top where Build's session layout
+  the local navigation, or at the window's top where Studio's session layout
   hides that bar. Pages start at `--shell-y0`; that layout's own layer
   (`#workspace-layer`, builder.css) starts at `--shell-tabs-h`, so the strip
   never covers a page's top bar.
@@ -2530,15 +2539,15 @@ the script starts nothing: no element, listener, timer, stored key or host call
 `tabs_strip.test.mjs` and `tabs_host.test.mjs` run the script over a fake DOM with
 a stub nav and shell (`tests/fixtures/tabs-env.mjs`); `tabs_render.test.mjs` runs
 it in a real window at five sizes with real input. **Known limits:** an in-page
-view change that nothing announces (Build's view switch) is seen at the next
+view change that nothing announces (Studio's view switch) is seen at the next
 trigger, not instantly (`MefiTabs.reader` is the hook for a page that can say);
 Friends opens as a window over whatever is showing and gets no tab; after Enter
 on a tab the page it opens takes the keyboard, as any page does.
 
-### Build's desktop in the 0.5 frame: the session list, the thread and the inspector
+### Studio's desktop in the 0.5 frame: the session list, the thread and the inspector
 
-With the new layout on (`html[data-layout="v2"]`, off by default; `?layout=v2`
-or `MefiNav.setLayout("v2")`) Build's Home is three panels that
+In the 0.5 layout (`html[data-layout="v2"]`, Studio's only layout since
+0.5.0) Studio's Home is three panels that
 `renderer/sessions.js` (`window.MefiSessions`, with `renderer/sessions.css`)
 hands to the shell's regions (`MefiShell.mount("list" | "main" | "inspector",
 key, element, { title, order })`). The panels only read what the page already
@@ -2558,7 +2567,7 @@ never disagree. Nothing is drawn unless the layout is on and a shell is there.
   project and its branch, whose **project menu** lists every project (a press
   switches through Home's own project button, so Save & switch for running
   agents still asks) with Open a folder (Home's Add project), Start a new app
-  (Vibe's New app panel) and All projects (the project panel); the **Git chip**
+  (Social's New app panel) and All projects (the project panel); the **Git chip**
   (git-sync.js's own in its list look, branch | state, one popover for every
   chip) and **N worktrees** (the project's other checkouts, opens Work ›
   Worktrees); **New task** (Ctrl N: Home's own message box in its task
@@ -2658,7 +2667,7 @@ inspector the way it offers (`open("inspector")` when it has `open` and `isOpen`
 else `reveal`, else a `resize` of a column that is at 0 and not folded). With Home's
 own Sessions layout (`homeLayout=sessions`) also on, its menu list repeats this list:
 leave Home on its default. There are no Drafts (the app keeps none); Ctrl N is not
-bound in Vibe; a Note cannot carry a picture. Windows' high-contrast mode is not
+bound in Social; a Note cannot carry a picture. Windows' high-contrast mode is not
 handled here or anywhere else in the app (a status dot is colour plus words).
 
 ### Community

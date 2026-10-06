@@ -321,7 +321,7 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
    * week is quiet), what was shared this week, who moved up a rank, and the
    * member's own week. Ranks are public; a balance only ever goes to its owner.
    */
-  function front(uid) {
+  function front(uid, held = 0) {
     const at = now();
     const since = at - FRONT.weekMs;
     const score = new Map();
@@ -358,7 +358,9 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
       plays: Number(store.get('SELECT COUNT(*) AS n FROM play_log l JOIN projects p ON p.id = l.project_id WHERE p.owner_id = ? AND l.day > ?', uid, dayOf(since))?.n ?? 0),
       stars: Number(store.get('SELECT COUNT(*) AS n FROM stars s JOIN projects p ON p.id = s.project_id WHERE p.owner_id = ? AND s.at > ? AND s.counted = 1', uid, since)?.n ?? 0),
     };
-    return { top: topView, fresh, rankUps, you: { balance: money.balance, lifetime: money.lifetime, rank: rankFor(money.lifetime), week } };
+    const stand = standing(uid, held);
+    const projects = Number(store.get('SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?', uid)?.n ?? 0);
+    return { top: topView, fresh, rankUps, you: { balance: money.balance, lifetime: money.lifetime, rank: rankFor(money.lifetime), week, projects, hold: stand.ok ? null : { reason: stand.reason, until: stand.until } } };
   }
 
   function routes(route) {
@@ -503,12 +505,13 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
         const at = now();
         if (at - t < PROJECT_LIMITS.playMinMs) return fail(409, 'conflict', { reason: 'too-soon', retryAfter: PROJECT_LIMITS.playMinMs - (at - t) });
         if (at - t > PROJECT_LIMITS.playMaxMs) return fail(410, 'gone', { reason: 'expired' });
-        if (row.owner_id === actor.uid) return reply(200, { ok: true, counted: false, credited: { owner: 0, you: 0 } });
+        if (row.owner_id === actor.uid) return reply(200, { ok: true, counted: false, credited: { owner: 0, you: 0 }, why: 'own' });
         // A token pays only for the day it started, so one play cannot count on both sides of midnight.
         const day = dayOf(t);
         const [playerHeld, ownerHeld] = [await heldUntil(actor.uid), await heldUntil(row.owner_id)];
         const result = store.transaction(() => {
-          const player = !actor.readOnly && standing(actor.uid, playerHeld).ok;
+          const stand = actor.readOnly ? { ok: false, reason: 'read-only' } : standing(actor.uid, playerHeld);
+          const player = stand.ok;
           const both = player && standing(row.owner_id, ownerHeld).ok;
           // The project's plays: once per player and day, from members in good standing.
           const fresh = player && Boolean(store.get('INSERT INTO play_log (project_id, player_id, day) VALUES (?, ?, ?) ON CONFLICT DO NOTHING RETURNING day', row.id, actor.uid, day));
@@ -516,11 +519,13 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
           // The maker earns once a day per player, whichever of their projects was played; the player once a day per maker.
           const owner = both ? pay({ actor: actor.uid, target: row.owner_id, kind: 'played', uniq: `d${day}`, ref: row.id }) : 0;
           const you = both ? pay({ actor: row.owner_id, target: actor.uid, kind: 'play', uniq: `d${day}`, ref: row.id }) : 0;
-          return { counted: fresh, owner, you };
+          // Why nothing was paid, in a word Studio turns into a sentence: the player's hold, the maker's, or a limit already reached.
+          const why = !player ? stand.reason : !both ? 'maker-held' : !owner && !you ? 'limit' : null;
+          return { counted: fresh, owner, you, why };
         });
         tell(row.owner_id, result.owner, 'played');
         tell(actor.uid, result.you, 'play');
-        return reply(200, { ok: true, counted: result.counted, credited: { owner: result.owner, you: result.you } });
+        return reply(200, { ok: true, counted: result.counted, credited: { owner: result.owner, you: result.you }, ...(result.why ? { why: result.why } : {}) });
       },
       { body: 'playFinish', readOnlyOk: true },
     );

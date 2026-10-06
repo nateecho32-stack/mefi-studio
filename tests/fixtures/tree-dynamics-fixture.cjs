@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");
 exports.capture = async ({ contents, run, until, sleep, capturePage, report, root }) => {
   await until("window.MefiNav && window.MefiIdle && !window.MefiBoot?.isBooting?.()", "tree controls startup");
-  await run("window.MefiNav.go('command');await window.MefiIdle.ready();window.MefiIdle.setView('2d');document.getElementById('idle-cam-orbit').click();window.MefiIdle.setOrbit(false);window.MefiIdle.setLabels('none');window.MefiTreeDynamics.update({mode:'steady',width:.7,height:.7,smoothing:.2,adaptCount:false});");
+  await run("window.MefiNav.go('command');await window.MefiIdle.ready();window.MefiIdle.setView('2d');document.querySelector('#map-view-pop [data-map-cam=orbit]').click();window.MefiIdle.setOrbit(false);window.MefiIdle.setLabels('none');window.MefiTreeDynamics.update({mode:'steady',width:.7,height:.7,smoothing:.2,adaptCount:false});");
   await until("window.MefiIdle.debugNodes().some(n=>n.id==='task:command_render_task'&&Number.isFinite(n.x))", "painted tree task");
   await sleep(1200);
   const nodes = () => run("return window.MefiIdle.debugNodes().filter(n=>n.layoutAnchor&&Number.isFinite(n.x));");

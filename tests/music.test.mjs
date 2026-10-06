@@ -82,7 +82,7 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
     getElementById: (id) => ids.get(id) ?? null,
     createElement: (tag) => { if (tag === "audio") { audios.push(audio = new Audio()); return audio; } const node = new Element(tag); if (tag === "iframe") { node.messages = []; node.contentWindow = { postMessage: (data, origin) => node.messages.push([JSON.parse(data), origin]) }; } return node; },
   };
-  for (const id of ["idle-music-toggle", "settings-audio-open"]) {
+  for (const id of ["settings-audio-open"]) {
     const anchor = document.createElement("button"); anchor.id = id;
     anchor.getBoundingClientRect = () => ({ width: 150, height: 36, top: 84, bottom: 120, right: 950 });
     document.body.append(anchor);
@@ -1180,7 +1180,7 @@ test("Appearance holds only visual controls; the audio dropdown owns every playe
 test("The audio dropdown stays beneath its opener, dismisses without stopping playback and restores keyboard focus", async () => {
   const env = environment();
   const anchor = env.document.createElement("button");
-  anchor.id = "idle-music-toggle";
+  anchor.id = "shell-player";
   anchor.getBoundingClientRect = () => ({ width: 150, height: 36, bottom: 120, right: 950 });
   const dropdown = env.ids.get("music-dropdown");
   dropdown.getBoundingClientRect = () => ({ width: 448 });
@@ -1213,7 +1213,7 @@ test("The audio dropdown stays beneath its opener, dismisses without stopping pl
 
 test("Hover opens current media without taking focus and lets the pointer cross into the dropdown", async () => {
   const env = environment();
-  const anchor = env.ids.get("idle-music-toggle"), dropdown = env.ids.get("music-dropdown");
+  const anchor = env.ids.get("settings-audio-open"), dropdown = env.ids.get("music-dropdown");
   const editor = env.document.createElement("textarea"); editor.focus();
   env.music.addFiles([file("Hover.mp3")]); env.ids.get("music-play").click(); await flush();
   env.audio.currentTime = 32;
@@ -1257,7 +1257,7 @@ test("Clicking a hovered opener or using a setting holds the menu open for adjus
 test("Opening video controls on hover keeps the video visible and entering its frame holds the menu open", () => {
   const env = environment({ mediaWindow: true });
   env.music.playLink("https://youtu.be/dQw4w9WgXcQ");
-  const anchor = env.ids.get("idle-music-toggle"), dropdown = env.ids.get("music-dropdown");
+  const anchor = env.ids.get("settings-audio-open"), dropdown = env.ids.get("music-dropdown");
   const stage = env.ids.get("music-video-stage"), card = env.ids.get("music-sound"), body = card.parentElement;
   // The menu was last left scrolled; every visit starts at the top of the card.
   body.scrollTop = 300; card.scrollTop = 200;
@@ -1294,7 +1294,7 @@ test("The floating toolbar belongs to the media panel and Float player keeps the
 
 test("Hover respects touch, dismissal, navigation, window blur and Zen", () => {
   const env = environment();
-  const anchor = env.ids.get("idle-music-toggle"), dropdown = env.ids.get("music-dropdown");
+  const anchor = env.ids.get("settings-audio-open"), dropdown = env.ids.get("music-dropdown");
   anchor.dispatch("pointerenter", { pointerType: "touch" }); env.advance(500);
   assert.equal(dropdown.hidden, true);
   const editor = env.document.createElement("textarea"); editor.focus();
@@ -2505,10 +2505,10 @@ test("Typing in the menu goes to the Browse box while a video source shows, and 
   env.music.closeAudio(); env.music.openAudio(); assert.equal(env.typeScopes.length, 1, "the menu registers once, however often it opens");
 });
 
-test("Companion hub's Friends & listening rooms opens the media menu on More, where Listen together lives", async () => {
+test("Friends › Playground's Friends & listening rooms opens the media menu on More, where Listen together lives", async () => {
   const hub = await readFile(new URL("../renderer/companion-hub.js", import.meta.url), "utf8");
-  const action = /action\("Friends & listening rooms", \(\) => \{([^}]*)\}\)/.exec(hub);
-  assert.ok(action, "the hub keeps its Friends & listening rooms action");
+  const action = /button\("Friends & listening rooms", \(\) => \{([^}]*)\}, "ghost"\)/.exec(hub);
+  assert.ok(action, "the Friends page keeps its Friends & listening rooms button");
   const calls = [...action[1].matchAll(/window\.MefiMusic\?\.(\w+)\?\.\(([^)]*)\)/g)].map((match) => [match[1], match[2] ? JSON.parse(match[2]) : undefined]);
   assert.deepEqual(calls, [["openAudio", undefined], ["setSource", "link"], ["openSection", "more"]], "it opens the menu on Video, then on More");
   // Those calls, made on the menu itself, land on More with Listen together inside it.

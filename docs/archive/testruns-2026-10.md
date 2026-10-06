@@ -6,6 +6,151 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 Today in both modes closer to the 0.5 prototype: Build's Home and Vibe's board
+
+Branch `ui/today` in `C:\wt\ui-today` (off land/ui-chrome 74bf360,
+node_modules junctioned), pushed as wip/ui-today: 0b52d4c Build's Today
+(Home with no session open: the greeting and "What's next for <project>?",
+Home's own box borrowed with Add files or an image, the permission mode,
+Talk it over and Build it, the starters and Suggest a next step, Needs you,
+Running now, Finished while you were away; the classic Home is the route's
+"chat" view), 75b3dfa Vibe's Today (the prototype's board: four columns that
+say when they are empty, a waiting card as its session, results under
+Review, Build it with its key, "Today, the board").
+
+`npm run check` ok (271 targets), lint 0 errors (no warning in the touched
+files), `npm run audit` 0 findings. `npm run test:fast` at 0b52d4c's tree
+under heavy load: 6950 tests, 6926 pass, 14 skipped, 8 fail, 2 cancelled,
+all in six host suites that took 700-860 s each (attempt_review_host,
+attempt_snapshots_host, git_actions, pc_vault, rust_parity_git,
+rust_parity_repo): 137 tests, 134 pass, 3 skipped, 0 fail alone.
+
+Full `npm test` at 75b3dfa: Node 6952 tests, 6934 pass, 14 skipped, 4 fail
+(attempt_review_host 2, attempt_snapshots_host, rust_parity_snapshots,
+sync_changes: 63 tests, 60 pass, 3 skipped, 0 fail alone); Electron lane 75:
+72 pass, 1 skipped, 2 fail, layout_contract_render (viewport 1921x1081) and
+shell_render ("373 !== 372" at 1100 px), both as on clean main on this PC;
+sessions_render (with its new Today gallery: Build's Today at 1920x1080 and
+1100x720, 600x560 at 1 and 1.5, Vibe's board, every text 12 px or more and
+4.5:1 in all eleven themes for both) and today_render pass; Python 248 OK
+(1 skipped); path lock ok.
+Captures (1920x1080) in `C:\wt\gap\after-today\final\`, prototype-left
+side-by-sides in `C:\wt\gap\after-today\compare\`.
+
+## 2026-10-04 The v2 Settings, first run and plan draft page land on main
+
+Branch `land/ui-settings` in `C:\wt\land-ui`: origin/main 349802a with
+wip/ui-settings cd17a4f merged file by file (CHANGELOG keeps both sides'
+entries; TESTRUNS keeps every row of both, checked heading by heading, with a
+row main had rotated left in the October archive only; booklet.html
+regenerated).
+
+Full `npm test` on d2d5ae4 (a Today agent's fixture ran beside it for its
+first minutes): Node 6950 tests, 6934 pass, 14 skipped, 2 fail, both pass
+alone: rust_parity_snapshots (3/3; under load one side's 10 s `rev-parse HEAD`
+timed out and made its start picture without a parent: same tree, other
+commit id) and sync_changes (5/5; a push to a local bare repo failed under
+memory pressure). Electron lane 76: 72 pass, 1 skipped, 3 fail:
+layout_contract_render and shell_render (as on clean main on this PC) and
+tree_dynamics_render, which fails now and then on this PC (failed once alone
+here, then passed 3 times alone; the branch's own run saw it fail on c01604e
+too). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run
+check` ok. Side-by-sides: `C:\wt\gap\after-settings\compare\`.
+
+## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
+
+Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,
+node_modules junctioned), three commits: 70bc565 Settings filed into the
+prototype's places (booklet.js, styles.css, template wrappers, report.js),
+4ac04f8 the three-step first run (setup-helper.js/.css), 7d268b0 a Backlog
+plan opens as its own draft page (planning.js/.css, one line of sessions.js).
+New Electron fixture `settings_render` (MEFI_SETTINGS_CAPTURE_DIR); the
+setup_helper_render and planning_render fixtures gained a v2 phase each; new
+shared `tests/fixtures/text-probe.cjs` (no text under 12 px, 4.5:1 against
+what is painted behind it).
+
+`npm run check` ok (271 targets), `npm run audit` 0 findings, lint: no
+warning in a changed file. `npm run test:fast` before each commit: 6923/6909
+pass/0 fail; 6929/6913 pass/2 fail (attempt_review_host and
+attempt_snapshots_host under load: 55 tests, 52 pass, 0 fail alone); 6933/6919
+pass/0 fail (14 skipped each). Full `npm test` on 7d268b0: Node 6933 tests,
+6917 pass, 14 skipped, 2 fail under load (update_host_bridge 8/8 and
+rust_parity_snapshots 3/3 alone); Electron lane 76: 72 pass, 1 skipped, 3
+fail: layout_contract_render (viewport 1921x1081) and shell_render (as on
+clean main on this PC), tree_dynamics_render (fails alone, and on c01604e
+too); command_render 1/1; eyes_toggle_electron 0/1 (fails on c01604e too);
+occlusion_probe 2/2; Python 248 OK (1 skipped); path lock ok.
+settings_render, setup_helper_render and planning_render pass in the run.
+Captures in `C:\wt\gap\after-settings\v2\` (settings, first-run,
+plan-draft); prototype captures in `C:\wt\gap\after-settings\proto\`; the
+prototype beside v2 in `C:\wt\gap\after-settings\compare\`.
+
+## 2026-10-04 The v2 status bar, Search and one Inbox land on main
+
+Branch `land/ui-chrome` in `C:\wt\land-ui`: origin/main c01604e with
+wip/ui-chrome f9e758c merged (only TESTRUNS.md conflicted: both rows kept,
+newest first, one more older row rotated). The branch's own run was at
+05b5c63; cd4444a fixed what it found (Search's layer kept to the free area,
+the Python palette contract), so the whole tree was gated again here.
+
+Full `npm test` on 74bf360: Node 6934 tests, 6920 pass, 14 skipped, 0 fail;
+Electron lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render
+(viewport 1921x1081) and shell_render (stops at "it shrinks to leave the main
+area its 320: 373 !== 372" at 1100 px), both as on clean main on this PC;
+Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check` ok
+(271 targets); booklet rebuilt with no drift. Side-by-sides with the
+prototype: `C:\wt\gap\after-chrome\compare\`.
+
+## 2026-10-04 The v2 chrome closer to the 0.5 prototype: status bar, Search, one Inbox
+
+Branch `ui/chrome` in `C:\wt\ui-chrome` (off land/ui-work-view fe59dd3,
+node_modules junctioned), pushed as wip/ui-chrome: 9947295 status bar (the
+machine's load from machine:status, the prototype's order, the rule before
+the meters, "5 h" and "Week"), 64854cc Search (the prototype's palette over
+the same registry: twelve rows, groups, the frame's, strip's, New task and
+permission-mode records), 05b5c63 one Inbox (the pill, status bar, Home's
+chip, the tabs and the session list's Needs you read one list; the
+prototype's cards; Work › Inbox), cd4444a Search kept to the free area and
+the Python palette contract updated (both found by the full run).
+
+`npm run check` ok (271 targets), lint 0 errors (44 warnings, none in the
+touched files), `npm run audit` 0 findings. `npm run test:fast` at cd4444a's
+tree: 6934 tests, 6919 pass, 14 skipped, 1 fail (rust_parity_snapshots
+"snapshot host", 73 s under load: 3/3 alone; untouched by this branch).
+Python contracts 248 OK (1 skipped) after the palette contract's update.
+
+Full `npm test` at 05b5c63 (quiet machine): Node 6934 tests, 6920 pass, 14
+skipped, 0 fail; Electron lane 75: 72 pass, 1 skipped, 2 fail:
+layout_contract_render (viewport 1921x1081, as on clean main here) and
+shell_render (Search's layer spanned the window; fixed in cd4444a, then
+shell_render alone reached and stopped at the known 1 px check at 1100 px,
+"373 !== 372", as on clean main); Python 1 fail (the palette contract read
+the old span; fixed in cd4444a); path lock ok. Electron suites alone after
+cd4444a: sessions_render pass (93 s, with its new chrome gallery: the bar's
+order and words, Search's groups and rows, one count everywhere, the Inbox
+popover and Work › Inbox at 1920x1080 and 600 px, every text 12 px or more
+and 4.5:1 in all eleven themes); today_render (53 s) and tabs_render (118 s)
+passed alone before it and in the full run.
+Captures (1920x1080) in `C:\wt\gap\after-chrome\final\`, prototype-left
+side-by-sides in `C:\wt\gap\after-chrome\compare\`.
+
+## 2026-10-04 The v2 Work view lands on main with Rust stage 2
+
+Branch `land/ui-work-view` in `C:\wt\land-ui`: origin/main 90661df (Rust stage
+2's five ports) with wip/ui-work-view 898fe49 merged (only TESTRUNS.md
+conflicted: both new rows kept, newest first, one more older row rotated),
+plus fe59dd3: a key hint inside a filled button takes the button's ink (New
+task's "Ctrl N" was pale on teal, under 4.5:1; shell_frame_css pins it).
+
+Full `npm test` on fe59dd3: Node 6900 tests, 6885 pass, 14 skipped, 1 fail
+(project_preview, the whole file in 0.9 s under load: 18/18 alone); Electron
+lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render and shell_render
+(viewport 1921x1081, as on clean main on this PC); Python 248 OK; path lock
+ok; `npm run audit` 0 findings; `npm run check` ok (271 targets).
+sessions_render with captures passes (1/1); 1920x1080 captures in
+`C:\wt\shots\land-ui\`, the Work view beside the prototype in
+`C:\wt\gap\after-work\compare\`.
+
 ## 2026-10-04 The v2 Work view closer to the 0.5 prototype: breadcrumb, list head, run menu, inspector
 
 Branch `wip/ui-work-view` (worktree off main 39d98e3, node_modules junctioned),

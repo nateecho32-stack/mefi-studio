@@ -35,6 +35,27 @@ const SECTIONS = { home: "Home", work: "Work", agents: "Agents", friends: "Frien
 
 export const task = (id, extra = {}) => ({ id, projectId: "p1", title: `Task ${id}`, prompt: `Do ${id}`, status: "open", createdAt: 1000, updatedAt: 1000, ...extra });
 
+// Team's places as tabs.js reads them from renderer/agents.js (TEAM_PLACES, teamPlace, params), in the parts it reads:
+// a place with panes of the page is a tab of its own, and an old { section, pane } is the place that holds that pane.
+const TEAM_PLACES = Object.freeze([
+  { id: "overview", label: "Overview", panes: ["overview", "behavior"] },
+  { id: "providers", label: "Providers", panes: ["connections"] },
+  { id: "seats", label: "Seats and models", panes: ["team", "routing"] },
+  { id: "perms", label: "Permissions", panes: ["perms"] },
+  { id: "skills", label: "Skills", views: [["Skills", "skills"]] },
+]);
+const PANE_PLACES = Object.freeze({ overview: "overview", behavior: "overview", connections: "providers", team: "seats", routing: "seats", perms: "perms" });
+export const teamAgents = (params) => ({
+  TEAM_PLACES, params,
+  teamPlace: (id, options = {}) => {
+    if (id !== "agents") return null;
+    const at = TEAM_PLACES.find((place) => place.id === options.place && place.panes)?.id
+      ?? (options.section === "setup" ? PANE_PLACES[options.pane] || "seats" : options.section !== "overview" && PANE_PLACES[options.pane] || "overview");
+    const place = TEAM_PLACES.find((item) => item.id === at);
+    return { id: place.id, label: place.label };
+  },
+});
+
 /**
  * options
  *   layout    "v2" (default) or null for v1

@@ -255,17 +255,17 @@
      go the same way, and each opens a compact panel beside the front door
      (renderer/vibe-panels.js) instead of a Build sheet. The Build view
      (everything above and below) is one switch away. -->
-<section id="vibe-layer" class="vibe" aria-label="Vibe" hidden tabindex="-1">
+<section id="vibe-layer" class="vibe" aria-label="Social" hidden tabindex="-1">
   <div class="vibe-sky" aria-hidden="true"><i class="vibe-aurora one"></i><i class="vibe-aurora two"></i><i class="vibe-aurora three"></i></div>
   <header class="vibe-top">
     <div class="vibe-top-left">
       <button id="vibe-project" class="vibe-project" type="button" title="Switch project" aria-controls="workspace-sidebar-panel"><span class="vibe-project-mark" aria-hidden="true">M+</span><span class="vibe-project-text"><small>Project</small><b id="vibe-project-name">Choose a project</b></span><svg class="glyph vibe-chev" aria-hidden="true"><use href="#g-chev"/></svg></button>
       <button id="vibe-new-app" class="vibe-icon" type="button" data-vibe-panel="newapp" title="Start a new app from a prompt" aria-label="Start a new app"><svg class="glyph" aria-hidden="true"><use href="#g-add"/></svg></button>
     </div>
-    <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe">
+    <div class="mode-switch" role="radiogroup" aria-label="Mode" data-mode="vibe">
       <i class="mode-thumb" aria-hidden="true"></i>
-      <button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
-      <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+      <button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Social: friends, and a light eye on your agents"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
+      <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
     </div>
     <div class="vibe-top-actions">
       <button id="vibe-update" class="vibe-pulse vibe-update" type="button" data-tone="ask" title="An update is ready" hidden><svg class="glyph" aria-hidden="true"><use href="#g-update"/></svg><span id="vibe-update-text">Update ready</span></button>
@@ -357,7 +357,7 @@
        beside the front door (renderer/vibe-panels.js). Full view opens the
        Build page for the same thing inside Vibe's rail. -->
   <aside id="vibe-panel" class="vibe-chat vibe-panel" aria-labelledby="vibe-panel-title" hidden>
-    <header class="vibe-chat-head"><div class="vibe-panel-heading"><button id="vibe-panel-back" class="vibe-icon vibe-panel-back" type="button" aria-label="Back" title="Back (Esc)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-back"/></svg></button><div><small id="vibe-panel-kicker">Vibe</small><h2 id="vibe-panel-title">Tasks</h2></div></div><button id="vibe-panel-close" class="vibe-icon" type="button" aria-label="Close the panel" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <header class="vibe-chat-head"><div class="vibe-panel-heading"><button id="vibe-panel-back" class="vibe-icon vibe-panel-back" type="button" aria-label="Back" title="Back (Esc)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-back"/></svg></button><div><small id="vibe-panel-kicker">Social</small><h2 id="vibe-panel-title">Tasks</h2></div></div><button id="vibe-panel-close" class="vibe-icon" type="button" aria-label="Close the panel" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
     <div id="vibe-panel-body" class="vibe-panel-body"></div>
     <footer class="vibe-ask-foot vibe-panel-foot"><span id="vibe-panel-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-panel-full" class="vibe-ask-link" type="button">Full view <span aria-hidden="true">↗</span></button></footer>
   </aside>
@@ -367,8 +367,8 @@
      and the rest, so leaving the front door never lands in the Build view; the
      spark at the top goes back to Vibe and only the switch at the foot leaves
      the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
-<nav id="vibe-rail" class="vibe-rail" aria-label="Vibe" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Vibe (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
+<nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Social (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
   <div class="vibe-rail-items">
     <button type="button" data-nav="command" data-vibe-section="agents" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
     <button type="button" data-nav="tasks" data-vibe-section="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
@@ -380,7 +380,7 @@
   </div>
   <div class="vibe-rail-foot">
     <button type="button" data-nav="studio" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
-    <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+    <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
   </div>
 </nav>
 <!-- Today and the Inbox (layout v2; renderer/today.js registers both routes only then). Vibe's Home draws the same board
@@ -436,18 +436,18 @@
 <div id="vibe-notes" class="vibe-notes" hidden>
   <div class="vibe-notes-card" role="dialog" aria-modal="true" aria-labelledby="vibe-notes-title" aria-describedby="vibe-notes-lede">
     <header class="vibe-notes-head"><span class="vibe-notes-tag"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>What's new</span><button id="vibe-notes-close" class="vibe-icon" type="button" aria-label="Close what's new" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
-    <h2 id="vibe-notes-title">Two ways to work: Vibe and Build</h2>
-    <p id="vibe-notes-lede" class="vibe-notes-lede">Studio now opens in <b>Vibe</b>, a calmer front door. Everything you already use lives in <b>Build</b>, one click away.</p>
+    <h2 id="vibe-notes-title">Two ways to work: Social and Studio</h2>
+    <p id="vibe-notes-lede" class="vibe-notes-lede">Mefi Studio opens in <b>Social</b>: friends, and a light eye on your agents. In-depth building lives in <b>Studio</b>, one click away.</p>
     <div class="vibe-notes-modes">
-      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Vibe</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
-      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Build</b><span>The full studio: Command, boards, models and every setting.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Social</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Studio</b><span>In-depth building: Command, boards, models and every setting.</span></figcaption></figure>
     </div>
     <ul class="vibe-notes-list">
-      <li>Switch any time with the <b>Vibe / Build</b> toggle at the top, or from the menu and Search.</li>
+      <li>Switch any time with the <b>Social / Studio</b> switch at the top, or from the menu and Search.</li>
       <li>One box: <b>Talk it over</b> with Mefi, or <b>Build it</b> as a task.</li>
       <li>Building now, Needs you and Freshly done share one screen.</li>
     </ul>
-    <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Build</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Vibe</button></footer>
+    <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Studio</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Social</button></footer>
   </div>
 </div>
 <!-- What's new (renderer/whats-new.js): opens from the toast after an update, from Settings › Updates or from Search; never by itself at launch. -->
@@ -473,21 +473,7 @@
       <p class="sub" id="status">Loading catalog…</p>
     </div>
   </div>
-  <div class="head-actions">
-    <button id="help-btn" class="ghost icon" title="Shortcuts (?)" aria-label="Shortcuts"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-help"/></svg></button>
-  </div>
 </header>
-<nav class="tabs" id="tabs" aria-label="Surfaces and tools">
-  <button class="home-tab" data-nav="workspace" title="Your workspace (H)">← Workspace</button>
-  <button id="nav-command" class="home-tab" data-nav="command" data-return-label="Back to Command" title="Command view (D)"><svg class="glyph glyph-home" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg><svg class="glyph glyph-back" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span><kbd class="key">D</kbd><span class="dot live" data-badge="progress" data-badge-mode="dot" hidden></span><span class="count warn" data-badge="questions" hidden></span></button>
-  <span class="tabs-sep" aria-hidden="true"></span>
-  <button class="tab active" data-tab="booklet" title="Model catalog (1)"><span class="label">Model catalog</span><kbd class="key">1</kbd></button>
-  <button class="tab" data-tab="graph" title="Performance (2)"><span class="label">Performance</span><kbd class="key">2</kbd></button>
-  <button class="tab" data-tab="eyes" title="Activity & evidence (3)"><span class="label">Activity & evidence</span><kbd class="key">3</kbd></button>
-  <button class="tab" data-tab="studio" title="Settings (4 or Ctrl ,)"><span class="label">Settings</span><kbd class="key">4</kbd></button>
-  <span class="spacer" aria-hidden="true"></span>
-  <details class="studio-more"><summary><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-more"/></svg><span class="label">More tools</span><svg class="glyph chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><div id="nav-tools" class="tools-cluster" role="group" aria-label="Tools"></div></details>
-</nav>
 <div id="banner" class="banner" hidden></div>
 <main>
   <section id="tab-booklet">
@@ -722,13 +708,12 @@
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
-            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Vibe, even if you closed Studio in Build. Off: Studio keeps the mode you closed it in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Vibe</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch keeps the mode you closed in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
-            <label class="switch" id="settings-layout-v2-switch" title="The 0.5 layout puts a list, an inspector, tabs and a status bar around every page, and a Vibe and Build switch in the top bar. Studio reloads to switch; switch it off here or in Search (Switch layout) to go back."><input type="checkbox" id="settings-layout-v2"><span class="track"></span><span>Try the 0.5 layout</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
-          <p class="muted" id="idle-home-hint">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
+          <p class="muted" id="idle-home-hint" data-info-anchor="idle-home-label">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
@@ -742,8 +727,8 @@
           <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
-            <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
-            <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button></div>
+            <span class="settings-mode-text"><b>Mode</b><span id="settings-mode-hint">Social is for friends and a light eye on your agents. Studio is for in-depth building.</span></span>
+            <div class="mode-switch" role="radiogroup" aria-label="Mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Social: friends, and a light eye on your agents"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button></div>
           </div>
         </details>
 <details class="settings-optional settings-card" id="settings-notifications" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-bell"/></svg></span><span class="settings-summary-text"><b>Notifications</b><span>Windows alerts, taskbar flash and count, quiet hours</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
@@ -797,7 +782,7 @@
         </details>
 </section>
 <section class="settings-category" id="settings-category-appearance" data-settings-category-pane="appearance" aria-labelledby="settings-category-appearance-heading" hidden><header class="settings-category-head"><div class="appearance-heading"><div><h2 id="settings-category-appearance-heading" tabindex="-1">Appearance</h2><p>Make the tree your own.</p></div><div class="appearance-actions"><button id="appearance-dock" class="ghost mini" type="button" title="Move sidebar to the right" aria-label="Move sidebar to the right">⇥</button><button id="appearance-close" class="ghost mini" type="button" title="Close appearance (Esc)" aria-label="Close appearance">×</button></div></div><nav id="appearance-sections" class="appearance-sections" aria-label="Appearance sections"><button type="button" data-appearance-section="themes" aria-pressed="true">Theme</button><button type="button" data-appearance-section="nodes" aria-pressed="false">Nodes</button><button type="button" data-appearance-section="layout" aria-pressed="false">Layout</button><button type="button" data-appearance-section="interface" aria-pressed="false">Interface</button></nav></header>
-<section class="settings-card" id="settings-appearance"><div class="settings-card-head"><div><h3>Interface</h3><p class="muted">Motion and panel effects apply throughout Studio.</p></div></div><div id="settings-appearance-controls" class="settings-you-fields"></div></section><div id="settings-appearance-media" class="settings-media"></div><details class="settings-card settings-advanced" id="settings-tree"><summary>Node tree details</summary><div id="settings-tree-controls"></div></details>
+<section class="settings-card" id="settings-appearance"><div class="settings-card-head"><div><h3>Interface</h3><p class="muted">Motion and panel effects apply throughout Studio.</p></div></div><div id="settings-appearance-controls" class="settings-you-fields"></div></section><div id="settings-appearance-media" class="settings-media"></div><details class="settings-card settings-advanced" id="settings-tree"><summary>Node tree details</summary><div id="settings-tree-controls"><label class="pop-row" title="The sky behind the node tree. Follow theme picks the scene that belongs to your colour theme in Style &amp; sound."><span class="grow">Backdrop</span><select id="idle-backdrop"></select></label><label class="switch pop-row" title="Agents say what they are doing beside their orb: hops, findings going home, replies and thoughts."><span class="grow">Speech bubbles</span><input type="checkbox" id="idle-bubbles"><span class="track"></span></label><label class="pop-row" title="How the thought bubble under a card is drawn. Auto keeps them outlined and fills the one you hover, select or that has a worker running."><span class="grow">Card style</span><select id="idle-card-style"><option value="auto">Auto</option><option value="outline">Outline</option><option value="filled">Filled</option></select></label><label class="switch pop-row" title="Fade the panels and tour the tree after 30 seconds without input. You can also park the mouse at the right edge for about two seconds. Move back into the view or press a key to return."><span class="grow">Zen mode</span><input type="checkbox" id="idle-ambient-zen"><span class="track"></span></label></div></details>
 </section>
 <section class="settings-category" id="settings-category-connections" data-settings-category-pane="connections" aria-labelledby="settings-category-connections-heading" hidden><header class="settings-category-head"><h2 id="settings-category-connections-heading" tabindex="-1">Connections</h2><p>Accounts, keys and local tools</p></header>
 <div id="studio-desktop"><section class="settings-group settings-card setup-card" id="settings-setup" aria-labelledby="settings-setup-heading">
@@ -1082,7 +1067,7 @@
 </div><p id="settings-automation-status" class="settings-status" role="status"></p></section><details class="settings-card settings-advanced" id="settings-automation-behavior" data-desktop-only><summary>Assistant behavior</summary><div class="settings-control-list" id="settings-behavior-controls"></div></details>
 </section>
 <section class="settings-category" id="settings-category-audio" data-settings-category-pane="audio" aria-labelledby="settings-category-audio-heading" hidden><header class="settings-category-head"><h2 id="settings-category-audio-heading" tabindex="-1">Audio</h2><p>Music, video and sound effects</p></header>
-<section class="settings-card" id="settings-audio"><div id="settings-audio-media"><h3>Music &amp; video</h3><p class="muted">Manage local music, radio, YouTube and other links from the audio dropdown. It also holds your audio connection and reactions.</p><button type="button" class="ghost" id="settings-audio-open" data-settings-nav="audio" aria-haspopup="dialog" aria-expanded="false" aria-controls="music-dropdown">Open music &amp; video</button></div></section><details class="settings-card settings-advanced" id="settings-audio-effects"><summary>Sound effects</summary><div id="settings-audio-controls"></div></details>
+<section class="settings-card" id="settings-audio"><div id="settings-audio-media"><h3>Music &amp; video</h3><p class="muted">Manage local music, radio, YouTube and other links from the audio dropdown. It also holds your audio connection and reactions.</p><button type="button" class="ghost" id="settings-audio-open" data-settings-nav="audio" aria-haspopup="dialog" aria-expanded="false" aria-controls="music-dropdown">Open music &amp; video</button></div></section><details class="settings-card settings-advanced" id="settings-audio-effects"><summary>Sound effects</summary><div id="settings-audio-controls"><label class="pop-row" title="Audio profile for the Zen bells"><span class="grow">Profile</span><select id="idle-profile"></select></label><label class="switch pop-row" title="Dynamic bells keyed to agent tempo"><span class="grow">Zen bells</span><input type="checkbox" id="idle-zen"><span class="track"></span></label></div></details>
 </section>
 <section class="settings-category" id="settings-category-system" data-settings-category-pane="system" aria-labelledby="settings-category-system-heading" hidden><header class="settings-category-head"><h2 id="settings-category-system-heading" tabindex="-1">System</h2><p>Updates, diagnostics and integrations</p></header>
 <details class="settings-optional settings-card" id="settings-updates" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-update"/></svg></span><span class="settings-summary-text"><b>Updates</b><span>Live update and published builds</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
@@ -1211,8 +1196,7 @@
 <canvas id="idle-layer" tabindex="0" role="application" aria-label="Command view" hidden></canvas>
 <div id="idle-hud" hidden>
   <!-- The Map of the 0.5 layout (html[data-frame], docs/unified-studio.md "The Map"): the place's three pages, Running only and
-       View ▾ over the node tree, as the prototype draws them. styles.css shows them only with the frame; the classic toolbar below
-       is the classic layout's and is folded away there. idle.js owns them; the pages are plain data-nav links. -->
+       View ▾ over the node tree, as the prototype draws them. idle.js owns them; the pages are plain data-nav links. -->
   <div id="map-bar" class="map-bar" role="toolbar" aria-label="Map">
     <div class="map-pages" role="group" aria-label="Map pages">
       <button type="button" class="map-page" data-nav="command" aria-current="page">Map</button>
@@ -1222,8 +1206,8 @@
     <button id="map-running-only" class="map-chip" type="button" aria-pressed="false" title="Running only: dim everything that is not running"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-bolt"/></svg><span>Running only</span></button>
     <button id="map-view-menu" class="map-chip" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="map-view-pop" title="View: layout, labels, camera and 2D or 3D"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-sliders"/></svg><span>View</span><svg class="glyph chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button>
   </div>
-  <!-- View ▾: Layout, Labels (L), Camera (C), View (V, and Space for the spin) and a way to Settings › Map look. The same choices
-       as the classic toolbar's camera, View ▾ and Spin, and the same saved settings. -->
+  <!-- View ▾: Layout, Labels (L), Camera (C), View (V, and Space for the spin) and a way to Settings › Map look, on the same
+       saved settings as those keys. -->
   <div id="map-view-pop" class="pop map-view-pop" role="menu" aria-labelledby="map-view-menu" hidden>
     <div class="map-menu-group" role="group" aria-labelledby="map-menu-layout">
       <div class="map-menu-head" id="map-menu-layout">Layout</div>
@@ -1265,172 +1249,6 @@
     <button id="map-zoom-out" type="button" title="Zoom out (−)" aria-label="Zoom out"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-out"/></svg></button>
     <button id="map-zoom-in" type="button" title="Zoom in (+)" aria-label="Zoom in"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-in"/></svg></button>
   </div>
-  <div class="cmd-top">
-    <div class="cmd-brand">
-      <div class="monogram small" aria-hidden="true">M+</div>
-      <div class="cmd-brand-text">
-        <span class="eyebrow">Mefi's Studio</span>
-        <h1 class="cmd-heading">Command view</h1>
-        <div id="idle-telemetry" class="cmd-tele" role="group" aria-label="Live status">
-          <button class="pill" data-tele="sessions" title="Fit the whole constellation"><b class="num">0</b><span class="unit">sessions</span></button>
-          <button class="pill" data-tele="progress" title="Jump to the next in-progress todo" hidden><i class="dot live" aria-hidden="true"></i><b class="num">0</b><span class="unit">in progress</span></button>
-          <button class="pill" data-tele="tasks" data-nav="tasks" title="Open the Task board (T)" hidden><b class="num">0</b><span class="unit">open tasks</span></button>
-          <button class="pill" data-tele="ideas" data-nav="ideas" title="Open Feature ideas (I)" hidden><b class="num">0</b><span class="unit">unread ideas</span></button>
-          <button class="pill" data-tele="machine" data-nav="machine" title="Machine status (opens the Explorer)" hidden><i class="dot" aria-hidden="true"></i><span class="unit">machine · busy</span></button>
-          <button class="pill" id="idle-pill-assistant" data-tele="assistant" data-tone="ok" title="Select the assistant (M)" hidden><i class="dot" aria-hidden="true"></i><span class="unit">assistant</span></button>
-          <span class="pill quiet" data-tele="offline" hidden>store offline</span>
-        </div>
-      </div>
-    </div>
-    <div class="cmd-center">
-      <div class="cmd-composer" role="group" aria-label="Add a task">
-        <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-add"/></svg>
-        <input id="idle-task-input" type="text" placeholder="Add a task… (Enter)" aria-label="New task" autocomplete="off" spellcheck="false">
-        <button id="idle-task-add" class="primary mini">Add</button>
-      </div>
-      <div class="cmd-search" role="search">
-        <svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-search"/></svg>
-        <input id="idle-search" type="text" placeholder="Find a session, todo or task…" aria-label="Find a node" aria-describedby="idle-search-count" autocomplete="off" spellcheck="false">
-        <span class="hint" id="idle-search-count" aria-live="polite"></span>
-      </div>
-    </div>
-    <div class="cmd-tools" role="toolbar" aria-label="Command view controls">
-      <div class="cmd-tools-group" role="group" aria-label="Agents">
-        <div class="cmd-agent-mode">
-          <button id="idle-agent-settings" class="ghost" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="cmd-settings" title="Agent settings" aria-label="Agent settings"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span class="label">Agents</span><svg class="glyph chev" aria-hidden="true"><use href="#g-chev"/></svg></button>
-          <select id="idle-feed-agent-mode" disabled aria-label="Agent coordination mode" aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
-        </div>
-      </div>
-      <span class="tools-sep" aria-hidden="true"></span>
-      <div class="cmd-tools-group" role="group" aria-label="Camera">
-        <button id="idle-fit" class="ghost icon" title="Rearrange and fit the node tree (F)" aria-label="Fit and rearrange node tree"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-fit"/></svg></button>
-        <div class="cmd-seg" role="group" aria-label="Camera mode">
-          <button id="idle-cam-orbit" class="ghost" data-cam="orbit" aria-pressed="true" title="Camera: overview — keep the whole tree framed (C cycles overview / follow / free)" aria-label="Camera: overview"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-frame"/></svg><span class="label">Overview</span></button>
-          <button id="idle-cam-follow" class="ghost" data-cam="follow" aria-pressed="false" title="Camera: follow — track the agent's current work (C cycles overview / follow / free)" aria-label="Camera: follow"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-target"/></svg><span class="label">Follow</span></button>
-        </div>
-        <button id="idle-orbit" class="ghost icon" aria-pressed="true" title="Spin on · Space pauses" aria-label="Spin"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg></button>
-      </div>
-      <span class="tools-sep" aria-hidden="true"></span>
-      <div class="cmd-tools-group" role="group" aria-label="View">
-        <button id="idle-view-menu" class="ghost" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="idle-view-pop" title="View: 2D or 3D, node labels and zoom" aria-label="View"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plane"/></svg><span class="label">View</span><svg class="glyph chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></button>
-      </div>
-      <span class="tools-sep" aria-hidden="true"></span>
-      <div class="cmd-tools-group" role="group" aria-label="Sound">
-        <button id="idle-music-toggle" class="ghost cmd-music" aria-haspopup="dialog" aria-expanded="false" aria-controls="music-dropdown" title="Music, video and audio setup" aria-label="Connect audio · Music and video"><span id="idle-music-level" class="cmd-music-level" aria-hidden="true"><i></i><i></i><i></i></span><span id="idle-music-status" class="label">Connect audio</span><svg class="glyph music-dropdown-chevron" aria-hidden="true"><use href="#g-chev"/></svg></button>
-        <button id="idle-ambience" class="ghost icon" aria-haspopup="dialog" aria-expanded="false" aria-controls="idle-ambience-pop" title="Ambience: look, sound and calm" aria-label="Ambience"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-ambience"/></svg></button>
-      </div>
-      <span class="tools-sep" aria-hidden="true"></span>
-      <button id="idle-exit" class="ghost icon" title="Close Command view (Esc / D)" aria-label="Close Command view"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg></button>
-    </div>
-  </div>
-  <!-- View ▾ folds 2D/3D, labels and zoom one menu away from the toolbar. idle.js
-       hangs it and Ambience under their buttons and owns the menu's keys only
-       while it is open. -->
-  <div id="idle-view-pop" class="pop cmd-view-pop" role="menu" aria-labelledby="idle-view-menu" hidden>
-    <button id="idle-view" class="ghost" type="button" role="menuitem" tabindex="-1" data-view="3d" title="View: 3D orbit (V toggles 2D)" aria-label="Map: 3D orbit"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-plane"/></svg><span class="cmd-view-name">Map</span><span class="label">3D</span><span class="key" aria-hidden="true">V</span></button>
-    <button id="idle-labels" class="ghost" type="button" role="menuitem" tabindex="-1" data-labels="auto" title="Node labels: auto (L cycles auto / updates / all / none)" aria-label="Node labels: auto"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-labels"/></svg><span class="cmd-view-name">Labels</span><span class="label">auto</span><span class="key" aria-hidden="true">L</span></button>
-    <div class="cmd-view-zoom" role="group" aria-label="Zoom">
-      <span class="cmd-view-name" aria-hidden="true">Zoom</span>
-      <button id="idle-zoom-out" class="ghost icon" type="button" role="menuitem" tabindex="-1" title="Zoom out (−)" aria-label="Zoom out"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-out"/></svg></button>
-      <button id="idle-zoom-in" class="ghost icon" type="button" role="menuitem" tabindex="-1" title="Zoom in (+)" aria-label="Zoom in"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-zoom-in"/></svg></button>
-    </div>
-  </div>
-  <div id="idle-ambience-pop" class="pop" role="dialog" aria-label="Ambience" tabindex="-1" hidden>
-    <div class="pop-group" role="group" aria-labelledby="idle-ambience-look">
-      <div class="eyebrow" id="idle-ambience-look">Look</div>
-      <label class="pop-row" title="The sky behind the node tree. Follow theme picks the scene that belongs to your colour theme in Style &amp; sound."><span class="grow">Backdrop</span><select id="idle-backdrop"></select></label>
-      <label class="switch pop-row" title="Agents say what they are doing beside their orb: hops, findings going home, replies and thoughts."><span class="grow">Speech bubbles</span><input type="checkbox" id="idle-bubbles"><span class="track"></span></label>
-      <label class="pop-row" title="How the thought bubble under a card is drawn. Auto keeps them outlined and fills the one you hover, select or that has a worker running."><span class="grow">Card style</span><select id="idle-card-style"><option value="auto">Auto</option><option value="outline">Outline</option><option value="filled">Filled</option></select></label>
-    </div>
-    <hr class="pop-sep">
-    <div class="pop-group" role="group" aria-labelledby="idle-ambience-sound">
-      <div class="eyebrow" id="idle-ambience-sound">Sound</div>
-      <label class="pop-row" title="What the nodes listen to while Music is on"><span class="grow">Listen to</span><select id="idle-source"><option value="auto">Auto · local or desktop</option><option value="local">Local player</option><option value="desktop">Desktop audio / Spotify</option><option value="mic">Microphone</option></select></label>
-      <label class="pop-row" title="Audio profile for the Zen bells"><span class="grow">Profile</span><select id="idle-profile"></select></label>
-      <label class="switch pop-row" title="Dynamic bells keyed to agent tempo"><span class="grow">Zen bells</span><input type="checkbox" id="idle-zen"><span class="track"></span></label>
-      <!-- The Audio link switch is the toolbar's Music button and Style & sound's Audio link; this box only mirrors that state for scripts. -->
-      <input type="checkbox" id="idle-reactive" hidden>
-    </div>
-    <hr class="pop-sep">
-    <div class="pop-group" role="group" aria-labelledby="idle-ambience-calm">
-      <div class="eyebrow" id="idle-ambience-calm">Calm</div>
-      <label class="switch pop-row" title="Fade the panels and tour the tree after 30 seconds without input. You can also park the mouse at the right edge for about two seconds. Move back into the view or press a key to return."><span class="grow">Zen mode</span><input type="checkbox" id="idle-ambient-zen"><span class="track"></span></label>
-    </div>
-    <hr class="pop-sep">
-    <button class="ghost mini pop-link" type="button" data-nav="studio" data-nav-params='{"category":"appearance"}'>All appearance settings ↗</button>
-    <button class="ghost mini pop-link" type="button" data-nav="studio" data-nav-params='{"category":"audio"}'>Audio settings ↗</button>
-  </div>
-  <section id="cmd-settings" class="cmd-settings pop cmd-agents-pop" role="dialog" aria-labelledby="cmd-agents-title" tabindex="-1" hidden>
-    <div class="rail-view-head">
-      <h2 id="cmd-agents-title" class="rail-view-title">Agent settings</h2>
-      <span id="cmd-settings-state" class="feed-state setting-state" role="status" aria-live="polite"></span>
-      <button id="idle-agent-settings-close" class="ghost mini" type="button" aria-label="Close agent settings">×</button>
-    </div>
-    <p class="rail-view-note">Queue controls apply across projects. Current work continues.</p>
-    <div class="settings-scroll">
-      <div id="cmd-agents-glance" class="agents-glance" role="group" aria-label="Agents at a glance">
-        <span class="agents-chip" id="cmd-glance-autopilot" data-tone="idle"><span class="agents-chip-k">Autopilot</span><b>…</b></span>
-        <span class="agents-chip" id="cmd-glance-workers" data-tone="idle"><span class="agents-chip-k">Workers</span><b>…</b></span>
-        <span class="agents-chip" id="cmd-glance-mode" data-tone="idle"><span class="agents-chip-k">Mode</span><b>…</b></span>
-      </div>
-      <div class="setting-group" role="group" aria-labelledby="cmd-settings-queue-title">
-        <h3 id="cmd-settings-queue-title" class="setting-group-title"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg>Queue</h3>
-        <div class="setting-row">
-          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg>
-          <label class="setting-label" for="idle-autopilot">Autopilot</label>
-          <label class="switch mini setting-switch" title="Turn the agent queue on or off"><input type="checkbox" id="idle-autopilot" role="switch" aria-describedby="idle-autopilot-help"><span class="track" aria-hidden="true"></span></label>
-          <span id="idle-autopilot-help" class="setting-hint">Starts ready tasks and verifies what comes back. Off stops new starts; running jobs finish.</span>
-        </div>
-        <div class="setting-row">
-          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-overhead"/></svg>
-          <label class="setting-label" for="idle-feed-parallel">Parallel builds</label>
-          <select id="idle-feed-parallel" aria-describedby="idle-feed-parallel-help"><option value="machine">Machine managed</option><option value="1">Manual: 1 worker</option><option value="2">Manual: 2 workers</option><option value="3">Manual: 3 workers</option></select>
-          <span id="idle-feed-parallel-help" class="setting-hint">How many builds run at once. Machine managed backs off while the machine is busy.</span>
-        </div>
-        <div class="setting-row">
-          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-tasks"/></svg>
-          <label class="setting-label" for="idle-feed-build-mode">Build mode</label>
-          <select id="idle-feed-build-mode" aria-describedby="idle-feed-build-mode-help"><option value="auto">Auto build</option><option value="verify">Verify first</option></select>
-          <span id="idle-feed-build-mode-help" class="setting-hint">Auto build starts eligible tasks itself. Verify first holds each new or changed brief for your approval.</span>
-        </div>
-        <div class="setting-row">
-          <svg class="glyph setting-glyph" aria-hidden="true" focusable="false"><use href="#g-agents"/></svg>
-          <label class="setting-label" for="idle-settings-agent-mode">Agent mode</label>
-          <select id="idle-settings-agent-mode" disabled aria-describedby="idle-feed-agent-mode-note"><option value="swarm">Swarm</option><option value="cluster">Cluster</option></select>
-          <span id="idle-feed-agent-mode-note" class="setting-hint" role="status">Swarm uses one builder per task across the queue. Cluster plans and reviews a shared task with supporting agents.</span>
-        </div>
-      </div>
-      <div class="setting-group" role="group" aria-labelledby="cmd-settings-safety-title">
-        <h3 id="cmd-settings-safety-title" class="setting-group-title"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-exit"/></svg>Stop or restart</h3>
-        <div class="setting-actions">
-          <button id="idle-stop-all" class="ghost mini" type="button" title="Stop every running agent now. Each run's progress is saved and its work stays queued.">Stop all</button>
-          <button id="idle-restart" class="ghost mini" type="button" title="Stop every agent, save progress, and restart Studio.">Restart Studio</button>
-          <span id="idle-stop-state" class="feed-state" role="status" aria-live="polite"></span>
-        </div>
-        <p class="setting-hint">Stop all halts every agent now; progress is saved and the work stays queued. Restart stops the agents first, then relaunches Studio paused.</p>
-      </div>
-      <div class="setting-actions" aria-label="More agent settings">
-        <button class="ghost mini" type="button" data-nav="agents" data-nav-params='{"section":"setup","pane":"team"}'>Team &amp; models ↗</button>
-        <button class="ghost mini" type="button" data-nav="agents" data-nav-params='{"section":"setup","pane":"connections"}'>Providers ↗</button>
-        <button class="ghost mini" type="button" data-nav="agents" data-nav-params='{"section":"setup","pane":"behavior"}'>All run settings ↗</button>
-      </div>
-      <details id="idle-controls-help" class="feed-help">
-        <summary>About these controls</summary>
-        <dl class="feed-help-list">
-          <dt>Autopilot</dt>
-          <dd>The master switch for the assistant's queue. On each pass the assistant looks for ready tasks, starts them while a worker slot is free, and verifies what came back. Turning it off stops new work from starting; jobs already running finish normally.</dd>
-          <dt>Parallel builds</dt>
-          <dd>How many builds may run at the same time. <b>Machine managed</b> starts work while the app stays responsive and backs off when the machine is busy. A manual limit (1–3) caps concurrent builds but never starts or pauses anything by itself.</dd>
-          <dt>Build mode</dt>
-          <dd><b>Auto build</b> starts eligible tasks as soon as a worker is free. <b>Verify first</b> holds every new or changed brief for your approval, so you decide what gets built. Switching never interrupts a running job.</dd>
-          <dt>Agent mode</dt>
-          <dd>How agents coordinate. <b>Swarm</b> uses one builder per task across the ready queue; <b>Cluster</b> adds planning, review and scoped delegation for one shared task. Current work finishes when you switch. The same selector sits in the node tree toolbar under <b>Agents</b> for quick changes.</dd>
-          <dt>New work</dt>
-          <dd>The master switch for starting anything new — queued tasks, builds and work the assistant suggests — lives with the Assistant. Off pauses admission; running jobs, replies and your answers to questions still work.</dd>
-        </dl>
-      </details>
-    </div>
-  </section>
   <aside id="idle-info" class="cmd-card" role="region" aria-label="Selected node" hidden></aside>
   <div id="cmd-announce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
   <div id="idle-follow-status" class="cmd-follow-status" hidden aria-live="polite"></div>
@@ -1559,22 +1377,12 @@
   </section>
     </div>
   </aside>
-  <!-- bottom-left corner: the Legend pill with the Usage pill above it; both lists open upward -->
+  <!-- bottom-left corner: the Legend pill; its list opens upward -->
   <div id="cmd-legend" class="cmd-legend">
     <!-- The Map (layout v2): the colours of the four states, beside the Legend that lists every colour. idle.js renderLegend fills it. -->
     <span id="map-legend" class="map-legend" role="group" aria-label="What the colours of the states mean"></span>
     <button id="idle-legend-toggle" class="pill" aria-expanded="false" aria-controls="cmd-legend-list" title="What the colours and rings mean"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-legend"/></svg><span class="label">Legend</span></button>
-    <button id="cmd-usage-toggle" class="pill usage-pill" type="button" aria-expanded="false" aria-controls="cmd-usage-pop" title="Usage across connected providers"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-graph"/></svg><span class="label">Usage</span><span id="cmd-usage-brief" class="usage-brief"></span><i id="cmd-usage-dot" class="usage-dot" aria-hidden="true" hidden></i></button>
     <ul id="cmd-legend-list" class="legend-list" hidden></ul>
-    <section id="cmd-usage-pop" class="usage-pop" aria-label="Usage across connected providers" hidden>
-      <header class="cmd-usage-head">
-        <h2 id="cmd-usage-title" class="cmd-usage-title">Usage</h2>
-        <button id="cmd-usage-refresh" class="ghost mini" type="button" title="Refresh usage and every connected account">Refresh</button>
-        <button id="cmd-usage-open" class="ghost mini" type="button" title="Open the full tracker in Usage">Details</button>
-      </header>
-      <p id="cmd-usage-state" class="cmd-usage-state" role="status" aria-live="polite">Waiting for a reading…</p>
-      <div id="cmd-usage-body" class="cmd-usage-body" hidden></div>
-    </section>
   </div>
   <div id="cmd-empty" class="cmd-empty" data-variant="desktop-only" role="status" hidden>
     <div class="eyebrow">Command</div>
@@ -1591,10 +1399,6 @@
     </div>
   </div>
   <div id="cmd-tip" class="cmd-tip tree-tip" role="tooltip" hidden><b class="tip-title"></b><span class="tip-meta"></span></div>
-  <div class="cmd-bottom">
-    <p id="cmd-hint" class="cmd-hint">click a node to zoom in · drag to pan · wheel to zoom · V 2D/3D · Esc leaves</p>
-    <nav id="cmd-dock" class="cmd-dock" aria-label="Command menu"></nav>
-  </div>
 </div>
 <div class="overlay" id="palette-overlay" hidden>
   <div class="palette-sheet" role="dialog" aria-modal="true" aria-label="Search Studio">
@@ -2030,6 +1834,7 @@
           <button id="trace-order" class="ghost mini" type="button" title="Show the newest lines first or last">Newest first</button>
           <button id="trace-copy" class="ghost mini" type="button" title="Copy the lines shown">Copy</button>
           <button id="trace-file" class="ghost mini" type="button" title="Show the log file in its folder" hidden>Open file</button>
+          <button id="trace-older" class="ghost mini" type="button" title="Read older lines of the studio log from the log kept on disk" hidden>Load older</button>
         </div>
         <div class="trace-filters">
           <div id="trace-levels" class="chips" role="group" aria-label="Levels"></div>
@@ -2314,7 +2119,7 @@
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
       <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
-        <h3>Use the account you already have</h3>
+        <h3 id="walkthrough-cli-heading">Use the account you already have</h3>
         <p>One supported subscription can handle chat, mapping, planning and coding. Choose your tool, sign in with its own window, then check the connection. Your account's model access and usage limits apply.</p>
         <label for="walkthrough-cli-choice">Your coding tool</label>
         <select id="walkthrough-cli-choice"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="grok">Grok</option><option value="antigravity">Antigravity</option><option value="opencode">OpenCode (free models or linked providers)</option></select>
@@ -2327,9 +2132,9 @@
           <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
           <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
         </div>
-        <p class="muted">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
         <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-cli-keys" type="button">I have an API key or a local model server</button></div>
-        <p class="muted">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
         <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
       </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
@@ -2377,11 +2182,6 @@
   </div>
 </div>
 <div id="toast-host" role="status" aria-live="polite"></div>
-<footer>
-  <span>Sources: <a class="link" href="https://opencode.ai/go" target="_blank" rel="noreferrer">opencode.ai/go<svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-external"/></svg></a> · models.dev · dev.opencode.ai/docs/go</span>
-  <span id="footer-keys">D Command · 1–4 tabs · E T I O A tools · ⌃K jump · ? shortcuts</span>
-  <span id="footer-meta"></span>
-</footer>
 <script id="booklet-data" type="application/json">__BOOKLET_DATA__</script>
 <script>__BOOKLET_CODE__</script>
 </html>

@@ -6,8 +6,8 @@
 // over the tree; renderer/nav.js syncMapSwitch in Fleet's and the Agent brain's heads). This opens the Map, measures
 // its bar (the switch, Running only, View ▾ with its four groups and the way to Map look), the colours of the four
 // states, Fit and zoom, the list column and the breadcrumb; moves between the three pages with a real pointer from each
-// switch; checks Running only and View ▾'s choices act; and that nothing reads under 12 px. A second launch without
-// ?layout=v2 shows Command as it was. Screenshots are kept when the test is given a capture folder
+// switch; checks Running only and View ▾'s choices act; and that nothing reads under 12 px. Screenshots are kept
+// when the test is given a capture folder
 // (MEFI_MAP_CAPTURE_DIR). No application main process or live state is loaded; network, permissions and child processes
 // are blocked.
 const { app, BrowserWindow, session } = require("electron");
@@ -121,17 +121,6 @@ app.whenReady().then(async () => {
   };`);
   const switchOf = (scope) => run(`return [...document.querySelectorAll(${JSON.stringify(`${scope} .map-pages .map-page`)})].map((node) => node.textContent.trim() + (node.getAttribute('aria-current') ? ' *' : ''));`);
 
-  // ---- v1: Command as it was -------------------------------------------------------------------------
-  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
-  await until("window.MefiNav && window.MefiIdle && !window.MefiBoot?.isActive?.()", "studio ready (v1)");
-  await run("window.MefiNav.go('command');");
-  await until("window.MefiNav.current() === 'command' && document.getElementById('idle-hud')?.hidden === false", "Command is up (v1)");
-  await sleep(600);
-  report.v1 = await run(`const shown = (id) => { const node = document.getElementById(id); return Boolean(node && node.getClientRects().length && getComputedStyle(node).display !== 'none'); };
-    return { bar: shown('map-bar'), zoom: shown('map-zoom'), legend: shown('map-legend'), top: Boolean(document.querySelector('#idle-hud .cmd-top')?.getClientRects().length) };`);
-  assert.deepEqual(report.v1, { bar: false, zoom: false, legend: false, top: true }, "with the layout off Command keeps its toolbar and has none of the Map's");
-  report.steps.push("v1 is untouched");
-
   // ---- v2 ------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
   await until("window.MefiNav && window.MefiIdle && window.MefiShell && window.MefiShell.active() && !window.MefiBoot?.isActive?.()", "studio ready (v2)");
@@ -145,9 +134,9 @@ app.whenReady().then(async () => {
   assert.equal(map.pagesList, false, "no page list over the Map: the column keeps the sessions");
   assert.deepEqual(await switchOf("#idle-hud"), ["Map *", "Fleet", "Pipelines"], "the Map's own switch, Map current");
   report.bar = await run(`const box = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; };
-    return { bar: box('map-bar'), zoom: box('map-zoom'), legend: [...document.querySelectorAll('#map-legend .map-legend-row')].map((row) => row.textContent.trim()), classicTop: Boolean(document.querySelector('#idle-hud .cmd-top')?.getClientRects().length) };`);
+    return { bar: box('map-bar'), zoom: box('map-zoom'), legend: [...document.querySelectorAll('#map-legend .map-legend-row')].map((row) => row.textContent.trim()), classicTop: Boolean(document.querySelector('#idle-hud .cmd-top, #idle-hud .cmd-hint, #cmd-dock')) };`);
   assert.deepEqual(report.bar.legend, ["Running", "Needs you", "Review", "Done"], "the colours of the four states, as the prototype names them");
-  assert.equal(report.bar.classicTop, false, "the classic top bar folds away");
+  assert.equal(report.bar.classicTop, false, "the classic top bar, hint line and dock are gone");
   assert.ok(report.bar.bar[2] > 200 && report.bar.zoom[2] > 60, `the bar and Fit and zoom are drawn: ${JSON.stringify(report.bar)}`);
   await capture("map-1920x1080.png");
   // Running only dims, and says so; again shows it all.
