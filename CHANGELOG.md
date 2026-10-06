@@ -63,6 +63,45 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   layout its top bar folds away (Search, New task and the player live in the
   frame). N opens a new task and S opens Search on the Map. The classic
   layout is unchanged.
+- **Friends works with no setup: the Mefi Studio relay.** Rooms, room chat,
+  Listen together, companions in the Playground and cowork file claims now
+  run through a free relay on Cloudflare
+  (`https://mefi-relay.mefi-studio.workers.dev`) that is built into Studio.
+  You no longer enter a hub address, and no PC has to stay on. The relay keeps
+  no chat: your Studio keeps its own encrypted copy of each room's messages for
+  a week, and when you open a room after being away, the messages you missed
+  are filled in from other members' copies. Every message is signed by the
+  relay, so a copy cannot be altered. Its code is public under `relay/`.
+  Linking is one button: **Link Discord** in Friends asks Discord once in
+  your browser and connects by itself; if your account is not in the Void
+  Engine server yet, it offers **Join the Discord** and checks again.
+- **Project hub with credits and ranks (Friends › Project hub).** Share what
+  you make as a card (a public link, a title, a line about it; never a file)
+  and play what friends make. A star map draws every shared project; New, Top
+  and Mine list them. Sharing is free and earns nothing by itself: when a
+  member plays someone else's project for two minutes, both earn credits (the
+  maker 5, the player 2), and a star earns the maker 3, up to 60 a day.
+  Credits are never bought; 100 features a project at the top of the hub for
+  a day. Ranks run Spark, Ember, Flame, Comet, Star, Nova, Void, and your
+  Discord roles show as special ranks. Your balance is yours alone; others see
+  your rank.
+- **Meeting people is simple: the Lobby, invite codes and Who's online.**
+  Everyone signed in is in the Lobby, a room that opens by itself the first
+  time you open Rooms, so there is always someone to say hi to. Every other
+  room has a short invite code (like `7K3Q-M2XR`): **Copy invite** puts it in
+  a message you can paste anywhere, and a friend types it into **Join with a
+  code** to come straight in, no approval needed. The owner can make a new
+  code, and the old one stops working. Rooms' **Online** tab lists who is in
+  Studio right now, with **Invite to** your rooms and **Start a room
+  together**; untick **Show me as online** to hide.
+- **Friends is one roomy page in both layouts.** The classic layout's Friends
+  now opens the same full page as the 0.5 layout instead of a small bubble
+  card, with tabs for Rooms, Your PCs, Playground and Project hub and a Close
+  button. The Project hub is in the rail's Friends menu and in Search. Your
+  PCs sums up a long report in a few lines ("3 other worktrees have
+  uncommitted work", "2 branches on GitHub not merged into main") with
+  **Show all** for the full list.
+
 - **Friends is a place of its own in the 0.5 layout.** With the new layout on
   (`?layout=v2`), the rail's Friends opens a page instead of the companion's
   bubbles: Rooms, Your PCs and Playground in the list beside it, one at a
@@ -71,8 +110,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   playdates and what your companion may share); Playground also keeps
   "Friends & listening rooms" and "Connect with Discord". Search's Rooms,
   Your PCs and Playground, and the companion's own Friends bubble, open the
-  page at that place, and each place can be a tab. The classic layout keeps
-  the Friends bubble as it was.
+  page at that place, and each place can be a tab.
 - **A task that will fix itself no longer looks like a problem.** In the 0.5
   layout, a task whose checks failed and that tries again by itself is listed
   with the running work as "Fixing itself", and its page says so calmly

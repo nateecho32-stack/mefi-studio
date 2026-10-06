@@ -24,11 +24,13 @@ const crypto = require("node:crypto");
 
 const GUILD_ID = "1345380333302059129";
 const INVITE_URL = "https://discord.gg/xgfKc5pVxG";
-// The public-client application Studio logs in with (no client secret; PKCE).
-// Empty until the app is registered; main also honours the environment
-// variable MEFI_STUDIO_DISCORD_CLIENT_ID and the id saved in Settings ›
-// Community (normalizeSetup), and an empty id means "not configured".
-const CLIENT_ID = "";
+// The public-client application Studio logs in with (no client secret; PKCE):
+// "Mefi Studio Link", registered 2026-10-05, the app the Mefi Studio relay
+// accepts (relay/wrangler.toml STUDIO_APP_ID). main also honours the
+// environment variable MEFI_STUDIO_DISCORD_CLIENT_ID and the id saved in
+// Settings › Community (normalizeSetup), which win; an empty id means "not
+// configured".
+const CLIENT_ID = "1556715336928334004";
 // Registered redirects http://127.0.0.1:<port>/callback, tried in order.
 const REDIRECT_PORTS = Object.freeze([53134, 53135, 53136]);
 const SCOPES = Object.freeze(["identify", "guilds.members.read"]);

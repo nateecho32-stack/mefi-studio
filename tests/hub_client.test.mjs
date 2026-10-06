@@ -88,7 +88,8 @@ test("the hub address takes https anywhere and http only on loopback", () => {
     assert.equal(hub.hubAddress(bad), null, String(bad));
   }
   assert.equal(hub.configuredUrl({ MEFI_STUDIO_HUB_URL: " https://hub.example.test " }), "https://hub.example.test");
-  assert.equal(hub.configuredUrl({}), hub.HUB_URL, "without the variable the built-in address (empty until the hub has one)");
+  assert.equal(hub.configuredUrl({}), hub.HUB_URL, "without the variable the built-in address");
+  assert.deepEqual({ ...hub.hubAddress(hub.HUB_URL) }, { http: "https://mefi-relay.mefi-studio.workers.dev", ws: "wss://mefi-relay.mefi-studio.workers.dev/v1/ws" }, "the Mefi Studio relay, at the root of its host");
 });
 
 test("without an address nothing connects and the status says so", async () => {
@@ -110,7 +111,7 @@ test("connecting trades the Discord token for a hub session once, says hello and
   assert.equal(h.socket().url, "wss://hub.example.test/v1/ws");
   assert.equal(h.client.status().state, "connecting");
   h.socket().open();
-  assert.deepEqual(h.socket().sent, [{ type: "hello", session: "hub-session-1", protocol: 1 }]);
+  assert.deepEqual(h.socket().sent, [{ type: "hello", session: "hub-session-1", protocol: 1, features: ["history.peer", "keepalive"] }], "hello names what this Studio can do; an older hub drops the field");
   h.socket().receive({ type: "ready", user: USER, protocol: 1 });
   await settle();
   const status = h.client.status();
@@ -297,4 +298,70 @@ test("a friend's companion frame is passed on with its room and sender, and a ma
   assert.deepEqual(seen[0], { type: "companion", roomId: ROOM, from: "987654321098765432", card: { v: 1, level: "hello", name: "Nova" }, direct: false, receivedAt: T0 });
   assert.equal(seen[1].card, null); assert.equal(seen[1].direct, true, "a card addressed to this member alone");
   assert.equal(seen[2].card, null, "a card that is not an object reads as gone");
+});
+
+test("the relay's keepalive: an exact ping every 30 s, only when the relay lists it, stopped on close", async () => {
+  const plain = harness();
+  await plain.readyUp();
+  await plain.advance(hub.KEEPALIVE_EVERY_MS * 2);
+  assert.equal(plain.socket().sent.some((frame) => frame.type === "ping"), false, "an older hub never gets a ping");
+
+  const h = harness();
+  await h.client.connect();
+  h.socket().open();
+  h.socket().receive({ type: "ready", user: USER, protocol: 1, features: ["keepalive"] });
+  await settle();
+  await h.advance(hub.KEEPALIVE_EVERY_MS);
+  assert.deepEqual(h.socket().sent.at(-1), { type: "ping" });
+  assert.equal(JSON.stringify(hub.KEEPALIVE_FRAME), '{"type":"ping"}', "byte for byte the relay's auto-response request");
+  const sent = h.socket().sent.length;
+  h.socket().drop(1006);
+  await h.advance(hub.KEEPALIVE_EVERY_MS * 2);
+  assert.equal(h.sockets[0].sent.length, sent, "no ping on a closed socket");
+});
+
+test("signed messages keep their sig, and wireMessage gives the hub's shape back", () => {
+  const message = { id: "1556701055531801106", author: { id: USER.id, name: "Mefi", viaStudio: true }, text: "hi", createdAt: T0, editedAt: null, mentions: { users: [], roles: [], everyone: false }, attachments: [], replyTo: null, sig: "abcdefghijklmnopqrstuv" };
+  const kept = hub.roomMessage(message);
+  assert.equal(kept.sig, "abcdefghijklmnopqrstuv");
+  assert.equal(hub.roomMessage({ ...message, sig: "bad sig!" }).sig, undefined);
+  assert.deepEqual(hub.wireMessage(kept), message);
+});
+
+test("peer history: ask the room, answer an ask from the kept copy within one frame, hear the checked history", async () => {
+  const h = harness();
+  await h.client.connect();
+  h.socket().open();
+  h.socket().receive({ type: "ready", user: USER, protocol: 1, features: ["history.peer"] });
+  await settle();
+  assert.equal(h.client.status().history, true);
+  assert.deepEqual(await h.client.historyAsk(ROOM), { ok: false, reason: "bad-request" }, "only for a subscribed room");
+  h.client.subscribe(ROOM);
+  const asked = h.client.historyAsk(ROOM, "1556701055531801106");
+  const frame = h.socket().sent.at(-1);
+  assert.equal(frame.type, "historyRequest");
+  assert.equal(frame.before, "1556701055531801106");
+  h.socket().receive({ type: "ack", nonce: frame.nonce });
+  assert.deepEqual(await asked, { ok: true });
+
+  const events = [];
+  h.events.length = 0;
+  h.socket().receive({ type: "historyRequest", roomId: ROOM, requestId: "hist_1", before: "1556701055531801106" });
+  events.push(...h.events.filter((event) => event.type === "historyRequest"));
+  assert.deepEqual(events[0], { type: "historyRequest", roomId: ROOM, requestId: "hist_1", before: "1556701055531801106" });
+  const long = (n) => ({ id: String(1556701055531801000n + BigInt(n)), author: { id: USER.id, name: "Mefi", viaStudio: true }, text: "x".repeat(1500), createdAt: T0 + n, editedAt: null, mentions: { users: [], roles: [], everyone: false }, attachments: [], replyTo: null, sig: "abcdefghijklmnopqrstuv" });
+  assert.equal(h.client.historyReply("hist_1", Array.from({ length: 20 }, (_, n) => long(n)), false), true);
+  const reply = h.socket().sent.at(-1);
+  assert.equal(reply.type, "historyReply");
+  assert.ok(Buffer.byteLength(JSON.stringify(reply)) <= 15 * 1024, "fits the relay's frame limit");
+  assert.equal(reply.hasMore, true, "older ones left out are still there");
+  assert.equal(reply.messages.at(-1).id, long(19).id, "the newest are kept");
+
+  h.socket().receive({ type: "history", roomId: ROOM, messages: [long(1)], hasMore: false });
+  const history = h.events.find((event) => event.type === "history");
+  assert.equal(history.messages[0].sig, "abcdefghijklmnopqrstuv");
+
+  const old = harness();
+  await old.readyUp();
+  assert.deepEqual(await old.client.historyAsk(ROOM), { ok: false, reason: "unsupported" }, "never asked of a hub without the feature");
 });

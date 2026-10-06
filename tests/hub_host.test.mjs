@@ -128,7 +128,7 @@ const plainCopy = (value) => JSON.parse(JSON.stringify(value));
 
 test("connection details save, answer at once and say whether the hub is there", async () => {
   const h = setupHost();
-  assert.deepEqual(plainCopy(h.api.communitySetupView()), { ok: true, clientId: "", hubUrl: "", environment: { clientId: false, hubUrl: false }, linkReady: false, hubReady: false });
+  assert.deepEqual(plainCopy(h.api.communitySetupView()), { ok: true, clientId: "", hubUrl: "", environment: { clientId: false, hubUrl: false }, linkReady: false, hubReady: true }, "nothing saved: the built-in relay is ready");
   const saved = plainCopy(await h.api.communitySetupSave({ clientId: APP, hubUrl: "https://hub.example.com/" }));
   assert.equal(saved.ok, true);
   assert.deepEqual([saved.clientId, saved.hubUrl, saved.linkReady, saved.hubReady], [APP, "https://hub.example.com", true, true]);
@@ -160,7 +160,7 @@ test("bad values are refused with the reason and nothing is saved; empty values 
   assert.equal(h.fetches.length, 0);
   await h.api.communitySetupSave({ clientId: "", hubUrl: "" });
   assert.equal("communitySetup" in h.settings(), false, "cleared from settings");
-  assert.deepEqual([h.api.communitySetupView().linkReady, h.api.communitySetupView().hubReady], [false, false]);
+  assert.deepEqual([h.api.communitySetupView().linkReady, h.api.communitySetupView().hubReady], [false, true], "cleared: back to the built-in relay");
 });
 
 test("the environment still wins, and an unreachable hub is saved with the reason", async () => {
@@ -170,7 +170,7 @@ test("the environment still wins, and an unreachable hub is saved with the reaso
   assert.deepEqual(saved.environment, { clientId: true, hubUrl: true });
   assert.equal(h.api.hubInstance().url, "http://127.0.0.1:8787", "a maintainer's test hub wins");
   assert.equal(saved.health.ok, false);
-  assert.match(saved.health.error, /could not reach the hub/);
+  assert.match(saved.health.error, /could not reach the rooms service/);
   const wrong = setupHost({ status: 404, answer: null });
   assert.match((await wrong.api.communitySetupSave({ hubUrl: "https://example.com" })).health.error, /not as a Void Engine hub \(HTTP 404\)/);
 });
@@ -184,4 +184,56 @@ test("a hub that names its link app fills in the link app ID when only its addre
   assert.equal((await typed.api.communitySetupSave({ clientId: APP, hubUrl: "https://hub.example.com" })).clientId, APP, "a typed ID is never replaced");
   const odd = setupHost({ answer: { ok: true, protocol: 1, studioAppId: "not-an-id" } });
   assert.equal((await odd.api.communitySetupSave({ hubUrl: "https://hub.example.com" })).clientId, "");
+});
+
+test("room history: this PC keeps what it saw, answers the relay's asks from it, and Rooms reads pages from it", async () => {
+  const { createRequire } = await import("node:module");
+  const roomHistory = createRequire(import.meta.url)("../scripts/room-history.cjs");
+  const sent = [];
+  const replies = [];
+  const asks = [];
+  let created = null;
+  const message = (n) => ({ id: String(1556701055531801000n + BigInt(n)), author: { id: "200000000000000001", name: "Alice", viaStudio: true }, text: `m${n}`, createdAt: T0 - 1000 + n, editedAt: null, mentions: [], attachments: [], replyTo: null, truncated: false, sig: "abcdefghijklmnopqrstuv" });
+  const client = {
+    status: () => ({ configured: true, state: "ready", error: null, user: { id: "200000000000000002", name: "Me" }, readOnly: false, paused: false, rooms: ["room_a"], history: true }),
+    historyReply: (requestId, messages, hasMore) => { replies.push({ requestId, ids: messages.map((item) => item.id), hasMore }); return true; },
+    historyAsk: async (roomId, before) => { asks.push([roomId, before]); return { ok: true }; },
+    messages: async () => ({ ok: true, messages: [], hasMore: false }),
+    report: async (...args) => ({ ok: true, args }),
+  };
+  const context = vm.createContext({
+    Date: { now: () => T0 }, process: { env: {} }, Boolean, Number, Object, String, Buffer, JSON, Array,
+    setTimeout: () => 1, clearTimeout: () => {},
+    path: { join: (...parts) => parts.join("/") }, app: { getPath: () => "/user-data" },
+    readFileSync: () => { throw new Error("no file yet"); },
+    safeStorage: { isEncryptionAvailable: () => false }, authStore: { atomicWriteJson: async () => {} },
+    community: {}, discordOAuth: {}, COMMUNITY_ACCESS_MARGIN_MS: MARGIN, communityTokens: null,
+    communityClientId: () => "1234567890", communityRead: async () => ({ state: { link: { userId: "42" } } }), checkCommunity: async () => ({ ok: true }), publishCommunity: async () => ({}),
+    send: (channel, payload) => sent.push([channel, payload]), logLine: () => {}, require: () => null,
+    optionalHelper: (file) => (file.includes("room-history") ? roomHistory : {
+      configuredUrl: () => "https://hub.example.test",
+      createHubClient: (options) => { created = options; return client; },
+    }),
+  });
+  vm.runInContext(`${block}\nthis.api = { hubInstance, hubRoom };`, context);
+  context.api.hubInstance();
+  for (let n = 0; n < 3; n += 1) created.onEvent({ type: "message", roomId: "room_a", message: message(n) });
+  assert.equal(sent.filter(([, event]) => event.type === "message").length, 3, "messages still reach Rooms");
+
+  created.onEvent({ type: "historyRequest", roomId: "room_a", requestId: "hist_1", before: null });
+  assert.deepEqual(replies, [{ requestId: "hist_1", ids: [message(0).id, message(1).id, message(2).id], hasMore: false }], "the relay's ask is answered from this PC's copy");
+  assert.equal(sent.some(([, event]) => event.type === "historyRequest"), false, "and never reaches the renderer");
+
+  created.onEvent({ type: "history", roomId: "room_a", messages: [message(5)], hasMore: false });
+  assert.deepEqual(JSON.parse(JSON.stringify(sent.at(-1))), ["hub:event", { type: "historyFill", roomId: "room_a" }], "a filled gap tells Rooms to reload");
+
+  const page = await context.api.hubRoom("messages", ["room_a"]);
+  assert.deepEqual(page.messages.map((item) => item.text), ["m0", "m1", "m2", "m5"]);
+  assert.deepEqual(asks, [["room_a", null]], "opening a room asks the room for what this PC missed");
+
+  const reported = await context.api.hubRoom("report", ["room_a", message(1).id, "spam"]);
+  assert.equal(reported.args[3].sig, "abcdefghijklmnopqrstuv", "a report carries this PC's signed copy");
+
+  created.onEvent({ type: "membership", roomId: "room_a", userId: "200000000000000002", state: "left" });
+  assert.equal((await context.api.hubRoom("messages", ["room_a"])).messages.length, 0, "leaving a room forgets its copy");
 });

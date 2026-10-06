@@ -6,6 +6,22 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-03 Paired restart boundary review follow-up
+
+All three Windows push/PR and Linux PR checks pass at first milestone commit
+44e40d0. Its completed 25-file CodeRabbit review raised one minor issue: paired
+services stopped before a deferred restart had reached its final checks.
+Shutdown now runs after saved-state and existing deferral checks, immediately
+before relaunch preparation. A project, game or build appearing during that
+await is checked again before the synchronous exit. Restart admission remains
+closed through the decision, and close failures prevent relaunch.
+
+34 lifecycle/update/loop tests pass, including paired-close deadline, deferral,
+ordering and failure injection. Earlier aggregate and clean-main audio fixture
+failures remain recorded; the unchanged candidate retry and exact-head CI pass.
+Follow-up check/audit/lint and review/CI outcomes are reported separately.
+No renderer, provider runtime, workflow, main merge or release changes.
+
 ## 2026-10-03 Paired workers review milestone - aggregate and baseline comparison
 
 Corrected slice: 22 focused tests pass; real HTTP loopback and Git/Node run the

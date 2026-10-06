@@ -233,6 +233,7 @@ block and the `// ---- Community ----` handlers in `main.cjs`. See
 | `community.cjs` | 406 | Pure rules: the Void Engine ids, the weekly card's cadence (never shown to a member, `isMember`), when a linked account is re-checked, what a check result means, the Discord link allow-list, PKCE and the public status. No Electron, filesystem or network, and time is injectable. `module_purity.test.mjs` holds it to that; `community_rules.test.mjs` pins the rules. |
 | `discord-oauth.cjs` | 418 | The network half: the OAuth2 PKCE login through a one-shot `127.0.0.1` loopback redirect, the secret-less token exchange, refresh, the membership read and revoke. Every POST the feature makes lives here, and everything it reaches for is injectable. `discord_oauth.test.mjs` runs a real loopback against a fake Discord. |
 | `hub-client.cjs` | 800 | The Void Engine rooms hub client (the bot repository's docs/protocol.md): trades the Discord access token for a hub session, keeps one WebSocket with backoff, renewal and presence, and carries Listen together's `listen` frames, the opt-in `nowPlaying` share and, only to a hub whose `ready` lists the feature, `companion` cards (one-member delivery only with `companion.direct`). Everything network is injected; main's "Rooms hub" block owns the one client and hands companion frames to its "Companion friends" block. With the `remote` feature it also names this PC to the hub (`setRemote`), hands main the Discord remote's `remote` commands, and sends `remoteReply` / `remoteNotice` (docs/remote.md). |
+| `room-history.cjs` | 160 | This PC's own copy of its rooms' chat, since the Mefi Studio relay keeps none: the last 500 messages of each room for 7 days in at most 50 rooms, edits that never go backwards, pages, and the file's JSON. Pure (time injected; `module_purity.test.mjs`). main's "Rooms hub" block saves it encrypted as `room-history.json`, reads Rooms' pages from it, answers the relay's `historyRequest` from it and merges `history`. |
 | `remote.cjs` | 328 | Pure rules for the Discord remote (docs/remote.md): the commands, what a message from Discord may do (`gateActions`, `LOCAL_ACTIONS`, the `ORIGIN` its filed work carries), each reply's wording (status, needs, made, digest), the alert policy (`alerts`: once per change, quiet hours, 12 an hour, the stuck and digest alerts) and the approval PIN (salted scrypt hash, five wrong tries lock). main.cjs "Discord remote" owns the I/O. |
 
 ### Build, checks and release (CLIs)
@@ -294,6 +295,27 @@ outside the checkout).
 | `scripts/tauri-sync-worker.cjs` | The blocking connection for the calls Electron answered on the spot (`Atomics.wait`). |
 | `scripts/rust-host.mjs` | `build`, `test`, `run` for the host, with the target folder in `%LOCALAPPDATA%\MefiStudio\rust-target`. |
 
+## `relay/` - the Mefi Studio relay (Cloudflare)
+
+The service Friends connects through: rooms, chat (passed along, never
+stored), listen together, companions, cowork claims, peer history, credits,
+ranks and the Project hub. A Worker plus one Durable Object on the free plan,
+deployed at `https://mefi-relay.mefi-studio.workers.dev`. It has its own
+`package.json` (wrangler only), so the app gains no dependency.
+[relay/README.md](../relay/README.md) lists what it keeps and how to deploy.
+
+| File | Purpose |
+| --- | --- |
+| `relay/src/worker.mjs` | The Worker: `/v1/health`, refuses anything outside `/v1/` or over 16 KB, routes the rest to the Hub object. |
+| `relay/src/hub-object.mjs` | The Hub Durable Object: every socket (Hibernation API; the keepalive ping is answered by Cloudflare) and the SQLite database, handed to the core. A plain class, so Node loads it too. |
+| `relay/src/relay.mjs` | The core: every HTTP route and WebSocket frame, rooms, chat, presence, companions, peer history, moderation, retention, alarms. Platform-free. |
+| `relay/src/protocol.mjs` · `paths.mjs` · `leases.mjs` | The Void Engine hub's v1 shapes, claim paths and lease authority, carried over, plus the relay's frames. |
+| `relay/src/sessions.mjs` · `chat.mjs` | Sign-in with the member's own Discord token and 15-minute session tokens; message ids that prove their author and message signatures. |
+| `relay/src/credits.mjs` | Credits (earned by playing, never bought), ranks and the project cards. |
+| `relay/src/listen.mjs` · `media.mjs` · `store.mjs` · `util.mjs` | Listen together (kept in SQLite across sleeps), allowed links, the schema and migrations, Web Crypto helpers. |
+| `relay/node/adapter.mjs` | The real Worker and Hub under Node with in-memory sockets and a scripted Discord, for `tests/relay_*.test.mjs` (with `tests/fixtures/relay-harness.mjs`). |
+| `relay/scripts/smoke.mjs` | A real-network check of a running relay (`wrangler dev` or the live address). |
+
 ## `renderer/` — classic scripts inlined into one HTML file
 
 `npm run build-booklet` inlines every script and stylesheet here, and the model
@@ -329,6 +351,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `setup-helper.js` / `setup-helper.css` | 1,277 | `window.MefiSetupHelper`: one sheet for every agent setting (connections, team and models, routing, how work runs, permissions, tools, machine, look). Opens before the walkthrough on a new profile and once per `REVISION` after an update; saves only through existing host calls (`agents:save` for the team, key, routing and CLI setup calls, `MefiAgentControls`, `assistant:prefs`, `machine:set`, `jev:*`, `prefs:set`). Registers the `setup-helper` sheet and a Search entry per section. Bundled after `agents.js`. |
 | `community.js` | 560 | `window.MefiCommunity`: the quiet weekly community card, General's Community disclosure, and the Community action in Help and Search; `mefi-community-status` tells Listen together when the link changes. It sees only the public status from main, never a token. Bundled after `music.js` and before `booklet.js`. |
 | `together.js` | 476 | `window.MefiTogether`: Listen together and the now-playing share, drawn into the Links panel (`MefiMusic.togetherHost`). It picks a room, follows its shared player (a file to the second, YouTube/Vimeo/SoundCloud through their postMessage APIs, Spotify by loading the same link) and sends the share only when the member turns it on. Talks to main only through `hub*` on the bridge. Bundled after `music.js`. |
+| `project-hub.js` | 430 | `window.MefiProjectHub`: Friends › Project hub on the Mefi Studio relay. Your rank badge, credits, progress, streak and special ranks; a Star map (a canvas drawn once per change, never in a loop, with every star also a button in the list under it), New, Top and Mine lists, and the Share form. Play, Star, Feature and Remove go through main's `hub:projects` channel (`HUB_PROJECT_METHODS`); main opens a played link in the browser and counts the play two minutes later. Text only. Bundled after `rooms.js`. |
 | `rooms.js` | 588 | `window.MefiRooms`: Friends › Rooms. Lists rooms with the one action each needs (open, ask to join, accept or decline an invite, cancel a request); has Requests and Invites tabs, making a room, and a room view with chat (text only, `<@id>` shown as @name), invite by member search, lock/unlock, close and leave. Everything goes through main's `hub:room` channel (`HUB_ROOM_METHODS`) plus `hubStatus`/`hubConnect`/`hubRooms`/`hubSubscribe`; the hub's refusal reasons read as plain sentences. `pending()` feeds the Friends badge. Bundled after `companion-friends.js`. |
 | `git-sync.js` / `git-sync.css` | 1,591 · 246 | `window.MefiGitSync`: the Git chip, its popover and the Save and push, Publish, Link and Sign in dialogs, drawn from the model `git-host.cjs` pushes on `git:state`. Mounted by `nav.js` (the section bar's tail) and `vibe.js` (the project cluster); bundled after `camera-tour.js`. |
 | `daily-paper.js` / `daily-paper.css` | 369 · 139 | `window.MefiDailyPaper`: the launch screen as The Studio Daily. `startup.js` calls `show()` before it draws the chooser; the paper fills `#paper-mast`, `#paper-news` and `#paper-note` around the untouched `.boot-card` from `newsEdition` / `onNewsEdition`, and `boot.js` puts its `controls()` after the chooser's in the Tab cycle. Also keeps Settings › General's Daily news switch (`settings.ui.dailyNews`). Bundled after `startup.js`. |

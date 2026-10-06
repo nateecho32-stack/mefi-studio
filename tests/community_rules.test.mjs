@@ -27,7 +27,7 @@ const link = (overrides = {}) => ({
 test("the constants match the shared contract", () => {
   assert.equal(GUILD_ID, "1345380333302059129");
   assert.equal(INVITE_URL, "https://discord.gg/xgfKc5pVxG");
-  assert.equal(community.CLIENT_ID, "");
+  assert.equal(community.CLIENT_ID, "1556715336928334004", "the registered Mefi Studio Link app");
   assert.deepEqual([...community.REDIRECT_PORTS], [53134, 53135, 53136]);
   assert.deepEqual([...SCOPES], ["identify", "guilds.members.read"]);
   assert.deepEqual([...community.LINK_STATES], ["ok", "not-member", "relink", "offline", "session"]);

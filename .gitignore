@@ -71,3 +71,9 @@ website/
 # Built alongside renderer/booklet.html by scripts/build-booklet.mjs; consumed by
 # the perf-render fixture to resolve error locations. Regenerated on every build.
 renderer/booklet.sources.json
+
+# The relay (relay/): its own node_modules, wrangler's local state and
+# local-only dev variables never go to GitHub.
+relay/.wrangler/
+relay/.dev.vars
+relay/.wrangler-dev.log

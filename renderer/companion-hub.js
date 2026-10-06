@@ -289,16 +289,16 @@
     return Array.from(document.querySelectorAll('[aria-modal="true"]')).some((item) => item !== el.layer && !el.layer?.contains(item) && !item.closest("[hidden]") && item.getClientRects().length);
   }
   function open(options = {}) {
-    if (!host || window.MefiBoot?.isActive?.() || otherDialog()) return false;
     const section = typeof options === "string" ? options : options?.section;
     const target = typeof options === "object" ? options?.target : null;
-    const requested = items.some(([id]) => id === section) ? section : null;
-    // Friends is a place of its own (openPlace below): asked for, it opens there instead of a bubble.
-    if (requested === "friends") {
+    // Friends is a page of its own (openPlace below): asked for, it opens there instead of a bubble.
+    if (section === "friends" && !window.MefiBoot?.isActive?.()) {
       if (hub.open) close({ immediate: true, restore: false });
       window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" });
       return true;
     }
+    if (!host || window.MefiBoot?.isActive?.() || otherDialog()) return false;
+    const requested = items.some(([id]) => id === section) ? section : null;
     if (hub.open) {
       if (hub.closing) { clearTimeout(hub.timer); hub.closing = false; el.layer.classList.remove("leaving"); }
       if (requested && hub.section !== requested) select(requested, target);
@@ -513,8 +513,10 @@
     { id: "rooms", label: "Rooms", glyph: "g-orbit", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
     { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
+    // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
+    { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
   ]);
-  // A way in may name its place by target ("rooms", "pcs", "playground").
+  // A way in may name its place by target (rooms, pcs, playground, hub).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
   const friendsPage = { place: null, root: null, body: null, title: null, about: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
@@ -537,6 +539,7 @@
     for (const child of [...friendsPage.body.children]) child.dispose?.();
     let card = null;
     if (place.id === "rooms") card = window.MefiRooms?.panel?.();
+    else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
     else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
     else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
     const parts = [card ?? node("p", "muted", "This part of Friends is not in this build.")];

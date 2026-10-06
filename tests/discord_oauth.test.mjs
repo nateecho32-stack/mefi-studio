@@ -276,13 +276,14 @@ test("the signal cancels the wait, before or during it", async () => {
 });
 
 test("an unconfigured client never listens", async () => {
-  for (const clientId of ["", "   ", undefined, null, 42]) {
+  // (No clientId at all means this build's own Mefi Studio Link app, community.CLIENT_ID.)
+  for (const clientId of ["", "   ", null, 42]) {
     const opened = [];
     assert.deepEqual(await authorize({ clientId, ports: [await freePort()], openExternal: (url) => opened.push(url) }), { ok: false, error: "not-configured" });
     assert.deepEqual(opened, []);
   }
   assert.deepEqual(await authorize({ clientId: CLIENT, ports: [await freePort()] }), { ok: false, error: "not-configured" }, "no openExternal");
-  assert.deepEqual(await authorize(), { ok: false, error: "not-configured" }, "the shipped CLIENT_ID is empty");
+  assert.deepEqual(await authorize(), { ok: false, error: "not-configured" }, "no browser to open, whatever the shipped CLIENT_ID");
   assert.deepEqual(await authorize("garbage"), { ok: false, error: "not-configured" });
 });
 
@@ -356,7 +357,7 @@ test("refresh rotates the token without a secret; invalid_grant is auth", async 
   }
   assert.deepEqual(await refresh({ clientId: "", refreshToken: "RT-1", fetch: discord.fetch }), { ok: false, error: "not-configured" });
   assert.deepEqual(await refresh({ clientId: CLIENT, refreshToken: "", fetch: discord.fetch }), { ok: false, error: "auth" });
-  assert.deepEqual(await refresh(), { ok: false, error: "not-configured" });
+  assert.deepEqual(await refresh(), { ok: false, error: "auth" }, "this build's own app, but no refresh token");
 });
 
 test("revoke posts the refresh token to the revoke URL", async () => {

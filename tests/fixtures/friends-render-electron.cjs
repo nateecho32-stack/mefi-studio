@@ -36,7 +36,7 @@ function finish(error) {
 process.on("uncaughtException", finish); process.on("unhandledRejection", finish);
 
 // The prototype's places, in its order, and the card each shows.
-const PLACES = [["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pc-sync"], ["playground", "Playground", "friends-card"]];
+const PLACES = [["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pc-sync"], ["playground", "Playground", "friends-card"], ["hub", "Project hub", "project-hub"]];
 
 async function bridgeNames() {
   const source = fs.readFileSync(path.join(studio, "preload.cjs"), "utf8");
@@ -146,7 +146,7 @@ app.whenReady().then(async () => {
       route: window.MefiNav?.current?.() ?? null, open: overlay ? overlay.hidden === false : false, place: overlay?.dataset.place ?? null,
       title: title?.textContent ?? null, about: shown(document.querySelector('.friends-place-about')) ? document.querySelector('.friends-place-about').textContent : null,
       cards: [...(body?.children ?? [])].filter(shown).map((node) => String(node.className).split(' ')[0]),
-      ownTitle: [...(body?.querySelectorAll('.rooms-title, .pc-sync-title, .friends-title') ?? [])].some(shown),
+      ownTitle: [...(body?.querySelectorAll('.rooms-title, .pc-sync-title, .friends-title, .project-hub-title') ?? [])].some(shown),
       list: document.getElementById('shell-pages')?.hidden === false ? [...document.querySelectorAll('#shell-pages-list > *')].map((node) => (node.tagName === 'H3' ? '# ' : '') + node.textContent.trim() + (node.getAttribute('aria-current') ? ' *' : '')) : null,
       listTitle: document.querySelector('#shell-pages .shell-pages-title')?.textContent ?? null,
       crumbs: [...document.querySelectorAll('.shell-trail .shell-crumb')].map((node) => node.textContent.trim()),
@@ -178,7 +178,7 @@ app.whenReady().then(async () => {
   const first = await run(measure);
   assert.equal(first.hub, false, "the companion's bubbles stay closed");
   assert.equal(first.listTitle, "Friends", "the list column is Friends'");
-  assert.deepEqual(first.list, ["Rooms *", "Your PCs", "Playground"], "the list column holds the prototype's three places, Rooms current");
+  assert.deepEqual(first.list, ["Rooms *", "Your PCs", "Playground", "Project hub"], "the list column holds the prototype's three places and the Project hub, Rooms current");
   for (const [id, title, card] of PLACES) {
     await click(`#shell-pages-list [data-page="friends:${id}"]`);
     await until(placeIs(id), `${title} is the place`);
@@ -210,7 +210,7 @@ app.whenReady().then(async () => {
   assert.equal(await run("return document.getElementById('agent-hub')?.hidden !== false;"), true, "the bubble did not stay open over the page");
   // A tab per place.
   report.tabs = await run("return (window.MefiTabs?.list?.() ?? []).filter((tab) => tab.route.id === 'friends-page').map((tab) => tab.title).sort();");
-  assert.ok(report.tabs.length >= 1 && report.tabs.every((title) => ["Rooms", "Your PCs", "Playground"].includes(title)), `Friends tabs are named by their place: ${JSON.stringify(report.tabs)}`);
+  assert.ok(report.tabs.length >= 1 && report.tabs.every((title) => ["Rooms", "Your PCs", "Playground", "Project hub"].includes(title)), `Friends tabs are named by their place: ${JSON.stringify(report.tabs)}`);
   report.steps.push("ways in land");
   // The layout contract's other sizes.
   for (const [width, height, zoom] of [[1440, 900, 1], [1100, 720, 1], [600, 560, 1.5]]) {

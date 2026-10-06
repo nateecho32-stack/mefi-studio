@@ -115,7 +115,8 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-sync[data-state=problem] { border-left-color: var(--bad); }
 .pc-sync[data-state=offline] { border-left-color: var(--muted); }
 .pc-sync-title { margin: 0; font-size: 13px; font-weight: 600; }
-.pc-sync-list { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.pc-sync-list, .pc-sync-brief { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.pc-sync-toggle { justify-self: start; }
 .pc-sync-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .pc-sync-actions[hidden] { display: none; }
 .pc-sync-run { white-space: normal; text-align: left; }
@@ -171,6 +172,11 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .rooms-row-text { min-width: 0; flex: 1 1 160px; }
 .rooms-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .rooms-button { white-space: normal; }
+.rooms-join, .rooms-invite { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rooms-join input { flex: 1 1 200px; min-width: 0; }
+.rooms-invite { padding: 8px 10px; border: 1px dashed var(--hairline-strong); border-radius: 10px; font-size: 12px; }
+.rooms-code { font-size: 15px; letter-spacing: .08em; color: var(--gold-bright); }
+.rooms-online-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .rooms-note, .rooms-name, .rooms-compose { flex: 1 1 100%; min-width: 0; box-sizing: border-box; }
 .rooms-quote { display: block; margin-top: 4px; color: var(--muted); font-style: italic; }
 .rooms-create { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--hairline); }
@@ -337,9 +343,12 @@ body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:h
 #friends-overlay .friends-place-about { margin: 4px 0 0; max-width: 70ch; font-size: var(--f135, 13.5px); line-height: 1.5; }
 #friends-overlay .friends-place-body { display: grid; gap: 14px; min-width: 0; }
 #friends-overlay .friends-place-body :is(.rooms, .pc-sync, .friends-card) { padding: 16px 18px; border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); font-size: var(--f135, 13.5px); }
-#friends-overlay .friends-place-body :is(.rooms-title, .pc-sync-title, .friends-title) { display: none; }
+#friends-overlay .friends-place-body :is(.rooms-title, .pc-sync-title, .friends-title, .project-hub-title) { display: none; }
 #friends-overlay .friends-place-body small { font-size: max(var(--f12, 12px), .8334em); }
 /* The cards' few pixel sizes (written for the hub's narrow column) read 12 px on the page: Your PCs' group heads,
    Playground's names, its "never shared" list and the session line. */
 #friends-overlay .friends-place-body :is(h5, h6, li, .friends-name, .friends-subhead, .friends-session, .friends-lines, .friends-say) { font-size: var(--f12, 12px); }
 #friends-overlay .friends-place-more { display: flex; flex-wrap: wrap; gap: 8px; }
+/* The places as tabs, and a Close button, where the 0.5 layout's list column does not list them (the classic layout). */
+#friends-overlay .friends-place-head { position: relative; padding-right: 96px; }
+html[data-layout="v2"] #friends-overlay .friends-place-head { padding-right: 0; }

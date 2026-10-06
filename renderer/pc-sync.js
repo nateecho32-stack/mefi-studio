@@ -289,7 +289,7 @@
       status.textContent = !s.on ? "Off. Turn it on to check on this PC and talk to Mefi from a Discord DM."
         : !result.linked ? "Link Discord first: Settings › General › Community."
         : !hub.configured ? "Add the rooms hub's address first: Settings › General › Community › Connection details."
-        : hub.state === "ready" && !hub.remote ? "This rooms hub does not carry the Discord remote yet. Update the bot on the hub PC."
+        : hub.state === "ready" && !hub.remote ? "The rooms service does not carry the Discord remote yet. It comes back once the Void Engine bot is linked to it."
         : hub.state === "ready" && hub.on ? `On. DM the Void Engine bot, or use /studio status. This PC answers as ${s.name}.`
         : hub.state === "error" ? `The rooms hub refused this PC (${hub.error ?? "error"}). Studio tries again every ten minutes.`
         : "Connecting to the rooms hub…";
@@ -421,6 +421,26 @@
     paintControls(); return box;
   }
 
+  // A long report (a PC with many branches) reads as a few grouped lines; the
+  // full list is one press away (Show all). Lines the groups do not know stay
+  // as they are.
+  const LONG_REPORT = 4;
+  function brief(lines) {
+    const groups = [
+      [/^Worktree .+: \d+ uncommitted files?\.$/, (n) => `${n} other worktree${n === 1 ? " has" : "s have"} uncommitted work`],
+      [/^Branch .+ on this PC: \d+ commits? not on main\.$/, (n) => `${n} branch${n === 1 ? "" : "es"} on this PC with commits not on main`],
+      [/^Branch .+ on GitHub: \d+ commits? not on main\.$/, (n) => `${n} branch${n === 1 ? "" : "es"} on GitHub not merged into main`],
+    ];
+    const counts = groups.map(() => 0);
+    const rest = [];
+    for (const line of lines) {
+      const at = groups.findIndex(([pattern]) => pattern.test(line));
+      if (at >= 0) counts[at] += 1;
+      else rest.push(line);
+    }
+    return [...rest, ...groups.flatMap(([, words], at) => (counts[at] ? [words(counts[at])] : []))];
+  }
+
   function card() {
     const root = node("section", "pc-sync");
     root.setAttribute("aria-labelledby", "pc-sync-title");
@@ -431,6 +451,13 @@
     status.setAttribute("role", "status");
     const list = node("ul", "pc-sync-list");
     list.hidden = true;
+    const summary = node("ul", "pc-sync-brief");
+    summary.hidden = true;
+    const toggle = node("button", "ghost pc-sync-toggle", "Show all");
+    toggle.type = "button";
+    toggle.id = "pc-sync-toggle";
+    toggle.hidden = true;
+    let showAll = false;
     const actions = node("div", "pc-sync-actions");
     const run = node("button", "ghost pc-sync-run", "Sync this PC");
     run.type = "button";
@@ -443,7 +470,7 @@
     const meta = node("p", "muted pc-sync-meta");
     meta.hidden = true;
     const note = node("p", "muted", "Sync pulls what your other PCs pushed and pushes this PC's commits after the project's check passes. It never overwrites uncommitted work or force-pushes.");
-    root.append(title, status, list, actions, meta, note);
+    root.append(title, status, summary, list, toggle, actions, meta, note);
     const api = bridge();
     // Keep this PC up to date: main checks GitHub every minute and, when this
     // PC has nothing of its own in the way, pulls what the other PCs pushed.
@@ -478,7 +505,12 @@
       status.textContent = result.headline || "Sync did not answer. Try again.";
       const details = Array.isArray(result.lines) ? result.lines.slice(1) : [];
       list.replaceChildren(...details.map((line) => node("li", "", line)));
-      list.hidden = !details.length;
+      const long = details.length > LONG_REPORT;
+      summary.replaceChildren(...(long ? brief(details) : []).map((line) => node("li", "", line)));
+      summary.hidden = !long || showAll;
+      list.hidden = !details.length || (long && !showAll);
+      toggle.hidden = !long;
+      toggle.textContent = showAll ? "Show less" : `Show all ${details.length}`;
       const linked = result.state?.repo !== false && result.state?.remote !== false;
       run.hidden = !linked;
       rebase.hidden = !linked || result.canRebase !== true;
@@ -509,6 +541,12 @@
       root.removeAttribute("aria-busy");
       show(result);
     };
+    toggle.addEventListener("click", () => {
+      showAll = !showAll;
+      summary.hidden = showAll;
+      list.hidden = !showAll;
+      toggle.textContent = showAll ? "Show less" : `Show all ${list.children.length}`;
+    });
     run.addEventListener("click", () => { void ask("sync"); });
     rebase.addEventListener("click", () => { void ask("rebase"); });
     // A background look that lands while the card is open repaints it; a card

@@ -165,25 +165,35 @@
   `youtube.com` and reads the public results page. A link no embed can play (a
   Spotify Jam, Twitch, any other page) can open in the Media browser, which
   the scope notes below describe.
-- **The rooms hub does nothing until you give Studio its address.** Rooms,
-  Playground, Listen together, Share what I'm playing, cowork file claims and
-  the Discord remote all go through the Void Engine rooms hub, a separate
-  program run by whoever hosts it (setting one up is in
-  [docs/friends-setup.md](docs/friends-setup.md)). This release carries no
-  built-in hub address and no link app id, so until you enter the address and
-  the link app id in Settings › Community › Connection details (or set
-  `MEFI_STUDIO_HUB_URL` and `MEFI_STUDIO_DISCORD_CLIENT_ID`) and link a Discord
-  account, none of it contacts anything, apart from one plain health check of
-  the hub's address when you save it. A hub can name its link app id in that
-  answer, and Studio then uses it if you have not entered one. Studio accepts an
-  `https` address, or `http` only for a hub on this PC itself. After that it
-  connects when you ask (Friends › Rooms › Connect, or picking a room or turning
+- **The Mefi Studio relay does nothing until you link Discord and connect.**
+  Rooms, Playground, Listen together, Share what I'm playing, cowork file
+  claims, the Project hub and the Discord remote all go through the Mefi Studio
+  relay at `https://mefi-relay.mefi-studio.workers.dev`, a Cloudflare Worker
+  whose code is public in this repository under `relay/`
+  ([relay/README.md](relay/README.md) lists everything it keeps and for how
+  long). Settings › Community › Connection details (or `MEFI_STUDIO_HUB_URL`
+  and `MEFI_STUDIO_DISCORD_CLIENT_ID`) can point Studio at another relay or an
+  older Void Engine hub; saving there sends one plain health check to that
+  address. Studio accepts an `https` address, or `http` only for one on this
+  PC itself. Until a Discord account is linked none of it contacts anything.
+  The relay keeps no chat, no files, no IP addresses and no request logs: it
+  hands each message to the members online and forgets it, and signs it so a
+  copy cannot be altered later. Each Studio keeps its own copy of its rooms'
+  chat (the last 500 messages of a room for 7 days) in `room-history.json` in
+  its user data, encrypted with the OS keystore (memory only without one),
+  and forgets a room's copy when you leave it. When a member who missed
+  messages opens a room, the relay asks another member's Studio for what it
+  holds of that room and checks each message's signature before passing it
+  on, so your copy of a room's chat can reach that room's other members. After that it
+  connects when you ask (opening Friends › Rooms or the Project hub with Discord
+  linked, Connect, or picking a room or turning
   on **Share what I'm playing** under Listen together) and, on its own, at
   launch when the Discord remote is on or a Listen together room or share was
   left on, and within a minute of a project linked to a cowork room being open.
-  Connecting sends the hub your Discord access token once per 15-minute hub
-  session, in exchange for a session token; the hub is meant to check it with
-  Discord and drop it. The token stays in Studio's main process and the page
+  Connecting sends the relay your Discord access token once per 15-minute
+  session, in exchange for a session token; the relay asks Discord who it
+  belongs to and which roles you hold in the Void Engine server, keeps only a
+  keyed hash of it (so a renewal need not ask again) and drops the token. The token stays in Studio's main process and the page
   never sees it. Over that one connection Studio can send the hub only what the
   next points describe: which rooms you have open (with a presence beat every 30
   seconds for each), what you do and type in Rooms, what you play or share,
@@ -193,9 +203,18 @@
   [docs/remote.md](docs/remote.md)), which Studio cannot check, so you trust
   whoever runs the hub with what these points say is sent.
 - **Rooms and Playground** (Friends › Rooms). Chat you write, join notes (up
-  to 300 characters), invites, reports and member searches go to the hub as
-  you typed them, and room chat is backed by Discord, so a message there is a
-  Discord message. While Studio holds a room open (Rooms, Listen together or a
+  to 300 characters), invites, reports and member searches go to the relay as
+  you typed them. Chat is passed to the room's members and not kept; a report
+  keeps the reported message's text for 30 days, and only when its signature
+  checks out. (An older Void Engine hub backs room chat with Discord threads
+  instead, so there a message is a Discord message.)
+- **Project hub** (Friends › Project hub). Sharing a project sends the relay
+  its public link, a title and a line about it, which every signed-in member
+  can see until you remove it or nobody plays it for 90 days. Playing one
+  opens its link in your browser and, two minutes later, tells the relay you
+  played it. The relay keeps your credit balance, rank and streak and a
+  180-day list of who credited whom (ids only); other members see your rank,
+  never your balance. Forget me removes all of it. While Studio holds a room open (Rooms, Listen together or a
   linked cowork room), the hub also tells its members who has it open in
   Studio, and Studio sends that room a small companion card, but only to a
   hub that lists the companion feature and only at the level you allow. The

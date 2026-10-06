@@ -23,6 +23,23 @@
 //     hands it `remote` commands from the member's own DMs, and
 //     `remoteReply` / `remoteNotice` answer them and send alerts. What a
 //     command may do is scripts/remote.cjs and main's "Discord remote" block.
+//   - The Mefi Studio relay (relay/ in this repository) speaks the same
+//     protocol and stores no chat. When its `ready` lists them: "keepalive"
+//     (a {"type":"ping"} every 30 s, which Cloudflare answers without waking
+//     the relay), "messages.signed" (each message carries the relay's `sig`,
+//     kept here so the copy stays checkable) and "history.peer" (historyAsk
+//     asks the room for older messages; a `historyRequest` from the relay asks
+//     this Studio to answer from its own copy with historyReply). `hello`
+//     names what this Studio can do (CLIENT_FEATURES); a hub that does not
+//     know the field drops it.
+//   - Connecting made simple (relay features "lobby", "join.codes",
+//     "online"): every member is in the Lobby; roomCode / newRoomCode hand
+//     out a room's short join code and link, joinCode joins with one, and
+//     online() lists who is in Studio now (setOnlineVisible hides you).
+//   - Credits and the project hub (features "credits" and "projects", relay
+//     only): me() and memberCard() for ranks and balances, projects() for the
+//     hub, shareProject / playProject / finishPlay / star / feature, and a
+//     `credits` event when this member earns or spends.
 //
 // Like scripts/discord-oauth.cjs this is a network module, and everything it
 // reaches for is injected: fetch, the WebSocket class, the clock and the
@@ -38,12 +55,24 @@
 const cowork = require("./cowork.cjs");
 
 const PROTOCOL_VERSION = 1;
-// The hub's public address. It is filled once the hub has one; until then the
-// feature reports "not configured". MEFI_STUDIO_HUB_URL wins, so a maintainer
-// can point a build at a test hub (http is accepted only on loopback).
-const HUB_URL = "";
+// The Mefi Studio relay's public address (relay/, on Cloudflare). Settings ›
+// Community › Connection details and MEFI_STUDIO_HUB_URL win, so a maintainer
+// can point a build at a test relay or hub (http is accepted only on loopback).
+const HUB_URL = "https://mefi-relay.mefi-studio.workers.dev";
 const SESSION_MARGIN_MS = 60_000;
 const PRESENCE_EVERY_MS = 30_000;
+// The relay's keepalive: this exact frame, byte for byte, is answered by
+// Cloudflare without waking the relay (relay/src/hub-object.mjs).
+const KEEPALIVE_EVERY_MS = 30_000;
+const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
+// What this Studio tells the hub it can do (hello.features).
+const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive"]);
+// A historyReply must fit the hub's 16 KB frame limit.
+const HISTORY_REPLY_BYTES = 15 * 1024;
+const HISTORY_REPLY_MESSAGES = 100;
+const PROJECT_KINDS = Object.freeze(["game", "app", "tool", "art", "music", "other"]);
+const PROJECT_VIEWS = Object.freeze(["new", "top", "played", "mine"]);
+const RANK_KEY = /^[a-z_]{1,20}$/;
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const BACKOFF_MS = Object.freeze([1_000, 2_000, 5_000, 10_000, 30_000, 60_000]);
@@ -150,6 +179,27 @@ function roomMessage(value) {
     mentions: Array.isArray(value.mentions?.users) ? value.mentions.users.map((item) => (object(item) && SNOWFLAKE.test(String(item.id)) ? { id: String(item.id), name: text(item.name, 100) } : null)).filter(Boolean).slice(0, 50) : [],
     attachments: Array.isArray(value.attachments) ? value.attachments.filter(object).slice(0, 10).map((item) => ({ name: text(item.name, 200) || "file", size: count(item.size, 1e12) ?? 0 })) : [],
     replyTo: SNOWFLAKE.test(String(value.replyTo)) ? String(value.replyTo) : null,
+    // The relay's signature (feature "messages.signed"), kept so this copy can
+    // later fill another member's gap or back a report.
+    ...(OPAQUE_ID.test(String(value.sig ?? "")) ? { sig: value.sig } : {}),
+  };
+}
+
+// A kept message back in the hub's wire shape, for historyReply and reports.
+function wireMessage(value) {
+  const message = roomMessage(value);
+  if (!message) return null;
+  return {
+    id: message.id,
+    author: { id: message.author.id, name: message.author.name.replace(/[\x00-\x1f\x7f]/g, " "), viaStudio: message.author.viaStudio },
+    text: message.text,
+    ...(message.truncated ? { truncated: true } : {}),
+    createdAt: message.createdAt,
+    editedAt: message.editedAt,
+    mentions: { users: message.mentions.map((item) => ({ id: item.id, name: item.name.replace(/[\x00-\x1f\x7f]/g, " ") })), roles: [], everyone: false },
+    attachments: message.attachments.map((item) => ({ name: item.name.replace(/[\x00-\x1f\x7f]/g, " ") || "file", size: item.size })),
+    replyTo: message.replyTo,
+    ...(message.sig ? { sig: message.sig } : {}),
   };
 }
 
@@ -219,6 +269,34 @@ function remotePcs(value) {
   return value.slice(0, 8).map((item) => (object(item) && PC_ID.test(String(item.id ?? "")) && line(item.name, 40) ? { id: item.id, name: item.name, since: Number.isFinite(item.since) ? item.since : null } : null)).filter(Boolean);
 }
 
+// A project card from the relay's hub, or null.
+function projectCard(value) {
+  if (!object(value) || !OPAQUE_ID.test(String(value.id)) || !object(value.owner) || !SNOWFLAKE.test(String(value.owner.id))) return null;
+  const url = listenUrl(value.url);
+  const title = line(value.title, 100);
+  if (!url || !title) return null;
+  return {
+    id: value.id, url, host: line(value.host, 253) ?? new URL(url).hostname, title, blurb: line(value.blurb, 300) ?? "",
+    kind: PROJECT_KINDS.includes(value.kind) ? value.kind : "other",
+    owner: { id: String(value.owner.id), name: text(value.owner.name, 100) || "member", rank: RANK_KEY.test(String(value.owner.rank ?? "")) ? value.owner.rank : "spark" },
+    plays: count(value.plays, 1e9) ?? 0, stars: count(value.stars, 1e9) ?? 0,
+    createdAt: Number.isFinite(value.createdAt) ? value.createdAt : null, lastPlayedAt: Number.isFinite(value.lastPlayedAt) ? value.lastPlayedAt : null,
+    featuredUntil: Number.isFinite(value.featuredUntil) ? value.featuredUntil : null, starred: value.starred === true,
+  };
+}
+function rankOf(value) {
+  if (!object(value) || !RANK_KEY.test(String(value.key))) return null;
+  const next = object(value.next) && RANK_KEY.test(String(value.next.key)) ? { key: value.next.key, name: line(value.next.name, 20) ?? value.next.key, at: count(value.next.at, 1e9) ?? 0 } : null;
+  return { key: value.key, name: line(value.name, 20) ?? value.key, next, progress: Number.isFinite(value.progress) ? Math.max(0, Math.min(1, value.progress)) : 0 };
+}
+const specialOf = (value) => (Array.isArray(value) ? value.filter((key) => RANK_KEY.test(String(key))).slice(0, 12) : []);
+// A room's join code ("7K3Q-M2XR") and its link, or a failure.
+function codeOf(data) {
+  const code = typeof data?.code === "string" && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(data.code) ? data.code : null;
+  const link = typeof data?.link === "string" && /^https:\/\/[^\s]+\/join\/[A-Z0-9]{8}$/.test(data.link) ? data.link : null;
+  return code ? { ok: true, code, link } : { ok: false, error: "failed" };
+}
+
 function createHubClient(options = {}) {
   const {
     url = configuredUrl(),
@@ -245,6 +323,7 @@ function createHubClient(options = {}) {
   let retryTimer = null;
   let renewTimer = null;
   let presenceTimer = null;
+  let keepaliveTimer = null;
   let paused = false;
   let nonceSeq = 0;
   let nowPlaying = null;
@@ -270,6 +349,9 @@ function createHubClient(options = {}) {
       rooms: [...rooms.keys()],
       companions: features.includes("companion"), companionDirect: features.includes("companion") && features.includes("companion.direct"),
       remote: features.includes("remote"), remoteOn: Boolean(remote?.on) && features.includes("remote"), remotePcs: remoteList,
+      history: features.includes("history.peer"),
+      credits: features.includes("credits"), projects: features.includes("projects"),
+      lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"),
     };
   }
   function setState(next, nextError = null) {
@@ -351,6 +433,7 @@ function createHubClient(options = {}) {
     retryTimer = clearTimer(retryTimer);
     renewTimer = clearTimer(renewTimer);
     if (presenceTimer) { stopEvery(presenceTimer); presenceTimer = null; }
+    if (keepaliveTimer) { stopEvery(keepaliveTimer); keepaliveTimer = null; }
     settleAll("offline");
     const closing = socket;
     socket = null;
@@ -387,7 +470,7 @@ function createHubClient(options = {}) {
       let ws;
       try { ws = new SocketImpl(address.ws); } catch { setState("offline", "network"); retry(); return; }
       socket = ws;
-      ws.onopen = () => { if (socket === ws) send({ type: "hello", session: session.token, protocol: PROTOCOL_VERSION }); };
+      ws.onopen = () => { if (socket === ws) send({ type: "hello", session: session.token, protocol: PROTOCOL_VERSION, features: [...CLIENT_FEATURES] }); };
       ws.onmessage = (event) => { if (socket === ws) receive(event?.data); };
       ws.onerror = () => {};
       ws.onclose = (event) => { if (socket === ws) closed(Number(event?.code) || 1006); };
@@ -398,6 +481,7 @@ function createHubClient(options = {}) {
   function closed(code) {
     socket = null;
     if (presenceTimer) { stopEvery(presenceTimer); presenceTimer = null; }
+    if (keepaliveTimer) { stopEvery(keepaliveTimer); keepaliveTimer = null; }
     renewTimer = clearTimer(renewTimer);
     settleAll("offline");
     if (!wanted) { setState("off"); return; }
@@ -430,6 +514,10 @@ function createHubClient(options = {}) {
         if (remote && features.includes("remote")) sendRemoteHello();
         if (presenceTimer) stopEvery(presenceTimer);
         presenceTimer = every(() => { for (const roomId of rooms.keys()) send({ type: "presence", roomId }); }, PRESENCE_EVERY_MS);
+        // The relay's keepalive keeps a socket with no rooms open (the remote,
+        // presence) from looking idle, at no cost to the relay.
+        if (keepaliveTimer) { stopEvery(keepaliveTimer); keepaliveTimer = null; }
+        if (features.includes("keepalive")) keepaliveTimer = every(() => send(KEEPALIVE_FRAME), KEEPALIVE_EVERY_MS);
         scheduleRenew();
         return;
       }
@@ -465,6 +553,25 @@ function createHubClient(options = {}) {
       }
       case "messageDelete":
         if (OPAQUE_ID.test(String(frame.roomId)) && SNOWFLAKE.test(String(frame.messageId))) emit({ type: "messageDelete", roomId: frame.roomId, messageId: String(frame.messageId) });
+        return;
+      // Peer history (feature "history.peer"): the relay asks this Studio for
+      // what it holds of a room before `before`; main answers with historyReply.
+      case "historyRequest":
+        if (features.includes("history.peer") && OPAQUE_ID.test(String(frame.roomId)) && OPAQUE_ID.test(String(frame.requestId)) && rooms.has(frame.roomId)) {
+          emit({ type: "historyRequest", roomId: frame.roomId, requestId: frame.requestId, before: SNOWFLAKE.test(String(frame.before ?? "")) ? String(frame.before) : null });
+        }
+        return;
+      // This member earned or spent credits (feature "credits").
+      case "credits":
+        if (Number.isFinite(frame.balance) && Number.isFinite(frame.delta)) {
+          emit({ type: "credits", balance: frame.balance, lifetime: Number.isFinite(frame.lifetime) ? frame.lifetime : null, today: Number.isFinite(frame.today) ? frame.today : null, delta: frame.delta, reason: typeof frame.reason === "string" ? frame.reason.slice(0, 20) : "", rank: RANK_KEY.test(String(frame.rank ?? "")) ? frame.rank : null });
+        }
+        return;
+      // Another member's copy of a room's messages, each checked by the relay.
+      case "history":
+        if (OPAQUE_ID.test(String(frame.roomId)) && Array.isArray(frame.messages)) {
+          emit({ type: "history", roomId: frame.roomId, messages: frame.messages.slice(0, HISTORY_REPLY_MESSAGES).map(roomMessage).filter(Boolean), hasMore: frame.hasMore === true });
+        }
         return;
       case "joinRequest": {
         const request = joinRequest(frame.request);
@@ -646,10 +753,13 @@ function createHubClient(options = {}) {
       if (!answer.ok) return refused(answer);
       return { ok: true, messages: Array.isArray(answer.data.messages) ? answer.data.messages.map(roomMessage).filter(Boolean) : [], hasMore: answer.data.hasMore === true };
     },
-    report(roomId, messageId, reason) {
+    // `message` (optional) is this Studio's own copy; the relay keeps its text
+    // as evidence only when the relay's signature on it checks out.
+    report(roomId, messageId, reason, message = null) {
       const why = typeof reason === "string" ? reason.trim() : "";
       if (!id(roomId) || !SNOWFLAKE.test(String(messageId ?? "")) || !why || why.length > 500) return bad();
-      return simple("POST", "/v1/reports", { roomId, messageId: String(messageId), reason: text(why, 500) });
+      const copy = message && String(message.id) === String(messageId) ? wireMessage(message) : null;
+      return simple("POST", "/v1/reports", { roomId, messageId: String(messageId), reason: text(why, 500), ...(copy?.sig ? { message: copy } : {}) });
     },
     // Room chat over the socket: an ack (with the Discord message id) or a
     // nack with the hub's reason, or "timeout" after 10 s. Nothing retries
@@ -667,6 +777,133 @@ function createHubClient(options = {}) {
     deleteMessage(roomId, messageId) {
       if (!id(roomId) || !SNOWFLAKE.test(String(messageId ?? ""))) return Promise.resolve({ ok: false, reason: "bad-request" });
       return withAck({ type: "delete", roomId, messageId: String(messageId) });
+    },
+    // ---- Peer history (feature "history.peer") -------------------------------
+    // Ask the room for messages older than `before` (or the latest): the relay
+    // forwards the ask to another member's Studio and sends back a `history`
+    // event with what it held. Answers the ack, or { ok: false, reason }
+    // ("no-peer" when nobody else in the room can answer).
+    historyAsk(roomId, before = null) {
+      if (!features.includes("history.peer")) return Promise.resolve({ ok: false, reason: "unsupported" });
+      if (!id(roomId) || !rooms.has(roomId) || (before != null && !SNOWFLAKE.test(String(before)))) return Promise.resolve({ ok: false, reason: "bad-request" });
+      return withAck({ type: "historyRequest", roomId, ...(before != null ? { before: String(before) } : {}) });
+    },
+    // Answer a `historyRequest` from this Studio's own copy: newest last, as
+    // many as fit one frame (the oldest are left out first). False when not sent.
+    historyReply(requestId, messages, hasMore = false) {
+      if (!features.includes("history.peer") || !id(requestId) || !Array.isArray(messages)) return false;
+      const wire = messages.map(wireMessage).filter(Boolean).slice(-HISTORY_REPLY_MESSAGES);
+      let more = hasMore === true;
+      const size = (list) => Buffer.byteLength(JSON.stringify({ type: "historyReply", requestId, messages: list, hasMore: more }));
+      while (wire.length && size(wire) > HISTORY_REPLY_BYTES) { wire.shift(); more = true; }
+      return send({ type: "historyReply", requestId, messages: wire, hasMore: more });
+    },
+    // ---- Connecting: join codes and Who's online (relay) ----------------------
+    async roomCode(roomId) {
+      if (!features.includes("join.codes")) return { ok: false, error: "unsupported" };
+      if (!id(roomId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/rooms/${roomId}/code`);
+      if (!answer.ok) return refused(answer);
+      return codeOf(answer.data);
+    },
+    async newRoomCode(roomId) {
+      if (!features.includes("join.codes")) return { ok: false, error: "unsupported" };
+      if (!id(roomId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/rooms/${roomId}/code`);
+      if (!answer.ok) return refused(answer);
+      return codeOf(answer.data);
+    },
+    joinCode(code) {
+      const typed = typeof code === "string" ? code.trim() : "";
+      if (!features.includes("join.codes")) return Promise.resolve({ ok: false, error: "unsupported" });
+      if (!/^[A-Za-z0-9 -]{4,24}$/.test(typed)) return Promise.resolve({ ok: false, error: "bad-request", reason: "code" });
+      return one("POST", "/v1/join", { code: typed }, "room", roomSummary);
+    },
+    async online() {
+      if (!features.includes("online")) return { ok: false, error: "unsupported" };
+      const answer = await authed("GET", "/v1/online");
+      if (!answer.ok) return refused(answer);
+      const people = Array.isArray(answer.data.people) ? answer.data.people.map((item) => {
+        const who = user(item);
+        return who ? { ...who, rank: RANK_KEY.test(String(item.rank ?? "")) ? item.rank : "spark", specialRanks: specialOf(item.specialRanks) } : null;
+      }).filter(Boolean).slice(0, 200) : [];
+      return { ok: true, people, visible: answer.data.visible !== false };
+    },
+    async setOnlineVisible(visible) {
+      if (!features.includes("online") || typeof visible !== "boolean") return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", "/v1/me/online", { visible });
+      return answer.ok ? { ok: true, visible: answer.data.visible === true } : refused(answer);
+    },
+    // ---- Credits, ranks and the project hub (features "credits", "projects") ---
+    async me() {
+      if (!features.includes("credits")) return { ok: false, error: "unsupported" };
+      const answer = await authed("GET", "/v1/me");
+      if (!answer.ok) return refused(answer);
+      const data = answer.data;
+      return {
+        ok: true, user: user(data.user),
+        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, today: count(data.credits?.today, 1e6) ?? 0, todayCap: count(data.credits?.todayCap, 1e6) ?? 0 },
+        rank: rankOf(data.rank), specialRanks: specialOf(data.specialRanks), streak: { days: count(data.streak?.days, 1e6) ?? 0, best: count(data.streak?.best, 1e6) ?? 0 },
+        featureCost: count(data.featureCost, 1e6) ?? 0, canEarn: data.canEarn === true,
+        projects: Array.isArray(data.projects) ? data.projects.map(projectCard).filter(Boolean) : [],
+      };
+    },
+    async memberCard(userId) {
+      if (!features.includes("credits")) return { ok: false, error: "unsupported" };
+      if (!SNOWFLAKE.test(String(userId ?? ""))) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/members/${userId}/card`);
+      if (!answer.ok) return refused(answer);
+      const card = answer.data.member;
+      const who = user(card);
+      if (!who) return { ok: false, error: "failed" };
+      return { ok: true, member: { ...who, rank: rankOf(card.rank), specialRanks: specialOf(card.specialRanks), projects: Array.isArray(card.projects) ? card.projects.map(projectCard).filter(Boolean) : [] } };
+    },
+    async projects(view = "new") {
+      if (!features.includes("projects")) return { ok: false, error: "unsupported" };
+      const which = PROJECT_VIEWS.includes(view) ? view : "new";
+      const answer = await authed("GET", `/v1/projects?view=${which}`);
+      if (!answer.ok) return refused(answer);
+      const list = (value) => (Array.isArray(value) ? value.map(projectCard).filter(Boolean) : []);
+      return { ok: true, projects: list(answer.data.projects), featured: list(answer.data.featured) };
+    },
+    async shareProject(fields = {}) {
+      if (!features.includes("projects")) return { ok: false, error: "unsupported" };
+      const url = listenUrl(fields?.url);
+      const title = line(fields?.title, 100);
+      const blurb = fields?.blurb == null || fields.blurb === "" ? "" : line(fields.blurb, 300);
+      if (!url || !title || blurb == null) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", "/v1/projects", { url, title, ...(blurb ? { blurb } : {}), kind: PROJECT_KINDS.includes(fields?.kind) ? fields.kind : "other" });
+      if (!answer.ok) return refused(answer);
+      return { ok: true, project: projectCard(answer.data.project), credited: count(answer.data.credited, 1e6) ?? 0 };
+    },
+    removeProject(projectId) { return id(projectId) && features.includes("projects") ? simple("DELETE", `/v1/projects/${projectId}`) : bad(); },
+    // Opening a project: the link to open and a token; finishPlay with the
+    // token at least two minutes later counts the play (and credits both).
+    async playProject(projectId) {
+      if (!features.includes("projects") || !id(projectId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/projects/${projectId}/play`);
+      if (!answer.ok) return refused(answer);
+      const url = listenUrl(answer.data.url);
+      if (!url || typeof answer.data.token !== "string") return { ok: false, error: "failed" };
+      return { ok: true, url, token: answer.data.token, minMs: count(answer.data.minMs, 86_400_000) ?? 120_000, expiresAt: Number.isFinite(answer.data.expiresAt) ? answer.data.expiresAt : null };
+    },
+    async finishPlay(projectId, token) {
+      if (!features.includes("projects") || !id(projectId) || typeof token !== "string" || token.length > 64) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/projects/${projectId}/played`, { token });
+      if (!answer.ok) return refused(answer);
+      return { ok: true, counted: answer.data.counted === true, credited: { owner: count(answer.data.credited?.owner, 1e6) ?? 0, you: count(answer.data.credited?.you, 1e6) ?? 0 } };
+    },
+    async star(projectId, on = true) {
+      if (!features.includes("projects") || !id(projectId)) return { ok: false, error: "bad-request" };
+      const answer = await authed(on ? "POST" : "DELETE", `/v1/projects/${projectId}/star`);
+      if (!answer.ok) return refused(answer);
+      return { ok: true, project: projectCard(answer.data.project) };
+    },
+    async feature(projectId) {
+      if (!features.includes("projects") || !id(projectId)) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/projects/${projectId}/feature`);
+      if (!answer.ok) return refused(answer);
+      return { ok: true, featuredUntil: Number.isFinite(answer.data.featuredUntil) ? answer.data.featuredUntil : null, balance: count(answer.data.balance, 1e12) ?? 0 };
     },
     // ---- File claims in a cowork room (main.cjs "Cowork claims") -------------
     // Claim before editing, renew every minute, release when done. A conflict
@@ -797,4 +1034,5 @@ module.exports = {
   PROTOCOL_VERSION, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, HOLDERS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
   hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
   remoteText, remoteButtons, remoteCommand, remotePcs,
+  KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,
 };

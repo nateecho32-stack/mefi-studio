@@ -327,6 +327,12 @@ const api = {
     args: args.slice(0, 3).map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value
       : typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([, item]) => ["string", "number", "boolean"].includes(typeof item)).slice(0, 8)) : null)),
   }),
+  // Friends › Project hub (main.cjs HUB_PROJECT_METHODS): the same shape as hubRoom.
+  hubProjects: (method, ...args) => ipcRenderer.invoke("hub:projects", {
+    method: typeof method === "string" ? method : "",
+    args: args.slice(0, 2).map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value
+      : typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([, item]) => ["string", "number", "boolean"].includes(typeof item)).slice(0, 8)) : null)),
+  }),
   // Companion friends (main.cjs "Companion friends"): what friends' companions
   // may see, the friends out now and playdates. Only named fields cross.
   hubFriends: (profile) => ipcRenderer.invoke("hub:friends", { ...(typeof profile?.name === "string" ? { name: profile.name.slice(0, 40) } : {}) }),

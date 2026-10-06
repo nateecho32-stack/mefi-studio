@@ -2188,7 +2188,7 @@ function communitySetupView() {
     ok: true, clientId: saved.clientId, hubUrl: saved.hubUrl,
     environment: { clientId: set("MEFI_STUDIO_DISCORD_CLIENT_ID"), hubUrl: set("MEFI_STUDIO_HUB_URL") },
     linkReady: Boolean(communityClientId()),
-    hubReady: Boolean(hubModule?.hubAddress(communityHubUrl())),
+    hubReady: Boolean(hubModule?.hubAddress(hubModule.configuredUrl({ MEFI_STUDIO_HUB_URL: communityHubUrl() }))),
   };
 }
 // Whether the saved hub answers, so the form can say so at once.
@@ -2205,7 +2205,7 @@ async function communityHubHealth(url) {
     if (response.ok && body?.ok === true) return { ok: true, protocol: Number.isInteger(body.protocol) ? body.protocol : null, paused: body.paused === true, ...(appId ? { appId } : {}) };
     return { ok: false, error: `The hub answered, but not as a Void Engine hub (HTTP ${response.status}).` };
   } catch (error) {
-    return { ok: false, error: error?.name === "AbortError" ? "The hub did not answer within 6 seconds. Is it running, and is its tunnel up?" : "Studio could not reach the hub at that address." };
+    return { ok: false, error: error?.name === "AbortError" ? "The rooms service did not answer within 6 seconds. Check the address, and that this PC is online." : "Studio could not reach the rooms service at that address." };
   } finally {
     clearTimeout(timer);
   }
@@ -2230,6 +2230,81 @@ async function communitySetupSave(payload) {
   return { ...communitySetupView(), health, status: await publishCommunity({ force: true }) };
 }
 
+// ---- Room history: this PC's own copy of its rooms' chat ----
+// The Mefi Studio relay passes room chat along and keeps none
+// (relay/README.md), so Studio keeps what it saw: scripts/room-history.cjs,
+// saved as room-history.json in userData, encrypted with the OS keystore, and
+// kept in memory only without one. Friends › Rooms reads its pages from here.
+// When the relay asks this Studio to fill another member's gap, the answer
+// comes from here too; when the room's history comes back from a member, it
+// is merged and Rooms hears historyFill. Leaving a room forgets its copy.
+const roomHistoryModule = optionalHelper("./scripts/room-history.cjs", () => require("./scripts/room-history.cjs"), null);
+const roomHistoryPath = () => path.join(app.getPath("userData"), "room-history.json");
+const ROOM_HISTORY_SAVE_MS = 2000;
+let roomHistoryStore = null;
+let roomHistorySaveTimer = null;
+function roomHistory() {
+  if (roomHistoryStore || typeof roomHistoryModule?.createRoomHistory !== "function") return roomHistoryStore;
+  roomHistoryStore = roomHistoryModule.createRoomHistory({ now: () => Date.now() });
+  try {
+    const saved = JSON.parse(readFileSync(roomHistoryPath(), "utf8"));
+    if (typeof saved?.encrypted === "string" && safeStorage.isEncryptionAvailable()) roomHistoryStore.load(JSON.parse(safeStorage.decryptString(Buffer.from(saved.encrypted, "base64"))));
+  } catch { /* no copy yet, or one this PC cannot read: start empty */ }
+  return roomHistoryStore;
+}
+function roomHistorySaveSoon() {
+  if (roomHistorySaveTimer || !roomHistoryStore) return;
+  roomHistorySaveTimer = setTimeout(() => {
+    roomHistorySaveTimer = null;
+    if (!roomHistoryStore?.takeDirty() || !safeStorage.isEncryptionAvailable()) return;
+    const encrypted = safeStorage.encryptString(JSON.stringify(roomHistoryStore.dump())).toString("base64");
+    authStore.atomicWriteJson(roomHistoryPath(), { version: 1, encrypted }).catch((error) => logLine(`[rooms] history not saved: ${error?.message ?? error}`));
+  }, ROOM_HISTORY_SAVE_MS);
+}
+// Each hub event passes through here first; false keeps it from the renderer.
+function roomHistoryHear(event) {
+  const store = roomHistory();
+  if (!store || !event) return true;
+  switch (event.type) {
+    case "message":
+    case "messageUpdate":
+      if (store.add(event.roomId, event.message)) roomHistorySaveSoon();
+      return true;
+    case "messageDelete":
+      if (store.remove(event.roomId, event.messageId)) roomHistorySaveSoon();
+      return true;
+    case "membership":
+      if (event.userId === hubClient?.status().user?.id && ["left", "removed", "closed"].includes(event.state)) { store.forgetRoom(event.roomId); roomHistorySaveSoon(); }
+      return true;
+    case "historyRequest": {
+      const page = store.page(event.roomId, event.before, 100);
+      hubClient?.historyReply(event.requestId, page.messages, page.hasMore);
+      return false;
+    }
+    case "history":
+      if (store.merge(event.roomId, event.messages)) {
+        roomHistorySaveSoon();
+        send("hub:event", { type: "historyFill", roomId: event.roomId });
+      }
+      return false;
+    default:
+      return true;
+  }
+}
+// A room's page: the hub's own (an older hub still keeps one) merged into this
+// PC's copy, which answers. Opening a room also asks the room for what this PC
+// missed while it was away.
+async function hubRoomMessages(client, roomId, before) {
+  const remote = await client.messages(roomId, before);
+  const store = roomHistory();
+  if (!store) return remote;
+  if (remote.ok && store.merge(roomId, remote.messages)) roomHistorySaveSoon();
+  if (!remote.ok && remote.error !== "offline" && remote.error !== "network") return remote;
+  const page = store.page(roomId, before ?? null, 50);
+  if (client.status().history && (!before || !page.hasMore)) client.historyAsk(roomId, before ?? null).catch(() => {});
+  return { ok: true, messages: page.messages, hasMore: page.hasMore || remote.hasMore === true, kept: true };
+}
+
 function hubInstance() {
   if (!hubClient && hubModule) {
     hubClient = hubModule.createHubClient({
@@ -2239,6 +2314,7 @@ function hubInstance() {
       // them before the renderer sees one; everything else passes straight on.
       // A cowork room's claims also reach the dispatcher (the "Cowork claims" block).
       onEvent: (event) => {
+        if (!roomHistoryHear(event)) return undefined;
         if (event?.type === "claims" && typeof coworkHear === "function") coworkHear(event);
         // A Discord remote command (the "Discord remote" block) is answered
         // there and never reaches the renderer; the remote's settings hear
@@ -2289,12 +2365,50 @@ const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying
 const HUB_ROOM_METHODS = Object.freeze({
   createRoom: 1, requestJoin: 2, requests: 0, decide: 2, cancelRequest: 1, invite: 2, invites: 0, acceptInvite: 1, declineInvite: 1,
   leave: 1, removeMember: 2, lock: 1, unlock: 1, close: 1, searchMembers: 1, messages: 2, report: 3, sendMessage: 2, editMessage: 3, deleteMessage: 2,
+  roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1,
 });
 function hubRoom(method, args) {
   const arity = Object.hasOwn(HUB_ROOM_METHODS, method) ? HUB_ROOM_METHODS[method] : -1;
   if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
   const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : typeof value === "object" && !Array.isArray(value) ? { ...value } : null));
+  if (method === "messages") return hubCall((client) => hubRoomMessages(client, ...plain));
+  // A report carries this PC's own copy of the message, which the relay keeps
+  // as evidence only when its signature checks out.
+  if (method === "report") return hubCall((client) => client.report(plain[0], plain[1], plain[2], roomHistory()?.page(plain[0], null, 500).messages.find((item) => item.id === String(plain[1])) ?? null));
   return hubCall((client) => client[method](...plain));
+}
+// Friends › Project hub (renderer/project-hub.js): credits, ranks and shared
+// projects on the Mefi Studio relay (relay/src/credits.mjs). Same gate as
+// Rooms: a listed method and plain arguments. Playing opens the project's
+// public link in the browser and, two minutes later while Studio is still
+// running, tells the relay the play happened, which credits its owner and
+// this member. A play still waiting is kept once per project.
+const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1 });
+const hubPlayTimers = new Map(); // projectId -> timeout
+function hubProjects(method, args) {
+  const arity = Object.hasOwn(HUB_PROJECT_METHODS, method) ? HUB_PROJECT_METHODS[method] : -1;
+  if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
+  const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : typeof value === "object" && !Array.isArray(value) ? { ...value } : null));
+  if (method !== "playProject") return hubCall((client) => client[method](...plain));
+  return hubCall(async (client) => {
+    const projectId = String(plain[0] ?? "");
+    const play = await client.playProject(projectId);
+    if (!play.ok) return play;
+    let link = null;
+    try { link = new URL(play.url); } catch { link = null; }
+    if (link?.protocol !== "https:") return { ok: false, error: "bad-link" };
+    await shell.openExternal(link.href);
+    if (hubPlayTimers.has(projectId)) return { ok: true, minMs: play.minMs, waiting: true };
+    const timer = setTimeout(() => {
+      hubPlayTimers.delete(projectId);
+      client.finishPlay(projectId, play.token)
+        .then((done) => send("hub:event", { type: "played", projectId, counted: done.ok && done.counted === true, credited: done.ok ? done.credited : null }))
+        .catch((error) => logLine(`[hub] play not counted: ${error?.message ?? error}`));
+    }, play.minMs + 1000);
+    timer.unref?.();
+    hubPlayTimers.set(projectId, timer);
+    return { ok: true, minMs: play.minMs };
+  });
 }
 // ---- end of the rooms hub ---------------------------------------------------
 
@@ -24521,6 +24635,8 @@ function registerIpc() {
   ipcMain.handle("hub:now-playing", async (_event, payload) => hubNowPlaying(payload?.track ?? null));
   // Friends › Rooms: one channel, HUB_ROOM_METHODS decides what it may call.
   ipcMain.handle("hub:room", async (_event, payload) => hubRoom(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
+  // Friends › Project hub: one channel, HUB_PROJECT_METHODS decides what it may call.
+  ipcMain.handle("hub:projects", async (_event, payload) => hubProjects(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Companion friends (the "Companion friends" block): what friends' companions
   // may see, the friends out now, and playdates.
   ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));

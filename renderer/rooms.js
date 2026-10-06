@@ -21,6 +21,7 @@
   const REASONS = {
     "room-host-role": "Creating rooms needs the Room Host role in the Void Engine server.",
     "new-member": "New members can do this after their first day in the server.",
+    "week-member": "Making your own rooms opens after a week in the server. Ask a Room Host to make one meanwhile.",
     "owned-rooms": "You already own 3 open rooms. Close one first.",
     "daily-creates": "You have made 5 rooms today. Try again tomorrow.",
     "hub-full": "The room service is full right now.",
@@ -52,6 +53,8 @@
     auth: "Your Discord link needs signing in again. Link Discord again in Settings › General › Community.",
     version: "The room service needs a newer Studio. Update Studio, then connect again.",
     unsupported: "This copy of Studio cannot reach the room service.",
+    lobby: "Everyone stays in the Lobby. Go back to All rooms to step out of it.",
+    code: "That code didn't match a room. Check it and try again.",
   };
   // Two-step confirm (studio-ui.js MefiUi.arm): the first press asks, the
   // second acts. Without the shared helper (a bare page), the browser asks.
@@ -126,6 +129,10 @@
     listen(api);
     current?.dispose();
     let me = null, tab = "rooms", openRoom = null, busy = false, openSeq = 0;
+    // What the room service carries (hub-client status): the Lobby, join codes, Who's online.
+    let flags = { lobby: false, joinCodes: false, online: false };
+    let lobbyOpened = false, people = null, showOnline = true, onlineTimer = null;
+    const codes = new Map(); // room id -> { code, link }
     let rooms = [], requests = [], invites = [], messages = [], more = false;
     // Fields keyed by what they hold. A repaint gives each its text back, and
     // a field that is off screen (another tab, another room) keeps its draft.
@@ -162,8 +169,9 @@
     function tabs() {
       const row = node("div", "rooms-tabs");
       row.setAttribute("role", "tablist");
-      for (const [id, label] of [["rooms", "Rooms"], ["requests", `Requests${counts.decide ? ` (${counts.decide})` : ""}`], ["invites", `Invites${counts.invites ? ` (${counts.invites})` : ""}`]]) {
-        const item = button(label, () => { tab = id; paint(); }, `rooms-tab-${id}`);
+      const places = [["rooms", "Rooms"], ...(flags.online ? [["online", people ? `Online (${people.length})` : "Online"]] : []), ["requests", `Requests${counts.decide ? ` (${counts.decide})` : ""}`], ["invites", `Invites${counts.invites ? ` (${counts.invites})` : ""}`]];
+      for (const [id, label] of places) {
+        const item = button(label, () => { tab = id; paint(); if (id === "online") void loadOnline(); }, `rooms-tab-${id}`);
         item.setAttribute("role", "tab");
         item.setAttribute("aria-selected", String(tab === id));
         row.append(item);
@@ -257,7 +265,107 @@
       const shown = rooms.filter((room) => room.status !== "closed");
       list.append(...shown.map(roomRow));
       if (!shown.length) list.append(node("li", "muted", "No rooms yet. Make one, or ask a friend to invite you."));
-      return [list, createForm()];
+      return [...(flags.joinCodes ? [joinRow()] : []), list, createForm()];
+    }
+
+    // ---- connecting made simple: a join code, and who is online ----------------
+    function joinRow() {
+      const row = node("div", "rooms-join");
+      const box = field(node("input", "rooms-note"), "join-code");
+      box.type = "text";
+      box.id = "rooms-join-code";
+      box.maxLength = 24;
+      box.placeholder = "Join with a code, like 7K3Q-M2XR";
+      box.setAttribute("aria-label", "Join with a code");
+      const go = button("Join", () => {
+        if (!box.value.trim()) return;
+        void guard("Joining…", async () => {
+          const answer = await call("joinCode", box.value);
+          if (!answer?.ok) { status.textContent = why(answer, "That code did not work."); return; }
+          box.value = "";
+          status.textContent = `You joined ${answer.room.name}.`;
+          await refresh({ repaint: false });
+          await open(rooms.find((room) => room.id === answer.room.id) ?? answer.room);
+        });
+      }, "rooms-join");
+      box.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); go.click(); } });
+      row.append(box, go);
+      return row;
+    }
+
+    async function loadOnline() {
+      if (onlineTimer) { clearTimeout(onlineTimer); onlineTimer = null; }
+      const answer = await call("online");
+      if (answer?.ok) { people = answer.people; showOnline = answer.visible !== false; }
+      if (tab === "online" && !openRoom) paint();
+      // Kept fresh while the list is on screen.
+      if (tab === "online" && root.isConnected !== false) onlineTimer = setTimeout(() => { void loadOnline(); }, 30_000);
+    }
+
+    function onlineView() {
+      const parts = [];
+      const toggle = node("label", "rooms-online-toggle");
+      const tick = node("input");
+      tick.type = "checkbox";
+      tick.id = "rooms-online-visible";
+      tick.checked = showOnline;
+      tick.addEventListener("change", () => guard(null, async () => {
+        const answer = await call("setOnlineVisible", tick.checked);
+        if (answer?.ok) showOnline = answer.visible;
+        status.textContent = showOnline ? "Others can see you're online." : "You're hidden from Who's online.";
+      }));
+      toggle.append(tick, node("span", "", "Show me as online"));
+      parts.push(toggle);
+      if (!people) { parts.push(node("p", "muted", "Looking for who's online…")); return parts; }
+      const list = node("ul", "rooms-list");
+      const owned = rooms.filter((room) => room.you === "owner" && room.status === "active" && room.id !== "lobby");
+      for (const person of people) {
+        const row = node("li", "rooms-row");
+        row.dataset.person = person.id;
+        const text = node("div", "rooms-row-text");
+        text.append(node("strong", "", person.name), node("span", "muted", ` · ${person.rank[0].toUpperCase()}${person.rank.slice(1)}`));
+        const actions = node("div", "rooms-row-actions");
+        for (const room of owned.slice(0, 3)) {
+          actions.append(button(`Invite to ${room.name}`, () => guard("Inviting…", async () => {
+            const sent = await call("invite", room.id, person.id);
+            status.textContent = sent?.ok ? `Invited ${person.name} to ${room.name}. They join when they accept.` : why(sent, "The invite did not go through.");
+          })));
+        }
+        actions.append(button("Start a room together", () => guard("Making a room…", async () => {
+          const made = await call("createRoom", { kind: "hangout", name: `${me?.name || "Me"} & ${person.name}`.slice(0, 80), policy: "invite", listed: false });
+          if (!made?.ok) { status.textContent = why(made, "The room could not be made."); return; }
+          const sent = await call("invite", made.room.id, person.id);
+          status.textContent = sent?.ok ? `Made ${made.room.name} and invited ${person.name}.` : why(sent, "The room is made, but the invite did not go through.");
+          await refresh({ repaint: false });
+          await open(rooms.find((room) => room.id === made.room.id) ?? made.room);
+        })));
+        row.append(text, actions);
+        list.append(row);
+      }
+      if (!people.length) list.append(node("li", "muted", "Nobody else is in Studio right now. Share a room's code to bring friends in."));
+      parts.push(list);
+      return parts;
+    }
+
+    function inviteStrip(room) {
+      const strip = node("div", "rooms-invite");
+      strip.id = "rooms-invite";
+      const held = codes.get(room.id);
+      if (!held) { strip.append(node("span", "muted", "Getting this room's invite code…")); return strip; }
+      strip.append(node("span", "", "Invite friends: code "), node("strong", "rooms-code", held.code));
+      strip.append(button("Copy invite", () => {
+        const text = `Join me in Mefi Studio: open Friends › Rooms, choose Join with a code, and enter ${held.code}.${held.link ? ` ${held.link}` : ""}`;
+        const clip = globalThis.navigator?.clipboard;
+        if (typeof clip?.writeText !== "function") { status.textContent = `Your code is ${held.code}.`; return; }
+        void clip.writeText(text).then(() => { status.textContent = "Invite copied. Paste it anywhere: Discord, a text, an email."; }, () => { status.textContent = `Your code is ${held.code}.`; });
+      }, "rooms-copy-invite"));
+      if (room.you === "owner") strip.append(confirmed("New code", "Replace it?", "Make a new code? The old one stops working.", () => guard("Making a new code…", async () => {
+        const answer = await call("newRoomCode", room.id);
+        if (answer?.ok) codes.set(room.id, answer);
+        status.textContent = answer?.ok ? `The new code is ${answer.code}.` : why(answer, "No new code.");
+        paint();
+      })));
+      return strip;
     }
 
     function requestsView() {
@@ -365,6 +473,7 @@
       const compose = fields.get(`compose:${room.id}`);
       if (compose && !compose.disabled) compose.focus?.({ preventScroll: true });
       api.hubSubscribe?.(room.id, true, "rooms");
+      if (flags.joinCodes && room.id !== "lobby" && !codes.has(room.id)) void call("roomCode", room.id).then((answer) => { if (answer?.ok) { codes.set(room.id, answer); if (openRoom?.id === room.id) paint(); } });
       status.textContent = "Loading messages…";
       const page = await call("messages", room.id);
       // The owner went back, or opened another room, while this page loaded.
@@ -420,8 +529,8 @@
       const room = openRoom;
       const head = node("div", "rooms-room-head");
       head.append(button("‹ All rooms", close, "rooms-back"), node("strong", "", room.name));
-      // The hub's privacy note: rooms are private Discord threads.
-      const privacy = node("p", "muted rooms-privacy", "Void Engine moderators can read every room.");
+      // Who reads a room: the relay passes messages to the room's members and keeps none.
+      const privacy = node("p", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in to Studio from the Void Engine server is in the Lobby." : flags.lobby ? "Messages go only to the people in this room. The room service keeps none of them." : "Void Engine moderators can read every room.");
       privacy.id = "rooms-privacy";
       coworkShow = null;
       const together = room.kind === "cowork" && room.status === "active" && ["owner", "member"].includes(room.you) && typeof api.coworkStatus === "function" ? coworkSection(room) : null;
@@ -479,15 +588,16 @@
           if (answer?.ok && openRoom?.id === room.id) openRoom = merged(openRoom, answer.room);
           status.textContent = answer?.ok ? (answer.room.status === "locked" ? "Locked: no new posts or requests." : "Unlocked.") : why(answer, "That did not go through.");
           paint();
-        })), confirmed("Close room", "Close it for everyone?", `Close ${room.name}? Its history stays in Discord, but nobody can post or join.`, () => {
+        })), confirmed("Close room", "Close it for everyone?", `Close ${room.name}? Nobody can post or join after this. Each member's Studio keeps its own copy of the chat for a week.`, () => {
           void guard("Closing…", async () => {
             const answer = await call("close", room.id);
             status.textContent = answer?.ok ? `${room.name} is closed.` : why(answer, "The room could not be closed.");
             if (answer?.ok) close();
           });
         }));
-        return [head, privacy, ...(together ? [together] : []), earlier, log, box, send, controls, found];
+        return [head, privacy, ...(flags.joinCodes ? [inviteStrip(room)] : []), ...(together ? [together] : []), earlier, log, box, send, controls, found];
       }
+      if (room.id === "lobby") return [head, privacy, earlier, log, box, send];
       controls.append(confirmed("Leave room", "Leave it?", `Leave ${room.name}?`, () => {
         void guard("Leaving…", async () => {
           const answer = await call("leave", room.id);
@@ -495,7 +605,7 @@
           if (answer?.ok) close();
         });
       }));
-      return [head, privacy, ...(together ? [together] : []), earlier, log, box, send, controls];
+      return [head, privacy, ...(flags.joinCodes ? [inviteStrip(room)] : []), ...(together ? [together] : []), earlier, log, box, send, controls];
     }
 
     // Rebuilds the view and gives every keyed field its draft (and focus) back.
@@ -508,7 +618,7 @@
       }
       fields.clear();
       root.dataset.view = openRoom ? "room" : tab;
-      body.replaceChildren(...(openRoom ? roomView() : [tabs(), ...(tab === "rooms" ? listView() : tab === "requests" ? requestsView() : invitesView())]));
+      body.replaceChildren(...(openRoom ? roomView() : [tabs(), ...(tab === "rooms" ? listView() : tab === "online" ? onlineView() : tab === "requests" ? requestsView() : invitesView())]));
       for (const [key, el] of fields) {
         const draft = drafts.get(key);
         if (draft) { if (el.type === "checkbox") el.checked = draft.checked; else el.value = draft.value; }
@@ -516,17 +626,53 @@
       }
     }
 
+    // Linking happens right here: Discord asks once in the browser, then the
+    // room service connects by itself. Not in the server yet: join, then check.
+    let autoConnected = false;
+    const connectNow = () => guard("Connecting…", async () => {
+      const answer = await api.hubConnect();
+      if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+    });
+    async function linkHere() {
+      const community = window.MefiCommunity;
+      if (typeof community?.link !== "function") { window.MefiCompanionHub?.close?.({ immediate: true, restore: false }); window.MefiNav?.go?.("community"); return; }
+      status.textContent = "Discord is asking in your browser. Press Authorize there, then come back.";
+      const linked = await community.link();
+      if (linked?.ok) { autoConnected = true; await connectNow(); return; }
+      if (linked?.error === "not-member") { notMember(); return; }
+      status.textContent = linked?.error === "canceled" ? "Linking was cancelled. Press Link Discord to try again." : "Linking didn't finish. Press Link Discord to try again.";
+    }
+    function notMember() {
+      root.dataset.state = "not-member";
+      status.textContent = "Your Discord account isn't in the Void Engine server yet. Join it, then check again.";
+      body.replaceChildren(button("Join the Discord", () => { void window.MefiCommunity?.join?.(); }, "rooms-join"), button("I've joined, check again", () => guard("Checking…", async () => {
+        const checked = await window.MefiCommunity?.check?.();
+        if (checked?.ok === false && checked.error === "not-member") { notMember(); return; }
+        autoConnected = true;
+        const answer = await api.hubConnect();
+        if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+      }), "rooms-recheck"));
+    }
     function explain(hub) {
       if (!hub?.configured) {
-        status.textContent = "Rooms need the Void Engine room service, which this PC is not connected to yet: add its address in Settings › General › Community › Connection details.";
+        status.textContent = "Rooms need the room service, which this copy of Studio has no address for: add one in Settings › General › Community › Connection details.";
         root.dataset.state = "not-configured";
         body.replaceChildren();
         return false;
       }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to use rooms.";
+        status.textContent = "Link your Discord account to use rooms. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Connect with Discord", () => { window.MefiCompanionHub?.close?.({ immediate: true, restore: false }); window.MefiNav?.go?.("community"); }, "rooms-link"));
+        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "rooms-link"));
+        return false;
+      }
+      if (hub.error === "not-member") { notMember(); return false; }
+      // Linked and simply not connected yet: opening Rooms is the ask, so connect once by itself.
+      if (hub.state === "off" && !hub.error && !autoConnected) {
+        autoConnected = true;
+        root.dataset.state = "connecting";
+        status.textContent = "Connecting to the room service…";
+        void connectNow();
         return false;
       }
       if (hub.state !== "ready") {
@@ -540,6 +686,7 @@
       }
       root.dataset.state = "ready";
       me = hub.user ?? me;
+      flags = { lobby: hub.lobby === true, joinCodes: hub.joinCodes === true, online: hub.online === true };
       return true;
     }
     async function load() {
@@ -548,6 +695,9 @@
       if (!explain(hub)) return;
       status.textContent = hub.paused ? "The room service is paused right now; you can read but not post." : `Signed in as ${me?.name || "you"}.`;
       await refresh();
+      // Open Friends and you are with everyone: the Lobby opens by itself, once.
+      const lobby = flags.lobby && !lobbyOpened && !openRoom ? rooms.find((room) => room.id === "lobby" && ["member", "owner"].includes(room.you)) : null;
+      if (lobby) { lobbyOpened = true; await open(lobby); }
     }
 
     // Frames from the module's one hub listener, while this panel is on screen.
@@ -580,10 +730,22 @@
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
       else if (event.type === "messageUpdate") { messages = messages.map((item) => (item.id === event.message.id ? event.message : item)); showMessages(); }
       else if (event.type === "messageDelete") { messages = messages.filter((item) => item.id !== event.messageId); showMessages(); }
+      // Another member's Studio filled a gap in this PC's copy (the relay keeps no chat): read the page again.
+      else if (event.type === "historyFill") {
+        const room = openRoom;
+        void Promise.resolve(call("messages", room.id)).then((page) => {
+          if (!page?.ok || openRoom !== room) return;
+          const byId = new Map(messages.map((item) => [item.id, item]));
+          for (const item of page.messages) byId.set(item.id, item);
+          messages = [...byId.values()].sort((a, b) => a.id.length - b.id.length || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(-500);
+          showMessages();
+        }).catch(() => {});
+      }
     }
     // Lets go of the open room's hold and stops hearing frames. Safe to call twice.
     function dispose() {
       openSeq += 1;
+      if (onlineTimer) { clearTimeout(onlineTimer); onlineTimer = null; }
       if (openRoom) api.hubSubscribe?.(openRoom.id, false, "rooms");
       openRoom = null;
       if (current === handle) current = null;
