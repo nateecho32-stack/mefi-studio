@@ -161,6 +161,9 @@ html[data-layout="v2"][data-detail="all"],
   .size-preview .size-actions { margin-top: 8px; }
 }
 @media (max-height: 520px) { .size-preview { position: static; } }
+/* With the intro behind the Preview caption's "i" (MefiUi.tuck), its row is not kept empty above the page. */
+.size-wrap:not(:has(> .size-intro)) { grid-template-areas: "controls preview"; }
+@container (max-width: 720px) { .size-wrap:not(:has(> .size-intro)) { grid-template-areas: "preview" "controls"; } }
 
 /* ---- 6. the miniature ---------------------------------------------------------
    A 760 x 440 window drawn with the real regions' parts (rail, list, top bar, tab

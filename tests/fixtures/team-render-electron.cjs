@@ -8,7 +8,10 @@
 // only where the team is edited, nothing wider than the page, and no text under 12 px. A place that is pages of its own
 // (Skills, Workflows, Health and usage, Models, Inspect) opens its first page with the place open in the list. Old ways
 // in (Settings' Connections, Models and Automation, Agents' setup panes, the permission control) land on the place that
-// holds them now, and Search names a control by its Team place. Screenshots are kept when the test is given a capture folder (MEFI_TEAM_CAPTURE_DIR). No application main
+// holds them now, and Search names a control by its Team place. Seats and models opens on its plain page
+// (renderer/team-models.js) with the detailed cards folded under More settings, which Change and an old way in to a
+// folded card open, and which is measured open as well as closed.
+// Screenshots are kept when the test is given a capture folder (MEFI_TEAM_CAPTURE_DIR). No application main
 // process or live state is loaded; network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
@@ -230,6 +233,36 @@ app.whenReady().then(async () => {
     await capture(`team-${id}-1920x1080.png`);
     found.push(...problems(m, `${title} at 1920x1080`));
   }
+  // Seats and models in plain words (renderer/team-models.js): five parts on top, and the detailed cards it grew from
+  // (the role grid, routing, coding workers, team coordination) folded under More settings until asked for. Change on a
+  // job's line opens that job's card; with it open the page still fits and nothing is under 12 px.
+  await click('#shell-pages-list [data-page="team:seats"]');
+  await until(placeIs("seats"), "Seats and models again");
+  await until("document.querySelectorAll('#team-models .tm-tbody .tm-tr').length === 8", "Who does what lists its eight jobs");
+  // checkVisibility: a closed <details> hides its content with content-visibility,
+  // which getClientRects still measures.
+  report.seats = await run(`const shown = (node) => Boolean(node) && node.checkVisibility();
+    return {
+      parts: [...document.querySelectorAll('#team-models > .tm-panel .tm-title')].map((node) => node.textContent),
+      choices: [...document.querySelectorAll('#team-models .tm-row')].map((node) => node.dataset.choice),
+      jobs: [...document.querySelectorAll('#team-models .tm-tbody .tm-tr')].map((node) => node.dataset.job),
+      open: document.getElementById('agents-more')?.open ?? null,
+      folded: ['agents-role-grid', 'settings-routing', 'settings-workers', 'agents-team-behavior'].filter((id) => document.getElementById(id)?.closest('#agents-more-body')),
+      grid: shown(document.getElementById('agents-role-grid')),
+    };`);
+  assert.deepEqual(report.seats.parts, ["Right now", "How Studio decides", "Who does what", "Report card", "How thinking works"], "the plain page's five parts");
+  assert.deepEqual(report.seats.choices, ["pick", "mode", "climb", "askMax", "explore", "subs"], "the six choices");
+  assert.deepEqual(report.seats.jobs, ["companion", "routine", "heavy", "builder", "lead", "desk", "scout", "overseer"], "one line per job");
+  assert.equal(report.seats.open, false, "More settings starts folded");
+  assert.deepEqual(report.seats.folded, ["agents-role-grid", "settings-routing", "settings-workers", "agents-team-behavior"], "the detailed cards wait under More settings");
+  assert.equal(report.seats.grid, false, "folded cards are not on the page");
+  await click('#team-models .tm-tr[data-job="desk"] .tm-change');
+  await until("document.getElementById('agents-more')?.open === true && document.querySelector('.agents-model-row[data-agent=\"desk\"]')?.getClientRects().length > 0", "Change opens the desk's card");
+  await sleep(400);
+  found.push(...problems(await run(measure), "Seats and models with More settings open at 1920x1080"));
+  await capture("team-seats-more-1920x1080.png");
+  await run("document.getElementById('agents-more').open = false;");
+  report.steps.push("seats in plain words, the detail folded");
   // What each new place holds.
   report.content = await run(`return {
     perms: Boolean(document.querySelector('#agents-permissions h3')) && document.querySelector('#agents-permissions h3').textContent,
@@ -274,6 +307,9 @@ app.whenReady().then(async () => {
     await go(id, params);
     await until(placeIs(place), `${what} lands on ${place}`);
   }
+  // Settings' routing card sits under More settings now: the way in to it opened the fold (it was closed above).
+  assert.equal(await run("return document.getElementById('agents-more')?.open === true;"), true, "an old way in to a folded card opens More settings");
+  await run("document.getElementById('agents-more').open = false;");
   await go("agents", { place: "models" });
   await until("window.MefiNav.current() === 'booklet'", "Team › Models opens the catalog");
   await go("agent-brain", { tab: "playbook" });
@@ -301,6 +337,15 @@ app.whenReady().then(async () => {
       const wrong = problems(m, `${place} at ${width}x${height}@${zoom}`);
       found.push(...wrong);
       if (place === "seats" || wrong.length) await capture(`team-${place}-${width}x${height}@${zoom}.png`);
+      // The cards under More settings were measured on the page before they folded; they still are, opened.
+      if (place === "seats") {
+        await run("document.getElementById('agents-more').open = true;");
+        await sleep(400);
+        const open = problems(await run(measure), `seats with More settings open at ${width}x${height}@${zoom}`);
+        found.push(...open);
+        if (open.length) await capture(`team-seats-more-${width}x${height}@${zoom}.png`);
+        await run("document.getElementById('agents-more').open = false;");
+      }
     }
   }
   assert.deepEqual(found, [], "every Team place fits at every size, with no text under 12 px");

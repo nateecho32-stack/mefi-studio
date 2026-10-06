@@ -821,7 +821,7 @@
   function settingsControlLabel(control) {
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
-    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
+    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName) && !node.classList?.contains?.("info-pop")).map((node) => node.textContent ?? "").join(" ") : "";
     return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? settingsButtonLabel(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
   function settingsEntries() {
@@ -838,7 +838,8 @@
         if (label) entries.push({ id: card.id, label, category, terms: `${words} ${card.id.replace(/-/g, " ")}` });
       }
       for (const control of pane.querySelectorAll("input, select, textarea, button")) {
-        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion")) continue;
+        // An info circle (MefiUi.tuck) is the help of the setting beside it, not a setting of its own.
+        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion, .info-dot")) continue;
         const label = settingsControlLabel(control);
         if (!label) continue;
         if (!control.id) control.id = `settings-control-${category}-${++settingsControlSerial}`;
@@ -933,6 +934,21 @@
     if (browser) browser.hidden = Boolean(window.mefiStudio?.launchStudio);
     for (const note of document.querySelectorAll("[data-desktop-message]")) note.hidden = Boolean(window.mefiStudio?.launchStudio);
   }
+  // A setting's long how-to words move behind an "i" at the end of its title (MefiUi.tuck, studio-ui.js), so a place
+  // shows its controls first. Connections, Models and Automation are the Team pages' (renderer/agents.js takes their
+  // cards there and tucks them) and Community is renderer/community.js's, so they are marked to stay as they are. One
+  // call for all of Settings: tuck reads every title's style before it moves anything, and a call per card read it
+  // again after each card's moves (about 20 ms of style each, 120 ms on the first paint). Every paint while Settings
+  // shows runs it: rows drawn since (Appearance's media) are tucked, rows already tucked stay as they are.
+  const SETTINGS_UNTUCKED = ["settings-category-connections", "settings-category-models", "settings-category-automation", "settings-community"];
+  function tuckSettings() {
+    const tuck = window.MefiUi?.tuck, sections = document.getElementById("settings-sections");
+    // Not before the page has loaded: renderer/nav.js chooses the layout then, and Settings is filed for it (a
+    // reopened Settings paints earlier, while a title the 0.5 layout hides, like Report's, still shows).
+    if (typeof tuck !== "function" || !sections || document.readyState === "loading") return;
+    for (const id of SETTINGS_UNTUCKED) document.getElementById(id)?.setAttribute?.("data-keep-visible", "");
+    tuck(sections);
+  }
   function paintSettingsRows() {
     mountSettingsControls();
     if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsPane(settingsCategory)}"]`)) settingsCategory = "general";
@@ -953,6 +969,8 @@
     }
     for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsPane(settingsCategory);
     if (document.getElementById("tab-studio")?.hidden === false) {
+      // Only once Settings shows: by then the layout is chosen and filed, and tuck reads which titles it shows.
+      tuckSettings();
       window.MefiMusic?.activateSettings?.(query ? null : settingsPane(settingsCategory));
       if (settingsCategory === "automation") void loadSettingsAutomation();
       if (!query) openSettingsPlace(settingsCategory);

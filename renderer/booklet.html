@@ -4202,6 +4202,9 @@ body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item
 #tab-studio[data-places="v2"] #settings-audio-media > h3:first-child { margin: 0 0 4px; font: 650 var(--f14, 14px)/1.35 var(--font-ui); }
 #tab-studio[data-places="v2"] #settings-audio-media > p:nth-child(2) { grid-column: 1; margin: 0; font-size: var(--f13, 13px); }
 #tab-studio[data-places="v2"] #settings-audio-media > button:nth-child(3) { grid-column: 2; grid-row: 2; }
+/* With its words behind the heading's "i" (MefiUi.tuck), the heading and its button share the one row. */
+#tab-studio[data-places="v2"] #settings-audio-media:has(> .info-pop) > h3:first-child { grid-column: 1; margin: 0; }
+#tab-studio[data-places="v2"] #settings-audio-media:has(> .info-pop) > button:nth-child(3) { grid-row: 1; }
 /* The Appearance sidebar's own small print reads at 12 px or more too. */
 #tab-studio[data-places="v2"] :is(.music-fineprint, .music-node-label, .music-node-choice strong, .music-node-choice small, .music-effect-copy small, .studio-style-choice strong, .music-void-theme-label) { font-size: var(--f12, 12px); }
 #tab-studio[data-places="v2"] .settings-media .music-theme { font-size: var(--f12, 12px); }
@@ -8154,6 +8157,9 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .agents-save-bar > button { min-height: 32px; padding-block: 6px; }
 .agents-save-bar p { margin: 0; flex: 1; font-size: var(--fs-sm); color: var(--muted); }
 .agents-save-bar [data-tone=bad] { color: var(--bad); }
+/* In the 0.5 layout Apply changes lights up only while the draft holds edits (renderer/agents.js sets data-dirty);
+   with nothing to apply it rests as a quiet button, still pressable. */
+#agents-overlay[data-places="v2"] .agents-save-bar:not([data-dirty="true"]) > .primary { background: transparent; border-color: var(--hairline); color: var(--muted); box-shadow: none; text-shadow: none; filter: none; font-weight: 500; }
 .agents-card .studio-field strong { display: block; font-weight: 500; }
 .agents-card .studio-field small { display: block; margin-top: 3px; }
 .agents-card .studio-field input:not([type=checkbox]) { width: 100%; min-width: 0; }
@@ -8328,6 +8334,196 @@ html[data-motion=off] .agents-model-row { transition: none; }
 .agents-rules-chip-files { color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, var(--hairline)); }
 .agents-rules-fine { font-size: 12px; }
 @media (max-width: 650px) { .agents-rules-reader { flex-direction: column; align-items: flex-start; gap: 6px; } }
+
+/* Team › Seats and models and Team › Providers, made simple (renderer/team-models.js, 0.5 layout).
+   Built from the app's tokens: cards are .agents-card (studio-ui.css gives them the theme's glass), the six choices
+   are Settings' rows (.settings-control, with its switch) holding the shared .segmented control, so every theme,
+   Chrome's metal included, draws them as it draws the rest of the app. Text is 12 px or more throughout, status
+   colours are mixed toward the ink on a light theme so they keep 4.5:1, and nothing moves under reduced motion. */
+#agents-overlay { --tm-good: var(--good); --tm-ok: var(--warn); --tm-weak: var(--bad); }
+:root[data-studio-theme-tone="light"] #agents-overlay { --tm-good: color-mix(in srgb, var(--good) 28%, var(--ivory)); --tm-ok: color-mix(in srgb, var(--warn) 28%, var(--ivory)); }
+#team-models, #team-providers { display: grid; gap: 16px; min-width: 0; }
+:is(#team-models, #team-providers, #agents-more)[hidden] { display: none; }
+.tm-panel { display: grid; gap: 10px; align-content: start; padding: 16px; min-width: 0; }
+.tm-panel p { margin: 0; }
+.tm-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tm-title { margin: 0; font-size: var(--f15, 15px); font-weight: 650; line-height: 1.3; letter-spacing: 0; color: var(--ivory); }
+.tm-sub, .tm-empty, .tm-untried { color: var(--muted); font-size: var(--f13, 13px); line-height: 1.5; max-width: 72ch; }
+.tm-sub[hidden] { display: none; }
+/* The small "i" until MefiUi.info draws the shared one: the words are its tooltip and its name. */
+.tm-tip { display: inline-grid; place-items: center; flex: none; width: 18px; height: 18px; border: 1px solid var(--hairline-strong); border-radius: 50%; color: var(--muted); font: italic 600 var(--f12, 12px)/1 var(--font-display); cursor: help; user-select: none; }
+.tm-tip:hover { color: var(--ivory); border-color: var(--gold-dim); }
+
+/* ---- Right now ---- */
+.tm-lead { color: var(--ivory); font-size: var(--f16, 16px); line-height: 1.55; max-width: 78ch; text-wrap: pretty; }
+.tm-lead.tm-lead-2 { color: var(--muted); font-size: var(--f14, 14px); }
+.tm-lead:empty { display: none; }
+.tm-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
+.tm-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 2px 10px; border: 1px solid var(--hairline); border-radius: 13px; background: color-mix(in srgb, var(--ivory) 4%, transparent); color: var(--muted); font-size: var(--f125, 12.5px); }
+.tm-chip > i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--gold); }
+.tm-chip[data-tone="warn"] > i { background: var(--warn); }
+button.tm-link { min-height: 26px; padding: 0 4px; border: 0; background: none; color: var(--gold-bright); font-size: var(--f125, 12.5px); text-decoration: underline; text-underline-offset: 3px; box-shadow: none; }
+button.tm-link:hover { background: none; color: var(--ivory); }
+:root[data-studio-theme-tone="light"] button.tm-link { color: var(--ivory); }
+
+/* ---- How Studio decides: Settings' rows ---- */
+.tm-rows { display: grid; }
+.tm-row.settings-control { flex-wrap: wrap; gap: 8px 20px; }
+.tm-row .tm-row-words { flex: 1 1 280px; }
+.tm-row .tm-row-title { display: inline-flex; align-items: center; gap: 8px; }
+.tm-row .tm-row-title b { color: var(--ivory); font-size: var(--f14, 14px); font-weight: 600; }
+.tm-row .tm-hint { color: var(--muted); font-size: var(--f125, 12.5px); line-height: 1.45; max-width: 64ch; }
+.tm-row input[role="switch"] { flex: none; }
+/* The shared segmented control, one line high: its buttons wrap rather than squeeze. */
+.segmented.tm-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border-radius: var(--r-md); max-width: 100%; }
+.segmented.tm-seg > button { min-height: 30px; padding: 0 12px; justify-items: center; text-align: center; border-radius: 6px; font-size: var(--f13, 13px); font-weight: 500; white-space: nowrap; }
+.segmented.tm-seg > button[aria-pressed="true"] { font-weight: 600; }
+
+/* ---- Who does what: a table drawn as a grid (role=table), stacked on a narrow page ---- */
+.tm-table { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(170px, 1.5fr) minmax(120px, .8fr) minmax(130px, 1fr) auto; column-gap: 14px; min-width: 0; }
+.tm-thead-group, .tm-tbody, .tm-tr { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; min-width: 0; }
+.tm-th { padding: 6px 0 8px; border-bottom: 1px solid var(--hairline); color: var(--muted); font-size: var(--f12, 12px); font-weight: 600; letter-spacing: .02em; }
+.tm-td { display: grid; align-content: start; gap: 3px; min-width: 0; padding: 11px 0; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); color: var(--muted); font-size: var(--f135, 13.5px); overflow-wrap: anywhere; }
+.tm-tr:last-child > .tm-td { border-bottom: 0; }
+.tm-td b { color: var(--ivory); font-weight: 600; }
+.tm-td small { color: var(--muted); font-size: var(--f125, 12.5px); line-height: 1.4; }
+.tm-td-change { justify-items: end; }
+.tm-model { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.tm-dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.tm-dot[data-provider="claude"] { background: #d89477; }
+.tm-dot[data-provider="zen"] { background: var(--gold); }
+.tm-dot[data-provider="opencode"] { background: #7fb7ff; }
+.tm-dot[data-provider="codex"], .tm-dot[data-provider="chatgpt"] { background: #b8a6f0; }
+.tm-dot[data-provider="zai"] { background: #8fd0c6; }
+.tm-dot[data-provider="openrouter"] { background: #aebdff; }
+.tm-dot[data-provider="grok"] { background: #c8ccd4; }
+.tm-dot[data-provider="antigravity"] { background: #f2c879; }
+.tm-dot[data-provider="lmstudio"] { background: #aa98f1; }
+.tm-td small.tm-pending, .tm-td small.tm-set { color: var(--tm-ok); }
+.tm-td small.tm-warn { display: inline-flex; align-items: center; gap: 6px; color: var(--tm-weak); }
+.tm-td [hidden] { display: none; }
+.tm-td-think select.tm-think { width: 100%; max-width: 200px; }
+.tm-td-think .studio-select { width: 100%; max-width: 200px; min-height: 30px; padding-block: 4px; }
+.tm-none { color: var(--muted); }
+.tm-res { display: grid; gap: 6px; font-variant-numeric: tabular-nums; }
+.tm-res > span:first-child { color: var(--ivory); }
+@container settings (max-width: 760px) {
+  .tm-table { display: grid; grid-template-columns: minmax(0, 1fr); }
+  /* The column names stay for a screen reader; each row says what it is. */
+  .tm-thead-group { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .tm-tbody { grid-template-columns: minmax(0, 1fr); }
+  .tm-tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "job change" "model model" "think think" "result result"; column-gap: 12px; padding: 10px 0; border-bottom: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); }
+  .tm-tr:last-child { border-bottom: 0; }
+  .tm-td { padding: 3px 0; border-bottom: 0; }
+  .tm-td-job { grid-area: job; }
+  .tm-td-model { grid-area: model; }
+  .tm-td-think { grid-area: think; }
+  .tm-td-result { grid-area: result; }
+  .tm-td-change { grid-area: change; align-self: start; }
+}
+
+/* ---- Report card ---- */
+.tm-report-body { display: grid; gap: 14px; min-width: 0; }
+.tm-rc { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; min-width: 0; }
+.tm-rc.tm-rc-one { grid-template-columns: minmax(0, 1fr); }
+.tm-rc-models, .tm-rc-side { display: grid; gap: 14px; align-content: start; min-width: 0; }
+.tm-rc-model { display: grid; gap: 4px; min-width: 0; }
+.tm-rc-model .tm-model b { color: var(--ivory); font-size: var(--f14, 14px); }
+.tm-pill { display: inline-flex; align-items: center; min-height: 22px; padding: 1px 9px; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-size: var(--f12, 12px); white-space: nowrap; }
+.tm-pill[data-tone="good"] { color: var(--tm-good); border-color: color-mix(in srgb, var(--tm-good) 40%, transparent); }
+.tm-pill[data-tone="warn"] { color: var(--tm-ok); border-color: color-mix(in srgb, var(--tm-ok) 40%, transparent); }
+.tm-skills { display: grid; margin: 0; padding: 0; list-style: none; }
+.tm-skill { display: grid; grid-template-columns: minmax(0, 1fr) minmax(56px, 110px) auto; align-items: center; gap: 4px 12px; padding: 9px 0; border-top: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); }
+.tm-skill:first-child { border-top: 0; }
+.tm-skill-k { display: grid; gap: 1px; min-width: 0; color: var(--ivory); font-size: var(--f135, 13.5px); font-weight: 600; }
+.tm-skill-k small { color: var(--muted); font-size: var(--f12, 12px); font-weight: 400; }
+.tm-verdict { justify-self: end; font-size: var(--f125, 12.5px); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+.tm-verdict[data-verdict="good"] { color: var(--tm-good); }
+.tm-verdict[data-verdict="ok"] { color: var(--tm-ok); }
+.tm-verdict[data-verdict="weak"] { color: var(--tm-weak); }
+.tm-bar { display: block; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--ivory) 10%, transparent); }
+.tm-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--muted); }
+.tm-bar > i[data-verdict="good"] { background: var(--good); }
+.tm-bar > i[data-verdict="ok"] { background: var(--warn); }
+.tm-bar > i[data-verdict="weak"] { background: var(--bad); }
+.tm-idea { display: grid; gap: 8px; align-content: start; padding: 14px; border: 1px solid var(--gold-dim); border-radius: var(--r-lg); background: var(--tint-gold-2); }
+.tm-idea .tm-idea-title, .tm-idea p { color: var(--ivory); font-size: var(--f135, 13.5px); }
+.tm-idea small { color: var(--muted); font-size: var(--f125, 12.5px); line-height: 1.45; }
+.tm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.tm-routes { display: grid; gap: 6px; }
+.tm-routes .tm-routes-title { margin: 0; color: var(--ivory); font-size: var(--f13, 13px); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.tm-route-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tm-route { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: var(--r-md); color: var(--ivory); font-size: var(--f135, 13.5px); }
+.tm-route-words { min-width: 0; overflow-wrap: anywhere; }
+.tm-say { color: var(--muted); font-size: var(--f125, 12.5px); }
+.tm-say:empty { display: none; }
+.tm-say[data-tone="good"] { color: var(--tm-good); }
+.tm-say[data-tone="bad"] { color: var(--tm-weak); }
+@container settings (max-width: 860px) {
+  .tm-rc { grid-template-columns: minmax(0, 1fr); }
+}
+@container settings (max-width: 520px) {
+  .tm-skill { grid-template-columns: minmax(0, 1fr) auto; }
+  .tm-skill .tm-bar { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* ---- How thinking works: the steps a stuck job climbs ---- */
+.tm-rungs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 4px 0 0; padding: 0; list-style: none; }
+.tm-rung { display: grid; align-content: start; gap: 4px; min-height: 84px; min-width: 0; padding: 10px; border: 1px solid var(--hairline); border-radius: var(--r-lg); background: color-mix(in srgb, var(--ivory) 3%, transparent); }
+.tm-rung b { color: var(--ivory); font-size: var(--f135, 13.5px); }
+.tm-rung small { color: var(--muted); font-size: var(--f12, 12px); line-height: 1.4; }
+.tm-rung[aria-current="step"] { border-color: var(--gold-dim); background: var(--tint-gold-3); }
+.tm-rung[data-ask="true"] { border-style: dashed; }
+/* Retry the same way: the steps past the start are not taken. */
+.tm-rungs[data-climb="off"] .tm-rung:not([aria-current="step"]) { border-style: dotted; background: transparent; }
+.tm-rungs[data-climb="off"] .tm-rung:not([aria-current="step"]) b { color: var(--muted); }
+@container settings (max-width: 860px) {
+  .tm-rungs { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .tm-rung { min-height: 0; }
+}
+
+/* ---- More settings: the detailed cards Seats and models grew from (renderer/agents.js fileSeats) ---- */
+/* The cards keep the type they had in the pane: a plain <details> would make everything inside small and muted. */
+.agents-more { min-width: 0; padding: 0 16px; border: 1px solid var(--studio-glass-edge, var(--hairline)); border-radius: var(--r-lg); background: color-mix(in srgb, var(--ivory) 2%, transparent); font-size: inherit; color: inherit; }
+.agents-more > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; padding: 14px 0; list-style: none; cursor: pointer; }
+.agents-more > summary::-webkit-details-marker { display: none; }
+.agents-more > summary::before { content: "›"; display: inline-block; width: 12px; color: var(--muted); font-size: var(--f16, 16px); line-height: 1; transition: transform var(--motion-fast, .15s) var(--ease-out, ease); }
+.agents-more[open] > summary::before { transform: rotate(90deg); }
+.agents-more-title { color: var(--ivory); font-size: var(--f14, 14px); font-weight: 600; }
+.agents-more-hint { flex: 1 1 260px; color: var(--muted); font-size: var(--f13, 13px); }
+.agents-more[open] > summary { margin-bottom: 12px; border-bottom: 1px solid var(--hairline); }
+.agents-more-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; padding-bottom: 16px; }
+@container settings (max-width: 520px) {
+  .agents-more { padding-inline: 10px; }
+}
+/* A job's card that Change opened: a ring for a moment, where to look. */
+.agents-model-row[data-found="true"] { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+
+/* ---- Providers: one provider for everything, and your subscriptions ---- */
+.tm-provider-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; min-width: 0; }
+.tm-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.tm-inline select.tm-select, .tm-inline .studio-select { min-width: min(220px, 100%); max-width: 100%; }
+.tm-login-groups, .tm-login-group { display: grid; gap: 8px; min-width: 0; }
+.tm-login-groups { gap: 14px; }
+.tm-login-group > button { justify-self: start; }
+.tm-login-group .tm-login-title { margin: 0; color: var(--muted); font-size: var(--f13, 13px); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.tm-logins { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.tm-login { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-lg); background: color-mix(in srgb, var(--ivory) 3%, transparent); min-width: 0; }
+.tm-login-words { display: grid; gap: 2px; min-width: 0; }
+.tm-login-words b { color: var(--ivory); font-size: var(--f135, 13.5px); font-weight: 600; }
+.tm-login-words small { color: var(--muted); font-size: var(--f12, 12px); }
+.tm-login[data-state="limited"] .tm-login-words small { color: var(--tm-ok); }
+.tm-login[data-state="answering"] .tm-login-words small { color: var(--tm-good); }
+#team-subscriptions:focus { outline: none; }
+#team-subscriptions:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+@container settings (max-width: 820px) {
+  .tm-provider-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(#team-models, #team-providers, .agents-more) *, .agents-more > summary::before { transition: none !important; animation: none !important; }
+}
+html[data-motion="off"] :is(#team-models, #team-providers, .agents-more) *, html[data-motion="off"] .agents-more > summary::before { transition: none !important; animation: none !important; }
 
 .companion-panel.companion-dynamic {
   display: flex; flex-direction: column; gap: 12px; padding: 18px;
@@ -9054,6 +9250,64 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 .key-tip :is(button):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
 html[data-motion="off"] .key-tip { transition: none; }
 @media (max-width: 720px) { .key-tip { display: none; } }
+
+/* --- info circles (MefiUi.info and MefiUi.tuck, studio-ui.js) -------------------------
+   An "i" at the end of a title opens the how-to that used to sit under it. The
+   circle is 18px and takes a 26px press; it draws its letter, so it adds no
+   words to its title. The box is a popover in the top layer: one floating
+   surface over the page in every theme, its words in the page's main ink. */
+button.info-dot {
+  position: relative; display: inline-grid; place-items: center; flex: none; box-sizing: border-box;
+  width: 18px; height: 18px; min-width: 0; min-height: 0; margin: 0 0 0 .4em; padding: 0;
+  vertical-align: middle; translate: 0 -1px;
+  border: 1px solid color-mix(in srgb, currentColor 60%, transparent); border-radius: 50%;
+  background: transparent; box-shadow: none; color: var(--muted);
+  font: italic 700 12px/1 Georgia, "Times New Roman", serif; letter-spacing: 0; text-transform: none; text-decoration: none; white-space: nowrap;
+  cursor: help;
+  transition: color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
+}
+/* The letter is drawn, not written: no text for a screen reader (its name says what it is) or a text audit. */
+button.info-dot::before { content: "i" / ""; }
+button.info-dot::after { content: ""; position: absolute; inset: -5px; border-radius: 50%; }
+button.info-dot:hover, button.info-dot[aria-expanded="true"] { color: var(--gold-bright); border-color: var(--gold-bright); background: var(--tint-gold-2); transform: none; }
+button.info-dot:active { transform: none; }
+button.info-dot:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+.info-pop {
+  position: fixed; inset: auto; z-index: 9000; box-sizing: border-box; margin: 0; overflow: visible;
+  width: max-content; min-width: 0; max-width: min(320px, calc(100vw - 16px)); padding: 10px 12px;
+  border: 1px solid var(--studio-glass-edge); border-radius: var(--r-md);
+  background: var(--studio-wash), var(--studio-sheen), var(--studio-float-fill);
+  backdrop-filter: var(--studio-float-blur); box-shadow: var(--studio-float-shadow);
+  color: var(--ivory); font: 400 max(13px, var(--f125, 13px))/1.5 var(--font-ui); cursor: auto;
+  letter-spacing: normal; text-align: left; text-transform: none; white-space: normal; overflow-wrap: anywhere;
+  opacity: 1; translate: 0 0;
+  transition: opacity var(--motion-fast) var(--ease-out), translate var(--motion-base) var(--ease-out), overlay var(--motion-fast) allow-discrete, display var(--motion-fast) allow-discrete;
+}
+.info-pop[popover]:not(:popover-open) { opacity: 0; translate: 0 4px; }
+.info-pop[popover][data-side="above"]:not(:popover-open) { translate: 0 -4px; }
+@starting-style {
+  .info-pop:popover-open { opacity: 0; translate: 0 4px; }
+  .info-pop[data-side="above"]:popover-open { translate: 0 -4px; }
+}
+/* The little arrow at the circle (--info-arrow, from placeTip). */
+.info-pop::before {
+  content: ""; position: absolute; left: calc(var(--info-arrow, 50%) - 5px); width: 10px; height: 10px; rotate: 45deg;
+  border: inherit; border-radius: 2px; background: var(--studio-float-fill);
+}
+.info-pop[data-side="below"]::before { top: -6px; border-right: 0; border-bottom: 0; }
+.info-pop[data-side="above"]::before { bottom: -6px; border-top: 0; border-left: 0; }
+.info-pop:not([data-side])::before { display: none; }
+.info-pop-body { position: relative; max-height: min(60vh, 420px); overflow: auto; overscroll-behavior: contain; }
+.info-pop-body.is-text { white-space: pre-line; }
+/* Words that moved in keep their element, id and classes, so code and tests
+   still find them, but read as the box's own: the rules that styled them where
+   they sat (a dim 11px hint, an uppercase eyebrow, an id's margin) would win
+   over the box otherwise, some of them by id. */
+.info-pop-body > * { display: block !important; margin: 0 !important; padding: 0 !important; max-width: none !important; color: inherit !important; font: inherit !important; letter-spacing: inherit !important; text-transform: none !important; text-align: inherit !important; opacity: 1 !important; }
+.info-pop-body > * + * { margin-top: 8px !important; }
+.info-pop-body > [hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { button.info-dot, .info-pop { transition: none; } }
+html:is([data-motion="off"], [data-motion="calm"]) :is(button.info-dot, .info-pop), body.no-motion :is(button.info-dot, .info-pop) { transition: none; }
 
 /* ---- Finish (every theme) ----------------------------------------------------
    Timing, light and press only, from tokens, so every palette, Studio style and
@@ -12259,6 +12513,9 @@ html[data-layout="v2"][data-detail="all"],
   .size-preview .size-actions { margin-top: 8px; }
 }
 @media (max-height: 520px) { .size-preview { position: static; } }
+/* With the intro behind the Preview caption's "i" (MefiUi.tuck), its row is not kept empty above the page. */
+.size-wrap:not(:has(> .size-intro)) { grid-template-areas: "controls preview"; }
+@container (max-width: 720px) { .size-wrap:not(:has(> .size-intro)) { grid-template-areas: "preview" "controls"; } }
 
 /* ---- 6. the miniature ---------------------------------------------------------
    A 760 x 440 window drawn with the real regions' parts (rail, list, top bar, tab
@@ -14528,7 +14785,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
-          <p class="muted" id="idle-home-hint">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
+          <p class="muted" id="idle-home-hint" data-info-anchor="idle-home-label">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
           <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
@@ -15934,7 +16191,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
       <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
-        <h3>Use the account you already have</h3>
+        <h3 id="walkthrough-cli-heading">Use the account you already have</h3>
         <p>One supported subscription can handle chat, mapping, planning and coding. Choose your tool, sign in with its own window, then check the connection. Your account's model access and usage limits apply.</p>
         <label for="walkthrough-cli-choice">Your coding tool</label>
         <select id="walkthrough-cli-choice"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="grok">Grok</option><option value="antigravity">Antigravity</option><option value="opencode">OpenCode (free models or linked providers)</option></select>
@@ -15947,9 +16204,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
           <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
         </div>
-        <p class="muted">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
         <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-cli-keys" type="button">I have an API key or a local model server</button></div>
-        <p class="muted">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
         <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
       </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
@@ -22371,7 +22628,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return { size, at };
   }
   function track(el) {
-    if (!el || regions.has(el) || el.closest?.(".studio-scroll-hint")) return;
+    // An info box draws in the top layer, above the hint layer: no hint for it or its words.
+    if (!el || regions.has(el) || el.closest?.(".studio-scroll-hint, .info-pop")) return;
     const css = getComputedStyle(el);
     if (el !== document.scrollingElement && !/(auto|scroll)/.test(`${css.overflowX} ${css.overflowY}`)) return;
     const hint = node("div", "studio-scroll-hint");
@@ -22809,6 +23067,353 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     glidePlace(host, item, false);
   }
   function glideFollow() { if (glideHost && glideItem?.isConnected) glidePlace(glideHost, glideItem, false); }
+  // ---- info circles: the how-to behind a small "i" --------------------------
+  // Pages used to hold their how-to words under every title. An "i" at the end
+  // of the title opens them in a small box instead, so a page shows its
+  // controls first and the words stay one click away. Two calls, shared by
+  // every page (the Team pages call them too, so keep their shape):
+  //
+  //   MefiUi.info(content, { label }) returns the circle, a
+  //     <button type="button" class="info-dot"> named "More about <label>",
+  //     with aria-expanded and aria-controls. It opens a box (.info-pop)
+  //     holding `content`: a string (its line breaks kept) or a Node. The box
+  //     goes in right after the circle once the circle has a parent, so place
+  //     the circle outside a title whose words are read elsewhere, or use tuck.
+  //   MefiUi.tuck(root, { min = 60 } = {}) moves the help words under the field
+  //     and card titles in `root` into such boxes, each circle at the end of its
+  //     title, and returns how many it moved. Run it after every render: words
+  //     already moved stay where they are, so it never wraps anything twice.
+  //
+  // The box is a popover="auto": the top layer (no panel clips it), a click
+  // outside or Esc closes it, one is open at a time. Click, Enter and Space open
+  // and close it; a mouse resting on the circle opens it after a moment and
+  // leaving closes it again, unless a click opened it. It sits under the circle
+  // (over it when there is more room there), inside the window, and follows the
+  // circle while the page scrolls or the window changes size.
+  const TIP_WAIT = 350, TIP_LINGER = 160, TIP_EDGE = 8, TIP_GAP = 8;
+  const POPOVER = typeof HTMLElement === "function" && "popover" in HTMLElement.prototype;
+  const titleTips = new WeakMap();
+  let tipSerial = 0, shownTip = null, tipFrame = 0, tipFollow = null, tipWatch = null;
+  const tipWords = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
+  const mouseOnly = (event) => !event?.pointerType || event.pointerType === "mouse";
+  function tipShown(tip) {
+    if (!POPOVER) return !tip.pop.hidden;
+    try { return tip.pop.matches(":popover-open"); } catch { return tip.shown; }
+  }
+  function makeTip(content, label) {
+    const id = `info-pop-${++tipSerial}`;
+    const pop = node("div", "info-pop"), body = node("div", "info-pop-body");
+    pop.id = id; body.id = `${id}-body`;
+    if (content != null && typeof content === "object" && content.nodeType) body.append(content);
+    else if (content != null && content !== "") { body.classList.add("is-text"); body.textContent = String(content); }
+    pop.append(body);
+    if (POPOVER) pop.setAttribute("popover", "auto"); else pop.hidden = true;
+    const dot = node("button", "info-dot");
+    dot.type = "button";
+    dot.setAttribute("aria-expanded", "false"); dot.setAttribute("aria-controls", id); dot.setAttribute("aria-describedby", body.id);
+    // The circle is its box's invoker, so a click on it is not a click outside
+    // the box: the light dismiss leaves an open box to its circle.
+    if (POPOVER) { try { dot.popoverTargetElement = pop; } catch { /* the circle still opens it */ } }
+    const tip = { dot, pop, body, how: null, wait: 0, linger: 0, overDot: false, overPop: false, shown: false, title: null, control: null, named: false };
+    nameTip(tip, label);
+    wireTip(tip);
+    return tip;
+  }
+  function nameTip(tip, label) {
+    const words = tipWords(label);
+    const name = words ? `More about ${words}` : "More about this";
+    if (tip.dot.getAttribute("aria-label") !== name) tip.dot.setAttribute("aria-label", name);
+  }
+  function wireTip(tip) {
+    const { dot, pop } = tip;
+    dot.addEventListener("click", (event) => {
+      // The circle decides, not the popover target's own toggle: a box the
+      // pointer opened stays open, pinned, when its circle is then clicked.
+      event.preventDefault(); event.stopPropagation();
+      if (!tipShown(tip)) showTip(tip, "click");
+      else if (tip.how === "hover") { tip.how = "click"; clearTimeout(tip.linger); }
+      else hideTip(tip);
+    });
+    dot.addEventListener("pointerenter", (event) => {
+      if (!mouseOnly(event)) return;
+      tip.overDot = true; clearTimeout(tip.linger);
+      if (tipShown(tip)) return;
+      clearTimeout(tip.wait);
+      tip.wait = setTimeout(() => { if (tip.overDot && !tipShown(tip)) showTip(tip, "hover"); }, TIP_WAIT);
+    });
+    dot.addEventListener("pointerleave", (event) => { if (!mouseOnly(event)) return; tip.overDot = false; clearTimeout(tip.wait); lingerTip(tip); });
+    pop.addEventListener("pointerenter", (event) => { if (!mouseOnly(event)) return; tip.overPop = true; clearTimeout(tip.linger); });
+    pop.addEventListener("pointerleave", (event) => { if (!mouseOnly(event)) return; tip.overPop = false; lingerTip(tip); });
+    // The box can sit inside a label: a click on its words must not reach the
+    // label (which would flip its switch) or a clickable row around it.
+    pop.addEventListener("click", (event) => {
+      const control = event.target?.closest?.("a[href], button, input, select, textarea, summary, [tabindex]");
+      if (control && pop.contains(control)) return;
+      event.preventDefault(); event.stopPropagation();
+    });
+    // A click outside and Esc close the box without asking the circle.
+    pop.addEventListener("toggle", (event) => {
+      if (event.newState === "open" && tipShown(tip)) {
+        tip.shown = true;
+        if (shownTip !== tip) { if (shownTip) settleTip(shownTip); shownTip = tip; }
+        if (dot.getAttribute("aria-expanded") !== "true") dot.setAttribute("aria-expanded", "true");
+        placeTip(tip); followTips(true);
+      } else if (event.newState === "closed") settleTip(tip);
+    });
+  }
+  function showTip(tip, how) {
+    clearTimeout(tip.wait); clearTimeout(tip.linger);
+    const { dot, pop } = tip;
+    if (!dot.isConnected) return false;
+    if (!pop.isConnected) dot.after(pop);
+    if (POPOVER) { try { if (!tipShown(tip)) pop.showPopover(); } catch { return false; } }
+    else { if (shownTip && shownTip !== tip) hideTip(shownTip); pop.hidden = false; }
+    // The Popover API closed the box that was open; its circle hears it here.
+    if (shownTip && shownTip !== tip) settleTip(shownTip);
+    tip.shown = true; tip.how = how; shownTip = tip;
+    dot.setAttribute("aria-expanded", "true");
+    placeTip(tip); followTips(true);
+    return true;
+  }
+  function hideTip(tip, { focus = false } = {}) {
+    if (POPOVER) { try { if (tipShown(tip)) tip.pop.hidePopover(); } catch { /* already closed */ } }
+    else tip.pop.hidden = true;
+    settleTip(tip);
+    if (focus && tip.dot.isConnected) tip.dot.focus?.({ preventScroll: true });
+  }
+  function settleTip(tip) {
+    clearTimeout(tip.wait); clearTimeout(tip.linger);
+    tip.shown = false; tip.how = null; tip.overPop = false;
+    if (tip.dot.getAttribute("aria-expanded") !== "false") tip.dot.setAttribute("aria-expanded", "false");
+    if (shownTip === tip) { shownTip = null; followTips(false); }
+  }
+  // A box the pointer opened closes a moment after the pointer leaves both it and its circle.
+  function lingerTip(tip) {
+    if (tip.how !== "hover") return;
+    clearTimeout(tip.linger);
+    tip.linger = setTimeout(() => { if (tip.how === "hover" && !tip.overDot && !tip.overPop) hideTip(tip); }, TIP_LINGER);
+  }
+  // Under the circle, or over it when there is more room there, and never
+  // nearer than TIP_EDGE to the window's edge. A circle scrolled out of the
+  // window, hidden or gone takes its box with it.
+  function placeTip(tip) {
+    const { dot, pop } = tip;
+    const at = dot.isConnected ? dot.getBoundingClientRect() : null;
+    if (!at || (!at.width && !at.height) || at.bottom < 0 || at.top > innerHeight || at.right < 0 || at.left > innerWidth) { hideTip(tip); return; }
+    const box = pop.getBoundingClientRect();
+    const width = Math.min(box.width, innerWidth - TIP_EDGE * 2), height = box.height;
+    const below = innerHeight - TIP_EDGE - (at.bottom + TIP_GAP), above = at.top - TIP_GAP - TIP_EDGE;
+    const up = height > below && above > below;
+    const top = Math.max(TIP_EDGE, Math.min(up ? at.top - TIP_GAP - height : at.bottom + TIP_GAP, innerHeight - TIP_EDGE - height));
+    const middle = at.left + at.width / 2;
+    const left = Math.max(TIP_EDGE, Math.min(middle - width / 2, innerWidth - TIP_EDGE - width));
+    const side = up ? "above" : "below";
+    if (pop.dataset.side !== side) pop.dataset.side = side;
+    pop.style.left = `${Math.round(left)}px`; pop.style.top = `${Math.round(top)}px`;
+    // The little arrow points at the circle, wherever the edge pushed the box.
+    pop.style.setProperty("--info-arrow", `${Math.round(Math.max(12, Math.min(width - 12, middle - left)))}px`);
+  }
+  function followTips(on) {
+    if (on === Boolean(tipFollow)) return;
+    if (on) {
+      tipFollow = () => { if (!tipFrame) tipFrame = requestAnimationFrame(() => { tipFrame = 0; if (shownTip) placeTip(shownTip); }); };
+      document.addEventListener("scroll", tipFollow, { capture: true, passive: true });
+      window.addEventListener("resize", tipFollow);
+      return;
+    }
+    document.removeEventListener("scroll", tipFollow, { capture: true });
+    window.removeEventListener("resize", tipFollow);
+    cancelAnimationFrame(tipFrame); tipFrame = 0; tipFollow = null;
+  }
+  // Esc closes the open box before the sheet, sidebar or page under it hears
+  // the key; the keyboard goes back to its circle. On the window's capture
+  // phase, from the moment this file loads: the Appearance sidebar
+  // (music.js) and others take Esc there too, and they load later.
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !shownTip) return;
+    const tip = shownTip;
+    if (!tipShown(tip)) { settleTip(tip); return; }
+    event.preventDefault(); event.stopImmediatePropagation();
+    const active = document.activeElement;
+    hideTip(tip, { focus: active === tip.dot || tip.pop.contains(active) });
+  }, true);
+  function info(content, { label = "" } = {}) {
+    const tip = makeTip(content, label);
+    // The box follows its circle into the page, once the caller has placed it.
+    queueMicrotask(() => { if (!tip.pop.parentNode && tip.dot.parentNode) tip.dot.after(tip.pop); });
+    return tip.dot;
+  }
+  // What tuck moves, and where its circle goes:
+  //  - a field's help: a small, p or .field-hint inside a field (a label,
+  //    .field, .studio-field, .settings-control, .setup-helper-field,
+  //    .setup-helper-toggle-words, .size-row, or the words beside a label's
+  //    control), to the field's title: the nearest title before it (b,
+  //    strong, a label, .field-label, .setup-helper-label, a heading), past the
+  //    field's own controls, or the title a row before it starts with;
+  //  - a card's intro: a paragraph right under a heading (h1 to h6, legend,
+  //    .settings-eyebrow), or under a row that starts with its title;
+  //  - help marked data-info-anchor="<id of its title>", whatever its length.
+  // What stays where it is: help under `min` characters; a status line (role
+  // status, alert or log, aria-live, data-tone or data-state, a status, error
+  // or warning class or id, a "Last run:" or "Now:" line); anything under
+  // data-keep-visible; help that holds a control or a link, or sits inside a
+  // page's header (its title and subtitle line), a button, a summary, a
+  // picture or hidden content; help whose title is hidden or inside such a place.
+  // A moved help keeps its element, id and classes inside the box (hidden
+  // until it opens), so code that rewrites it and tests that read textContent
+  // still find it; the box takes its old place, so the order around it holds.
+  // The field's control is described by it (aria-describedby). A label that
+  // wraps its control is pointed at that control (htmlFor), or the circle, a
+  // button before it, would become the label's control; the control is named
+  // by the title's words (aria-label), or the circle's name would join its own.
+  const TUCK_HELP = "p, small, .field-hint, [data-info-anchor]";
+  const TUCK_FIELD = "label, .field, .studio-field, .settings-control, .setup-helper-field, .setup-helper-toggle-words, .size-row";
+  const TUCK_HEADING = "h1, h2, h3, h4, h5, h6, legend, .settings-eyebrow";
+  const TUCK_TITLE = `${TUCK_HEADING}, b, strong, label, .field-label, .setup-helper-label`;
+  const TUCK_CONTROL = "input, select, textarea, button, [role=switch], [role=radio], [role=radiogroup], [role=slider], [role=combobox], [role=group], [contenteditable=true]";
+  const TUCK_OUTSIDE = "header, button, a[href], summary, select, textarea, [role=button], [role=link], [role=radio], [role=option], [role=tab], [role=menuitem], [role=switch], [role=checkbox], [role=img], [inert], [aria-hidden=true], .info-pop";
+  const STATUS_NAME = /(?:^|[\s_-])(?:status|error|warning|alert)(?:$|[\s_-])/i;
+  const STATUS_WORDS = /^(?:last run|now|status)\s*:/i;
+  // A title the stylesheet hides is remembered as hidden: a page that paints
+  // again (Settings on every Find keystroke) would otherwise read its style
+  // again, after the paint's own changes, and force the page's style anew.
+  // Only "hidden" is kept, so the worst a stale answer does is leave words in
+  // view. Off the page (a section drawn before it is attached, as the setup
+  // helper's) nothing is read at all: its titles count as shown.
+  const styleHidden = new WeakSet();
+  function hiddenByStyle(el) {
+    if (styleHidden.has(el)) return true;
+    try { if (typeof getComputedStyle === "function" && el.isConnected && getComputedStyle(el).display === "none") { styleHidden.add(el); return true; } } catch { /* no styles to read */ }
+    return false;
+  }
+  function statusLine(help) {
+    if (help.closest("[role=status], [role=alert], [role=log], [role=progressbar], [aria-live]")) return true;
+    if (help.matches("[data-tone], [data-state], .bad-text, .is-bad") || help.parentElement?.matches("[data-tone], [data-state]")) return true;
+    return STATUS_NAME.test(`${help.id || ""} ${help.getAttribute("class") || ""}`) || STATUS_WORDS.test(tipWords(help.textContent));
+  }
+  function tuckable(help, min, explicit) {
+    if (help.hidden || help.closest(TUCK_OUTSIDE) || help.closest("[data-keep-visible]") || help.matches(TUCK_HEADING)) return false;
+    if (help.querySelector(`a[href], [tabindex], ${TUCK_CONTROL}`) || statusLine(help)) return false;
+    return explicit || tipWords(help.textContent).length >= min;
+  }
+  const holdsControl = (el) => el.matches(TUCK_CONTROL) || Boolean(el.querySelector(TUCK_CONTROL));
+  // A row that starts with its title: Size's label row, a key's head row.
+  function rowTitle(row) {
+    const first = row?.firstElementChild;
+    return first && first.matches(TUCK_TITLE) && !holdsControl(first) ? first : null;
+  }
+  function fieldTitle(help) {
+    const parent = help.parentElement;
+    if (!parent || !(parent.matches(TUCK_FIELD) || parent.parentElement?.matches("label"))) return null;
+    for (let at = help.previousElementSibling; at; at = at.previousElementSibling) {
+      if (at.matches(TUCK_TITLE) && !holdsControl(at)) return at;
+      const lead = rowTitle(at);
+      if (lead) return lead;
+      // The field's own controls (and a switch's drawn track) sit between a title and its help.
+      if (!holdsControl(at) && !at.matches("datalist, .track, .setup-helper-track, [aria-hidden=true]")) return null;
+    }
+    return null;
+  }
+  function cardTitle(help) {
+    const before = help.matches("p") ? help.previousElementSibling : null;
+    if (!before) return null;
+    if (before.matches(TUCK_HEADING)) return before;
+    return before.matches(`p, ul, ol, ${TUCK_FIELD}`) ? null : rowTitle(before);
+  }
+  function anchorTitle(help, root) {
+    const id = help.dataset?.infoAnchor;
+    if (!id) return null;
+    return (root.ownerDocument || document).getElementById(id) ?? root.querySelector(`[id="${id}"]`);
+  }
+  const usableTitle = (title, help) => Boolean(title) && title !== help && !help.contains(title) && !title.hidden && !title.closest(TUCK_OUTSIDE) && !hiddenByStyle(title);
+  // A title's own words, without a count or a note in a span inside it.
+  function titleWords(title) {
+    const own = [...(title?.childNodes || [])].filter((child) => child.nodeType === 3).map((child) => child.textContent).join(" ");
+    return tipWords(own) || tipWords(title?.firstElementChild?.textContent) || tipWords(title?.textContent);
+  }
+  function describeBy(control, help, tip) {
+    const ids = (control.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    if ((help.id && ids.includes(help.id)) || ids.includes(tip.body.id)) return;
+    control.setAttribute("aria-describedby", [...ids, tip.body.id].join(" "));
+  }
+  function bindTip(tip, help, field) {
+    const title = tip.title, doc = title.ownerDocument || document;
+    const label = title.closest("label");
+    const usable = (el) => el.type !== "hidden" && !el.closest(".info-pop");
+    let control = null;
+    if (label) {
+      control = (label.htmlFor && doc.getElementById(label.htmlFor)) || [...label.querySelectorAll("input, select, textarea")].find(usable) || null;
+      if (control && !label.htmlFor) {
+        if (!control.id) control.id = `info-control-${tipSerial}`;
+        label.htmlFor = control.id;
+      }
+      if (control && !control.hasAttribute("aria-label") && !control.hasAttribute("aria-labelledby")) { control.setAttribute("aria-label", titleWords(title)); tip.named = true; }
+    } else if (field) {
+      const box = tip.pop.parentElement?.closest(TUCK_FIELD) ?? tip.pop.parentElement;
+      control = [...(box?.querySelectorAll("input, select, textarea, [role=radiogroup], [role=group], [role=slider], [role=switch]") ?? [])].find((el) => usable(el) && el.getAttribute("aria-hidden") !== "true") ?? null;
+    }
+    if (!control) return;
+    tip.control = control;
+    describeBy(control, help, tip);
+    // An enhanced select is read through its button (enhanceSelect above).
+    const choice = control.classList?.contains("studio-select-source") ? doc.getElementById(`${control.id}-choice`) : null;
+    if (choice) describeBy(choice, help, tip);
+  }
+  // A title whose words are rewritten (vibe.js renames Open Home on launch for
+  // the mode) gets its circle back at its end, and the names follow the words.
+  function watchTitle(title) {
+    if (typeof MutationObserver !== "function") return;
+    tipWatch ??= new MutationObserver((records) => {
+      const seen = new Set();
+      for (const record of records) {
+        let at = record.target;
+        while (at && !titleTips.has(at)) at = at.parentNode;
+        if (!at || seen.has(at)) continue;
+        seen.add(at);
+        const tip = titleTips.get(at), words = titleWords(at);
+        if (tip.dot.parentNode !== at) at.append(tip.dot);
+        nameTip(tip, words);
+        if (tip.named && tip.control && tip.control.getAttribute("aria-label") !== words) tip.control.setAttribute("aria-label", words);
+      }
+    });
+    tipWatch.observe(title, { childList: true, characterData: true, subtree: true });
+  }
+  function tuckInto(help, title, field) {
+    const known = titleTips.get(title);
+    if (known) {
+      // A second help for the same title joins the first one's box.
+      if (known.dot.parentNode !== title) title.append(known.dot);
+      help.remove(); known.body.append(help);
+      return;
+    }
+    const tip = makeTip(null, titleWords(title));
+    tip.title = title; titleTips.set(title, tip);
+    help.replaceWith(tip.pop);
+    tip.body.append(help);
+    title.append(tip.dot);
+    bindTip(tip, help, field);
+    watchTitle(title);
+  }
+  // The kill switch: localStorage "mefiStudio.infoTips" set to "off" leaves
+  // every help where it was (info() still makes circles for new UI).
+  const tucksOff = () => { try { return localStorage.getItem("mefiStudio.infoTips") === "off"; } catch { return false; } };
+  function tuck(root, { min = 60 } = {}) {
+    if (!root?.querySelectorAll || tucksOff()) return 0;
+    // Every choice is read first and every move made after: a move between two
+    // reads of a title's style forced the whole page's style again each time
+    // (13 moves took 274 ms in Settings; read first, one recalculation).
+    const moves = [];
+    for (const help of [...root.querySelectorAll(TUCK_HELP)]) {
+      const explicit = Boolean(help.dataset?.infoAnchor);
+      if (!tuckable(help, min, explicit)) continue;
+      let title = null, field = false;
+      if (explicit) title = anchorTitle(help, root);
+      else { title = fieldTitle(help); field = Boolean(title); title ??= cardTitle(help); }
+      if (usableTitle(title, help)) moves.push([help, title, field]);
+    }
+    for (const [help, title, field] of moves) tuckInto(help, title, field);
+    return moves.length;
+  }
   function init() {
     layer(); applyAppearance({}, false); scan(); mountAppearance();
     document.addEventListener("scroll", schedule, true);
@@ -22894,7 +23499,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (/cannot read propert|is not a function|is not defined|is not valid json|unexpected (token|end)|\bundefined\b|\[object /i.test(text)) return fallback;
     return text[0].toUpperCase() + text.slice(1);
   }
-  window.MefiUi = Object.assign(window.MefiUi || {}, { arm, plainError });
+  window.MefiUi = Object.assign(window.MefiUi || {}, { arm, plainError, info, tuck });
   window.MefiScroll = { attach: track, scan, refresh: schedule, owns: (parent, target) => [...regions.values()].some(({ el, hint }) => parent?.contains(el) && hint.contains(target)) };
   window.MefiSelect = { enhance: enhanceSelect, refresh: schedule, close: closeSelect, owns: (parent) => Boolean(popup && parent?.contains(popup.select)), contains: (target) => Boolean(popup?.root.contains(target)), near: (parent, x, y) => { if (!popup || !parent?.contains(popup.select)) return false; const box = popup.root.getBoundingClientRect(); return x >= box.left - 16 && x <= box.right + 16 && y >= box.top - 16 && y <= box.bottom + 16; } };
   window.MefiAppearance = { get: () => ({ ...appearance }), apply: applyAppearance, mount: mountAppearance };
@@ -63248,7 +63853,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     out.id = `size-${key}-out`;
     input.addEventListener("input", () => change(Number(input.value)));
     const ticks = h("div", "size-ticks", null, ...marks.map(([label, at]) => tick(label, at)));
-    return row(key, h("div", "size-label", null, h("label", "", { for: `size-${key}`, text: title }), out), hint, input, ticks);
+    const name = h("label", "", { for: `size-${key}`, text: title });
+    name.id = `size-${key}-title`;
+    return row(key, h("div", "size-label", null, name, out), hint, input, ticks);
   }
   function choiceRow(key, title, hint, choices, change) {
     const group = h("div", "size-seg", { role: "radiogroup", "aria-label": title });
@@ -63287,10 +63894,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const detail = choiceRow("detail", "Detail", "How much each session row and board card shows.", DETAILS.map(([key, label]) => [key, label]), (value) => preview({ detail: value }));
     const grid = h("dl", "size-grid");
     grid.id = "size-panels";
+    // The page's how-to words sit behind an "i" at the end of the title they explain (MefiUi.tuck, studio-ui.js,
+    // run at the end of build): data-info-anchor names that title for the words that are not right under it.
+    const panelsTitle = h("span", "", { text: "Panels" });
+    panelsTitle.id = "size-panels-title";
     const panels = h("section", "size-panel", { "aria-label": "Panels" },
-      h("h3", "", null, h("span", "", { text: "Panels" }), h("small", "", { text: "" })),
+      h("h3", "", null, panelsTitle, h("small", "", { text: "" })),
       grid,
-      h("p", "size-note", { text: "Each mode remembers its own. Drag the edge of a panel to resize it; a double-click on the edge puts it back." }));
+      h("p", "size-note", { text: "Each mode remembers its own. Drag the edge of a panel to resize it; a double-click on the edge puts it back.", "data-info-anchor": "size-panels-title" }));
     const applyButton = h("button", "primary", { type: "button", text: "Apply" });
     applyButton.id = "size-apply";
     const resetButton = h("button", "ghost", { type: "button", text: "Reset", title: "Back to 100%, default text, comfortable, titles and status" });
@@ -63306,19 +63917,22 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const mini = buildMini();
     mini.id = "size-mini";
     host.append(mini);
+    const previewTitle = h("b", "", { text: "Preview" });
+    previewTitle.id = "size-preview-title";
     const side = h("div", "size-preview", null,
-      h("div", "size-cap", null, h("b", "", { text: "Preview" }), h("span", "size-sample", { text: "Sample data" }), stateText),
+      h("div", "size-cap", null, previewTitle, h("span", "size-sample", { text: "Sample data" }), stateText),
       host, appliedText,
       h("div", "size-actions", null, applyButton, resetButton, discardButton));
     side.id = "size-preview";
     body.replaceChildren(
       h("div", "size-wrap", null,
-        h("p", "size-intro", { text: "Move a control and the preview beside it changes at once. The rest of the window changes when you press Apply, so you never have to flip back and forth." }),
+        h("p", "size-intro", { text: "Move a control and the preview beside it changes at once. The rest of the window changes when you press Apply, so you never have to flip back and forth.", "data-info-anchor": "size-preview-title" }),
         h("div", "size-controls", null,
           h("section", "size-panel", { "aria-label": "Size and density" }, zoom, size, density, detail),
           panels,
-          h("p", "size-aside", { text: "Pages from before the 0.5 layout are drawn in fixed pixels, so the interface scale is what resizes them. Text size, density and detail change the new panels." })),
+          h("p", "size-aside", { text: "Pages from before the 0.5 layout are drawn in fixed pixels, so the interface scale is what resizes them. Text size, density and detail change the new panels.", "data-info-anchor": "size-zoom-title" })),
         side));
+    window.MefiUi?.tuck?.(body);
     applyButton.addEventListener("click", () => { void apply(); });
     resetButton.addEventListener("click", () => { void reset(); });
     discardButton.addEventListener("click", () => { discard(); });
@@ -80442,6 +81056,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!overlay) return;
     state = { ...state, status: "reading", mode: "sheet" };
     save(); render();
+    // The account step's fine print sits behind an "i" at its heading (MefiUi.tuck, studio-ui.js); the
+    // step's own words and its live line under the tool choice stay in view.
+    window.MefiUi?.tuck?.($("cli-setup"));
     const coachEl = $("coach");
     if (coachEl) coachEl.hidden = true;
     clearHighlight();
@@ -82004,10 +82621,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     root.append(tabs, body); paint();
     if (!learned) void refresh({ learning: true }).then(paint);
   }
+  // The model with the best checked record on one kind of job here. Coding
+  // attempts are filed as coding-<intent> (implement, explore, analyze,
+  // document), never "fix", so a fix/repair/debug filter matched nothing.
   function best() {
-    const rows = (learned?.skills?.project || []).filter((row) => /fix|repair|debug/.test(row.taskType));
+    const rows = (learned?.skills?.project || []).filter((row) => Number(row.n) >= 5);
     const row = [...rows].sort((a, b) => b.p - a.p || b.n - a.n)[0];
-    return row ? `Best at fixes here: ${row.model} · ${row.wins} of ${row.n}` : "Model strengths appear as your team finishes work.";
+    const kind = words(String(row?.taskType ?? "").replace(/^coding-?/, "")) || "coding";
+    return row ? `Best here: ${row.model} at ${kind} · ${row.wins} of ${row.n}` : "Model strengths appear as your team finishes work.";
   }
   // The same choice the mode buttons make (autonomy:set with a level), from anywhere: Search's "Set permission mode" rows. It says
   // what it did in a toast, since the place it was chosen from has gone by then.
@@ -86219,6 +86840,990 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   api()?.onSettingsChanged?.((data) => { if (data?.connectors && state.root?.isConnected !== false && !state.busy.size) void read(); });
 })();
 
+// Team › Seats and models and Team › Providers, made simple (the 0.5 layout).
+//
+// The owner wants every menu readable "like I'm 5": few words on the page and
+// the how-to behind small "i" circles. Seats and models opens on five plain
+// parts, as the approved mockup ("Team and Friends, made simple") has them:
+//   Right now           who does what, in a sentence or two, and three chips
+//   How Studio decides  six choices, each written to the team draft
+//   Who does what       one line per job: its model, what that model is good
+//                       for, how hard it thinks, its results on this PC and
+//                       Change (the job's detailed card under More settings)
+//   Report card         what each coding model is good and bad at on this PC,
+//                       the suggestions (Try it, Not now) and the kinds of
+//                       jobs sent to another model (Stop)
+//   How thinking works  the steps a stuck job climbs
+// renderer/agents.js owns the rest: in the 0.5 layout it mounts this page on
+// top of Seats and models, folds the detailed cards (the role grid, routing,
+// coding workers, team coordination) under More settings, repaints this from
+// renderConfiguration() and hands over the context (`ctx`, see mount()).
+//
+// Nothing here saves on its own. The six choices and each job's thinking edit
+// the team draft (ctx.draft()) and mark it dirty, so they apply with the rest
+// of the team on Apply changes (agents:save, checked by
+// scripts/agent-profiles.cjs). The report card's Try it and Stop are the one
+// exception: mefiStudio.teamKindRoute applies at once (main.cjs "Which model
+// does which kind of job") and answers with a fresh report.
+//
+// Providers gains two cards on top, the setup helper's flows in its words
+// (renderer/setup-helper.js): one subscription for the whole studio
+// (cliSetupStatus, cliSetupCheck, cliSetupUse) and more than one login
+// (cliAccounts, cliAccountAdd, cliAccountLogin, cliAccountCheck,
+// cliAccountRemove). Every host call is optional: one the bridge lacks reads
+// as "not yet" instead of failing the page.
+(function () {
+  "use strict";
+  const api = () => window.mefiStudio || null;
+  // A host call that may be missing: null when the bridge has no such call.
+  async function host(name, ...args) {
+    const fn = api()?.[name];
+    return typeof fn === "function" ? fn(...args) : null;
+  }
+  const record = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  function node(tag, className, text) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    if (text !== undefined && text !== null) el.textContent = String(text);
+    return el;
+  }
+  function button(text, run, className = "ghost mini") {
+    const el = node("button", className, text);
+    el.type = "button";
+    el.addEventListener("click", run);
+    return el;
+  }
+  const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : (typeof error === "string" ? error : error?.message || error?.error) || fallback;
+  const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+  // "a, b and c"
+  const list = (items) => items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+  const percent = (rate) => `${Math.round(Math.max(0, Math.min(1, Number(rate) || 0)) * 100)}%`;
+  function dispatch(name, detail) {
+    try { if (typeof CustomEvent === "function") window.dispatchEvent?.(new CustomEvent(name, { detail })); } catch { /* no events here */ }
+  }
+
+  // A small "i": the how-to behind a row, out of the way until asked for.
+  // MefiUi.info (studio-ui.js) draws the shared one, a round button that opens
+  // a small popover. Until it is there, a focusable "i" carries the words as
+  // its tooltip and its accessible name.
+  function tip(text, label = "More about this") {
+    const info = window.MefiUi?.info;
+    if (typeof info === "function") {
+      try { const made = info(text, { label }); if (made) return made; } catch { /* the plain one below */ }
+    }
+    const el = node("span", "tm-tip", "i");
+    el.tabIndex = 0;
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", `${label}: ${text}`);
+    el.title = text;
+    return el;
+  }
+
+  // ---- words ------------------------------------------------------------------
+  // Model ids as people say them. The report card's models come named by the
+  // host (scripts/model-kinds.cjs modelName); the routes the team view lists
+  // carry only ids. Claude Code's short names stand for the current models.
+  // Anything else takes the model catalog's own name, else the id tidied.
+  const NAMES = Object.freeze({
+    opus: "Opus 5.5", sonnet: "Sonnet 5.5", haiku: "Haiku", fable: "Fable 5.1",
+    "claude-opus-5-5": "Opus 5.5", "claude-opus-5.5": "Opus 5.5", "claude-sonnet-5-5": "Sonnet 5.5", "claude-sonnet-5.5": "Sonnet 5.5",
+    "claude-haiku-4-5": "Haiku 4.5", "claude-fable-5-1": "Fable 5.1",
+    "gpt-6-luna": "GPT-6 Luna", "gpt-6-sol": "GPT-6 Sol", "gpt-6.1-sol": "GPT-6.1 Sol", "gpt-6-codex": "GPT-6 Codex", "gpt-5.6-luna": "GPT-5.6 Luna",
+    "deepseek-v4.1-flash": "DeepSeek V4.1 Flash", "deepseek-v4-flash": "DeepSeek V4 Flash", "deepseek-v4-pro": "DeepSeek V4 Pro",
+    "glm-5.3": "GLM-5.3", "glm-5.3-flash": "GLM-5.3 Flash", "glm-5.2": "GLM-5.2",
+    "openrouter/free": "Free models",
+  });
+  const TOOLS = Object.freeze({ claude: "Claude Code", codex: "Codex", grok: "Grok", antigravity: "Antigravity", opencode: "OpenCode" });
+  // Where a model runs: [short name, the words after a model's name].
+  const VIA = Object.freeze({
+    auto: ["Automatic", "picked automatically"],
+    claude: ["Claude login", "on your Claude login"],
+    codex: ["ChatGPT login", "on Codex with your ChatGPT login"],
+    chatgpt: ["ChatGPT plan", "on your ChatGPT plan"],
+    grok: ["Grok login", "on your Grok login"],
+    antigravity: ["Google login", "on Antigravity"],
+    opencode: ["OpenCode Go", "on OpenCode Go"],
+    zen: ["OpenCode Zen", "on OpenCode Zen"],
+    zai: ["z.ai", "on z.ai"],
+    openrouter: ["OpenRouter", "on OpenRouter"],
+    lmstudio: ["LM Studio on this PC", "on LM Studio"],
+    custom: ["Your own server", "on your own server"],
+  });
+  const PLACEHOLDER = /^(?:provider default|tool default|default)$/i;
+  const modelId = (model) => String(model ?? "").trim().replace(/^(?:opencode-go|opencode|mefi-zai|zai-coding-plan|openai|anthropic)\//i, "").toLowerCase();
+  const isDefault = (model) => { const raw = String(model ?? "").trim(); return !raw || PLACEHOLDER.test(raw) || /-default$/i.test(raw); };
+  let catalog = null;
+  function catalogName(id) {
+    if (catalog === null) {
+      catalog = new Map();
+      try { for (const entry of JSON.parse(document.getElementById("booklet-data")?.textContent || "{}").models || []) if (entry?.id && entry.name) catalog.set(String(entry.id).toLowerCase(), String(entry.name)); } catch { /* no catalog: tidy ids */ }
+    }
+    return catalog.get(id) || "";
+  }
+  function tidy(id) {
+    const words = id.split(/[-_\s]+/).filter(Boolean).map((part) => /^v?\d/.test(part) ? part.replace(/^v/, "V") : ["gpt", "glm", "lm", "ai"].includes(part) ? part.toUpperCase() : part[0].toUpperCase() + part.slice(1));
+    return words.join(" ").replace(/^(GPT|GLM) (\d)/, "$1-$2");
+  }
+  // Where a route's model comes from. A coding worker on OpenCode says by its
+  // model's prefix which OpenCode provider runs it, as the model record does
+  // (main.cjs workerLedgerIdentity: a bare id is an OpenCode Go model).
+  function viaOf(provider, model = "", { builder = false } = {}) {
+    const raw = String(provider ?? "");
+    if (!Object.hasOwn(VIA, raw)) return { key: "custom", name: raw || "Unknown", on: raw ? `on ${raw}` : "" };
+    let key = raw;
+    if (builder && raw === "opencode") {
+      const id = String(model ?? "").trim().toLowerCase();
+      key = id.startsWith("opencode/") ? "zen" : id.startsWith("mefi-zai/") ? "zai" : id.startsWith("openrouter/") ? "openrouter" : "opencode";
+    }
+    const [name, on] = VIA[key];
+    return { key, name, on };
+  }
+  function modelName(model, provider = "") {
+    const raw = String(model ?? "").trim();
+    if (isDefault(raw)) return provider === "auto" ? "Picked automatically" : TOOLS[provider] ? `${TOOLS[provider]}'s default` : `${viaOf(provider).name} default`;
+    if (NAMES[raw.toLowerCase()]) return NAMES[raw.toLowerCase()];
+    const id = modelId(raw);
+    return NAMES[id] || catalogName(id) || tidy(id.split("/").pop() || id);
+  }
+  // What a model family is good for, kept short (the prototype's MODEL_GOOD).
+  const GOOD_FOR = Object.freeze([
+    [/fable/, "The hardest problems"],
+    [/opus/, "Planning, review and hard bugs"],
+    [/sonnet/, "Balanced building and writing"],
+    [/haiku/, "Quick, simple answers"],
+    [/luna/, "Reading, checking and quick answers"],
+    [/(?:^|[-.])sol(?:$|-)/, "Plans and careful reviews"],
+    [/codex/, "Large refactors and long tasks"],
+    [/deepseek.*flash/, "Everyday building at low cost"],
+    [/deepseek.*pro/, "Harder building at low cost"],
+    [/glm/, "Tidying, summaries and small fixes"],
+    [/kimi/, "Long coding sessions"],
+    [/qwen/, "Everyday building"],
+    [/grok/, "Quick answers and code"],
+  ]);
+  function goodFor(model, provider = "", { builder = false } = {}) {
+    const id = isDefault(model) ? "" : modelId(model);
+    // Claude Code builds with its own tools whatever model it runs, Opus aside.
+    if (builder && provider === "claude" && !/opus|fable/.test(id)) return "Everyday building with its own tools";
+    for (const [pattern, words] of GOOD_FOR) if (id && pattern.test(id)) return words;
+    return provider === "codex" ? "Large refactors and long tasks" : provider === "claude" ? "Everyday building with its own tools" : "";
+  }
+
+  // ---- thinking ---------------------------------------------------------------
+  // Four levels, each the effort word the routes take (scripts/model-ladder.cjs).
+  const LEVELS = Object.freeze([["light", "low", "Light"], ["balanced", "medium", "Balanced"], ["deep", "high", "Deep"], ["max", "max", "Max"]]);
+  const LEVEL_OF = Object.freeze({ minimal: "light", low: "light", medium: "balanced", high: "deep", xhigh: "deep", max: "max", ultra: "max" });
+  const EFFORT_OF = Object.freeze({ light: "low", balanced: "medium", deep: "high", max: "max" });
+  const LEVEL_WORD = Object.freeze({ auto: "Auto", light: "Light", balanced: "Balanced", deep: "Deep", max: "Max" });
+  const MODES = Object.freeze(["auto", "light", "balanced", "deep"]);
+  // The team's thinking choices (agentThinking) with the defaults filled in.
+  function thinkingOf(item) {
+    const raw = { ...(record(item?.saved?.thinking) ? item.saved.thinking : {}), ...(record(item?.configuration?.agentThinking) ? item.configuration.agentThinking : {}) };
+    const flag = (key) => typeof raw[key] === "boolean" ? raw[key] : true;
+    return { mode: MODES.includes(raw.mode) ? raw.mode : "auto", climb: flag("climb"), askMax: flag("askMax"), explore: flag("explore") };
+  }
+  // The effort words a provider and model take, as agent-profiles.capabilities
+  // reads them when Apply checks a role's or a seat's effort: the Responses API
+  // routes for GPT-5 and GPT-6 models, Claude Code but for Haiku, and Codex.
+  function capable(provider, model = "") {
+    const id = String(model ?? "").toLowerCase().replace(/^openai\//, "");
+    const extended = /^gpt-6(?:\.\d+)?-/.test(id);
+    const reasoning = (provider === "zen" || provider === "chatgpt" || provider === "openrouter" && /^openai\//i.test(String(model))) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
+    if (reasoning) return extended ? ["minimal", "low", "medium", "high", "xhigh", "max"] : ["low", "medium", "high"];
+    if (provider === "claude") return /haiku/i.test(id) ? [] : ["low", "medium", "high", "xhigh", "max"];
+    if (provider === "codex") return ["low", "medium", "high", "xhigh"];
+    return [];
+  }
+
+  // ---- the jobs -----------------------------------------------------------------
+  const JOBS = Object.freeze([
+    { id: "companion", job: "Talks with you", who: "Companion", kind: "seat", does: "talks with you" },
+    { id: "routine", job: "Quick answers and checks", who: "Routine assistant", kind: "role", does: "answers quick questions" },
+    { id: "heavy", job: "Plans and reviews", who: "Planning and review", kind: "role", does: "plans and reviews" },
+    { id: "builder", job: "Writes the code", who: "Coding worker", kind: "builder", does: "writes the code" },
+    { id: "lead", job: "Leads big jobs", who: "Lead", kind: "seat", does: "leads big jobs" },
+    { id: "desk", job: "Unsticks workers", who: "Desk", kind: "seat", does: "unsticks workers" },
+    { id: "scout", job: "Finds the starting files", who: "Scout", kind: "seat", does: "finds the starting files" },
+    { id: "overseer", job: "Watches the whole team", who: "Overseer", kind: "seat", does: "watches the team" },
+  ]);
+  // A seat's defaults, as renderer/agents.js and main.cjs SEAT_DEFAULTS have them.
+  const seatDefaults = (seat) => ({ provider: seat === "overseer" ? "auto" : "zen", model: ["companion", "scout"].includes(seat) ? "gpt-6-luna" : "gpt-6.1-sol", effort: seat === "scout" ? "low" : "medium", fast: ["companion", "scout"].includes(seat) });
+  // One job's route in a team configuration, read the way renderConfiguration()
+  // reads it: provider, model, the model Apply checks an effort against, and
+  // the effort the owner set (empty when Studio decides).
+  function routeIn(configuration, saved, job) {
+    const config = record(configuration) ? configuration : {};
+    if (job.kind === "role") {
+      const provider = config.aiRoleProviders?.[job.id] || config.aiProvider || "auto";
+      const model = config.aiModelsByProvider?.[provider]?.[job.id] ?? (["auto", "zen", "zai", "opencode"].includes(provider) ? config.aiModels?.[job.id] || "" : "");
+      return { provider, model: String(model || ""), checked: String(config.aiModelsByProvider?.[provider]?.[job.id] || config.aiModels?.[job.id] || ""), tier: "", effort: String(config.agentEfforts?.[job.id] || "") };
+    }
+    if (job.kind === "seat") {
+      const value = { ...seatDefaults(job.id), ...(record(saved?.seats?.[job.id]) ? saved.seats[job.id] : {}), ...(record(config.agentSeats?.[job.id]) ? config.agentSeats[job.id] : {}) };
+      const provider = String(value.provider || "zen"), model = String(value.model || "");
+      return { provider, model, checked: model || (provider === "zen" ? "gpt-6.1-sol" : ""), tier: "", effort: String(config.agentSeats?.[job.id]?.effort || "") };
+    }
+    const cli = config.executorCli || "opencode", tier = config.executorTier || "auto";
+    const model = tier === "auto" ? config.executorModels?.[cli] ?? config.executorModel ?? "" : config.executorTierModels?.[cli]?.[tier] || "";
+    return { provider: cli, model: String(model || ""), checked: String(model || ""), tier, effort: String(config.agentEfforts?.builder || "") };
+  }
+  // How the model record files a coding worker's runs (main.cjs workerLedgerIdentity).
+  function ledgerKey(cli, model) {
+    const named = String(model || "");
+    if (["grok", "claude", "codex", "antigravity"].includes(cli)) return `${cli}::${named || `${cli}-default`}`;
+    if (/^mefi-zai\//.test(named)) return `zai::${named.replace(/^mefi-zai\//, "")}`;
+    return `opencode::${(named || "opencode-default").replace(/^opencode-go\//, "")}`;
+  }
+  const verdictOf = (wins, settled) => settled < 5 ? "few" : wins / settled >= 0.6 ? "good" : wins / settled >= 0.4 ? "ok" : "weak";
+  // The coding worker's record on this PC, from the report card.
+  // `known` is the host's own ledger key for the worker as it is set up
+  // (teamReport's builder.key), used while the draft has not moved it.
+  function resultOf(report, cli, model, name, known = null) {
+    const models = Array.isArray(report?.models) ? report.models : [];
+    const key = known || ledgerKey(cli, isDefault(model) ? "" : model);
+    const entry = models.find((item) => item?.key === key) || models.find((item) => name && item?.name === name);
+    const settled = Number(entry?.settled) || 0;
+    if (!entry || !settled) return null;
+    const wins = Math.max(0, Number(entry.wins) || 0);
+    return { wins, settled, rate: wins / settled, verdict: verdictOf(wins, settled) };
+  }
+  // Each job as Who does what shows it. The applied route (agents:state's
+  // choices) names the real model, Automatic resolved; a job the draft moved
+  // shows the draft's choice until Apply. Thinking offers the levels the route
+  // takes: a role or a seat one its own provider and model take (Apply refuses
+  // anything else) and the applied route lists, none of its own on Automatic;
+  // the coding worker all four, which each attempt fits to its model.
+  function jobRows(item, report = null) {
+    const thinking = thinkingOf(item), saved = record(item?.saved) ? item.saved : {};
+    return JOBS.map((job) => {
+      const now = routeIn(item?.configuration, saved, job), before = routeIn(saved.configuration, saved, job);
+      const pending = now.provider !== before.provider || now.model !== before.model || now.tier !== before.tier;
+      const choice = !pending && record(saved.choices?.[job.id]) ? saved.choices[job.id] : null;
+      const builder = job.kind === "builder";
+      const provider = String(choice?.provider || now.provider);
+      const model = choice ? (isDefault(choice.model) ? "" : String(choice.model)) : now.model;
+      let words = builder ? ["low", "medium", "high", "max"] : now.provider === "auto" ? [] : capable(now.provider, now.checked);
+      if (!builder && choice && Array.isArray(choice.efforts)) words = words.filter((word) => choice.efforts.includes(word));
+      const explicit = LEVEL_OF[now.effort] || "";
+      const levels = LEVELS.map(([level]) => level).filter((level) => words.includes(EFFORT_OF[level]) || level === explicit);
+      // A job with no level of its own shows the team's fixed level when it takes it.
+      const level = explicit || (thinking.mode !== "auto" && levels.includes(thinking.mode) ? thinking.mode : "");
+      const name = modelName(model, provider);
+      return {
+        ...job, provider, model, name, pending, via: viaOf(provider, model, { builder }), good: goodFor(model, provider, { builder }),
+        ok: choice ? choice.ok !== false : true, reason: String(choice?.reason || ""),
+        levels, level, explicit: Boolean(explicit), result: builder ? resultOf(report, provider, model, name, !pending && typeof report?.builder?.key === "string" ? report.builder.key : null) : null,
+      };
+    });
+  }
+  // Who does what, in a sentence per model: "Opus 5.5 on your Claude login plans and reviews."
+  function subjectOf(row) {
+    if (row.provider === "auto") return "A model Studio picks";
+    if (isDefault(row.model)) return TOOLS[row.provider] && row.provider !== "opencode" ? TOOLS[row.provider] : `${row.via.name}'s default model`;
+    return `${row.name} ${row.via.on}`;
+  }
+  function nowSentences(rows) {
+    const groups = [];
+    for (const row of rows) {
+      const key = `${row.via.key}|${row.provider === "auto" ? "auto" : row.name}`;
+      let group = groups.find((entry) => entry.key === key);
+      if (!group) groups.push(group = { key, row, does: [] });
+      group.does.push(row.does);
+    }
+    return groups.sort((a, b) => b.does.length - a.does.length).map(({ row, does }) => `${subjectOf(row)} ${list(does)}.`);
+  }
+
+  // ---- what each choice says ------------------------------------------------------
+  const THINK_LEAD = Object.freeze({
+    auto: "Every job starts with light thinking and thinks harder only when it gets stuck.",
+    light: "Every job thinks lightly. Fastest, and easiest on your plan.",
+    balanced: "Every job thinks at a balanced level.",
+    deep: "Every job thinks deeply. Slower, and it uses more of your plan.",
+  });
+  const HINTS = Object.freeze({
+    pick: { jev: "Each kind of job goes to the model with the best results on this PC. Your picks below are where it starts.", fixed: "Studio uses exactly the models below for every kind of job." },
+    mode: { auto: "Starts light. When a check fails, the retry thinks one step harder.", light: "Always light. Fastest, and easiest on your plan.", balanced: "Always balanced. Slower than light, steadier on bigger jobs.", deep: "Always deep. Best for hard work, heavy on your plan." },
+    climb: { step: "Think harder first. After two misses on the same model, a stronger model takes the job.", same: "Retries use the same model and thinking. A job that keeps failing waits for you." },
+    askMax: { on: "Max thinking waits for your OK.", off: "Studio may use Max thinking without asking." },
+    explore: { on: "When a kind of job keeps failing, Studio tries another model on the next 5 and keeps it only if it does better.", off: "Studio only suggests other models, in the report card.", fixed: "Only while Pick models for me is on Auto." },
+    subs: { on: "Claude and ChatGPT logins before pay-per-use keys.", off: "Studio follows your provider order, keys included." },
+  });
+  const TIPS = Object.freeze({
+    pick: "Auto sends each kind of job (building features, exploring a codebase, fixing bugs) to the model with the best record on this PC, and may try another model on a few jobs to learn. I choose keeps every job on the models you set below.",
+    mode: "Light is quick and easy on your plan. Balanced and Deep think longer and use more of it. Auto starts light and steps up only when a job gets stuck. A model with no thinking setting keeps its own.",
+    climb: "Step up: after a failed check the retry thinks one step harder, and after two misses on one model a stronger one takes over (Flash to Pro on OpenCode Go, Sonnet to Opus on Claude Code). With a fixed thinking level only the model moves. Retry the same way: every retry runs like the first.",
+    askMax: "Max thinking uses the most of your plan. With this on, a job that would need it waits for your OK.",
+    explore: "Studio runs at most one trial of its own at a time, on a kind of job the usual model keeps failing, and says so in the feed. A trial uses a subscription first.",
+    subs: "Signed-in Claude Code and ChatGPT logins answer before API keys that bill per use. Off: Studio walks your provider order, under More settings.",
+    who: "Change a job's thinking here. Change opens that job's card under More settings, where its provider, exact model, tools, skills and habits live.",
+    report: "From coding tasks Studio checked on this PC. Good means at least 6 in 10 passed, OK at least 4 in 10, Weak fewer. Five checked tasks come before a verdict. Try it sends the next 5 jobs of that kind to the suggested model, and Studio keeps it only if it does clearly better.",
+    ladder: "Every job starts light. A failed check makes the retry think one step harder. After two misses on the same model, a stronger model takes the job and can think deeper. Max waits for you unless you turned that off. When a harder step works for a kind of job, that kind starts there next time.",
+  });
+
+  // ---- state ------------------------------------------------------------------
+  const NOT_NOW_KEY = "mefiStudio.teamModels.notNow";
+  const state = {
+    root: null, ctx: null, ui: null, rows: new Map(),
+    report: null, reportFor: undefined, reportError: "", reportSerial: 0, reportBusy: false, reportPainted: null, flash: null, hidden: new Set(),
+    accounts: null, accountsSerial: 0, accountsBusy: false,
+  };
+  const ctx = () => state.ctx || prov.ctx || {};
+  const projectIdOf = () => { try { return ctx().projectId?.() ?? null; } catch { return null; } };
+  const draftOf = () => { try { return ctx().draft?.() || null; } catch { return null; } };
+  function notNow() {
+    try { const saved = JSON.parse(window.localStorage?.getItem(NOT_NOW_KEY) || "[]"); return Array.isArray(saved) ? saved.filter((id) => typeof id === "string") : []; } catch { return []; }
+  }
+  function rememberNotNow(id) {
+    const ids = [...notNow().filter((item) => item !== id), id].slice(-40);
+    try { window.localStorage?.setItem(NOT_NOW_KEY, JSON.stringify(ids)); } catch { /* this visit only */ }
+    state.hidden.add(id);
+  }
+
+  // ---- Seats and models: the page ------------------------------------------------
+  // Search finds the new parts by the Team place that holds them, as it finds
+  // the cards agents.js moved ("Team › <place> › <words>", settings:<id>), and
+  // opens the place at them (openTeam scrolls to and focuses the target).
+  function searchable(id, words, desc, place) {
+    const where = place === "providers" ? "Providers" : "Seats and models";
+    window.MefiNav?.register?.({ id: `settings:${id}`, kind: "action", section: "agents", group: "tools", label: `Team › ${where} › ${words}`, desc: String(desc || "").slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => ctx().go?.("agents", { place, target: id }) });
+  }
+  function panel(id, title, help) {
+    const box = node("section", "agents-card tm-panel"); box.id = id;
+    const head = node("div", "tm-head"), heading = node("h2", "tm-title", title); heading.id = `${id}-title`;
+    heading.tabIndex = -1;
+    head.append(heading);
+    if (help) head.append(tip(help, `About ${title.toLowerCase()}`));
+    box.setAttribute("aria-labelledby", heading.id);
+    box.append(head);
+    return { box, head, heading };
+  }
+  // A segmented choice (the app's .segmented, which every theme styles): one
+  // button per value, the chosen one pressed.
+  function segmented(label, options, pick) {
+    const group = node("div", "segmented tm-seg"); group.setAttribute("role", "group"); group.setAttribute("aria-label", label);
+    const items = options.map(([value, text]) => {
+      const item = button(text, () => { if (item.getAttribute("aria-pressed") !== "true") pick(value); }, "tm-seg-item");
+      item.dataset.value = value; item.setAttribute("aria-pressed", "false");
+      group.append(item);
+      return item;
+    });
+    return { el: group, set(value, disabled = false) { for (const item of items) { item.setAttribute("aria-pressed", String(item.dataset.value === value)); item.disabled = disabled; } } };
+  }
+  function toggle(label, change) {
+    const input = node("input", "tm-switch"); input.type = "checkbox"; input.setAttribute("role", "switch"); input.setAttribute("aria-label", label);
+    input.addEventListener("change", () => change(input.checked));
+    return { el: input, set(on, disabled = false) { input.checked = Boolean(on); input.disabled = disabled; } };
+  }
+  // The six choices, in the mockup's order. Each writes one team field.
+  const DECIDE = Object.freeze([
+    { key: "pick", title: "Pick models for me", control: "segmented", options: [["jev", "Auto"], ["fixed", "I choose"]] },
+    { key: "mode", title: "How hard to think", control: "segmented", options: [["auto", "Auto"], ["light", "Light"], ["balanced", "Balanced"], ["deep", "Deep"]] },
+    { key: "climb", title: "When a job gets stuck", control: "segmented", options: [["step", "Step up"], ["same", "Retry the same way"]] },
+    { key: "askMax", title: "Ask me before Max thinking", control: "switch" },
+    { key: "explore", title: "Try other models now and then", control: "switch" },
+    { key: "subs", title: "Use my subscriptions first", control: "switch" },
+  ]);
+  function choose(key, value) {
+    const item = draftOf(); if (!item?.configuration) return;
+    const config = item.configuration;
+    if (key === "pick") config.modelSelection = value === "fixed" ? "fixed" : "jev";
+    else if (key === "subs") config.aiSubscriptionFirst = Boolean(value);
+    else {
+      const next = thinkingOf(item);
+      if (key === "mode") next.mode = MODES.includes(value) ? value : "auto";
+      else if (key === "climb") next.climb = value === "step";
+      else next[key] = Boolean(value);
+      config.agentThinking = next;
+    }
+    changed();
+  }
+  // One job's thinking: the effort word the level means, or empty for Auto.
+  function setLevel(job, level) {
+    const item = draftOf(); if (!item?.configuration) return;
+    const config = item.configuration, effort = EFFORT_OF[level] || "";
+    if (job.kind === "seat") {
+      const value = { ...seatDefaults(job.id), ...(record(item.saved?.seats?.[job.id]) ? item.saved.seats[job.id] : {}), ...(record(config.agentSeats?.[job.id]) ? config.agentSeats[job.id] : {}) };
+      config.agentSeats = { ...config.agentSeats, [job.id]: { ...value, effort } };
+    } else config.agentEfforts = { ...config.agentEfforts, [job.id]: effort };
+    changed();
+  }
+  // The draft changed: agents.js marks it dirty (Apply lights up) and repaints
+  // the page, this part included. Without agents.js this repaints itself.
+  function changed() {
+    if (typeof ctx().changed === "function") ctx().changed();
+    else render();
+  }
+
+  function mount(root, context = {}) {
+    if (!root) return;
+    state.ctx = context;
+    if (state.root === root) { render(); return; }
+    state.root = root; state.rows.clear();
+    root.classList.add("team-models");
+    const ui = state.ui = {};
+    // Right now
+    const now = panel("tm-now", "Right now");
+    ui.lead = node("p", "tm-lead"); ui.think = node("p", "tm-lead tm-lead-2"); ui.chips = node("div", "tm-chips");
+    now.box.append(ui.lead, ui.think, ui.chips);
+    // How Studio decides
+    const decide = panel("tm-decide", "How Studio decides");
+    const rows = node("div", "tm-rows");
+    ui.decide = {};
+    for (const choice of DECIDE) {
+      const row = node("div", "settings-control tm-row"); row.dataset.choice = choice.key;
+      row.id = `tm-choice-${choice.key}`; row.tabIndex = -1;
+      searchable(row.id, choice.title, TIPS[choice.key], "seats");
+      const words = node("span", "tm-row-words"), title = node("span", "tm-row-title"), hint = node("small", "tm-hint");
+      hint.id = `tm-hint-${choice.key}`;
+      title.append(node("b", "", choice.title), tip(TIPS[choice.key], `About ${choice.title.toLowerCase()}`));
+      words.append(title, hint);
+      const control = choice.control === "switch" ? toggle(choice.title, (on) => choose(choice.key, on)) : segmented(choice.title, choice.options, (value) => choose(choice.key, value));
+      control.el.setAttribute("aria-describedby", hint.id);
+      row.append(words, control.el);
+      rows.append(row);
+      ui.decide[choice.key] = { control, hint };
+    }
+    decide.box.append(rows);
+    // Who does what
+    const who = panel("tm-who", "Who does what", TIPS.who);
+    const table = node("div", "tm-table"); table.setAttribute("role", "table"); table.setAttribute("aria-labelledby", who.heading.id);
+    const header = node("div", "tm-tr"); header.setAttribute("role", "row");
+    // The last column holds the Change buttons: named for a screen reader, blank on the page.
+    for (const text of ["Job", "Model", "Thinking", "Results on this PC", ""]) { const cell = node("div", "tm-th", text); cell.setAttribute("role", "columnheader"); if (!text) cell.setAttribute("aria-label", "Change"); header.append(cell); }
+    ui.tbody = node("div", "tm-tbody"); ui.tbody.setAttribute("role", "rowgroup");
+    const head = node("div", "tm-thead-group"); head.setAttribute("role", "rowgroup"); head.append(header);
+    table.append(head, ui.tbody);
+    who.box.append(table);
+    // Report card
+    const report = panel("tm-report", "Report card", TIPS.report);
+    ui.reportHeading = report.heading;
+    ui.reportSub = node("p", "tm-sub");
+    ui.reportBody = node("div", "tm-report-body");
+    ui.reportSay = node("p", "tm-say"); ui.reportSay.setAttribute("role", "status");
+    report.box.append(ui.reportSub, ui.reportBody, ui.reportSay);
+    // How thinking works
+    const ladder = panel("tm-ladder", "How thinking works", TIPS.ladder);
+    ui.ladder = node("ol", "tm-rungs");
+    ladder.box.append(node("p", "tm-sub", "Light thinking is fast and saves your plan. Studio spends more only when a job needs it."), ui.ladder);
+    root.replaceChildren(now.box, decide.box, who.box, report.box, ladder.box);
+    searchable(who.heading.id, "Who does what", TIPS.who, "seats");
+    searchable(report.heading.id, "Report card", "What each model is good and bad at, from coding tasks Studio checked on this PC.", "seats");
+    searchable(ladder.heading.id, "How thinking works", TIPS.ladder, "seats");
+    render();
+  }
+
+  function render() {
+    const ui = state.ui; if (!ui) return;
+    const item = draftOf();
+    if (!item?.configuration) {
+      ui.lead.textContent = "Reading your team…"; ui.think.textContent = ""; ui.chips.replaceChildren();
+      for (const { control } of Object.values(ui.decide)) control.set(null, true);
+      return;
+    }
+    const projectId = projectIdOf();
+    if (state.reportFor !== projectId && !state.reportBusy) void loadReport();
+    if (state.accounts === null && !state.accountsBusy) void loadAccounts();
+    const rows = jobRows(item, state.report);
+    paintNow(item, rows);
+    paintDecide(item);
+    paintTable(rows, thinkingOf(item));
+    paintReport();
+    paintLadder(thinkingOf(item));
+  }
+
+  function paintNow(item, rows) {
+    const ui = state.ui, config = item.configuration, thinking = thinkingOf(item);
+    ui.lead.textContent = nowSentences(rows).join(" ");
+    ui.think.textContent = thinking.mode === "auto" && !thinking.climb ? "Every job starts with light thinking, and a retry thinks the same way." : THINK_LEAD[thinking.mode];
+    const chip = (text, warn = false) => { const el = node("span", "tm-chip"); if (warn) el.dataset.tone = "warn"; const dot = node("i"); dot.setAttribute("aria-hidden", "true"); el.append(dot, node("span", "", text)); return el; };
+    const chips = [chip(config.modelSelection === "fixed" ? "You pick each model" : "Studio picks the best model per job"), chip(config.aiSubscriptionFirst === false ? "Your provider order first" : "Subscriptions first")];
+    const claude = (state.accounts?.ok ? state.accounts.providers || [] : []).find((entry) => entry?.id === "claude");
+    if (claude && (claude.installed || (claude.accounts || []).length > 1)) {
+      const logins = Math.max(1, (claude.accounts || []).length);
+      const one = chip(count(logins, "Claude login"), logins === 1);
+      chips.push(one);
+      // One login stops at its limit; a second one carries on (Providers › Your subscriptions).
+      if (logins === 1) chips.push(button("Add a second one in Providers", () => ctx().go?.("agents", { place: "providers", target: "team-subscriptions" }), "tm-link"));
+    }
+    ui.chips.replaceChildren(...chips);
+  }
+
+  function paintDecide(item) {
+    const ui = state.ui, config = item.configuration, thinking = thinkingOf(item);
+    const pick = config.modelSelection === "fixed" ? "fixed" : "jev";
+    const set = (key, value, hint) => { ui.decide[key].control.set(value); ui.decide[key].hint.textContent = hint; };
+    set("pick", pick, HINTS.pick[pick]);
+    set("mode", thinking.mode, HINTS.mode[thinking.mode]);
+    // With a fixed level, Step up only moves the job to a stronger model (model-ladder builderStep).
+    set("climb", thinking.climb ? "step" : "same", !thinking.climb ? HINTS.climb.same : thinking.mode === "auto" ? HINTS.climb.step : `After two misses, a stronger model takes the job. Thinking stays ${LEVEL_WORD[thinking.mode].toLowerCase()}.`);
+    set("askMax", thinking.askMax, thinking.askMax ? HINTS.askMax.on : HINTS.askMax.off);
+    set("explore", thinking.explore, pick === "fixed" ? HINTS.explore.fixed : thinking.explore ? HINTS.explore.on : HINTS.explore.off);
+    set("subs", config.aiSubscriptionFirst !== false, config.aiSubscriptionFirst !== false ? HINTS.subs.on : HINTS.subs.off);
+  }
+
+  // Who does what: one row per job, kept between paints so a select keeps its
+  // focus while its own change repaints the page.
+  function paintTable(rows, thinking) {
+    const ui = state.ui;
+    for (const row of rows) {
+      let entry = state.rows.get(row.id);
+      if (!entry || entry.tr.parentNode !== ui.tbody) { entry = makeRow(row); state.rows.set(row.id, entry); ui.tbody.append(entry.tr); }
+      fillRow(entry, row, thinking);
+    }
+  }
+  function makeRow(job) {
+    const tr = node("div", "tm-tr"); tr.setAttribute("role", "row"); tr.dataset.job = job.id;
+    const cell = (className, role = "cell") => { const el = node("div", `tm-td ${className}`); el.setAttribute("role", role); tr.append(el); return el; };
+    const jobCell = cell("tm-td-job", "rowheader");
+    jobCell.append(node("b", "", job.job), node("small", "", job.who));
+    const model = cell("tm-td-model"), think = cell("tm-td-think"), result = cell("tm-td-result"), change = cell("tm-td-change");
+    const select = node("select", "tm-think"); select.id = `tm-think-${job.id}`; select.setAttribute("aria-label", `Thinking for ${job.job.toLowerCase()}`);
+    select.addEventListener("change", () => setLevel(job, select.value));
+    const auto = node("span", "tm-none", "Auto"); auto.title = "Follows How hard to think";
+    const mine = node("small", "tm-set", "You set this");
+    think.append(select, auto, mine);
+    const go = button("Change", () => ctx().reveal?.(job.id), "ghost mini tm-change");
+    go.setAttribute("aria-label", `Change ${job.job.toLowerCase()}`);
+    change.append(go);
+    return { tr, model, think, result, select, auto, mine, sig: "" };
+  }
+  function fillRow(entry, row, thinking) {
+    const maxLabel = thinking.askMax ? "Max (asks you)" : "Max";
+    const sig = JSON.stringify([row.provider, row.model, row.name, row.via.key, row.good, row.pending, row.ok, row.reason, row.levels, maxLabel, row.result]);
+    if (entry.sig !== sig) {
+      entry.sig = sig;
+      const line = node("div", "tm-model"), dot = node("span", "tm-dot");
+      dot.dataset.provider = row.via.key; dot.setAttribute("aria-hidden", "true");
+      line.append(dot, node("b", "", row.name));
+      const where = node("small", "", row.good ? `${row.via.name} · Good for: ${row.good}` : row.via.name);
+      const parts = [line, where];
+      if (row.pending) parts.push(node("small", "tm-pending", "After you apply"));
+      if (!row.ok) { const warn = node("small", "tm-warn", "Not ready "); warn.append(tip(row.reason || "This route cannot answer right now.", "Why")); parts.push(warn); }
+      entry.model.replaceChildren(...parts);
+      // The select is kept (and with it any focus): only its options change.
+      const options = [["", "Auto"], ...row.levels.map((level) => [level, level === "max" ? maxLabel : LEVEL_WORD[level]])].map(([value, text]) => { const option = node("option", "", text); option.value = value; return option; });
+      entry.select.replaceChildren(...options);
+      entry.result.replaceChildren(...resultCell(row));
+    }
+    const offered = row.levels.length > 0;
+    entry.select.hidden = !offered; entry.auto.hidden = offered;
+    if (entry.select.value !== row.level) entry.select.value = row.level;
+    entry.mine.hidden = !row.explicit;
+  }
+  function resultCell(row) {
+    if (row.kind !== "builder") return [node("span", "tm-none", "Not checked by tests")];
+    if (!row.result) return [node("span", "tm-none", "No checked results yet")];
+    const box = node("div", "tm-res");
+    box.append(node("span", "", `${row.result.wins} of ${row.result.settled} passed checks`), bar(row.result.rate, row.result.verdict));
+    return [box];
+  }
+  function bar(rate, verdict) {
+    const track = node("span", "tm-bar"), fill = node("i");
+    track.setAttribute("aria-hidden", "true");
+    fill.dataset.verdict = verdict; fill.style.width = percent(rate);
+    track.append(fill);
+    return track;
+  }
+
+  // ---- the report card ----------------------------------------------------------
+  async function loadReport() {
+    const serial = ++state.reportSerial, projectId = projectIdOf();
+    state.reportBusy = true; state.reportFor = projectId;
+    let result = null, error = "";
+    try { result = await host("teamReport", { projectId }); } catch (caught) { error = plain(caught, "The report card could not be read."); }
+    if (serial !== state.reportSerial) return;
+    state.reportBusy = false;
+    // A refusal is said once; the next open (or another project) reads again.
+    if (result && result.ok === false) { error = plain(result.error, "The report card could not be read."); result = null; }
+    state.report = result; state.reportError = error;
+    if (state.ui) render();
+  }
+  const VERDICT_WORDS = Object.freeze({ good: "Good", ok: "OK", weak: "Weak", few: "Too few to tell" });
+  const VERDICT_RANK = Object.freeze({ good: 0, ok: 1, weak: 2, few: 3 });
+  function dateWords(from, to) {
+    const day = (value) => { const date = new Date(Number(value)); return Number.isFinite(date.getTime()) && Number(value) > 0 ? date.toLocaleDateString(undefined, { day: "numeric", month: "short" }) : ""; };
+    const first = day(from), last = day(to);
+    return first && last ? first === last ? first : `${first} to ${last}` : "";
+  }
+  // The card is repainted only when something it shows changed, so a draft edit
+  // elsewhere on the page leaves its buttons (and the focus on one) alone. The
+  // line under it always says how the last Try it, Not now or Stop went.
+  function paintReport() {
+    const ui = state.ui, body = ui.reportBody;
+    say(ui.reportSay, state.flash?.text || "", state.flash?.tone || "");
+    const report = state.report;
+    const painted = JSON.stringify([report, state.reportError, state.reportBusy, [...state.hidden]]);
+    if (state.reportPainted === painted) return;
+    state.reportPainted = painted;
+    const models = Array.isArray(report?.models) ? report.models.filter(record) : [];
+    const checked = Number(report?.checked) || 0;
+    const range = dateWords(report?.from, report?.to);
+    ui.reportSub.textContent = checked && models.length ? `${count(checked, "checked task")} on this PC${range ? `, ${range}` : ""}.` : "";
+    ui.reportSub.hidden = !ui.reportSub.textContent;
+    const parts = [];
+    if (state.reportError) {
+      const again = button("Try again", () => { state.reportError = ""; void loadReport(); });
+      const line = node("p", "tm-empty", "The results could not be read. "); line.append(again);
+      parts.push(line);
+    } else if (!report) parts.push(node("p", "tm-empty", state.reportBusy ? "Reading the results…" : "Results show up here after Studio checks a few coding tasks."));
+    else if (!checked || !models.length) parts.push(node("p", "tm-empty", "Results show up here after Studio checks a few coding tasks."));
+    else {
+      const grid = node("div", "tm-rc"), left = node("div", "tm-rc-models"), right = node("div", "tm-rc-side");
+      for (const entry of models) left.append(modelCard(entry));
+      const untried = (Array.isArray(report.untried) ? report.untried : []).filter(record);
+      if (untried.length) {
+        const names = untried.slice(0, 6).map((item) => `${item.name || modelName(item.model, item.cli)} (${viaOf(item.cli, item.model, { builder: true }).name})`);
+        const more = untried.length > 6 ? ` and ${untried.length - 6} more` : "";
+        left.append(node("p", "tm-untried", `Not tried for coding yet: ${list(names)}${more}.${models.length === 1 ? " Studio has built with one model so far, so it has had nothing to compare." : ""}`));
+      }
+      const ideas = suggestionsOf(report);
+      for (const idea of ideas) right.append(ideaCard(idea));
+      if (right.children.length) grid.append(left, right); else { grid.classList.add("tm-rc-one"); grid.append(left); }
+      parts.push(grid);
+    }
+    const routes = routesOf(report);
+    if (routes.length) parts.push(routesList(routes));
+    body.replaceChildren(...parts);
+  }
+  function modelCard(entry) {
+    const box = node("div", "tm-rc-model");
+    const title = node("div", "tm-model"), dot = node("span", "tm-dot"), via = viaOf(entry.provider, entry.model, { builder: true });
+    dot.dataset.provider = via.key; dot.setAttribute("aria-hidden", "true");
+    title.append(dot, node("b", "", entry.name || modelName(entry.model, entry.provider)), node("span", "tm-pill", `${via.name} · ${Number(entry.settled) || 0} checked`));
+    box.append(title);
+    const kinds = (Array.isArray(entry.kinds) ? entry.kinds.filter(record) : []).slice().sort((a, b) => (VERDICT_RANK[a.verdict] ?? 3) - (VERDICT_RANK[b.verdict] ?? 3) || (Number(b.rate) || 0) - (Number(a.rate) || 0));
+    const skills = node("ul", "tm-skills");
+    for (const kind of kinds) {
+      const verdict = Object.hasOwn(VERDICT_WORDS, kind.verdict) ? kind.verdict : "few";
+      const settled = Number(kind.settled) || 0, wins = Number(kind.wins) || 0, rate = settled ? wins / settled : 0;
+      const row = node("li", "tm-skill"); row.dataset.kind = String(kind.taskType || "");
+      const words = node("span", "tm-skill-k");
+      words.append(node("span", "", kind.label || kind.taskType || "Coding"), node("small", "", `${wins} of ${settled} passed`));
+      const said = node("span", "tm-verdict", verdict === "few" ? VERDICT_WORDS.few : `${VERDICT_WORDS[verdict]} · ${percent(rate)}`);
+      said.dataset.verdict = verdict;
+      row.append(words, bar(rate, verdict), said);
+      skills.append(row);
+    }
+    box.append(skills);
+    return box;
+  }
+  function suggestionsOf(report) {
+    const hidden = new Set([...notNow(), ...(state.hidden || [])]);
+    return (Array.isArray(report?.suggestions) ? report.suggestions : []).filter((idea) => record(idea) && idea.id && !hidden.has(idea.id) && record(idea.to));
+  }
+  function ideaCard(idea) {
+    const box = node("div", "tm-idea"); box.dataset.suggestion = idea.id;
+    box.append(node("b", "tm-idea-title", "Suggestion"), node("p", "", idea.text || `Send ${String(idea.label || "these").toLowerCase()} jobs to ${idea.to.name || modelName(idea.to.model, idea.to.cli)}.`));
+    if (idea.detail) box.append(node("small", "", idea.detail));
+    const actions = node("div", "tm-actions");
+    const tryIt = button("Try it", () => void startTrial(idea, tryIt), "primary mini");
+    const later = button("Not now", () => {
+      rememberNotNow(idea.id);
+      state.flash = { text: "Kept as it is." };
+      paintReport();
+      state.ui?.reportHeading?.focus?.({ preventScroll: true });
+    }, "ghost mini");
+    actions.append(tryIt, later);
+    box.append(actions);
+    return box;
+  }
+  function routesOf(report) {
+    const kinds = record(report?.kinds) ? report.kinds : {};
+    return Object.entries(kinds).filter(([, route]) => record(route)).map(([taskType, route]) => ({ taskType, ...route }));
+  }
+  function routeWords(route) {
+    if (record(route.trial)) {
+      const size = Math.max(1, Number(route.trial.size) || 5), left = Math.max(0, Math.min(size, Number(route.trial.left) || 0));
+      return `trying, ${size - left} of ${size} done`;
+    }
+    if (record(route.kept)) { const wins = Number(route.kept.wins) || 0, all = wins + (Number(route.kept.losses) || 0); return all ? `kept, it passed ${wins} of ${all}` : "kept"; }
+    return route.by === "studio" ? "Studio's pick" : "your pick";
+  }
+  function routesList(routes) {
+    const box = node("div", "tm-routes");
+    box.append(node("h3", "tm-routes-title", "Kinds of jobs on another model"));
+    const rows = node("ul", "tm-route-list");
+    for (const route of routes) {
+      const row = node("li", "tm-route"); row.dataset.kind = route.taskType;
+      const label = route.label || route.taskType;
+      const words = node("span", "tm-route-words", `${label} → ${route.name || modelName(route.model, route.cli)} (${routeWords(route)})`);
+      const stop = button("Stop", () => void stopRoute(route, stop), "ghost mini");
+      stop.setAttribute("aria-label", `Stop sending ${String(label).toLowerCase()} jobs to ${route.name || modelName(route.model, route.cli)}`);
+      row.append(words, stop);
+      rows.append(row);
+    }
+    box.append(rows);
+    return box;
+  }
+  // Try it and Stop apply at once and answer with a fresh report card.
+  async function kindRoute(payload, control, done) {
+    if (control) control.disabled = true;
+    state.flash = { text: "Saving…" };
+    if (state.ui) paintReport();
+    let result = null;
+    try {
+      result = await host("teamKindRoute", payload);
+      if (!result) throw new Error("This runs in the desktop app.");
+      if (result.ok === false) throw new Error(result.error || "That did not work.");
+    } catch (error) {
+      if (control) control.disabled = false;
+      state.flash = { text: plain(error, "That did not work. Try again."), tone: "bad" };
+      if (state.ui) paintReport();
+      return null;
+    }
+    if (Array.isArray(result.models)) { state.report = result; state.reportError = ""; state.reportFor = projectIdOf(); } else void loadReport();
+    state.flash = { text: done, tone: "good" };
+    // The routes are a team field: the draft takes them so Apply keeps them.
+    try { await ctx().kindsChanged?.(); } catch { /* the draft stays as it is */ }
+    if (state.ui) { render(); state.ui.reportHeading.focus?.({ preventScroll: true }); }
+    return result;
+  }
+  function startTrial(idea, control) {
+    const name = idea.to.name || modelName(idea.to.model, idea.to.cli);
+    const kind = idea.label ? ` (${String(idea.label).toLowerCase()})` : "";
+    return kindRoute({ projectId: projectIdOf(), taskType: idea.taskType, cli: idea.to.cli, model: idea.to.model || "", trial: true }, control,
+      `Trying ${name} on the next 5 jobs of this kind${kind}. Studio keeps it only if it does better.`);
+  }
+  function stopRoute(route, control) {
+    return kindRoute({ projectId: projectIdOf(), taskType: route.taskType, clear: true }, control, `${route.label || "That kind of job"} goes back to the usual model.`);
+  }
+
+  // ---- how thinking works --------------------------------------------------------
+  function paintLadder(thinking) {
+    const rungs = [
+      ["Light", "Every job starts here."],
+      ["Balanced", "After one failed check."],
+      ["Stronger model", "After two misses: Flash to Pro, Sonnet to Opus."],
+      ["Deep", "The stronger model thinks harder."],
+      thinking.askMax ? ["Asks you", "Before Max, the job waits for your OK."] : ["Max", "Only when it is still stuck."],
+    ];
+    const start = { auto: 0, light: 0, balanced: 1, deep: 3 }[thinking.mode] ?? 0;
+    const items = rungs.map(([title, words], index) => {
+      const rung = node("li", "tm-rung");
+      if (index === start) rung.setAttribute("aria-current", "step");
+      if (index === 4 && thinking.askMax) rung.dataset.ask = "true";
+      rung.append(node("b", "", title), node("small", "", words));
+      return rung;
+    });
+    state.ui.ladder.dataset.climb = thinking.climb ? "on" : "off";
+    state.ui.ladder.replaceChildren(...items);
+  }
+
+  // ---- logins (the Seats chip and Providers share them) ---------------------------
+  async function loadAccounts() {
+    const serial = ++state.accountsSerial;
+    state.accountsBusy = true;
+    let result = null;
+    try { result = await host("cliAccounts"); } catch { result = null; }
+    if (serial !== state.accountsSerial) return;
+    state.accountsBusy = false;
+    state.accounts = record(result) ? result : { ok: false, providers: [] };
+    if (state.ui) render();
+    if (prov.ui) paintLogins();
+  }
+
+  // The place opened: the report card and the logins are read again (unless a
+  // read for this project is already on its way, as on the first visit).
+  function open() {
+    state.flash = null;
+    if (!(state.reportBusy && state.reportFor === projectIdOf())) void loadReport();
+    if (!state.accountsBusy) void loadAccounts();
+  }
+
+  // ---- Providers ------------------------------------------------------------------
+  const SUBSCRIPTIONS = Object.freeze(["claude", "codex", "grok", "antigravity"]);
+  const prov = { root: null, ctx: null, ui: null, cli: null, cliBusy: false, cliSerial: 0, pick: "", checked: {} };
+  function say(line, text, tone = "") {
+    line.textContent = String(text || "");
+    if (tone) line.dataset.tone = tone; else delete line.dataset.tone;
+  }
+  // Runs a host call with its controls held, and says how it went in `line`.
+  async function act(controls, line, call, done) {
+    const held = (Array.isArray(controls) ? controls : [controls]).filter(Boolean);
+    for (const control of held) control.disabled = true;
+    say(line, "Working…");
+    try {
+      const result = await call();
+      if (!result) throw new Error("This runs in the desktop app.");
+      if (result.ok === false) throw new Error(result.error || "That did not work.");
+      say(line, typeof done === "function" ? done(result) : done, "good");
+      return result;
+    } catch (error) {
+      say(line, plain(error, "That did not work. Try again."), "bad");
+      return null;
+    } finally {
+      for (const control of held) control.disabled = false;
+    }
+  }
+  function providers(root, context = {}) {
+    if (!root) return;
+    prov.ctx = context;
+    if (prov.root === root) { paintProviders(); return; }
+    prov.root = root;
+    root.classList.add("tm-providers");
+    const ui = prov.ui = {};
+    // Use one provider for everything (setup-helper.js "Use for the whole studio").
+    const one = panel("team-one-provider", "Use one provider for everything", "Chat, planning and reviews, every seat (lead, desk, scout, companion and overseer), the coding workers and subtask builders all run on it, and Studio calls nothing else. It sets the Studio defaults and this project's own team, and you choose each model yourself from then on. The tool's own usage limits still apply.");
+    one.box.append(node("p", "tm-sub", "Chat, planning, every seat and the coding workers."));
+    const row = node("div", "tm-inline");
+    ui.pick = node("select", "tm-select"); ui.pick.id = "team-one-provider-pick"; ui.pick.setAttribute("aria-label", "Provider for everything");
+    ui.pick.addEventListener("change", () => { prov.pick = ui.pick.value; say(ui.oneSay, ""); paintOne(); });
+    ui.state = node("span", "tm-pill");
+    ui.check = button("Check", () => void checkOne(), "ghost");
+    ui.use = button("Use for everything", () => void useOne(), "primary");
+    ui.use.title = "Sets chat, planning, every seat and the coding workers to this tool";
+    ui.fix = button("", () => void fixOne(), "ghost");
+    row.append(ui.pick, ui.state, ui.check, ui.use, ui.fix);
+    ui.oneSay = node("p", "tm-say"); ui.oneSay.setAttribute("role", "status");
+    one.box.append(row, ui.oneSay);
+    // Your subscriptions (setup-helper.js "More than one login").
+    const subs = panel("team-subscriptions", "Your subscriptions", "Have two Claude or ChatGPT subscriptions? Add the other login here. Studio uses one login until it hits its usage limit, moves to the next, and goes back when the limit resets. Other providers answer only once every login is topped out.");
+    subs.box.tabIndex = -1;
+    ui.subs = subs.box;
+    ui.logins = node("div", "tm-login-groups");
+    ui.loginSay = node("p", "tm-say"); ui.loginSay.setAttribute("role", "status");
+    subs.box.append(ui.logins, ui.loginSay);
+    const grid = node("div", "tm-provider-grid");
+    grid.append(one.box, subs.box);
+    root.replaceChildren(grid);
+    searchable(ui.pick.id, "Use one provider for everything", "Chat, planning, every seat and the coding workers on one subscription.", "providers");
+    searchable(subs.box.id, "Your subscriptions", "More than one Claude or ChatGPT login: Studio moves to the next when one hits its limit.", "providers");
+    paintProviders();
+  }
+  function cliChoices() {
+    const clis = prov.cli?.ok && Array.isArray(prov.cli.clis) ? prov.cli.clis.filter(record) : null;
+    if (!clis) return SUBSCRIPTIONS.map((id) => ({ id, name: TOOLS[id], installed: false, signedIn: null, unknown: true }));
+    return clis.filter((cli) => cli.subscription === true || cli.subscription === undefined && SUBSCRIPTIONS.includes(cli.id)).map((cli) => ({ ...cli, name: cli.name || TOOLS[cli.id] || cli.id }));
+  }
+  function paintProviders() {
+    if (!prov.ui) return;
+    paintOne();
+    paintLogins();
+  }
+  function paintOne() {
+    const ui = prov.ui, clis = cliChoices();
+    if (!clis.some((cli) => cli.id === prov.pick)) {
+      const executor = draftOf()?.configuration?.executorCli;
+      prov.pick = (clis.find((cli) => cli.id === executor && cli.installed) || clis.find((cli) => cli.installed && cli.signedIn !== false) || clis.find((cli) => cli.installed) || clis[0])?.id || "";
+    }
+    const signature = JSON.stringify(clis.map((cli) => [cli.id, cli.name, cli.installed, cli.signedIn]));
+    if (ui.pick.dataset.signature !== signature) {
+      ui.pick.dataset.signature = signature;
+      ui.pick.replaceChildren(...clis.map((cli) => { const option = node("option", "", `${cli.name}${cli.unknown ? "" : cli.installed ? cli.signedIn === false ? " · not signed in" : "" : " · not installed"}`); option.value = cli.id; return option; }));
+    }
+    if (ui.pick.value !== prov.pick) ui.pick.value = prov.pick;
+    const cli = clis.find((item) => item.id === prov.pick) || { id: prov.pick, installed: false, unknown: true };
+    const checked = Boolean(prov.checked[cli.id]);
+    ui.state.textContent = cli.unknown ? (prov.cliBusy ? "Checking…" : "Desktop app only") : !cli.installed ? "Not installed" : cli.signedIn === false ? "Not signed in" : checked ? "Answered" : "Installed";
+    ui.state.dataset.tone = checked ? "good" : !cli.installed || cli.signedIn === false ? "warn" : "";
+    ui.pick.disabled = cli.unknown && !prov.cliBusy && !prov.cli;
+    ui.check.disabled = !cli.installed;
+    ui.use.disabled = !cli.installed || !checked;
+    ui.fix.hidden = cli.unknown || (cli.installed && cli.signedIn !== false);
+    ui.fix.textContent = cli.installed ? "Sign in" : "Set it up";
+  }
+  async function readCli() {
+    const serial = ++prov.cliSerial;
+    prov.cliBusy = true; if (prov.ui) paintOne();
+    let result = null;
+    try { result = await host("cliSetupStatus"); } catch { result = null; }
+    if (serial !== prov.cliSerial) return;
+    prov.cliBusy = false; prov.cli = record(result) ? result : null;
+    if (prov.ui) paintOne();
+  }
+  async function checkOne() {
+    const id = prov.pick, ui = prov.ui, name = TOOLS[id] || id;
+    const result = await act([ui.check, ui.pick], ui.oneSay, () => host("cliSetupCheck", id), (reply) => reply?.message || `${name} answered.`);
+    prov.checked = { ...prov.checked, [id]: Boolean(result) };
+    paintOne();
+  }
+  async function useOne() {
+    const id = prov.pick, ui = prov.ui, name = TOOLS[id] || id;
+    if (!prov.checked[id]) return;
+    const result = await act([ui.use, ui.check, ui.pick], ui.oneSay, () => host("cliSetupUse", id), (reply) => reply?.message || `${name} now runs the studio.`);
+    paintOne();
+    if (!result) return;
+    dispatch("mefi:connection-saved", { which: id });
+    // The team changed on the host: a draft without edits is read again.
+    try { ctx().reload?.(); } catch { /* the team page reads it when it opens */ }
+  }
+  async function fixOne() {
+    const id = prov.pick, cli = cliChoices().find((item) => item.id === id);
+    if (cli?.installed) {
+      await act(prov.ui.fix, prov.ui.oneSay, () => host("cliSetupAction", { id, action: "login" }), (reply) => reply?.message || "Sign-in opened. Finish it in the window, then press Check.");
+      setTimeout(() => void readCli(), 1500);
+      return;
+    }
+    // Installing is the setup helper's guided flow.
+    if (window.MefiSetupHelper?.open) window.MefiSetupHelper.open("providers");
+    else say(prov.ui.oneSay, "Install it from the setup guide, then press Check.");
+  }
+  function loginState(account) {
+    return account.limited ? `Topped out until ${account.untilText || "its reset"}` : account.answering ? "Answering now" : "Ready, next in line";
+  }
+  function paintLogins() {
+    const ui = prov.ui; if (!ui) return;
+    const focusInside = Boolean(document.activeElement && ui.logins.contains?.(document.activeElement));
+    const result = state.accounts;
+    if (result === null) { ui.logins.replaceChildren(node("p", "tm-empty", "Reading your logins…")); return; }
+    const groups = (result.ok ? result.providers || [] : []).filter((provider) => record(provider) && (provider.installed || (provider.accounts || []).length > 1));
+    if (!groups.length) {
+      const line = node("p", "tm-empty", "No Claude Code or Codex sign-in on this PC yet. ");
+      if (window.MefiSetupHelper?.open) line.append(button("Set one up", () => window.MefiSetupHelper.open("providers")));
+      ui.logins.replaceChildren(line);
+      return;
+    }
+    const after = async () => { await loadAccounts(); };
+    const made = groups.map((provider) => {
+      const group = node("div", "tm-login-group");
+      group.append(node("h3", "tm-login-title", provider.name || TOOLS[provider.id] || provider.id));
+      const rows = node("ul", "tm-logins");
+      for (const account of (provider.accounts || []).filter(record)) {
+        const row = node("li", "tm-login"); row.dataset.state = account.limited ? "limited" : account.answering ? "answering" : "ready"; row.dataset.account = account.id;
+        const words = node("span", "tm-login-words");
+        words.append(node("b", "", account.label || "Login"), node("small", "", loginState(account)));
+        const actions = node("span", "tm-actions");
+        const signIn = button("Sign in", async () => { await act(signIn, ui.loginSay, () => host("cliAccountLogin", account.id), (reply) => reply?.message || "Sign-in window opened."); }, "ghost mini");
+        const check = button("Check", async () => { const done = await act(check, ui.loginSay, () => host("cliAccountCheck", account.id), (reply) => reply?.message || `${account.label} answered.`); if (done) await after(); }, "ghost mini");
+        signIn.setAttribute("aria-label", `Sign in to ${provider.name} ${account.label}`); check.setAttribute("aria-label", `Check ${provider.name} ${account.label}`);
+        actions.append(signIn, check);
+        if (!account.main) {
+          // Removing a login deletes its sign-in on this PC: a second press confirms.
+          const remove = async () => { const done = await act(null, ui.loginSay, () => host("cliAccountRemove", account.id), (reply) => reply?.message || `${account.label} removed.`); if (done) await after(); };
+          const control = button("Remove", window.MefiUi?.arm ? () => {} : remove, "ghost mini");
+          control.setAttribute("aria-label", `Remove ${provider.name} ${account.label}`);
+          actions.append(window.MefiUi?.arm ? window.MefiUi.arm(control, { run: remove, armed: "Remove this login?" }) : control);
+        }
+        row.append(words, actions);
+        rows.append(row);
+      }
+      group.append(rows);
+      if ((provider.accounts || []).length < (Number(provider.max) || 6)) {
+        const add = button(`Add another ${provider.name || TOOLS[provider.id]} login`, async () => {
+          const added = await act(add, ui.loginSay, () => host("cliAccountAdd", { provider: provider.id, label: "" }), (reply) => `${reply?.account?.label || "The login"} added. Sign in with the other account in the window that opens.`);
+          if (added?.account?.id) await act(null, ui.loginSay, () => host("cliAccountLogin", added.account.id), (reply) => reply?.message || "Sign-in window opened.");
+          await after();
+        }, "ghost");
+        group.append(add);
+      }
+      return group;
+    });
+    ui.logins.replaceChildren(...made);
+    if (focusInside) ui.subs.focus?.({ preventScroll: true });
+  }
+  // Providers opened: the coding tools and the logins are read again.
+  function openProviders() {
+    if (!prov.cliBusy) void readCli();
+    if (!state.accountsBusy) void loadAccounts();
+  }
+
+  window.MefiTeamModels = {
+    mount, render, open, providers, openProviders, tip,
+    // The words and rows, for tests and for whoever lists models elsewhere.
+    modelName, viaOf, goodFor, jobRows, thinkingOf, nowSentences, ledgerKey, JOBS,
+  };
+})();
+
 // Agents owns setup and team drafts. Existing model/provider controls are
 // mounted here once, keeping their bindings while removing the former menus.
 (function () {
@@ -86315,8 +87920,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // says what exists and what does not. renderer/shell.js draws the list (teamPlaces) and the breadcrumb (teamPlace).
   const TEAM_PLACES = Object.freeze([
     { id: "overview", label: "Overview", glyph: "g-home", panes: ["overview", "behavior"], draft: true, about: "Who does the work, how many can work at once, and how much they can do without asking." },
-    { id: "providers", label: "Providers", glyph: "g-key", panes: ["connections"], about: "Where the models come from. Connect what you already pay for, or add a key. Seats choose from what is connected here." },
-    { id: "seats", label: "Seats and models", glyph: "g-agents", panes: ["team", "routing"], draft: true, about: "Each seat keeps its place on the team when the agent behind it changes. Changes apply when you press Apply changes." },
+    { id: "providers", label: "Providers", glyph: "g-key", panes: ["connections"], about: "Where the models come from. Connect what you already pay for, then choose who uses it." },
+    { id: "seats", label: "Seats and models", glyph: "g-agents", panes: ["team", "routing"], draft: true, about: "Who does each job, which model it uses, and how hard it thinks." },
     { id: "perms", label: "Permissions", glyph: "g-flag", panes: ["perms"], about: "How much Mefi can decide without asking you. Every mode leaves the same things to you." },
     { id: "rules", label: "Rules", glyph: "g-booklet", group: "Context for agents", panes: ["rules"], scoped: true, about: "Standing rules every model on this project reads. Write what you would tell a new teammate on their first day." },
     { id: "skills", label: "Skills", glyph: "g-skills", group: "Context for agents", views: [["Skills", "skills"]] },
@@ -86527,7 +88132,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const [id, title] of items) { const option = node("option", "", title); option.value = id; el.append(option); }
     el.value = value; el.addEventListener("change", () => change(el.value)); return el;
   }
-  function dirty() { if (!draft()) return; draft().dirty = true; say("Draft · applies to new work after you choose Apply."); }
+  function dirty() { if (!draft()) return; draft().dirty = true; say("Draft · applies to new work after you choose Apply."); $("agents-save-bar")?.setAttribute("data-dirty", "true"); }
   function buildRoles() {
     const intro = node("div", "agents-team-intro"); intro.append(node("h2", "", "A model for every role"), node("p", "muted", "Choose a provider in the corner of each agent. Use + to add skills or tools."));
     const roles = node("div", "agents-role-grid"); roles.id = "agents-role-grid"; $("agents-team").prepend(intro, roles);
@@ -86935,6 +88540,78 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     $("agents-overlay")?.setAttribute("data-places", "v2");
     return true;
   }
+  // ---- Seats and models, made simple (renderer/team-models.js) ----
+  // In the 0.5 layout Seats and models opens on a plain page (right now, how Studio decides, who does what, the report
+  // card, how thinking works) and the detailed cards it grew from fold under More settings: the role grid, the routing
+  // and coding-worker cards and team coordination move there with their ids, bindings and Search entries, and go back
+  // where they were when the classic layout opens the page. Providers gains the setup helper's one-provider and
+  // several-logins flows on top. The plain page edits this page's draft (teamContext.changed marks it dirty and
+  // repaints both), so Apply changes applies everything; openTeam opens More settings for a target inside it.
+  let seatsMade = false;
+  const seatHomes = new Map();
+  const teamContext = {
+    draft: () => draft() || null,
+    projectId,
+    go,
+    changed: () => { dirty(); refreshRows(); },
+    reveal: (id) => revealSeat(id),
+    // The team changed on the host (Use for everything): a draft without edits is read again.
+    reload: () => { const item = draft(); if (!item || item.dirty || rulesChanged(item)) return false; drafts.delete(draftKey()); void load(); return true; },
+    kindsChanged: () => adoptKinds(),
+  };
+  function fileSeats(on) {
+    if (!seatsMade) {
+      if (!on || !$("agents-team") || !$("agents-connections")) return;
+      seatsMade = true;
+      const page = node("div", "team-models"); page.id = "team-models";
+      const more = node("details", "agents-more"); more.id = "agents-more";
+      const summary = node("summary"); summary.append(node("span", "agents-more-title", "More settings"), node("span", "agents-more-hint", "Provider order · Jev · coding tiers · subtask builders · each seat in detail"));
+      const inside = node("div", "agents-more-body"); inside.id = "agents-more-body";
+      more.append(summary, inside); $("agents-team").prepend(page, more);
+      const providers = node("div", "team-providers"); providers.id = "team-providers"; $("agents-connections").prepend(providers);
+      window.MefiTeamModels?.mount?.(page, teamContext); window.MefiTeamModels?.providers?.(providers, teamContext);
+    }
+    const inside = $("agents-more-body");
+    for (const el of [$("agents-team")?.querySelector(".agents-team-intro"), $("agents-role-grid"), $("settings-routing"), $("settings-workers"), $("agents-model-skills"), $("agents-team-behavior")]) {
+      if (!el) continue;
+      if (on) {
+        if (el.parentNode === inside) continue;
+        // A marker where the card was, so the classic layout puts it back in its place.
+        if (!seatHomes.has(el)) { const home = document.createComment(` ${el.id || "agents-team-intro"} `); el.before(home); seatHomes.set(el, home); }
+        inside.append(el);
+      } else if (el.parentNode === inside && seatHomes.get(el)?.parentNode) seatHomes.get(el).after(el);
+    }
+    for (const id of ["team-models", "agents-more", "team-providers"]) { const el = $(id); if (el) el.hidden = !on; }
+  }
+  // Change on a job's line: More settings opens at that job's card, its model picker focused.
+  function revealSeat(id) {
+    const more = $("agents-more"); if (more) more.open = true;
+    const row = $("agents-role-grid")?.querySelector(`.agents-model-row[data-agent="${id}"]`);
+    if (!row) return false;
+    row.scrollIntoView?.({ block: "center" });
+    const select = $(`agent-${id}-model`), shown = select?.nextElementSibling?.classList.contains("studio-select") ? select.nextElementSibling : select;
+    (shown && !shown.disabled && !shown.hidden ? shown : $(`agent-${id}-provider`))?.focus?.({ preventScroll: true });
+    row.dataset.found = "true"; setTimeout(() => { delete row.dataset.found; }, 2400);
+    return true;
+  }
+  // Try it and Stop in the report card write the team's kind-of-job routes on the host at once (team:kind-route), and
+  // that moves the team's revision. A draft without edits is read again. A draft with edits takes the new routes and
+  // revision only when nothing else changed under it, so Apply neither drops the route nor overwrites another writer
+  // (that case still meets the stale-draft refusal, as before).
+  async function adoptKinds() {
+    const item = draft(); if (!item) return;
+    const key = draftKey();
+    let fresh = null;
+    try { fresh = await api()?.agentsState?.({ projectId: projectId(), scope }); } catch { return; }
+    if (!fresh?.ok || key !== draftKey() || draft() !== item) return;
+    const others = (configuration) => { const { agentKinds, ...rest } = configuration || {}; return JSON.stringify(rest); };
+    if (!item.dirty && !rulesChanged(item)) drafts.set(key, { saved: fresh, configuration: clone(fresh.configuration), name: fresh.name, dirty: false });
+    else if (others(fresh.configuration) === others(item.saved.configuration)) {
+      item.saved = fresh;
+      if (fresh.configuration?.agentKinds) item.configuration.agentKinds = clone(fresh.configuration.agentKinds); else delete item.configuration.agentKinds;
+    } else return;
+    renderConfiguration(); window.dispatchEvent(new CustomEvent("mefi:agent-draft"));
+  }
   // Connectors: Team › Connectors is its own module (renderer/connectors.js): add, approve, test and import the MCP
   // servers agents use, and where each is used. Without it (an older bundle) the pane says where they live.
   function buildConnectors(root) {
@@ -87022,9 +88699,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const blank = node("option", "", "Choose a saved team"); blank.value = ""; picker.append(blank);
     for (const preset of item.saved.presets || []) { const option = node("option", "", preset.name); option.value = preset.id; picker.append(option); }
     picker.value = selected;
+    // Apply changes lights up while the draft holds edits (agents.css).
+    $("agents-save-bar")?.setAttribute("data-dirty", String(Boolean(item.dirty)));
     say(item.dirty ? "Draft · applies to new work after you choose Apply." : `${scope === "defaults" ? "Studio defaults" : item.saved.inherited ? "Inheriting Studio defaults" : "Independent project team"} · Saved`);
     paintRules();
     paintConnectors();
+    window.MefiTeamModels?.render?.();
     window.MefiScroll?.scan($("agents-overlay"));
   }
   function stageRouting(patch) {
@@ -87095,7 +88775,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // section and pane beside the place, so routing's staging (stageRouting, routingView) reads the page as it did.
   let teamPlaceSaid = null;
   async function openTeam(options = {}) {
-    fileTeamV2();
+    fileTeamV2(); fileSeats(true);
     const place = teamPlaceById(teamPlaceFromParams(options)) ?? TEAM_PLACES[0];
     const pane = place.id === "seats" ? (options.pane === "routing" || $(options.target)?.closest?.("#agents-routing") ? "routing" : "team") : place.id === "providers" ? "connections" : place.panes[0];
     const moved = params.place !== place.id;
@@ -87113,6 +88793,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (moved && !options.target) $("agents-body").scrollTop = 0;
     if (teamPlaceSaid !== place.id) { teamPlaceSaid = place.id; window.dispatchEvent(new CustomEvent("mefi:team-place", { detail: { place: place.id } })); }
     await Promise.all([load(), refreshQueue()]); syncQueue();
+    // The report card and the logins are read each time their place opens (renderer/team-models.js).
+    if (place.id === "seats") window.MefiTeamModels?.open?.(); else if (place.id === "providers") window.MefiTeamModels?.openProviders?.();
     window.MefiNav?.paintCurrent(); window.MefiScroll?.refresh();
     if (options.target) {
       const target = $(options.target); if (target && $("agents-overlay").contains(target)) { for (let el = target; el && el !== $("agents-body"); el = el.parentElement) if (el.tagName === "DETAILS") el.open = true; target.scrollIntoView?.({ block: "nearest" }); (target.nextElementSibling?.classList.contains("studio-select") ? target.nextElementSibling : target).focus?.({ preventScroll: true }); }
@@ -87624,6 +89306,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!chatgptBridge()) return null;
     const plan = data.chatgpt || {};
     const box = card("Use your ChatGPT plan", "Complete eligible AI requests in this app with usage included in your ChatGPT plan or credits balance.", "setup-helper-card setup-helper-chatgpt-card");
+    // OpenAI's words stay as written and in view: none of them goes behind an "i" (MefiUi.tuck).
+    box.dataset.keepVisible = "";
     const manage = (className) => button("Manage usage", () => { void api()?.openExternal?.(plan.manageUsageUrl || CHATGPT_USAGE_URL); }, className);
     if (state.chatgptWelcome) {
       const welcome = node("div", "setup-helper-chatgpt-welcome");
@@ -88452,6 +90136,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (serial === renderSerial) say(plain(error, "This section could not load."), "bad");
     }
     if (serial !== renderSerial) return;
+    // A card's long description and a field's long hint sit behind an "i" at the end of its title
+    // (MefiUi.tuck, studio-ui.js), so a section reads as its controls. Done while the section is still
+    // off the page, where tuck reads no style, and before the focus is put back, so a circle that had
+    // the keyboard is found again by its name.
+    window.MefiUi?.tuck?.(content);
     const active = document.activeElement;
     const held = els.content.contains?.(active) ? { label: active.getAttribute?.("aria-label"), text: active.tagName === "BUTTON" ? active.textContent : null, tag: active.tagName, row: active.closest?.(".setup-helper-toggle")?.querySelector?.("strong")?.textContent || null } : null;
     els.content.removeAttribute("aria-busy");
@@ -104391,7 +106080,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function settingsControlLabel(control) {
     const label = control.closest?.("label") ?? document.querySelector?.(`label[for="${control.id}"]`);
     const named = label?.querySelector?.(".field-label, b, strong, .grow");
-    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName)).map((node) => node.textContent ?? "").join(" ") : "";
+    const parts = label ? Array.from(label.children ?? []).filter((node) => !["INPUT", "SELECT", "TEXTAREA", "SMALL"].includes(node.tagName) && !node.classList?.contains?.("info-pop")).map((node) => node.textContent ?? "").join(" ") : "";
     return String(control.getAttribute?.("aria-label") || named?.textContent || parts || (control.tagName === "BUTTON" ? settingsButtonLabel(control) : "") || control.getAttribute?.("title") || "").replace(/\s+/g, " ").trim();
   }
   function settingsEntries() {
@@ -104408,7 +106097,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (label) entries.push({ id: card.id, label, category, terms: `${words} ${card.id.replace(/-/g, " ")}` });
       }
       for (const control of pane.querySelectorAll("input, select, textarea, button")) {
-        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion")) continue;
+        // An info circle (MefiUi.tuck) is the help of the setting beside it, not a setting of its own.
+        if (!settingsAvailable(control) || control.type === "hidden" || control.getAttribute?.("aria-hidden") === "true" || control.hidden || control.closest?.(".settings-you-theme[hidden], .music-queue, .music-recent, .music-suggestion, .info-dot")) continue;
         const label = settingsControlLabel(control);
         if (!label) continue;
         if (!control.id) control.id = `settings-control-${category}-${++settingsControlSerial}`;
@@ -104503,6 +106193,21 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (browser) browser.hidden = Boolean(window.mefiStudio?.launchStudio);
     for (const note of document.querySelectorAll("[data-desktop-message]")) note.hidden = Boolean(window.mefiStudio?.launchStudio);
   }
+  // A setting's long how-to words move behind an "i" at the end of its title (MefiUi.tuck, studio-ui.js), so a place
+  // shows its controls first. Connections, Models and Automation are the Team pages' (renderer/agents.js takes their
+  // cards there and tucks them) and Community is renderer/community.js's, so they are marked to stay as they are. One
+  // call for all of Settings: tuck reads every title's style before it moves anything, and a call per card read it
+  // again after each card's moves (about 20 ms of style each, 120 ms on the first paint). Every paint while Settings
+  // shows runs it: rows drawn since (Appearance's media) are tucked, rows already tucked stay as they are.
+  const SETTINGS_UNTUCKED = ["settings-category-connections", "settings-category-models", "settings-category-automation", "settings-community"];
+  function tuckSettings() {
+    const tuck = window.MefiUi?.tuck, sections = document.getElementById("settings-sections");
+    // Not before the page has loaded: renderer/nav.js chooses the layout then, and Settings is filed for it (a
+    // reopened Settings paints earlier, while a title the 0.5 layout hides, like Report's, still shows).
+    if (typeof tuck !== "function" || !sections || document.readyState === "loading") return;
+    for (const id of SETTINGS_UNTUCKED) document.getElementById(id)?.setAttribute?.("data-keep-visible", "");
+    tuck(sections);
+  }
   function paintSettingsRows() {
     mountSettingsControls();
     if (document.querySelector && !document.querySelector(`[data-settings-category-pane="${settingsPane(settingsCategory)}"]`)) settingsCategory = "general";
@@ -104523,6 +106228,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     for (const pane of document.querySelectorAll("[data-settings-category-pane]")) pane.hidden = Boolean(query) || pane.dataset.settingsCategoryPane !== settingsPane(settingsCategory);
     if (document.getElementById("tab-studio")?.hidden === false) {
+      // Only once Settings shows: by then the layout is chosen and filed, and tuck reads which titles it shows.
+      tuckSettings();
       window.MefiMusic?.activateSettings?.(query ? null : settingsPane(settingsCategory));
       if (settingsCategory === "automation") void loadSettingsAutomation();
       if (!query) openSettingsPlace(settingsCategory);
