@@ -952,6 +952,23 @@
               ]
             },
             {
+              "id": "friends-events",
+              "title": "Friends › Events: a weekly Build Jam and co-work hours",
+              "status": "next",
+              "label": "Coming in 0.5",
+              "area": "Community",
+              "text": "A Build Jam every week with a theme, co-work hours three times a day, and credits for building together.",
+              "details": [
+                "The Build Jam opens on Monday with a theme and shows next week’s. Enter one of your shared projects until Saturday, then play the others and vote for up to three until Monday, when the results are paid.",
+                "A vote counts only for an entry you played for two minutes, and votes stay hidden until the results.",
+                "Three times a day a co-work hour opens a room: join it, keep Studio open and work on anything, and everyone who stays with others earns 4 credits.",
+                "Building together in your own co-work room with a friend earns you both 4 credits a day.",
+                "Credits come from making and playing things together, never from inviting people. To bring a friend, send them your room’s join code.",
+                "Prizes and co-work rewards share a daily community pot that grows with the number of people active that week, so credits keep their worth as the community grows.",
+                "Studio shows the jam’s times in your own time zone."
+              ]
+            },
+            {
               "id": "advertise",
               "title": "Feature your project with credits",
               "text": "Spend 100 credits to put a project at the top of the Project hub for a day.",
@@ -1072,22 +1089,6 @@
           "title": "In progress",
           "note": "Started, not finished. On branches or in other repositories, not on main yet.",
           "items": [
-            {
-              "id": "friends-events",
-              "title": "Friends › Events: a weekly Build Jam and co-work hours",
-              "status": "progress",
-              "label": "In progress",
-              "area": "Community",
-              "text": "A Build Jam every week with a theme, co-work hours three times a day, and credits for building together.",
-              "details": [
-                "Enter the jam with one of your shared projects. Everyone gets 3 votes, and a vote counts only for an entry you played.",
-                "Show up to a co-work hour with Studio connected and you earn a few credits.",
-                "Members of the same cowork room who build together earn credits once a day.",
-                "Credits come from doing things together, never from inviting people.",
-                "A daily community pot grows with the number of active members, so credits can’t pile up faster than the community grows.",
-                "Built on a branch, not on main yet."
-              ]
-            },
             {
               "id": "bot-news",
               "title": "New things for the Studio bot",
