@@ -506,11 +506,12 @@
     const choices = el("div", "today-need-options");
     choices.setAttribute("role", "group"); choices.setAttribute("aria-label", item.options.length ? "Your answer" : "What to do");
     const lock = busy;
-    if (item.options.length) {
+    // A question is always answerable here, with options or without: one that has none is answered in words.
+    if (item.options.length || item.need.kind === "question") {
       let typed = null;
       const form = el("form", "today-need-free");
       const input = el("input", "today-need-input"); input.type = "text"; input.autocomplete = "off";
-      input.placeholder = item.options.some((option) => option.text) ? "Your one-line answer, or an option above…" : "Or say it in your own words…";
+      input.placeholder = item.options.some((option) => option.text) ? "Your one-line answer, or an option above…" : item.options.length ? "Or say it in your own words…" : "Your answer…";
       input.setAttribute("aria-label", "Write your own answer");
       const kept = state.drafts.get(item.key);
       if (kept) { input.value = kept.text; typed = item.options.find((option) => option.id === kept.optionId) ?? null; }
@@ -540,10 +541,16 @@
       });
       // The owner's choice (2026-10-04): the box for your own words waits behind a small link, so a card reads as its
       // options first. It opens on the link, on an option that asks for words, and stays open while it holds a draft.
+      // A question with no options has nothing to read first: its box is open from the start, and there is no link.
       const own = button("Answer in my own words", "today-link today-own-words", () => { openOwnWords(); input.focus?.(); }, { title: "Write your own answer instead of picking one", disabled: lock });
       function openOwnWords() { state.ownWords.add(item.key); form.hidden = false; own.hidden = true; }
-      if (kept?.text || state.ownWords.has(item.key)) openOwnWords(); else form.hidden = true;
-      node.append(choices, own, form);
+      if (kept?.text || state.ownWords.has(item.key)) openOwnWords();
+      else if (!item.options.length) { form.hidden = false; own.hidden = true; }
+      else form.hidden = true;
+      // Without options the link is not in the card at all: the Inbox gives the focus to a card's first button, and a
+      // hidden one cannot take it (the focus stayed on the pill, so Escape never reached the Inbox).
+      if (item.options.length) node.append(choices, own);
+      node.append(form);
     } else {
       for (const action of actionsOf(item, state.data || {})) {
         // A way to look (Review changes) only goes somewhere; everything else is a decision, through perform().
@@ -1624,7 +1631,7 @@
     });
     nav.register({
       id: "home-chat", label: "Open the conversation", short: "Conversation", kind: "action", layer: null, section: "home", group: "surfaces", key: null, glyph: "g-chat", badge: null,
-      paletteGroup: "Actions", desc: "Build's Home as it was: the conversation with Mefi, the queue, Activity and the app preview",
+      paletteGroup: "Actions", desc: "Studio's Home as it was: the conversation with Mefi, the queue, Activity and the app preview",
       searchTerms: "conversation chat talk message assistant mefi classic home queue activity preview",
       showIn: showIn({ palette: true, help: true }), hidden: () => !building(), keyMatch: () => false,
       run: () => { openChat(); },

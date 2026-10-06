@@ -4,8 +4,8 @@
 // canvas: the camera orbits and lerps toward the most recent activity, work
 // paths glow, external reads vaporize into blue-white particles, evidence PNGs
 // float in, and Zen mode plays dynamic bells keyed to how fast agents move.
-// After five quiet minutes it opens itself in ambient mode; D (or the dock, the
-// rail button, the palette) opens it as the menu. Keys, layers and every
+// After five quiet minutes it opens itself in ambient mode; D (or the rail's
+// Map, the palette) opens it as the menu. Keys, layers and every
 // destination belong to nav.js — this file owns the canvas and its HUD.
 // Behind Home it draws the same tree as scenery for the workspace's frosted
 // panels (startHomeBackdrop): no HUD, no input, no text, a slow cadence.
@@ -241,7 +241,6 @@
   const HUD_DIM_MS = 6000;
   const AMBIENT_ZEN_MS = 30000;
   const EDGE_ZEN_MS = 1500;
-  const DEFAULT_HINT = "click a node to zoom in · drag to pan · right-drag to orbit · wheel to zoom · V 2D/3D · Esc leaves";
   const LABEL_MODES = ["auto", "updates", "all", "none"];
 
   // Camera autopilot modes: "orbit" keeps the whole tree framed at the largest
@@ -311,8 +310,6 @@
     expandedTaskGroups: new Set(),
     taskLayout: new Map(),
     projectId: null, // the folder the command view is showing; a change reloads the tree
-    telemetryAt: 0,
-    telemetry: "",
     selected: null,
     hoverNode: null,
     hoverBubble: null,
@@ -320,10 +317,6 @@
     rotating: null,
     zoom: 1,
     pitch: 0,
-    machineStatus: null,
-    telemetryNodeCount: -1,
-    ideasAt: 0,
-    ideasUnread: 0,
     frameError: false,
     pickerHoldUntil: 0,
     // Command-hub state
@@ -366,7 +359,6 @@
     matches: [],
     matchSet: new Set(),
     matchIndex: -1,
-    searchTimer: null,
     branch: null,
     labelRects: [],
     labelWidths: new Map(),
@@ -377,7 +369,6 @@
     tipNode: null,
     emptyVariant: null,
     treeStatus: "ok",
-    progressCycle: 0,
     // The assistant service as the tree reports it: { status, tone, sublabel, unread }.
     assistant: null,
     assistantSending: false,
@@ -427,7 +418,7 @@
     readyPromise: null,
     workOnBusy: false,
     newWorkBusy: false,
-    // Backdrop scene and speech bubbles (Ambience pop), remembered per machine.
+    // Backdrop scene and speech bubbles (Settings › Map look), remembered per machine.
     backdrop: BACKDROP_ORDER.includes(readStore("mefiStudio.cmdBackdrop")) ? readStore("mefiStudio.cmdBackdrop") : "follow",
     themeKey: null, // the Style & sound key the canvas last synced to
     bubbles: readStore("mefiStudio.cmdBubbles") !== "0",
@@ -672,7 +663,6 @@
     state.audioSource = next;
     state.inputError = null;
     writeStore("mefiStudio.audioSource.v2", next);
-    if (el.source) el.source.value = next;
     if (state.reactive && state.active) {
       releaseReactiveInput();
       state.captureArmed = true;
@@ -686,8 +676,6 @@
     state.captureArmed = state.reactive;
     state.inputError = null;
     writeStore("mefiStudio.zenReactive", state.reactive ? "1" : "0");
-    if (el.reactive) el.reactive.checked = state.reactive;
-    if (el.source) el.source.disabled = false;
     if (state.reactive && state.active) ensureReactiveInput();
     else releaseReactiveInput();
     renderMusicStatus(true);
@@ -698,26 +686,6 @@
     if (!force && now - state.musicUiAt < 100) return;
     state.musicUiAt = now;
     const status = audioStatus();
-    const { listening } = status;
-    const buttonLabel = status.phase === "off" ? "Connect audio" : status.text;
-    // Ten times a second: only what changed is written. An unchanged value
-    // still queues a mutation and re-runs the page's :has() rules.
-    if (el.musicStatus && el.musicStatus.textContent !== buttonLabel) el.musicStatus.textContent = buttonLabel;
-    if (el.musicToggle) {
-      const toggleState = state.inputError ? "error" : listening ? "listening" : state.inputPending ? "pending" : "off";
-      const toggleTitle = `${status.description} Open music, video and audio setup.`;
-      const toggleLabel = `${buttonLabel} · Music and video`;
-      if (el.musicToggle.dataset.state !== toggleState) el.musicToggle.dataset.state = toggleState;
-      if (el.musicToggle.title !== toggleTitle) el.musicToggle.title = toggleTitle;
-      if (el.musicToggle.getAttribute?.("aria-label") !== toggleLabel) el.musicToggle.setAttribute("aria-label", toggleLabel);
-    }
-    if (el.musicLevel) {
-      el.musicLevel.style.setProperty("--music-level", String(listening && !noMotion() ? state.music?.energy ?? 0 : 0));
-      for (const [index, band] of ["bass", "mid", "treble"].entries()) {
-        const bar = el.musicLevel.children[index];
-        if (bar) bar.style.setProperty("--band-level", String(listening && !noMotion() ? state.bands[band] : 0));
-      }
-    }
     // Publish connection/player transitions, not every FFT frame. Controls can
     // stay synchronized without a separate polling loop or noisy live region.
     const key = JSON.stringify([status.reactive, status.selection, status.source, status.phase, status.text, status.error, status.response, status.effects]);
@@ -990,7 +958,7 @@
         rosterQueued: summary.queued,
       };
     }
-    // Audio controls live in the toolbar; the companion is the assistant's
+    // Audio controls live in the status bar's player; the companion is the assistant's
     // visible home. Keep the internal assistant anchor for agent routing.
     appendTaskNodes();
     appendDoneHoldNodes();
@@ -1041,18 +1009,8 @@
     }
     state.hoverNode = state.hoverNode ? state.nodes.find((entry) => entry.id === state.hoverNode.id) ?? null : null;
     state.hoverBubble = state.hoverBubble ? state.nodes.find((entry) => entry.id === state.hoverBubble.id) ?? null : null;
-    const treeWas = state.treeStatus;
     state.treeStatus = window.MefiTree?.status?.() ?? (window.mefiStudio ? "ok" : "desktop-only");
-    // The store coming back (or dropping) changes the hint, the pills and the
-    // autopilot switch, none of which repaint on a rebuild by themselves: the
-    // offline hint stayed up after the rail had drawn the recovered store.
-    if (treeWas !== state.treeStatus && state.active) {
-      renderHint();
-      renderSettingsPanel();
-      updateTelemetry(true);
-    }
     renderEmpty();
-    updateAssistantPill();
     if (state.query) applyQuery();
     computeBranch();
     // Camera autopilot after a rebuild: orbit re-pins zoom so new nodes shrink
@@ -1077,8 +1035,8 @@
     };
   }
 
-  // The player no longer has a node of its own on the graph (the toolbar and
-  // the companion carry it); a player change still wakes suspended audio and
+  // The player no longer has a node of its own on the graph (the status bar
+  // and the companion carry it); a player change still wakes suspended audio and
   // re-picks the reactive input.
   function syncMusicNode() {
     const details = musicNodeDetails();
@@ -1887,7 +1845,6 @@
       state.readyPromise = Promise.resolve(window.MefiTree?.ready?.())
         .then(() => {
           refreshGraph();
-          updateTelemetry(true);
         })
         .catch(() => {});
     }
@@ -1917,68 +1874,6 @@
     } catch (error) {
       return { ok: false, error: error?.message || "the task store is unavailable" };
     }
-  }
-
-  function pillOf(name) {
-    return el.pills?.[name] ?? null;
-  }
-
-  function writePill(name, { count, unit, hidden, warn = false, bad = false }) {
-    const pill = pillOf(name);
-    if (!pill) return;
-    if (count != null) {
-      const num = pill.querySelector(".num");
-      if (num) num.textContent = String(count);
-    }
-    if (unit != null) {
-      const text = pill.querySelector(".unit");
-      if (text) text.textContent = unit;
-    }
-    pill.classList.toggle("warn", warn);
-    pill.classList.toggle("bad", bad);
-    pill.hidden = hidden;
-  }
-
-  async function updateTelemetry(force = false) {
-    const nodeCount = state.nodes.length;
-    if (!force && Date.now() - state.telemetryAt < 6000 && nodeCount === state.telemetryNodeCount) return state.telemetry;
-    state.telemetryAt = Date.now();
-    state.telemetryNodeCount = nodeCount;
-    const badges = window.MefiNav?.badges ?? null;
-    const sessions = badges?.sessions ?? state.nodes.filter((node) => node.kind === "session" && !node.child).length;
-    const inProgress = badges?.progress ?? state.nodes.filter((node) => node.kind === "todo" && node.status === "in_progress").length;
-    const openTasks = badges?.tasks ?? state.tasks.length;
-    // nav already polls the ideas store for its badges; only run the local poll
-    // when there is no nav (plain browser, stripped bundle).
-    if (!badges && Date.now() - state.ideasAt > 30000) {
-      state.ideasAt = Date.now();
-      try {
-        const ideaResult = await window.mefiStudio?.ideasList?.();
-        state.ideasUnread = (ideaResult?.ideas ?? []).filter((idea) => !idea.read).length;
-      } catch {}
-    }
-    const unread = badges?.ideas ?? state.ideasUnread;
-    const machineValue =
-      badges?.machine ??
-      (state.machineStatus ? (state.machineStatus.leases?.exclusive ? "exclusive" : state.machineStatus.wait ? "busy" : "free") : null);
-    const machine = machineValue ? `machine: ${machineValue}` : "";
-    state.telemetry = `${sessions} sessions · ${inProgress} in progress · ${openTasks} open task${openTasks === 1 ? "" : "s"} · ${unread} unread idea${unread === 1 ? "" : "s"}${machine ? ` · ${machine}` : ""}`;
-    if (el.telemetry) el.telemetry.title = state.telemetry;
-    const offline = state.treeStatus !== "ok";
-    writePill("sessions", { count: sessions, unit: sessions === 1 ? "session" : "sessions", hidden: offline });
-    writePill("progress", { count: inProgress, unit: "in progress", hidden: offline || !inProgress });
-    writePill("tasks", { count: openTasks, unit: openTasks === 1 ? "open task" : "open tasks", hidden: offline || !openTasks });
-    writePill("ideas", { count: unread, unit: unread === 1 ? "unread idea" : "unread ideas", hidden: offline || !unread });
-    writePill("machine", {
-      unit: `machine · ${machineValue === "exclusive" ? "exclusive" : "busy"}`,
-      hidden: offline || !(machineValue === "busy" || machineValue === "exclusive"),
-      warn: machineValue === "busy",
-      bad: machineValue === "exclusive",
-    });
-    const offlinePill = pillOf("offline");
-    if (offlinePill) offlinePill.hidden = !offline;
-    updateAssistantPill();
-    return state.telemetry;
   }
 
   // ---------- the assistant ----------
@@ -2228,8 +2123,8 @@
   }
 
   function setRailTab(name, { save = true, focus = false, render = true } = {}) {
-    // Older links open the toolbar dropdown without replacing the rail view.
-    if (name === "settings") { openAgentSettings({ focus }); return; }
+    // Older links to Command's Agent settings land on their home, Team › Overview's run settings.
+    if (name === "settings") { nav("agents", { section: "setup", pane: "behavior" }); return; }
     let view = RAIL_VIEWS.includes(name) ? name : "work";
     // The node view cannot be entered without a node; a stale one falls back to
     // whatever the owner last chose for themselves.
@@ -2985,7 +2880,6 @@
     if (taken || !back.camMode) return;
     state.camMode = back.camMode;
     syncViewControls();
-    renderHint();
     renderFollowStatus();
   }
 
@@ -3043,7 +2937,6 @@
       }
     }
     syncViewControls();
-    renderHint();
     renderFollowStatus();
   }
 
@@ -3080,8 +2973,6 @@
       el.followStatus.textContent = `${title} · ${stage}`;
       el.followStatus.title = state.follow?.reason ?? stage;
     }
-    if (el.camFollowBtn) el.camFollowBtn.title = active ? `Following ${title} · ${stage}. ${state.follow?.reason ?? "Waiting for actual activity"}. Click to hold this view.` : "Follow active tasks and their current work (C)";
-    if (active) renderHint();
   }
 
   function refreshAssistantCache() {
@@ -3091,32 +2982,6 @@
     // (running jobs, parallel, queue depth) from the last push.
     state.assistant = { ...(state.assistant ?? {}), status: full?.status ?? null, tone: summary.tone, sublabel: summary.sublabel, unread: Number(full?.unread) || 0 };
     renderNewWorkControl();
-  }
-
-  // The pill stays whatever the store is doing: the service runs whether or not
-  // the OpenCode database can be read, and it is the way back to the node.
-  function updateAssistantPill() {
-    const pill = pillOf("assistant");
-    if (!pill) return;
-    if (!window.mefiStudio?.assistantState) {
-      pill.hidden = true;
-      return;
-    }
-    const summary = assistantSummary();
-    const full = assistantFull();
-    const unread = Number(full?.unread) || 0;
-    const working = (Array.isArray(full?.agents) ? full.agents : []).filter((agent) => agent.status === "running").length;
-    const inFlight = Array.isArray(full?.work) ? full.work.length : 0;
-    // Jobs in flight beat the agent count, which beats the service line.
-    const line = inFlight ? `working on ${inFlight}` : working ? `${working} working` : summary.sublabel;
-    const unit = pill.querySelector(".unit");
-    if (unit) unit.textContent = `assistant · ${line}${unread ? ` · ${unread} new` : ""}`;
-    pill.dataset.tone = summary.tone;
-    pill.classList.toggle("warn", summary.tone === "warn" || summary.tone === "offline");
-    pill.classList.remove("bad");
-    // The short form is on the pill; the whole story is a hover away.
-    pill.title = `${summary.label} · ${summary.detail ?? summary.sublabel}\nselect the assistant (M)`;
-    pill.hidden = false;
   }
 
   // The assistant console lives in the A-Eyes rail while that panel is
@@ -3187,7 +3052,6 @@
       }
       if (result.state) window.MefiTree?.applyAssistant?.({ state: result.state });
       refreshAssistantCache();
-      updateAssistantPill();
       if (state.selected?.kind === "assistant") renderInfo();
       const prefs = assistantFull()?.prefs ?? {};
       window.MefiToast?.(`${label} · ${Object.keys(patch).map((key) => `${key} ${prefs[key] ?? patch[key]}`).join(" · ")}`, "good");
@@ -3212,7 +3076,6 @@
         return null;
       }
       if (result) state.assistant = { ...(state.assistant ?? {}), ...result };
-      updateAssistantPill();
       if (state.selected?.kind === "assistant") renderInfo();
       state.feedDirty = true;
       if (state.active) renderFeed();
@@ -3259,7 +3122,6 @@
     } finally {
       state.assistantSending = false;
       refreshAssistantCache();
-      updateAssistantPill();
       // A failed send hands the text back; a sent one clears the composer —
       // the rail's input is static, so it is emptied here rather than by the
       // card rebuild.
@@ -3308,7 +3170,6 @@
       }
       if (result.state) window.MefiTree?.applyAssistant?.({ state: result.state });
       refreshAssistantCache();
-      updateAssistantPill();
       window.MefiToast?.(`${result.where ?? "queued"}. ${result.dispatch?.message ?? "Open Builder to follow its status."}`, result.dispatch?.held ? "info" : "good");
     } catch (error) {
       window.MefiToast?.(`work on it failed · ${String(error?.message ?? error)}`, "bad");
@@ -3332,7 +3193,6 @@
       if (result.state) window.MefiTree?.applyAssistant?.({ state: result.state });
       if (result.autopilot) state.assistant = { ...(state.assistant ?? {}), ...result.autopilot };
       refreshAssistantCache();
-      updateAssistantPill();
       if (state.selected?.kind === "assistant") renderInfo();
       const full = assistantFull();
       if (action === "tidy") window.MefiToast?.(full?.housekeeping?.lastText || "tidy pass done", "good");
@@ -3344,59 +3204,11 @@
         window.MefiToast?.(overseer?.lastSummary ? `overseer · ${overseer.lastSummary}` : "overseer review queued", overseer?.health === "poor" ? "bad" : overseer?.health === "fair" ? "info" : "good");
       } else if (action === "start-work") window.MefiToast?.("new work is on · queued work can start when ready", "good");
       else if (action === "pause") window.MefiToast?.("new work is off · current jobs can finish", "info");
-      else if (action === "stop-all") {
-        // `stopped` counts kill requests; `idle: false` says a worker was
-        // still alive when the host stopped waiting, so that is not "stopped".
-        const stopped = Number(result.stopped) || 0;
-        if (result.idle === false) window.MefiToast?.(`${stopped ? `asked ${stopped} agent(s) to stop` : "new work is off"} · a run is still finishing · progress saved`, "warn");
-        else window.MefiToast?.(stopped ? `stopped ${stopped} agent(s) · progress saved, work stays queued` : "no agents were running · new work is off", stopped ? "good" : "info");
-      }
       else window.MefiToast?.(`assistant ${full?.status ?? action}`, "info");
       return result;
     } catch (error) {
       window.MefiToast?.(`${label} failed · ${String(error?.message ?? error)}`, "bad");
       return null;
-    }
-  }
-
-  // The brake: every running agent stops now, each run's progress is
-  // checkpointed, and new dispatch parks until the operator resumes.
-  async function stopAllAgents() {
-    if (state.stopAllBusy) return null;
-    state.stopAllBusy = true;
-    if (el.stopState) el.stopState.textContent = "stopping…";
-    try {
-      const result = await assistantControl("stop-all", "stop all agents");
-      state.feedDirty = true;
-      if (state.active) renderFeed();
-      return result;
-    } finally {
-      state.stopAllBusy = false;
-      if (el.stopState) el.stopState.textContent = "";
-    }
-  }
-
-  // Restart Studio with the agents stopped first, so running builds cannot
-  // defer the relaunch. The app comes back paused; Resume starts work again.
-  async function restartStudio() {
-    if (!window.mefiStudio?.appRestart) {
-      window.MefiToast?.("restart runs in the desktop app only", "info");
-      return null;
-    }
-    if (state.restartBusy) return null;
-    state.restartBusy = true;
-    if (el.stopState) el.stopState.textContent = "stopping agents…";
-    try {
-      const result = await window.mefiStudio.appRestart({ stopAgents: true });
-      if (result?.deferred) window.MefiToast?.(`restart deferred · ${result.reason ?? "work is still running"}`, "info");
-      else if (result?.ok === false) window.MefiToast?.(`restart failed · ${result.error ?? "unknown error"}`, "bad");
-      return result;
-    } catch (error) {
-      window.MefiToast?.(`restart failed · ${String(error?.message ?? error)}`, "bad");
-      return null;
-    } finally {
-      state.restartBusy = false;
-      if (el.stopState) el.stopState.textContent = "";
     }
   }
 
@@ -3465,7 +3277,6 @@
   async function changeQueueEnabled(wanted) {
     if (typeof wanted !== "boolean" || state.queueSaving || !window.mefiStudio?.assistantAutopilot) return false;
     state.queueSaving = true;
-    renderSettingsPanel();
     try {
       const result = await window.mefiStudio.assistantAutopilot({ enabled: wanted, execute: wanted });
       if (!result || result.ok === false) throw new Error(result?.error ?? "The host did not confirm it.");
@@ -3478,7 +3289,6 @@
       return false;
     } finally {
       state.queueSaving = false;
-      renderSettingsPanel();
       publishQueueSettings();
     }
   }
@@ -3541,7 +3351,6 @@
     state.calmFrames = 0;
     const applied = window.MefiTree?.applyAssistant?.(payload) ?? Promise.resolve();
     refreshAssistantCache();
-    updateAssistantPill();
     paintChatLog();
     if (typeof renderRailBadges === "function") renderRailBadges(payload?.state ?? null);
     if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks(payload?.state ?? null);
@@ -3774,20 +3583,6 @@
     return notice;
   }
 
-  function focusNextInProgress() {
-    const list = state.nodes
-      .filter((node) => node.kind === "todo" && node.status === "in_progress")
-      .sort((a, b) => (parentSession(b)?.updated ?? 0) - (parentSession(a)?.updated ?? 0));
-    if (!list.length) {
-      window.MefiToast?.("nothing in progress", "info");
-      return;
-    }
-    state.progressCycle = (state.progressCycle + 1) % list.length;
-    const node = list[state.progressCycle];
-    selectNode(node);
-    focusNode(node, { zoom: 1.5 });
-  }
-
   function constellationHasWork() {
     for (const node of state.nodes) {
       if (node.dying) continue;
@@ -3856,20 +3651,6 @@
     // The assistant node outlives the store: its card stays open over this panel.
     if (el.emptyAssistant) el.emptyAssistant.hidden = !assistantNode();
     if (state.selected && state.selected.kind !== "assistant") selectNode(null);
-  }
-
-  function renderHint() {
-    if (!el.hint) return;
-    let text = DEFAULT_HINT;
-    if (state.treeStatus !== "ok") text = "Desktop store not available · the dock still works";
-    else if (state.query) text = "Enter cycles matches · Esc clears the search";
-    else if (state.selected?.kind === "task") text = "Enter opens it in Tasks · [ ] other tasks · Esc clears";
-    else if (state.selected?.kind === "assistant") text = "Enter sends · ↓ focuses the composer · Esc clears";
-    else if (state.selected?.kind === "folded") text = "Enter lists them in the Explorer · ← → sessions · Esc clears";
-    else if (state.selected) text = "Enter opens it in the Explorer · ↑ ↓ move · Esc clears";
-    else if (state.camMode === "follow") text = state.follow ? `Following ${state.follow.title} · drag or zoom to hold your own view` : "Waiting for active work · the camera holds here";
-    else if (state.orbit === "paused") text = "spin paused · Space resumes · click a node · F fits";
-    el.hint.textContent = text;
   }
 
   // The graph lives in the space left by the actual panels, including shorter
@@ -4050,13 +3831,9 @@
     let right = el.width - 28;
     let top = 110;
     let bottom = el.height - 86;
-    const header = visibleBox(el.top);
-    const dock = visibleBox(el.bottom);
     const rail = visibleBox(el.rail);
     const feed = visibleBox(el.feed);
     const chat = visibleBox(el.chatLog);
-    if (header) top = Math.max(top, header.bottom + 20);
-    if (dock) bottom = Math.min(bottom, dock.top - 24);
     // The app's navigation rail floats over the canvas's left edge, the way the
     // work rail floats over its right; fit the graph beside it, not under it.
     // The shell says where its chrome ends (nav.js usable()): in layout v1 that is
@@ -4113,7 +3890,7 @@
     // re-seeding the tree, and the projection centre glides after it —
     // stepCenter — instead of jumping.) The Map's bar (layout v2) floats over
     // the top left the same way; without the frame it is not drawn.
-    for (const panel of [feed, chat, state.focusMode && !state.railCollapsed ? rail : null, visibleBox(el.info), visibleBox(el.followStatus), visibleBox(el.legend), visibleBox(el.pop), visibleBox(el.mapBar), visibleBox(el.mapZoom)]) {
+    for (const panel of [feed, chat, state.focusMode && !state.railCollapsed ? rail : null, visibleBox(el.info), visibleBox(el.followStatus), visibleBox(el.legend), visibleBox(el.mapBar), visibleBox(el.mapZoom)]) {
       if (!panel) continue;
       const x = panel.left - 20, y = panel.top - 20, rightEdge = panel.right + 20, bottomEdge = panel.bottom + 20;
       spaces = spaces.flatMap((area) => {
@@ -4361,7 +4138,7 @@
     state.overviewAt = null;
     state.screenLayout = previous.nodeLayout === state.nodeLayout ? previous.screenLayout : null;
     if (!previous.wasActive && !keepActive) exit();
-    else { syncViewControls(); renderHint(); }
+    else syncViewControls();
   }
 
   function applyTreePreferences(preferences = {}) {
@@ -6404,12 +6181,13 @@
 
   function renderParallelControl() {
     const known = Number.isFinite(Number(state.assistant?.parallel)) && Number(state.assistant.parallel) >= 1;
-    for (const control of [el.feedParallel, el.infoParallel].filter(Boolean)) {
-      control.disabled = Boolean(state.parallelSaving) || !known || !window.mefiStudio?.assistantAutopilot;
-      if (!state.parallelSaving) control.value = state.assistant?.adaptiveParallel !== false ? "machine" : String(Math.max(1, Math.min(3, Math.round(Number(state.assistant?.parallel) || 2))));
-      control.setAttribute("aria-busy", String(Boolean(state.parallelSaving)));
-      control.title = "Machine managed starts independent, eligible work while Studio remains responsive. Starts are staggered to recheck performance; new starts wait when Studio is laggy and resume when it recovers. Manual limits cap concurrent builds. Pause, approvals and file claims still apply.";
-    }
+    // The selected node's card holds Command's one copy (createBuildParallelControl).
+    const control = el.infoParallel;
+    if (!control) return;
+    control.disabled = Boolean(state.parallelSaving) || !known || !window.mefiStudio?.assistantAutopilot;
+    if (!state.parallelSaving) control.value = state.assistant?.adaptiveParallel !== false ? "machine" : String(Math.max(1, Math.min(3, Math.round(Number(state.assistant?.parallel) || 2))));
+    control.setAttribute("aria-busy", String(Boolean(state.parallelSaving)));
+    control.title = "Machine managed starts independent, eligible work while Studio remains responsive. Starts are staggered to recheck performance; new starts wait when Studio is laggy and resume when it recovers. Manual limits cap concurrent builds. Pause, approvals and file claims still apply.";
   }
 
   function createBuildParallelControl() {
@@ -6450,84 +6228,10 @@
     }
   }
 
-  function renderBuildModeControl() {
-    if (!el.feedBuildMode) return;
-    const known = typeof state.assistant?.autoBuild === "boolean";
-    el.feedBuildMode.disabled = Boolean(state.buildModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
-    if (!state.buildModeSaving) el.feedBuildMode.value = state.assistant?.autoBuild === false ? "verify" : "auto";
-    el.feedBuildMode.setAttribute("aria-busy", String(Boolean(state.buildModeSaving)));
-    el.feedBuildMode.title = "Auto build starts eligible tasks automatically. Verify first holds each new or changed brief for your approval. Running work continues.";
-  }
-
-  function renderAgentModeControl() {
-    const assistant = state.assistant;
-    const known = ["swarm", "cluster"].includes(assistant?.mode);
-    // The tree toolbar (quick switch) and the rail's Agents view show the same selector.
-    for (const control of [el.feedAgentMode, el.settingsAgentMode].filter(Boolean)) {
-      control.disabled = Boolean(state.agentModeSaving) || !known || !window.mefiStudio?.assistantAutopilot;
-      if (!state.agentModeSaving) control.value = assistant?.mode === "cluster" ? "cluster" : "swarm";
-      control.setAttribute("aria-busy", String(Boolean(state.agentModeSaving)));
-      control.title = "Swarm uses one builder per ready task. Cluster adds planning, review and scoped delegation for a shared task. Applies to all projects; current work finishes when switching.";
-    }
-    if (el.feedAgentModeNote) el.feedAgentModeNote.textContent = state.agentModeSaving ? "Saving agent mode…" : !window.mefiStudio ? "Available in the desktop app." : !known ? "Loading agent mode…" : assistant.mode === "swarm"
-      ? "Swarm · one builder per ready task, with independent tasks running across the queue. Pause, approvals and capacity still apply."
-      : assistant.clusterFocus?.title ? `Cluster · agents focus on: ${assistant.clusterFocus.title}`
-      : autopilotJobs(assistant).length ? "Cluster · current workers finish before agents focus on one task."
-      : "Cluster · the Assistant and builders share one task, delegate independent subtasks, then combine the results.";
-    renderAgentsGlance();
-  }
-
-  // The toolbar settings and work feed share confirmed state on every pass.
-  function renderSettingsPanel() {
-    renderParallelControl();
-    renderBuildModeControl();
-    renderAgentModeControl();
-    if (el.autopilotToggle) {
-      el.autopilotToggle.checked = Boolean(state.assistant?.enabled);
-      el.autopilotToggle.disabled = Boolean(state.queueSaving) || state.treeStatus !== "ok";
-      el.autopilotToggle.setAttribute("aria-busy", String(Boolean(state.queueSaving)));
-      const wrap = el.autopilotToggle.closest(".setting-row") ?? el.autopilotToggle.closest(".switch");
-      if (wrap) wrap.hidden = !window.mefiStudio;
-    }
-    if (el.settingsState) {
-      el.settingsState.textContent = !window.mefiStudio ? "Desktop only"
-        : !state.assistant ? "…"
-        : state.assistant.enabled ? "Autopilot on" : "Autopilot off";
-      el.settingsState.dataset.on = String(Boolean(window.mefiStudio && state.assistant?.enabled));
-    }
-    renderAgentsGlance();
-  }
-
-  // The three chips above the Agents controls: the queue switch, how many builds
-  // are running under which cap, and the coordination mode. Painted from the same
-  // assistant state the controls read, so the two can never disagree.
-  function renderAgentsGlance() {
-    const chip = (element, text, tone) => {
-      if (!element) return;
-      const value = element.querySelector("b");
-      if (value) value.textContent = text;
-      element.dataset.tone = tone;
-    };
-    if (!el.glanceAutopilot && !el.glanceWorkers && !el.glanceMode) return;
-    if (!window.mefiStudio) {
-      for (const element of [el.glanceAutopilot, el.glanceWorkers, el.glanceMode]) chip(element, "Desktop only", "idle");
-      return;
-    }
-    const assistant = state.assistant;
-    const on = Boolean(assistant?.enabled);
-    chip(el.glanceAutopilot, !assistant ? "…" : on ? "On" : "Off", !assistant ? "idle" : on ? "ok" : "off");
-    const running = assistant ? autopilotJobs(assistant).length : 0;
-    const cap = el.feedParallel?.value === "machine" ? "auto cap" : Number(el.feedParallel?.value) > 0 ? `cap ${el.feedParallel.value}` : "";
-    chip(el.glanceWorkers, `${running} running${cap ? ` · ${cap}` : ""}`, running ? "ok" : "idle");
-    const mode = assistant?.mode === "cluster" ? "Cluster" : assistant?.mode === "swarm" ? "Swarm" : "…";
-    chip(el.glanceMode, mode, mode === "…" ? "idle" : "ok");
-  }
-
   async function changeAgentMode(mode) {
     if (state.agentModeSaving) return false;
-    if (!["swarm", "cluster"].includes(mode)) { renderAgentModeControl(); return false; }
+    if (!["swarm", "cluster"].includes(mode)) return false;
     state.agentModeSaving = true;
-    renderAgentModeControl();
     try {
       const result = await autopilotPrefs({ mode }, "Agent mode");
       if (!result && window.mefiStudio?.assistantStatus) {
@@ -6550,7 +6254,6 @@
       return Boolean(result);
     } finally {
       state.agentModeSaving = false;
-      renderAgentModeControl();
     }
   }
 
@@ -6592,11 +6295,10 @@
 
   async function changeBuildMode(value) {
     if (state.buildModeSaving) return false;
-    if (!["auto", "verify"].includes(value)) { renderBuildModeControl(); return false; }
+    if (!["auto", "verify"].includes(value)) return false;
     state.buildModeSaving = true;
-    renderBuildModeControl();
     try {
-      const result = await autopilotPrefs({ autoBuild: value === "auto" }, "Build mode");
+      const result = await autopilotPrefs({ autoBuild: value === "auto" }, "Build approval");
       if (!result && window.mefiStudio?.assistantStatus) {
         // A lost acknowledgement may still have saved the mode. Read it back;
         // a newer status push takes precedence over this recovery snapshot.
@@ -6605,7 +6307,7 @@
         try {
           const fresh = await Promise.race([
             window.mefiStudio.assistantStatus(),
-            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Build mode status is unavailable.")), 12000); }),
+            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Build approval status is unavailable.")), 12000); }),
           ]);
           const status = fresh?.status ?? fresh;
           if (fresh?.ok !== false && typeof status?.autoBuild === "boolean" && state.assistant === previous) {
@@ -6620,7 +6322,6 @@
       return Boolean(result);
     } finally {
       state.buildModeSaving = false;
-      renderBuildModeControl();
     }
   }
 
@@ -6708,7 +6409,7 @@
     const enabled = Boolean(assistant?.enabled);
     const recentPass = Boolean(assistant?.lastPassAt) && Date.now() - assistant.lastPassAt < 10 * 60 * 1000;
     refreshCommandBacklog();
-    renderSettingsPanel();
+    renderParallelControl();
     renderCommandAttention();
     const activeAgent = commandAgentRoster(assistant, full).find((agent) => agent?.status === "running");
 
@@ -7167,7 +6868,6 @@
           if (result?.ok && result.state) {
             window.MefiTree?.applyAssistant?.({ state: result.state });
             refreshAssistantCache();
-            updateAssistantPill();
             renderInfo();
           }
         })
@@ -9208,7 +8908,7 @@
     const backdropSpan = profiler?.begin("command.backdrop");
     try {
       // The canvas paints its own sky, so CSS alone cannot apply a theme: the
-      // scene follows the colour theme (or the Ambience override) and is
+      // scene follows the colour theme (or Map look's Backdrop) and is
       // tinted from the live palette in light and dark palettes alike.
       drawBackdrop(far, time, still, energy, musicBands, musicBeat);
       if (far !== ctx) ctx.clearRect(0, 0, el.width, el.height);
@@ -9999,9 +9699,7 @@
       const box = node.getBoundingClientRect();
       if (box.width > 0 && box.height > 0) rects.push({ x: box.left, y: box.top, w: box.width, h: box.height });
     };
-    push(el.top);
     push(el.followStatus);
-    push(el.bottom);
     push(el.info);
     push(el.rail);
     push(el.feed);
@@ -10009,8 +9707,6 @@
     push(el.legend);
     push(el.appRail);
     push(el.empty);
-    push(el.pop);
-    push(el.settings);
     state.hudRects = rects;
     return rects;
   }
@@ -10351,7 +10047,7 @@
 
   function selectNode(node, options = {}) {
     if (node?.kind === "music") {
-      window.MefiMusic?.openAudio?.(el.musicToggle);
+      window.MefiMusic?.openAudio?.();
       bumpHud();
       return;
     }
@@ -10386,7 +10082,6 @@
     state.feedDirty = true;
     if (state.active) renderFeed();
     if (focusInCard && state.active) el.canvas.focus?.({ preventScroll: true });
-    renderHint();
     bumpHud();
   }
 
@@ -11033,7 +10728,6 @@
             if (result?.ok && result.state) {
               window.MefiTree?.applyAssistant?.({ state: result.state });
               refreshAssistantCache();
-              updateAssistantPill();
               renderInfo();
             }
           })
@@ -11527,14 +11221,6 @@
     state.matches = matches;
     state.matchSet = new Set(matches);
     state.matchIndex = previous ? matches.indexOf(previous) : -1;
-    if (el.searchCount) {
-      el.searchCount.textContent = !matches.length
-        ? "no match"
-        : matches.length === 1
-          ? "1 match · Enter cycles"
-          : `${matches.length} matches · Enter cycles`;
-    }
-    renderHint();
     return matches.length;
   }
 
@@ -11548,26 +11234,14 @@
     return applyQuery();
   }
 
-  function cycleMatch() {
-    if (!state.matches.length) return;
-    state.matchIndex = (state.matchIndex + 1) % state.matches.length;
-    const node = state.nodes.find((entry) => entry.id === state.matches[state.matchIndex]);
-    if (!node) return;
-    selectNode(node);
-    focusNode(node, { zoom: 1.4 });
-  }
-
   function clearSearch() {
     state.query = "";
     state.matches = [];
     state.matchSet = new Set();
     state.matchIndex = -1;
-    if (el.search) el.search.value = "";
-    if (el.searchCount) el.searchCount.textContent = "";
-    renderHint();
   }
 
-  // ---------- legend, view controls, ambience ----------
+  // ---------- legend and view controls ----------
   // The Map's legend (layout v2): the four states the prototype names, each in the colour its legend row already
   // uses here (current work, held for you, awaiting verification, completed).
   const MAP_LEGEND = [["active", "Running"], ["held", "Needs you"], ["verify", "Review"], ["done", "Done"]];
@@ -11623,47 +11297,8 @@
     if (state.active) renderFeed();
   }
 
+  // The Map's View ▾ (layout v2) says what is in force, one choice per row.
   function syncViewControls() {
-    if (el.orbitBtn) {
-      const flat = state.view === "2d";
-      const running = state.orbit !== "paused";
-      el.orbitBtn.disabled = flat;
-      el.orbitBtn.setAttribute("aria-pressed", running && !flat ? "true" : "false");
-      el.orbitBtn.title = flat ? "Spin (3D view only)" : running ? "Spin on · Space pauses" : "Spin paused · Space resumes";
-    }
-    // The camera mode "orbit" reads as Overview on screen: Spin is the only
-    // control that turns the tree, so the toolbar never shows two "Orbit"s.
-    if (el.camOrbitBtn) {
-      const on = state.camMode === "orbit";
-      el.camOrbitBtn.setAttribute("aria-pressed", on ? "true" : "false");
-      el.camOrbitBtn.title = on
-        ? "Camera: overview — gently pan and resize with Spin on, keeping the whole tree in view · click for a free camera (C cycles overview / follow / free)"
-        : "Camera: overview — keep the whole tree framed; Spin adds gentle pan and zoom (C)";
-    }
-    if (el.camFollowBtn) {
-      const on = state.camMode === "follow";
-      el.camFollowBtn.setAttribute("aria-pressed", on ? "true" : "false");
-      el.camFollowBtn.title = on
-        ? `Following ${state.follow?.title ?? "active tasks"}. Click to hold this view.`
-        : "Follow active tasks and their current work (C)";
-    }
-    if (el.viewBtn) {
-      el.viewBtn.dataset.view = state.view;
-      const viewLabel = el.viewBtn.querySelector(".label");
-      if (viewLabel) viewLabel.textContent = state.view === "2d" ? "2D" : "3D";
-      el.viewBtn.title = state.view === "2d" ? "View: flat 2D map (V toggles 3D)" : "View: 3D orbit (V toggles 2D)";
-      el.viewBtn.setAttribute("aria-label", state.view === "2d" ? "Map: flat 2D" : "Map: 3D orbit");
-    }
-    if (el.labelsBtn) {
-      el.labelsBtn.dataset.labels = state.labels;
-      const label = el.labelsBtn.querySelector(".label");
-      if (label) label.textContent = state.labels;
-      el.labelsBtn.title = state.labels === "auto" ? "Auto labels: current work and inspected nodes · hover or search for more (L cycles labels)" : state.labels === "updates" ? "Updates: code changes and task progress only (L cycles labels)" : `Node labels: ${state.labels} (L cycles auto / updates / all / none)`;
-      el.labelsBtn.setAttribute("aria-label", `Node labels: ${state.labels}`);
-    }
-    // Map and Labels sit one menu away, so View ▾ carries their state.
-    if (el.viewMenuBtn) el.viewMenuBtn.title = `View: ${state.view === "2d" ? "flat 2D map" : "3D orbit"} · labels ${state.labels} · zoom`;
-    // The Map's own View ▾ (layout v2) says the same, one choice per row.
     if (el.mapPop) syncMapMenu();
   }
 
@@ -11689,7 +11324,6 @@
       if (state.focusRestore) state.focusRestore.orbit = next;
     }
     syncViewControls();
-    renderHint();
     if (changed && !options.quiet) window.MefiToast?.(next === "paused" ? "spin paused" : "spin resumed", "info");
   }
 
@@ -11728,7 +11362,6 @@
     if (!options.quiet || changed) {
       if (changed && !options.transient) writeStore("mefiStudio.cmdCam", next);
       syncViewControls();
-      renderHint();
       if (changed && !options.quiet) {
         window.MefiToast?.(
           next === "orbit" ? "camera: overview — the whole tree stays in frame" : next === "follow" ? "camera: follow — tracking the current work" : "camera: free",
@@ -11787,185 +11420,17 @@
     writeStore("mefiStudio.cmdView", next);
     if (next === "2d") state.orbitVel = 0; // no easing tail into the flat map
     syncViewControls();
-    renderHint();
     refitLayout();
     if (state.camMode === "follow") applyCamMode(); // refit recentered; go back to the work node
     window.dispatchEvent(new CustomEvent("mefi-tree-view", { detail: { view: next } }));
     if (!state.settingsPreview) window.MefiToast?.(next === "2d" ? "2D map view" : "3D orbit view", "info");
   }
 
-  // The toolbar's popovers hang from the button that opened them: under the
-  // toolbar strip, right edges lined up with the button, inside the HUD (which
-  // starts at the app menu's edge). The top bar runs to two rows below 1650px
-  // and three below 760px, so the fixed top: 70px this replaces landed on the
-  // composer there. The inline styles win over the .pop defaults.
-  function placePop(pop, anchor) {
-    if (!pop || !anchor || !el.hud) return;
-    const button = anchor.getBoundingClientRect();
-    if (!button.width && !button.height) return;
-    const strip = anchor.closest?.(".cmd-tools")?.getBoundingClientRect?.() ?? button;
-    const hud = el.hud.getBoundingClientRect();
-    const edge = 12;
-    const top = Math.round(Math.max(button.bottom, strip.bottom) - hud.top + 6);
-    const widest = Math.max(edge, hud.width - pop.offsetWidth - edge);
-    pop.style.top = `${top}px`;
-    pop.style.right = `${Math.min(widest, Math.max(edge, Math.round(hud.right - button.right)))}px`;
-    pop.style.maxHeight = `${Math.max(160, Math.round(hud.height - top - edge))}px`;
-  }
-
   // Whether a HUD list can be seen: its own hidden flag says too little once
-  // a breakpoint hides its corner (Legend and Usage go at 1100px and below).
+  // a breakpoint hides its corner (the Legend goes at 1100px and below).
   function shownOnScreen(node) {
     if (!node || node.hidden !== false) return false;
     return typeof node.checkVisibility === "function" ? node.checkVisibility() : (node.getClientRects?.().length ?? 0) > 0;
-  }
-
-  // The Usage breakdown is tracker.js's; Command only asks it to close, and
-  // only while it is on screen. Says whether there was one to close.
-  function closeUsagePop() {
-    if (!shownOnScreen(el.usagePop) || typeof window.MefiUsageTracker?.setOpen !== "function") return false;
-    window.MefiUsageTracker.setOpen(false);
-    return true;
-  }
-
-  function agentSettingsOwns(target) {
-    return el.settings?.contains(target) || el.agentSettingsBtn?.contains(target) ||
-      (window.MefiSelect?.owns?.(el.settings) && window.MefiSelect?.contains?.(target)) ||
-      window.MefiScroll?.owns?.(el.settings, target);
-  }
-
-  function onAgentSettingsOutside(event) {
-    if (!agentSettingsOwns(event.target)) closeAgentSettings();
-  }
-
-  function openAgentSettings({ focus = false } = {}) {
-    if (!el.settings || !el.agentSettingsBtn) return;
-    closeAmbience(); closeViewMenu(); closeUsagePop();
-    window.MefiMusic?.closeAudio?.();
-    renderSettingsPanel();
-    el.settings.hidden = false;
-    el.agentSettingsBtn.setAttribute("aria-expanded", "true");
-    placePop(el.settings, el.agentSettingsBtn);
-    document.addEventListener("pointerdown", onAgentSettingsOutside);
-    window.MefiScroll?.scan(el.settings);
-    if (focus) el.settings.focus({ preventScroll: true });
-    state.hudRectsAt = 0;
-    bumpHud();
-  }
-
-  function closeAgentSettings({ focus = false } = {}) {
-    if (!el.settings) return;
-    if (window.MefiSelect?.owns?.(el.settings)) window.MefiSelect.close();
-    el.settings.hidden = true;
-    el.agentSettingsBtn?.setAttribute("aria-expanded", "false");
-    document.removeEventListener("pointerdown", onAgentSettingsOutside);
-    state.hudRectsAt = 0;
-    if (focus) el.agentSettingsBtn?.focus({ preventScroll: true });
-  }
-
-  function onAmbienceOutside(event) {
-    if (el.pop?.contains(event.target) || el.ambienceBtn?.contains(event.target)) return;
-    closeAmbience();
-  }
-
-  function toggleAmbience(event) {
-    if (!el.pop) return;
-    if (el.pop.hidden) {
-      closeAgentSettings();
-      closeViewMenu();
-      closeUsagePop();
-      el.pop.hidden = false;
-      el.ambienceBtn?.setAttribute("aria-expanded", "true");
-      placePop(el.pop, el.ambienceBtn);
-      document.addEventListener("mousedown", onAmbienceOutside);
-      // Opened from the keyboard, focus steps into the dialog itself so the
-      // next Tab reaches its first row instead of Leave. Never onto a select:
-      // a focused select holds the frame loop (holdForPicker).
-      if (event?.detail === 0) el.pop.focus?.({ preventScroll: true });
-      bumpHud();
-    } else {
-      closeAmbience();
-    }
-  }
-
-  function closeAmbience({ focus = false } = {}) {
-    if (!el.pop) return;
-    if (!el.pop.hidden) document.removeEventListener("mousedown", onAmbienceOutside);
-    el.pop.hidden = true;
-    el.ambienceBtn?.setAttribute("aria-expanded", "false");
-    if (focus) el.ambienceBtn?.focus?.({ preventScroll: true });
-  }
-
-  // View ▾ holds Map (2D/3D), Labels and zoom. A click, Enter or Space opens
-  // it onto its first item; arrows and Home/End move, Esc closes it back onto
-  // its button and Tab closes it on the way past. It stays open under its own
-  // items (zoom twice, cycle the labels). Closed, it owns no key at all, so
-  // every single-key shortcut still reaches the canvas.
-  function viewMenuItems() {
-    return [...(el.viewPop?.querySelectorAll?.("[role='menuitem']") ?? [])].filter((item) => !item.disabled);
-  }
-
-  function onViewMenuOutside(event) {
-    if (el.viewPop?.contains(event.target) || el.viewMenuBtn?.contains(event.target)) return;
-    closeViewMenu();
-  }
-
-  function openViewMenu() {
-    if (!el.viewPop || el.viewPop.hidden === false) return;
-    closeAgentSettings();
-    closeAmbience();
-    closeUsagePop();
-    el.viewPop.hidden = false;
-    el.viewMenuBtn?.setAttribute("aria-expanded", "true");
-    placePop(el.viewPop, el.viewMenuBtn);
-    document.addEventListener("mousedown", onViewMenuOutside);
-    viewMenuItems()[0]?.focus?.({ preventScroll: true });
-    bumpHud();
-  }
-
-  function closeViewMenu({ focus = false } = {}) {
-    if (!el.viewPop) return;
-    if (el.viewPop.hidden === false) document.removeEventListener("mousedown", onViewMenuOutside);
-    el.viewPop.hidden = true;
-    el.viewMenuBtn?.setAttribute("aria-expanded", "false");
-    if (focus) el.viewMenuBtn?.focus?.({ preventScroll: true });
-  }
-
-  function toggleViewMenu() {
-    if (el.viewPop?.hidden === false) closeViewMenu({ focus: true });
-    else openViewMenu();
-  }
-
-  // Keys inside the open menu stop here, so an arrow never also walks the
-  // node tree underneath. Letters still bubble: V and L work from the menu.
-  function viewMenuKey(event) {
-    const items = viewMenuItems();
-    if (!items.length) return;
-    const at = items.indexOf(document.activeElement);
-    let next = null;
-    if (event.key === "ArrowDown" || event.key === "ArrowRight") next = (at + 1) % items.length;
-    else if (event.key === "ArrowUp" || event.key === "ArrowLeft") next = at < 0 ? items.length - 1 : (at - 1 + items.length) % items.length;
-    else if (event.key === "Home") next = 0;
-    else if (event.key === "End") next = items.length - 1;
-    else if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      closeViewMenu({ focus: true });
-      return;
-    } else if (event.key === "Tab") {
-      // Leave from the button, so Tab carries on along the toolbar.
-      closeViewMenu({ focus: true });
-      return;
-    }
-    if (next === null) return;
-    event.preventDefault();
-    event.stopPropagation();
-    items[next].focus({ preventScroll: true });
-  }
-
-  function viewMenuFocusOut(event) {
-    const next = event.relatedTarget;
-    if (next && !el.viewPop?.contains(next) && next !== el.viewMenuBtn) closeViewMenu();
   }
 
   // ---------- keyboard ----------
@@ -12096,8 +11561,7 @@
       return true;
     }
     if (key === "n") {
-      if (state.mapOn) mapNewTask();
-      else el.taskInput?.focus();
+      mapNewTask();
       return true;
     }
     if (key === "m") {
@@ -12105,12 +11569,7 @@
       return true;
     }
     if (key === "s") {
-      if (state.mapOn) {
-        window.MefiNav?.go?.("palette");
-        return true;
-      }
-      el.search?.focus();
-      el.search?.select?.();
+      window.MefiNav?.go?.("palette");
       return true;
     }
     if (key === "v") {
@@ -12123,26 +11582,13 @@
   // One Esc step per press; nav owns focus and the layers above this one.
   function escape() {
     if (!state.active) return false;
-    if (el.settings?.hidden === false) {
-      closeAgentSettings({ focus: true });
-      return true;
-    }
-    // What opened last closes first: the toolbar's popovers, then the
-    // corner's Usage and Legend lists (only while they can be seen), and only
-    // then the search, the inspected node and Command itself. The Map's View ▾ (layout v2) is a toolbar popover too.
+    // What opened last closes first: the Map's View ▾, then the corner's Legend
+    // list (only while it can be seen), and only then the search, the inspected
+    // node and Command itself.
     if (el.mapPop && el.mapPop.hidden === false) {
       closeMapMenu({ focus: true });
       return true;
     }
-    if (el.viewPop && el.viewPop.hidden === false) {
-      closeViewMenu({ focus: true });
-      return true;
-    }
-    if (el.pop && el.pop.hidden === false) {
-      closeAmbience({ focus: el.pop.contains(document.activeElement) });
-      return true;
-    }
-    if (closeUsagePop()) return true;
     if (state.legendOpen && shownOnScreen(el.legendList)) {
       setLegend(false);
       return true;
@@ -12176,9 +11622,9 @@
   // ---------- the Map (layout v2) ----------
   // In the 0.5 layout (html[data-frame], docs/unified-studio.md "The Map") Command is the Map place, drawn as the
   // prototype draws it: Map | Fleet | Pipelines, Running only and View ▾ over the top left of the tree, the colours of
-  // the four states bottom left, Fit and zoom under it. Every control is the classic toolbar's own choice (the same
-  // functions and the same saved settings); styles.css shows these only with the frame and folds the classic top bar
-  // away there. Nothing here runs per frame: the menu paints when it opens and when a choice changes.
+  // the four states bottom left, Fit and zoom under it. Every choice is the keys' own (the same functions and the same
+  // saved settings); styles.css shows these only with the frame. Nothing here runs per frame: the menu paints when it
+  // opens and when a choice changes.
   function syncMapOn() {
     const on = globalThis.document?.documentElement?.dataset?.frame === "on";
     if (on === state.mapOn) return;
@@ -12246,10 +11692,6 @@
 
   function openMapMenu() {
     if (!el.mapPop || el.mapPop.hidden === false) return;
-    closeAgentSettings();
-    closeAmbience();
-    closeViewMenu();
-    closeUsagePop();
     renderMapLayouts();
     syncMapMenu();
     el.mapPop.hidden = false;
@@ -12311,7 +11753,7 @@
     else if (item.dataset.nav) closeMapMenu();
   }
 
-  // The keys N and S open what the frame has in place of the classic composer and find box: New task and Search.
+  // The keys N and S open what the frame has: New task and Search.
   function mapNewTask() {
     if (typeof window.MefiSessions?.newTask === "function") window.MefiSessions.newTask();
     else if (typeof window.MefiWorkspace?.composeTask === "function") window.MefiWorkspace.composeTask();
@@ -12325,11 +11767,10 @@
     return Boolean((!state.director || state.director === state.zenDirector) && (state.ambientZenEnabled || state.zenEdgeSince != null) && state.active && !document.hidden && !state.settingsPreview &&
       !document.body.dataset.sheet && (!top || top === "command") &&
       !state.panning && !state.rotating && !state.query &&
-      // No open menu or popover fades out from under the pointer: Ambience,
-      // View and the Usage breakdown all hold Zen off while they are up.
-      el.pop?.hidden !== false && el.viewPop?.hidden !== false && el.settings?.hidden !== false &&
-      document.getElementById?.("music-dropdown")?.hidden !== false &&
-      document.getElementById?.("cmd-usage-pop")?.hidden !== false && (!state.feedMenuOpen || state.feedCollapsed) &&
+      // No open menu fades out from under the pointer: the Map's View ▾ and
+      // the music dropdown hold Zen off while they are up.
+      el.mapPop?.hidden !== false &&
+      document.getElementById?.("music-dropdown")?.hidden !== false && (!state.feedMenuOpen || state.feedCollapsed) &&
       !Array.from(document.querySelectorAll?.("#idle-hud details[open]") ?? []).some((node) => !node.closest?.("[hidden]")) &&
       !focus?.matches?.("input, textarea, select, [contenteditable='true']"));
   }
@@ -12427,7 +11868,6 @@
       state.ambient &&
       !state.selected &&
       !state.query &&
-      el.pop?.hidden !== false &&
       !document.body.dataset.sheet &&
       !el.hud.matches(":hover") &&
       !el.hud.contains(document.activeElement)
@@ -12570,11 +12010,6 @@
     state.matches = [];
     state.matchSet = new Set();
     state.matchIndex = -1;
-    if (el.search) el.search.value = "";
-    if (el.searchCount) el.searchCount.textContent = "";
-    closeAmbience();
-    closeViewMenu();
-    closeAgentSettings();
     closeMapMenu();
     syncMapOn();
     el.canvas.hidden = false;
@@ -12593,13 +12028,11 @@
       .then(() => {
         refreshGraph();
         selectNode(null);
-        updateTelemetry(true);
         applyEnterParams(params);
       })
       .catch(() => {})
       .then(() => {});
     loadPngs();
-    updateTelemetry(true);
     read("prefsGet").then((result) => {
       if (result?.ok && el.home) el.home.checked = result.prefs.commandHome !== false;
       if (result?.ok) writeStore("mefiStudio.commandHome", result.prefs.commandHome === false ? "0" : "1");
@@ -12645,7 +12078,6 @@
     // closed (paintChatLog, renderAsks); bring both up to date.
     paintChatLog();
     if (state.railTab === "ask" && typeof renderAsks === "function") renderAsks();
-    renderHint();
     window.MefiUsageTracker?.open?.();
     bumpHud();
     state.lastTouch = Date.now();
@@ -12673,9 +12105,6 @@
     setAmbientZen(false);
     state.active = false;
     cancelFrame();
-    closeAmbience();
-    closeViewMenu();
-    closeAgentSettings();
     closeMapMenu();
     hideTip();
     clearSearch();
@@ -12727,7 +12156,7 @@
     releaseReactiveInput();
     const active = document.activeElement;
     if (active === el.canvas || el.hud.contains(active)) {
-      (document.querySelector(".tab.active") ?? document.body).focus?.({ preventScroll: true });
+      document.body.focus?.({ preventScroll: true });
     }
     document.body.classList.remove("command-active");
     window.dispatchEvent(new CustomEvent("mefi:command", { detail: { active: false } }));
@@ -12749,7 +12178,6 @@
     refreshGraph();
     state.calmFrames = calmFrames;
     checkCollisions();
-    updateTelemetry();
     if (autopilotJobs(state.assistant).length || chatMode()) state.feedDirty = true; // "running: … · Ns" and the chat status line age between status pushes
     renderFeed();
     globalThis.MefiUsageTracker?.tick?.();
@@ -12913,8 +12341,8 @@
     ["cmd-cam", "C", "Camera: overview / follow / free"],
     ["cmd-view", "V", "Switch 3D orbit / flat 2D map"],
     ["cmd-labels", "L", "Node labels: auto / updates / all / none"],
-    ["cmd-search", "S", "Find a session, todo or task"],
-    ["cmd-compose", "N", "Add a task"],
+    ["cmd-search", "S", "Search Studio"],
+    ["cmd-compose", "N", "New task"],
     ["cmd-assistant", "M", "Message the assistant"],
   ];
 
@@ -12955,12 +12383,6 @@
     el.railWorkBadge = document.getElementById("cmd-rail-work-badge");
     el.railAssistantBadge = document.getElementById("cmd-rail-assistant-badge");
     el.railAskBadge = document.getElementById("cmd-rail-ask-badge");
-    el.settings = document.getElementById("cmd-settings");
-    el.agentSettingsBtn = document.getElementById("idle-agent-settings");
-    el.settingsState = document.getElementById("cmd-settings-state");
-    el.glanceAutopilot = document.getElementById("cmd-glance-autopilot");
-    el.glanceWorkers = document.getElementById("cmd-glance-workers");
-    el.glanceMode = document.getElementById("cmd-glance-mode");
     el.done = document.getElementById("cmd-done");
     el.doneList = document.getElementById("cmd-done-list");
     el.doneState = document.getElementById("cmd-done-state");
@@ -12971,48 +12393,21 @@
     el.asks = document.getElementById("cmd-asks");
     el.askList = document.getElementById("cmd-ask-list");
     el.askState = document.getElementById("cmd-ask-state");
-    el.telemetry = document.getElementById("idle-telemetry");
-    el.taskInput = document.getElementById("idle-task-input");
-    el.taskAdd = document.getElementById("idle-task-add");
     el.home = document.getElementById("idle-home");
     el.zen = document.getElementById("idle-zen");
     el.ambientZen = document.getElementById("idle-ambient-zen");
-    el.reactive = document.getElementById("idle-reactive");
-    el.musicToggle = document.getElementById("idle-music-toggle");
-    el.musicStatus = document.getElementById("idle-music-status");
-    el.musicLevel = document.getElementById("idle-music-level");
-    el.source = document.getElementById("idle-source");
     el.profile = document.getElementById("idle-profile");
     el.backdrop = document.getElementById("idle-backdrop");
     el.bubbles = document.getElementById("idle-bubbles");
     el.cardStyle = document.getElementById("idle-card-style");
     el.chatAbsorbed = document.getElementById("idle-chat-absorbed");
     el.chatAbsorbedList = document.getElementById("idle-chat-absorbed-list");
-    el.exitBtn = document.getElementById("idle-exit");
-    el.search = document.getElementById("idle-search");
-    el.searchCount = document.getElementById("idle-search-count");
-    el.fitBtn = document.getElementById("idle-fit");
-    el.orbitBtn = document.getElementById("idle-orbit");
-    el.camOrbitBtn = document.getElementById("idle-cam-orbit");
-    el.camFollowBtn = document.getElementById("idle-cam-follow");
     el.followStatus = document.getElementById("idle-follow-status");
-    el.zoomIn = document.getElementById("idle-zoom-in");
-    el.zoomOut = document.getElementById("idle-zoom-out");
-    el.labelsBtn = document.getElementById("idle-labels");
-    el.viewBtn = document.getElementById("idle-view");
     el.feed = document.getElementById("idle-feed");
     el.feedToggle = document.getElementById("idle-feed-toggle");
     el.feedContent = document.getElementById("idle-feed-content");
     el.feedDot = document.getElementById("idle-feed-dot");
     el.feedState = document.getElementById("idle-feed-state");
-    el.feedParallel = document.getElementById("idle-feed-parallel");
-    el.feedBuildMode = document.getElementById("idle-feed-build-mode");
-    el.feedAgentMode = document.getElementById("idle-feed-agent-mode");
-    el.settingsAgentMode = document.getElementById("idle-settings-agent-mode");
-    el.feedAgentModeNote = document.getElementById("idle-feed-agent-mode-note");
-    el.stopAll = document.getElementById("idle-stop-all");
-    el.restart = document.getElementById("idle-restart");
-    el.stopState = document.getElementById("idle-stop-state");
     el.feedNow = document.getElementById("idle-feed-now");
     el.feedMetrics = document.getElementById("idle-feed-metrics");
     el.feedQueue = document.getElementById("idle-feed-queue");
@@ -13038,12 +12433,6 @@
     el.chatPause = document.getElementById("idle-chat-pause");
     el.chatNewWorkState = document.getElementById("idle-chat-new-work-state");
     el.chatChips = document.getElementById("idle-chat-chips");
-    el.autopilotToggle = document.getElementById("idle-autopilot");
-    el.ambienceBtn = document.getElementById("idle-ambience");
-    el.pop = document.getElementById("idle-ambience-pop");
-    el.viewMenuBtn = document.getElementById("idle-view-menu");
-    el.viewPop = document.getElementById("idle-view-pop");
-    el.usagePop = document.getElementById("cmd-usage-pop");
     el.legendToggle = document.getElementById("idle-legend-toggle");
     el.legend = document.getElementById("cmd-legend");
     el.legendList = document.getElementById("cmd-legend-list");
@@ -13065,13 +12454,6 @@
     el.emptyRetry = document.getElementById("cmd-empty-retry");
     el.emptyAssistant = document.getElementById("cmd-empty-assistant");
     el.tip = document.getElementById("cmd-tip");
-    el.hint = document.getElementById("cmd-hint");
-    el.top = el.hud?.querySelector(".cmd-top") ?? null;
-    el.bottom = el.hud?.querySelector(".cmd-bottom") ?? null;
-    el.pills = {};
-    for (const name of ["sessions", "progress", "tasks", "ideas", "machine", "assistant", "offline"]) {
-      el.pills[name] = el.telemetry?.querySelector(`[data-tele="${name}"]`) ?? null;
-    }
 
     if (el.profile) {
       el.profile.innerHTML = PROFILE_ORDER.map((key) => `<option value="${key}" ${key === state.profile ? "selected" : ""}>${PROFILES[key].label}</option>`).join("");
@@ -13094,20 +12476,7 @@
         else if (state.audio?.state === "running" && !state.reactive && !state.mediaElements.has(window.MefiMusic?.getAudioElement?.())) state.audio.suspend().catch(() => {});
       });
     }
-    if (el.reactive) {
-      el.reactive.checked = state.reactive;
-      el.reactive.addEventListener("change", () => setMusicReactive(el.reactive.checked));
-    }
-    el.musicToggle?.addEventListener("click", () => {
-      closeAmbience(); closeViewMenu(); closeUsagePop(); closeAgentSettings();
-      window.MefiMusic?.toggleAudio?.(el.musicToggle);
-    });
     renderMusicStatus(true);
-    if (el.source) {
-      el.source.value = state.audioSource;
-      el.source.disabled = false;
-      el.source.addEventListener("change", () => setAudioSource(el.source.value));
-    }
     if (el.backdrop) {
       el.backdrop.innerHTML = BACKDROP_ORDER.map((key) => `<option value="${key}" ${key === state.backdrop ? "selected" : ""}>${BACKDROPS[key]}</option>`).join("");
       el.backdrop.addEventListener("change", () => setBackdrop(el.backdrop.value));
@@ -13120,7 +12489,6 @@
       el.cardStyle.value = state.cardStyle;
       el.cardStyle.addEventListener("change", () => setCardStyle(el.cardStyle.value));
     }
-    el.exitBtn?.addEventListener("click", leave);
     watchPickers();
     el.home?.addEventListener("change", () => {
       window.mefiStudio?.prefsSet?.({ commandHome: el.home.checked });
@@ -13128,80 +12496,6 @@
       window.MefiToast?.(`Workspace ${el.home.checked ? "opens" : "stays off"} on launch`, "info");
     });
 
-    const addTaskFromComposer = async () => {
-      const text = el.taskInput?.value.trim();
-      if (!text) return null;
-      el.taskInput.value = "";
-      let created = null;
-      if (window.mefiStudio?.tasksCreate) {
-        // A board task, straight through tasks:create: the path Work mode
-        // uses (assistantCreateTask pinned, then the executor is asked for
-        // work). Never the chat classifier: there a statement without a work
-        // verb made no task, "Pause button in the music player" paused the
-        // service, and the toast still said the task was on the board.
-        let result = null;
-        try {
-          result = await window.mefiStudio.tasksCreate({ title: text.split("\n")[0].slice(0, 180), prompt: text, ...(state.projectId ? { projectId: state.projectId } : {}) });
-        } catch (error) {
-          result = { ok: false, error: String(error?.message ?? error) };
-        }
-        created = result?.ok && result.task?.id ? result.task : null;
-        if (!created) {
-          // The host's own reason (a duplicate title, a project switch).
-          window.MefiToast?.(`task not added · ${result?.error || "the task store did not return a task"}`, "bad");
-          if (!el.taskInput.value) el.taskInput.value = text; // hand the text back
-          return null;
-        }
-      } else {
-        // Browser mode: tasks.js writes the board. Await the add so the list
-        // read below happens after the write landed.
-        created = await window.MefiTasks?.addTask(text);
-        if (!created) {
-          // Nothing was saved (tasks.js toasts the reason when it is loaded): hand
-          // the text back unless the field has been typed into since.
-          if (!el.taskInput.value) el.taskInput.value = text;
-          return null;
-        }
-      }
-      await refreshTasks();
-      refreshGraph();
-      updateTelemetry();
-      window.MefiToast?.(`on the board · ${String(created.title || text).slice(0, 48)}`, "good");
-      if (state.active) {
-        const node = state.nodes.find((entry) => entry.id === `task:${created.id}`);
-        if (node) {
-          selectNode(node);
-          focusNode(node, { zoom: 1.4 });
-        }
-      }
-      return created;
-    };
-    el.taskAdd?.addEventListener("click", addTaskFromComposer);
-    el.taskInput?.addEventListener("keydown", async (event) => {
-      if (event.key !== "Enter") return;
-      const created = await addTaskFromComposer();
-      if (created && (event.ctrlKey || event.metaKey)) nav("tasks", { taskId: created.id });
-    });
-
-    el.search?.addEventListener("input", () => {
-      clearTimeout(state.searchTimer);
-      state.searchTimer = setTimeout(() => search(el.search.value), 80);
-    });
-    el.search?.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") cycleMatch();
-    });
-
-    el.fitBtn?.addEventListener("click", () => fitAll());
-    el.orbitBtn?.addEventListener("click", () => setOrbit());
-    el.camOrbitBtn?.addEventListener("click", () => setCamMode(state.camMode === "orbit" ? "free" : "orbit"));
-    el.camFollowBtn?.addEventListener("click", () => setCamMode(state.camMode === "follow" ? "free" : "follow"));
-    el.zoomOut?.addEventListener("click", () => userZoom(state.zoom * 0.89));
-    el.zoomIn?.addEventListener("click", () => userZoom(state.zoom * 1.12));
-    el.labelsBtn?.addEventListener("click", () => setLabels(nextLabels()));
-    el.viewBtn?.addEventListener("click", () => setView(state.view === "2d" ? "3d" : "2d"));
-    // Busy while the host saves, and back to the confirmed state on failure:
-    // a switch that shows On when nothing was saved would say work is running.
-    el.autopilotToggle?.addEventListener("change", () => changeQueueEnabled(el.autopilotToggle.checked));
     el.chatSend?.addEventListener("click", () => sendAssistant(el.chatInput?.value));
     el.chatInput?.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey) {
@@ -13262,26 +12556,7 @@
     for (const button of el.doneFilters ?? []) button.addEventListener("click", () => setDoneFilter(button.dataset.doneFilter));
     setDoneCollapsed(state.doneCollapsed, { save: false });
     setRailTab(state.railTab, { save: false });
-    el.agentSettingsBtn?.addEventListener("click", (event) => {
-      if (el.settings?.hidden === false) closeAgentSettings({ focus: true });
-      else openAgentSettings({ focus: event.detail === 0 });
-    });
-    document.getElementById("idle-agent-settings-close")?.addEventListener("click", () => closeAgentSettings({ focus: true }));
-    el.settings?.addEventListener("click", (event) => { if (event.target?.closest?.("[data-nav]")) closeAgentSettings(); });
-    el.settings?.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") { event.preventDefault(); closeAgentSettings({ focus: true }); }
-      event.stopPropagation(); // settings keys must not also move the canvas
-    });
-    el.settings?.addEventListener("focusout", (event) => {
-      if (event.relatedTarget && !agentSettingsOwns(event.relatedTarget)) closeAgentSettings();
-    });
     document.getElementById("idle-chat-explorer")?.addEventListener("click", () => nav("explorer", { assistant: true }));
-    el.ambienceBtn?.addEventListener("click", toggleAmbience);
-    // A way out of Ambience (Style & sound ↗) closes it on the way.
-    el.pop?.addEventListener("click", (event) => { if (event.target?.closest?.("[data-nav]")) closeAmbience(); });
-    el.viewMenuBtn?.addEventListener("click", toggleViewMenu);
-    el.viewPop?.addEventListener("keydown", viewMenuKey);
-    el.viewPop?.addEventListener("focusout", viewMenuFocusOut);
     // The Map (layout v2): Running only, View ▾ and its choices, Fit and zoom. The page links are data-nav.
     setRunningOnly(state.runningOnly, { save: false });
     el.mapRunningOnly?.addEventListener("click", () => setRunningOnly(!state.runningOnly));
@@ -13295,29 +12570,10 @@
     el.mapFit?.addEventListener("click", () => fitAll());
     el.mapZoomOut?.addEventListener("click", () => userZoom(state.zoom * 0.89));
     el.mapZoomIn?.addEventListener("click", () => userZoom(state.zoom * 1.12));
-    // Both popovers hang from their buttons, so they follow them on a resize.
-    window.addEventListener("resize", () => {
-      if (el.pop?.hidden === false) placePop(el.pop, el.ambienceBtn);
-      if (el.viewPop?.hidden === false) placePop(el.viewPop, el.viewMenuBtn);
-      if (el.settings?.hidden === false) placePop(el.settings, el.agentSettingsBtn);
-    });
     el.legendToggle?.addEventListener("click", () => setLegend(!state.legendOpen));
     el.feedMenu?.addEventListener("click", () => setFeedMenu(!state.feedMenuOpen));
     el.feedToggle?.addEventListener("click", () => setFeedCollapsed(!state.feedCollapsed));
     setFeedCollapsed(state.feedCollapsed, false);
-    el.feedParallel?.addEventListener("change", () => void changeBuildParallel(el.feedParallel.value));
-    el.feedBuildMode?.addEventListener("change", () => void changeBuildMode(el.feedBuildMode.value));
-    el.feedAgentMode?.addEventListener("change", () => void changeAgentMode(el.feedAgentMode.value));
-    el.settingsAgentMode?.addEventListener("change", () => void changeAgentMode(el.settingsAgentMode.value));
-    // Both brakes ask first, as the Explorer's do: the first press arms the
-    // question on the button, a second press within a few seconds acts.
-    const armBrake = (button, run, question) => {
-      if (!button) return;
-      if (window.MefiUi?.arm) window.MefiUi.arm(button, { run, armed: question });
-      else button.addEventListener("click", run);
-    };
-    armBrake(el.stopAll, () => void stopAllAgents(), "Stop every run?");
-    armBrake(el.restart, () => void restartStudio(), "Restart Studio?");
     setFeedMenu(state.feedMenuOpen);
     window.addEventListener("mefi:project-changed", projectChanged);
     el.emptyRetry?.addEventListener("click", async () => {
@@ -13326,16 +12582,12 @@
       try {
         await window.MefiTree?.reload?.();
         refreshGraph();
-        updateTelemetry(true);
       } finally {
         el.emptyRetry.disabled = false;
       }
     });
-    pillOf("sessions")?.addEventListener("click", () => setCamMode("orbit"));
-    pillOf("progress")?.addEventListener("click", () => focusNextInProgress());
-    pillOf("assistant")?.addEventListener("click", () => selectAssistant({ focus: true }));
     el.emptyAssistant?.addEventListener("click", () => window.MefiCompanion?.open?.());
-    // The fresh card's first step: Vibe's box in Vibe, Command's own task box in Build.
+    // The fresh card's first step: Vibe's box in Vibe, a new task in Build (the Map's N).
     document.getElementById("cmd-empty-start")?.addEventListener("click", () => {
       if (window.MefiVibe?.mode?.() === "vibe") {
         window.MefiNav?.go?.("vibe");
@@ -13343,7 +12595,7 @@
         setTimeout(() => box?.focus?.({ preventScroll: true }), 0);
         return;
       }
-      document.getElementById("idle-task-input")?.focus?.();
+      mapNewTask();
     });
 
     // The broadcast carries the list that was just written. Using it skips a
@@ -13587,10 +12839,6 @@
       { passive: false }
     );
 
-    window.mefiStudio?.onMachineStatus?.((status) => {
-      state.machineStatus = status;
-      updateTelemetry(true);
-    });
     window.mefiStudio?.onEyesActivity?.(onActivity);
     window.mefiStudio?.onStudioLog?.((line) => {
       const text = String(line ?? "");
@@ -13697,15 +12945,11 @@
     window.addEventListener("mefi:tree-select", () => {
       if (state.active) refreshGraph();
     });
-    window.addEventListener("mefi:nav-badges", () => {
-      if (state.active) updateTelemetry(true);
-    });
     // A sheet closed over the constellation: catch up before it is looked at.
     window.addEventListener("mefi:nav", (event) => {
       if (event.detail?.action !== "close") return;
       if (!state.active || document.body.dataset.sheet) return;
       refreshGraph();
-      updateTelemetry(true);
       bumpHud();
     });
 
@@ -13725,7 +12969,6 @@
     }
     renderLegend();
     syncViewControls();
-    renderHint();
     armIdleTimer();
     // Both timers bail while document.hidden (the refresh tick and the idle
     // auto-enter); one pass on show snaps the view and the quiet clock back
@@ -13847,7 +13090,7 @@
     exitFocus,
     setCardStyle,
     setDirector,
-    // Zen now: switches Zen on if it is off (the Ambience toggle, saved) and
+    // Zen now: switches Zen on if it is off (Map look's Zen mode, saved) and
     // enters it at once when the view allows it.
     enterZen: () => {
       if (!state.ambientZenEnabled) setAmbientZenEnabled(true);

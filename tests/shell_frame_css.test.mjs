@@ -129,7 +129,7 @@ test("geometry comes from the contract's derived edges only, and the layers are 
 });
 
 test("the classic local navigation is not drawn in the frame: the bar's middle is the breadcrumb, and the page list is the list column's", () => {
-  assert.equal(decl('html[data-frame][data-shell="rail"] #app-local-nav', "display"), "none !important");
+  absent(css, /#app-local-nav/, "the classic local navigation is gone, so nothing draws or hides it");
   absent(css, /--frame-top-[lr]|data-frame-narrow|data-local/, "nothing is measured or squeezed for it any more");
   absent(js, /NARROW_BAND|data-frame-narrow|--frame-top-[lr]|dataset\.local/, "and the script measures nothing for it");
   // The page list: while it shows, the column's own panels make way; its rows are buttons, the one you are on is marked.

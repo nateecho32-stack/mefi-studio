@@ -6,8 +6,7 @@
 // with a real pointer at 1920x1080 and measures: the list in the prototype's order, the current row, the breadcrumb
 // (Friends / <place>), the page's title and the line under it, the one card that shows, nothing wider than the page,
 // and no text under 12 px. The rail's Friends, Search's Rooms, Your PCs and Playground, and the companion's Friends
-// bubble land on the page; a tab per place. A second launch without ?layout=v2 opens the companion's Friends bubble as
-// it was. Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
+// bubble land on the page; a tab per place. Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
 // process or live state is loaded; network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
@@ -181,11 +180,14 @@ app.whenReady().then(async () => {
       crumbs: [...document.querySelectorAll('.shell-trail .shell-crumb')].map((node) => node.textContent.trim()),
       sheet: box(overlay), nav: box(document.getElementById('shell-pages')),
       pageOverflow: document.documentElement.scrollWidth > innerWidth + 1 || document.body.scrollWidth > innerWidth + 1,
+      // The window itself never scrolls under a page: the classic tab pages beneath are not laid out.
+      docScroll: [document.scrollingElement.scrollHeight, innerHeight],
       sideways: overlay ? overlay.scrollWidth > overlay.clientWidth + 1 : false, small, wide,
       hub: document.getElementById('agent-hub')?.hidden === false,
     };`;
   const problems = (m, tag) => [
     ...(m.pageOverflow ? [`${tag}: the page overflows the window`] : []),
+    ...(m.docScroll[0] > m.docScroll[1] + 1 ? [`${tag}: the whole window scrolls (${m.docScroll[0]} over ${m.docScroll[1]})`] : []),
     ...(m.sideways ? [`${tag}: the page scrolls sideways ${JSON.stringify(m.wide)}`] : []),
     ...m.small.map((line) => `${tag}: text under 12 px: ${line}`),
     ...m.wide.map((line) => `${tag}: past the page's right edge: ${line}`),
@@ -193,24 +195,6 @@ app.whenReady().then(async () => {
   const found = [];
   const go = (id, params) => run(`window.MefiNav.go(${JSON.stringify(id)}${params ? `, ${JSON.stringify(params)}` : ""});`);
   const placeIs = (place) => `document.getElementById('friends-overlay')?.hidden === false && document.getElementById('friends-overlay').dataset.place === ${JSON.stringify(place)} && window.MefiNav.current() === 'friends-page'`;
-
-  // ---- v1: the same Friends page, with its places as tabs and a Close of its own ---------------------
-  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
-  await until("window.MefiNav && window.MefiCompanionHub && !window.MefiBoot?.isActive?.()", "studio ready (v1)");
-  await resize(1920, 1080);
-  await go("friends");
-  await until("document.getElementById('friends-overlay')?.hidden === false && document.getElementById('friends-overlay').dataset.place === 'lobby'", "Friends opens the Friends page in the classic layout too, at The Lobby");
-  report.v1 = await run(`const shown = (el) => Boolean(el && el.getClientRects().length && getComputedStyle(el).visibility !== 'hidden');
-    return { bubble: document.getElementById('agent-hub')?.hidden === false, places: window.MefiCompanionHub.friendsPlaces(), route: window.MefiNav.get('friends-page')?.hidden?.(),
-      tabs: [...document.querySelectorAll('#friends-place-tabs .friends-place-tab')].filter(shown).map((tab) => tab.textContent + (tab.getAttribute('aria-current') === 'page' ? ' *' : '')),
-      close: shown(document.getElementById('friends-place-close')) };`);
-  assert.deepEqual(report.v1, { bubble: false, places: null, route: true, tabs: ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub"], close: true }, "with the layout off, Friends is the same page: tabs for its places and a Close, no bubble");
-  await click("#friends-place-tab-hub");
-  await until("document.getElementById('friends-overlay').dataset.place === 'hub' && document.getElementById('project-hub')", "the Project hub tab");
-  await capture("friends-v1-hub-1920x1080.png");
-  await click("#friends-place-close");
-  await until("document.getElementById('friends-overlay').hidden === true", "Close leaves the page");
-  report.steps.push("v1 opens the page");
 
   // ---- v2 ------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });

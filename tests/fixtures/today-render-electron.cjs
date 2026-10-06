@@ -13,8 +13,7 @@
 // real geometry: nothing overflows the page, no scroller reserves width for a bar, no text is
 // under 12 px, everything is reachable, the backdrop and the media are not covered. Then it
 // drives the page the way a person does (answer on a card, answer in the popover, approve,
-// drop and undo, retry, refuse, keys, the notification hand-off) and proves layout v1 is
-// untouched in a second window. No application main process or live state is loaded;
+// drop and undo, retry, refuse, keys, the notification hand-off). No application main process or live state is loaded;
 // network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
@@ -747,15 +746,20 @@ app.whenReady().then(async () => {
   for (let index = 0; index < 60; index += 1) {
     contents.sendInputEvent({ type: "keyDown", keyCode: "Tab" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
     await sleep(40);
-    stops.push(await run(`const node = document.activeElement; if (!node || node === document.body) return null; const r = node.getBoundingClientRect(), style = getComputedStyle(node); return { id: node.id || '', cls: typeof node.className === 'string' ? node.className.split(' ')[0] : '', text: (node.textContent || '').trim().slice(0, 28), x: Math.round(r.left), y: Math.round(r.top), ring: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0, today: Boolean(node.closest('#today-page')), ours: /^today-/.test(typeof node.className === 'string' ? node.className.split(' ')[0] : '') };`));
+    stops.push(await run(`const node = document.activeElement; if (!node || node === document.body) return null; const r = node.getBoundingClientRect(), style = getComputedStyle(node); return { under: Boolean(node.closest('body > main, body > header.page-head')), id: node.id || '', cls: typeof node.className === 'string' ? node.className.split(' ')[0] : '', text: (node.textContent || '').trim().slice(0, 28), x: Math.round(r.left), y: Math.round(r.top), ring: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0, today: Boolean(node.closest('#today-page')), ours: /^today-/.test(typeof node.className === 'string' ? node.className.split(' ')[0] : '') };`));
   }
   report.tabStops = stops.map((stop) => (stop ? `${stop.id || stop.cls}:${stop.text}@${stop.x},${stop.y}` : null));
-  assert.ok(stops.every(Boolean), "focus never falls out to the page while tabbing through Today");
+  // Past the page's last control the order leaves the document for one press (Chromium's wrap) and comes back at the
+  // frame's first control. It never lands on the tab pages under the frame's layers: before the frame left them out of
+  // the flow while Today is the page, the Model catalog's 28 controls sat in the order there, invisible.
+  const outs = stops.flatMap((stop, index) => (stop ? [] : [index]));
+  assert.ok(outs.every((index) => index === stops.length - 1 || stops[index + 1]?.id === "shell-list-toggle"), `focus leaves the page only where the order wraps, back to the frame's first control: ${JSON.stringify(report.tabStops)}`);
+  assert.ok(stops.every((stop) => !stop?.under), `no stop lands on a page under the frame's layers: ${JSON.stringify(stops.filter((stop) => stop?.under))}`);
   const at = (match) => stops.findIndex((stop) => stop && match(stop));
   const order = [at((stop) => stop.id === "vibe-project"), at((stop) => stop.id === "vibe-new-app"), at((stop) => stop.id === "vibe-chat-toggle"), at((stop) => stop.cls === "today-chip"), at((stop) => stop.id === "vibe-input"), at((stop) => stop.id === "vibe-talk"), at((stop) => stop.id === "vibe-build"), at((stop) => stop.cls === "vibe-evolution-intent"), at((stop) => stop.cls === "today-card-open")];
   assert.ok(order.every((found) => found >= 0), `every stop is reached by Tab: ${JSON.stringify(order)} in ${JSON.stringify(report.tabStops)}`);
   assert.deepEqual([...order].sort((a, b) => a - b), order, "in the order the page reads: project, the summary, the box, its buttons, the starting points, the board");
-  const firstCards = stops.filter((stop) => stop.cls === "today-card-open" || stop.cls === "today-btn" || stop.cls === "today-link" || stop.cls === "today-chip");
+  const firstCards = stops.filter((stop) => stop && (stop.cls === "today-card-open" || stop.cls === "today-btn" || stop.cls === "today-link" || stop.cls === "today-chip"));
   assert.ok(firstCards.length >= 4, "the board's own controls are in the tab order");
   assert.ok(firstCards.every((stop) => stop.ring), `a focus ring on every stop of Today's own: ${JSON.stringify(firstCards.filter((stop) => !stop.ring))}`);
   // Down the board the order follows the columns: the first card of Needs you comes before the first of Running.
@@ -764,34 +768,6 @@ app.whenReady().then(async () => {
   await run("document.activeElement?.blur?.();");
   check("Tab walks Today in reading order with a ring on its own stops");
 
-  // ---- v1 is untouched ---------------------------------------------------------------------------------------------
-  const v2Window = window;
-  ({ window, contents } = await open({ capture: "1" }));
-  v2Window.destroy();
-  await until("window.MefiVibe && window.MefiNav && !window.MefiBoot?.isActive?.()", "v1 studio ready");
-  assert.equal(await run("return document.documentElement.dataset.layout ?? null;"), null, "layout v1: the attribute is absent");
-  window.setContentSize(1440, 900); contents.setZoomFactor(1); await sleep(300);
-  await run("await window.MefiVibe.setMode('vibe'); await window.MefiVibe.refresh();");
-  await until("document.getElementById('vibe-layer') && !document.getElementById('vibe-layer').hidden && document.querySelector('#vibe-lane-needs .vibe-row, #vibe-lane-needs li')", "v1 Vibe is up with its own lanes");
-  await sleep(400);
-  report.v1 = await run(`return {
-    page: Boolean(document.getElementById('today-page')), mark: document.getElementById('vibe-layer').dataset.today ?? null, inbox: Boolean(document.getElementById('today-inbox')),
-    routes: ['today', 'inbox', 'inbox-open'].map((id) => Boolean(window.MefiNav.get(id))), on: window.MefiToday.isOn(), count: window.MefiToday.count(),
-    stage: [...document.querySelector('#vibe-layer .vibe-stage').children].map((node) => node.id || node.className.split(' ')[0]),
-    stageShown: getComputedStyle(document.querySelector('#vibe-layer .vibe-stage')).display, topShown: getComputedStyle(document.querySelector('#vibe-layer .vibe-top')).display, dockShown: getComputedStyle(document.getElementById('vibe-dock')).display,
-    composeParent: document.getElementById('vibe-compose').parentElement.className, hero: Boolean(document.querySelector('#vibe-layer .vibe-stage > .vibe-hero')),
-    needsLane: document.getElementById('vibe-card-needs').hidden === false, tabsOpen: typeof window.MefiVibe.data, calls: window.todayFixture.calls().length };`);
-  assert.deepEqual({ page: report.v1.page, mark: report.v1.mark, inbox: report.v1.inbox, routes: report.v1.routes, on: report.v1.on, count: report.v1.count }, { page: false, mark: null, inbox: false, routes: [false, false, false], on: false, count: 0 });
-  assert.equal(report.v1.stageShown, "flex", "the front door's stage is drawn as it always was");
-  assert.notEqual(report.v1.topShown, "none");
-  assert.notEqual(report.v1.dockShown, "none");
-  assert.equal(report.v1.composeParent, "vibe-stage", "the box is where v1 draws it");
-  assert.equal(report.v1.hero, true);
-  assert.equal(report.v1.needsLane, true, "v1's own Needs you card shows");
-  const v1Wait = await run("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true, bubbles: true, cancelable: true })); return document.getElementById('today-inbox') === null;");
-  assert.equal(v1Wait, true, "Ctrl J does nothing in v1");
-  await capture("vibe-v1-1440x900.png");
-  check("v1: no page, no mark, no routes, no popover, the front door as it was");
   assert.deepEqual(report.errors, [], "no console errors");
   report.complete = true;
   finish();

@@ -248,6 +248,21 @@
   .pm-navigation .ab-map-breadcrumb { order: 1; flex-basis: 100%; }
   .pm-navigation .ab-crumb { max-width: 200px; }
 }
+/* A short window (the smallest, 600x560, at 150%): the frame leaves this page about 250 px, and the head on two rows
+   with the tools on four took all of it, so the map had no height at all. Here the head keeps one row (the title gives
+   way to Map | Fleet | Pipelines), the tools take two (Browse, Map actions, Inspect and where you are share the
+   second, the location at its end with its last step in view) and the page less padding, so the map keeps a strip. */
+@media (max-height: 440px) {
+  .agent-brain-head.sheet-head { flex-wrap: nowrap; }
+  .agent-brain-head .sheet-title { width: 0; min-width: 0; }
+  .agent-brain-head .sheet-title h2 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #agent-brain-map { padding-block: 8px; }
+  .agent-brain-map-tools { gap: 4px 6px; margin-bottom: 6px; }
+  .pm-navigation { display: contents; }
+  .pm-browse { order: 1; }
+  .agent-brain-map-tools > :is(.pm-actions, .ab-narrow-open) { order: 2; }
+  .pm-navigation .ab-map-breadcrumb { order: 3; flex: 1 1 0; min-width: 48px; justify-content: flex-end; }
+}
 
 /* Ideas keep their provenance and real workflow states in a separate tree. */
 .agent-brain-pane[data-map-mode="ideas"] .agent-brain-map-grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "map"; }

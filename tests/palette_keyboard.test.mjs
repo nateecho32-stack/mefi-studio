@@ -1,8 +1,15 @@
-// Command-palette keyboard contract, driven for real: renderer/palette.js runs
-// against a minimal DOM stub, synthetic window keydown events walk the list,
-// and the assertions watch the active option wrap at both ends, Home/End jump
-// to the first/last option, aria-activedescendant track the highlight, and
-// focus land back on the opener after Escape and after Enter. No Electron.
+// Search's (Ctrl K) keyboard contract and everyday behaviour, driven for real:
+// renderer/palette.js runs against a minimal DOM stub, synthetic window keydown
+// events walk the list, and the assertions watch the active option wrap at both
+// ends (within the twelve rows shown), Home/End jump to the first/last option,
+// aria-activedescendant track the highlight, and focus land back on the opener
+// after Escape, Enter and a click on the scrim; then the task list arriving,
+// Recent, and "task ..." / "idea ...". Rows sit under group headings
+// (li.palette-heading, role presentation, not options); the options are
+// li.palette-row with ids palette-option-N. The empty box lists Recent, the
+// sessions, the rail's places and the registry records marked paletteBrowse.
+// The prototype's look itself (icons, words on the right, the footer) is
+// pinned by palette_layout_v2.test.mjs. No Electron.
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
@@ -19,6 +26,7 @@ function element(id, getDocument = () => globalThis.document) {
     listeners,
     attrs,
     hidden: false,
+    dataset: {},
     value: "",
     title: "",
     children: [],
@@ -87,6 +95,13 @@ function element(id, getDocument = () => globalThis.document) {
   return el;
 }
 
+// What a rendered list holds: the option rows (the headings between groups are not options),
+// each row's label, and the list as it reads ("# Group" where a group starts, then its rows).
+const optionsIn = (list) => list.children.filter((node) => node.attrs?.role === "option");
+const labelOf = (row) => row.children.find((child) => child.className === "label")?.textContent;
+const isHeading = (node) => node.className === "palette-heading";
+const shownIn = (list) => list.children.filter((node) => isHeading(node) || node.attrs?.role === "option").map((node) => (isHeading(node) ? `# ${node.textContent}` : labelOf(node)));
+
 test("command palette: arrows wrap at both ends, Escape and Enter restore the opener", async () => {
   const overlay = element("palette-overlay");
   const input = element("palette-input");
@@ -96,12 +111,13 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
 
   const listeners = {};
   const goCalls = [];
+  // Three pages marked for the empty box (paletteBrowse, the lower the earlier).
   const nav = {
     state: {},
     list: () => [
-      { id: "booklet", label: "Model booklet", group: "surfaces" },
-      { id: "graph", label: "Value graph", group: "surfaces" },
-      { id: "tasks", label: "Task board", group: "surfaces" },
+      { id: "booklet", label: "Model booklet", group: "surfaces", paletteBrowse: 1 },
+      { id: "graph", label: "Value graph", group: "surfaces", paletteBrowse: 2 },
+      { id: "tasks", label: "Task board", group: "surfaces", paletteBrowse: 3 },
     ],
     go: (id) => goCalls.push(id),
     claim: () => {},
@@ -142,6 +158,7 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
     for (const handler of input.listeners.input ?? []) handler({ target: input });
   };
   const activeId = () => list.querySelector("li.active")?.id ?? null;
+  const options = () => optionsIn(list);
 
   // open from a real trigger: the palette focuses its field and names option 0
   const opener = element("tools-booklet");
@@ -150,11 +167,14 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
   palette.open();
   assert.equal(overlay.hidden, false);
   assert.equal(globalThis.document.activeElement, input);
+  assert.deepEqual(shownIn(list), ["# surfaces", "Model booklet", "Value graph", "Task board"], "one heading over the group, then its rows");
+  assert.equal(list.children[0].attrs.role, "presentation", "the heading is not an option");
+  assert.equal(list.children[0].id, null, "and has no option id");
   assert.equal(activeId(), "palette-option-0");
   assert.equal(input.attrs["aria-activedescendant"], "palette-option-0");
   assert.equal(list.attrs["aria-activedescendant"], "palette-option-0", "the listbox names the active option too");
-  assert.equal(list.children[0].attrs["aria-posinset"], "1", "options announce their position");
-  assert.equal(list.children[0].attrs["aria-setsize"], "3", "position is against the full result set");
+  assert.equal(options()[0].attrs["aria-posinset"], "1", "options announce their position");
+  assert.equal(options()[0].attrs["aria-setsize"], "3", "position is against the full result set");
 
   // ArrowDown walks 0 -> 1 -> 2, then wraps at the last option back to 0
   key("ArrowDown");
@@ -194,7 +214,7 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
   // a typed query narrows the list and the wrap span follows the filtered set:
   // "task" matches only the Task board, so Down/Up wrap inside a one-row list
   type("task");
-  assert.equal(list.children.length, 1, "the query really narrowed the rendered list");
+  assert.deepEqual(shownIn(list), ["# surfaces", "Task board"], "the query really narrowed the rendered list");
   const filteredDown = key("ArrowDown");
   assert.equal(filteredDown.defaultPrevented, true);
   assert.equal(activeId(), "palette-option-0", "a one-row filtered list wraps onto itself");
@@ -209,7 +229,7 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
   opener.focus();
   palette.open();
   type("bo");
-  assert.equal(list.children.length, 2);
+  assert.equal(options().length, 2);
   const filteredUp = key("ArrowUp");
   assert.equal(filteredUp.defaultPrevented, true);
   assert.equal(activeId(), "palette-option-1", "ArrowUp wraps within the filtered span, not the full set");
@@ -231,7 +251,7 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
   assert.equal(activeId(), "palette-option-0");
   key("ArrowDown");
   assert.equal(activeId(), "palette-option-1");
-  assert.equal(list.children[1].attrs["aria-posinset"], "2", "position follows the highlight");
+  assert.equal(options()[1].attrs["aria-posinset"], "2", "position follows the highlight");
   key("Enter");
   await new Promise((resolve) => setTimeout(resolve, 60));
   assert.deepEqual(goCalls, ["graph"]);
@@ -239,9 +259,10 @@ test("command palette: arrows wrap at both ends, Escape and Enter restore the op
   assert.equal(globalThis.document.activeElement, secondOpener, "Enter restores the opener's focus");
 });
 
-// `nav` adds to the MefiNav stand-in, e.g. the sectionLabel/sectionRank pair.
-// `storage` is the page's localStorage and `toasts` collects what MefiToast was asked to say.
-function environment({ destinations = [], api = {}, projectId = "alpha", nav = {}, storage = null, toasts = null, placeholder = "" } = {}) {
+// `nav` adds to the MefiNav stand-in, e.g. the sectionLabel/sectionRank pair or `get` (the rail's places).
+// `storage` is the page's localStorage, `toasts` collects what MefiToast was asked to say, and
+// `board` is what MefiWorkspace.snapshot() hands over (the board Home already holds).
+function environment({ destinations = [], api = {}, projectId = "alpha", nav = {}, storage = null, toasts = null, placeholder = "", board = null } = {}) {
   const document = { readyState: "complete", activeElement: null, addEventListener() {} };
   const make = (id) => element(id, () => document);
   const ids = Object.fromEntries(["palette-overlay", "palette-input", "palette-list", "palette-close", "palette-status"].map((id) => [id, make(id)]));
@@ -254,6 +275,7 @@ function environment({ destinations = [], api = {}, projectId = "alpha", nav = {
   const window = {
     MefiNav: { state: {}, list: () => destinations, go: (id, params) => routes.push({ id, params }), claim() {}, release() {}, ...nav },
     MefiTasks: { state: { projectId, tasks: [] } },
+    ...(board ? { MefiWorkspace: { snapshot: () => board } } : {}),
     mefiStudio: { ...api, onProjects: (fn) => projectHandlers.push(fn), onTasks: (fn) => taskHandlers.push(fn) },
     ...(toasts ? { MefiToast: (text, kind, options) => toasts.push({ text, kind, options }) } : {}),
     addEventListener(type, fn) { (handlers[type] ??= []).push(fn); },
@@ -265,10 +287,14 @@ function environment({ destinations = [], api = {}, projectId = "alpha", nav = {
     return event;
   };
   const type = (value) => { input.value = value; for (const fn of input.listeners.input || []) fn({ target: input }); };
-  const labels = () => list.children.map((row) => row.children.find((child) => child.className === "palette-result-copy")?.children.find((child) => child.className === "label")?.textContent).filter(Boolean);
+  const options = () => optionsIn(list);
+  const labels = () => options().map(labelOf);
+  const kinds = () => options().map((row) => row.dataset.group);
+  const hints = () => options().map((row) => row.children.find((child) => child.className === "hint")?.textContent ?? "");
+  const shown = () => shownIn(list);
   const emitProject = (activeId) => { for (const fn of projectHandlers) fn({ activeId }); };
   const emitTasks = (tasks) => { for (const fn of taskHandlers) fn(tasks); };
-  return { palette: window.MefiPalette, document, input, list, close, status, overlay, key, type, labels, routes, emitProject, emitTasks, make };
+  return { palette: window.MefiPalette, document, input, list, close, status, overlay, key, type, options, labels, kinds, hints, shown, routes, emitProject, emitTasks, make };
 }
 
 test("palette finds everyday words and descriptions, ranks titles first, and keeps Tab inside its dialog", () => {
@@ -285,22 +311,28 @@ test("palette finds everyday words and descriptions, ranks titles first, and kee
   }
   env.type("connection");
   assert.equal(env.labels()[0], "Settings & connections", "literal titles outrank descriptive matches");
+  // Tab and Shift+Tab never leave the dialog. Its one control is the field: the
+  // Close button stays hidden (the scrim and Escape close Search).
+  assert.equal(env.close.hidden, true);
   assert.equal(env.key("Tab").defaultPrevented, true);
-  assert.equal(env.document.activeElement, env.close);
-  assert.notEqual(env.key("Enter").defaultPrevented, true, "the Close button keeps its native activation");
-  env.key("Tab");
   assert.equal(env.document.activeElement, env.input);
-  env.key("Tab", { shiftKey: true });
-  assert.equal(env.document.activeElement, env.close);
-  // Escape claims closing from any control inside the dialog, not just the
-  // field: from the focused Close button it still closes and restores the opener.
-  const closeEscape = env.key("Escape");
-  assert.equal(closeEscape.defaultPrevented, true);
-  assert.equal(env.overlay.hidden, true);
-  assert.equal(env.document.activeElement, opener, "Escape from the Close button restores the opener");
-  env.palette.open();
+  assert.equal(env.key("Tab", { shiftKey: true }).defaultPrevented, true);
+  assert.equal(env.document.activeElement, env.input);
+  // Enter belongs to the field; with focus elsewhere in the dialog it is not claimed.
+  env.list.focus();
+  assert.notEqual(env.key("Enter").defaultPrevented, true, "Enter away from the field keeps its native role");
   assert.equal(env.overlay.hidden, false);
-  for (const fn of env.close.listeners.click) fn();
+  // Escape claims closing from anywhere inside the dialog, not just the field,
+  // and restores the opener.
+  const escape = env.key("Escape");
+  assert.equal(escape.defaultPrevented, true);
+  assert.equal(env.overlay.hidden, true);
+  assert.equal(env.document.activeElement, opener, "Escape from inside the dialog restores the opener");
+  // A click on the scrim closes it too; a click inside the sheet does not.
+  env.palette.open();
+  for (const fn of env.overlay.listeners.click) fn({ target: env.list });
+  assert.equal(env.overlay.hidden, false);
+  for (const fn of env.overlay.listeners.click) fn({ target: env.overlay });
   assert.equal(env.overlay.hidden, true);
   assert.equal(env.document.activeElement, opener);
 });
@@ -317,13 +349,35 @@ test("opening Search again preserves the query, selection and original focus ret
   env.palette.open();
   env.type("task");
   env.key("ArrowDown");
-  env.close.focus();
+  env.document.body.focus();
   env.palette.open();
   assert.equal(env.input.value, "task");
   assert.equal(env.document.activeElement, env.input);
   assert.equal(env.input.attrs["aria-activedescendant"], "palette-option-1");
   env.key("Escape");
   assert.equal(env.document.activeElement, opener);
+});
+
+test("Search shows twelve rows at most: the keys wrap within them, each option counts every result, and a line says how many more", () => {
+  const many = Array.from({ length: 20 }, (_, n) => ({ id: `page${n}`, label: `Page ${n}`, group: "tools", paletteBrowse: n }));
+  const env = environment({ destinations: many });
+  env.palette.open();
+  assert.equal(env.options().length, 12, "the empty box lists twelve of the twenty marked for it");
+  assert.deepEqual(env.labels().slice(0, 3), ["Page 0", "Page 1", "Page 2"], "in their paletteBrowse order");
+  assert.equal(env.options()[0].attrs["aria-setsize"], "12");
+  env.type("page");
+  assert.equal(env.options().length, 12);
+  assert.equal(env.options()[11].attrs["aria-posinset"], "12");
+  assert.equal(env.options()[11].attrs["aria-setsize"], "20", "position is against the full result set");
+  const more = env.list.children.at(-1);
+  assert.equal(more.className, "palette-more");
+  assert.equal(more.attrs.role, "presentation", "the line under the rows is not an option");
+  assert.equal(more.textContent, "8 more results · keep typing to narrow them");
+  assert.match(env.status.textContent, /^Showing 12 of 20 results\. Keep typing to narrow them\./);
+  env.key("ArrowUp");
+  assert.equal(env.input.attrs["aria-activedescendant"], "palette-option-11", "Up from the first row is the twelfth, not the twentieth");
+  env.key("ArrowDown");
+  assert.equal(env.input.attrs["aria-activedescendant"], "palette-option-0");
 });
 
 test("palette searches saved tasks before the board is visited and discards previous-project responses", async () => {
@@ -335,7 +389,7 @@ test("palette searches saved tasks before the board is visited and discards prev
   assert.match(env.status.textContent, /Loading project tasks/);
   pending[0]({ ok: true, projectId: "alpha", tasks: [{ id: "a", title: "Welcome screen", projectId: "alpha" }] });
   await settle();
-  assert.deepEqual(env.labels(), ["Welcome screen"]);
+  assert.deepEqual(env.shown(), ["# Sessions", "Welcome screen"], "a task is a session");
   assert.equal(env.input.value, "welcome", "background loading preserves what the user typed");
 
   env.palette.close(); env.palette.open();
@@ -356,7 +410,7 @@ test("palette searches saved tasks before the board is visited and discards prev
 
 test("palette keeps newer task broadcasts, ignores closed searches, and explains failed task reads", async () => {
   const pending = [];
-  const env = environment({ destinations: [{ id: "tasks", label: "Task board", group: "tools" }], api: { tasksList: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) } });
+  const env = environment({ destinations: [{ id: "tasks", label: "Task board", group: "tools", paletteBrowse: 1 }], api: { tasksList: () => new Promise((resolve, reject) => pending.push({ resolve, reject })) } });
   env.palette.open(); env.type("new"); await settle();
   env.emitTasks([{ id: "fresh", title: "New task", projectId: "alpha" }]);
   pending[0].resolve({ ok: true, projectId: "alpha", tasks: [] }); await settle();
@@ -366,7 +420,7 @@ test("palette keeps newer task broadcasts, ignores closed searches, and explains
   env.palette.close(); env.palette.open(); await settle();
   pending[2].reject(new Error("Read failed")); await settle();
   pending[1].resolve({ ok: true, projectId: "alpha", tasks: [{ id: "old", title: "Stale task" }] }); await settle();
-  assert.deepEqual(env.labels(), ["Task board"]);
+  assert.deepEqual(env.labels(), ["Task board"], "the empty box keeps its page and takes no session from a closed search");
   assert.match(env.status.textContent, /Tasks couldn't be loaded/);
   env.palette.close();
 });
@@ -391,11 +445,11 @@ test("palette rejects foreign task responses and requires a known project before
     { id: "b", title: "Foreign task", projectId: "beta" },
   ] }) } });
   env.palette.open(); await settle();
-  assert.deepEqual(env.labels(), ["Current task"]);
+  assert.deepEqual(env.shown(), ["# Sessions", "Current task"], "the empty box lists this project's sessions");
   env.palette.close();
 });
 
-test("palette files each result under its rail section, keeps sections together, and hover moves the highlight in place", () => {
+test("palette files each page under its rail section, keeps sections together under one heading each, and hover moves the highlight in place", () => {
   // nav.sectionLabel / nav.sectionRank, as renderer/nav.js exports them.
   const sections = { workspace: ["Home", 0], tasks: ["Work", 1], plans: ["Work", 1], command: ["Live", 2], studio: ["Settings", 4], music: ["Settings", 4], help: ["Help", 5] };
   const env = environment({
@@ -404,31 +458,30 @@ test("palette files each result under its rail section, keeps sections together,
       { id: "studio", label: "Settings", group: "surfaces" },
       { id: "tasks", label: "Pitch lanes", group: "tools" },
       { id: "music", label: "Style & sound", group: "tools" },
-      { id: "help", label: "Shortcuts", group: "system", key: "?" },
+      { id: "help", label: "Shortcuts", group: "system", key: "?", paletteBrowse: 1 },
       { id: "plans", label: "Plans", group: "tools" },
-      { id: "workspace", label: "Your workspace", group: "surfaces", key: "H" },
+      { id: "workspace", label: "Your workspace", group: "surfaces", key: "H", paletteBrowse: 2 },
     ],
     nav: { sectionLabel: (dest) => sections[dest.id]?.[0] ?? null, sectionRank: (dest) => sections[dest.id]?.[1] ?? 9 },
   });
-  const kinds = () => env.list.children.map((row) => row.children.find((child) => child.className === "kind")?.textContent);
-  const starts = () => env.list.children.map((row) => row.classList.contains("palette-group-start"));
   env.palette.open();
-  assert.deepEqual(kinds(), ["Home", "Work", "Work", "Live", "Settings", "Settings", "Help"], "the kind is the section, and the browse list follows the rail top to bottom");
-  assert.deepEqual(env.labels(), ["Your workspace", "Pitch lanes", "Plans", "Command view", "Settings", "Style & sound", "Shortcuts"]);
-  assert.deepEqual(starts(), [true, true, false, true, true, false, true], "the first row of each section carries the divider marker");
+  assert.deepEqual(env.shown(), ["# Help", "Shortcuts", "# Home", "Your workspace"], "the empty box lists the pages marked for it, in their paletteBrowse order, each under its section");
+  assert.deepEqual(env.hints(), ["?", "H"], "a page's key on the right");
 
   // A query ranks rows, then keeps each section together: Plans (an exact
   // title) leads, and the Work row that only matched loosely follows it
   // ahead of the Live row that outscored it.
   env.type("plans");
-  assert.deepEqual(env.labels(), ["Plans", "Pitch lanes", "Command view"]);
-  assert.deepEqual(kinds(), ["Work", "Work", "Live"]);
-  assert.deepEqual(starts(), [true, false, true]);
+  assert.deepEqual(env.shown(), ["# Work", "Plans", "Pitch lanes", "# Live", "Command view"]);
+  assert.deepEqual(env.kinds(), ["Work", "Work", "Live"]);
+  assert.deepEqual(env.hints(), ["page", "page", "page"], "a page with no key says page");
+  assert.deepEqual(env.options().map((row) => row.id), ["palette-option-0", "palette-option-1", "palette-option-2"], "the headings take no option number");
 
   // Hover moves the highlight without rebuilding a single row.
-  const rows = env.list.children.slice();
+  const nodes = env.list.children.slice();
+  const rows = env.options();
   for (const fn of rows[2].listeners.mouseenter) fn();
-  assert.ok(env.list.children.every((row, at) => row === rows[at]), "the rows are the same elements");
+  assert.ok(env.list.children.every((node, at) => node === nodes[at]), "the rows are the same elements");
   assert.equal(rows[0].classList.contains("active"), false);
   assert.equal(rows[0].attrs["aria-selected"], "false");
   assert.equal(rows[2].classList.contains("active"), true);
@@ -446,48 +499,73 @@ const memoryStorage = (initial = {}) => {
   return { map, getItem: (key) => (map.has(key) ? map.get(key) : null), setItem: (key, value) => { map.set(key, String(value)); }, removeItem: (key) => { map.delete(key); } };
 };
 const pause = (ms = 60) => new Promise((resolve) => setTimeout(resolve, ms));
+// Pages the empty box lists (paletteBrowse), so it has something to show before anything is opened.
 const PAGES = [
-  { id: "tasks", label: "Task board", group: "tools", desc: "Tasks with connection errors" },
-  { id: "plans", label: "Plans", group: "tools" },
-  { id: "booklet", label: "Model booklet", group: "surfaces" },
-  { id: "graph", label: "Value graph", group: "surfaces" },
+  { id: "tasks", label: "Task board", group: "tools", desc: "Tasks with connection errors", paletteBrowse: 1 },
+  { id: "plans", label: "Plans", group: "tools", paletteBrowse: 2 },
+  { id: "booklet", label: "Model booklet", group: "surfaces", paletteBrowse: 3 },
+  { id: "graph", label: "Value graph", group: "surfaces", paletteBrowse: 4 },
 ];
-const kinds = (env) => env.list.children.map((row) => row.children.find((child) => child.className === "kind")?.textContent);
 const recentKey = (project) => `mefi.searchRecent.v1.${project}`;
-const activeLabel = (env) => env.labels()[env.list.children.findIndex((row) => row.classList.contains("active"))];
+const activeLabel = (env) => env.labels()[env.options().findIndex((row) => row.classList.contains("active"))];
 const stored = (storage, project) => JSON.parse(storage.map.get(recentKey(project)) ?? "null");
 const openItem = async (env, query) => { if (env.overlay.hidden) env.palette.open(); env.type(query); env.key("Enter"); await pause(); };
 // Objects made inside the palette's sandbox come from another realm; compare them as plain data.
 const plain = (value) => JSON.parse(JSON.stringify(value));
-const descriptionOf = (row) => row.children.find((child) => child.className === "palette-result-copy")?.children.find((child) => child.className === "description")?.textContent ?? "";
+
+test("over the empty box Search lists the board's sessions, the rail's places and the marked pages; each opens, and Recent leads with it", async () => {
+  const storage = memoryStorage();
+  const places = [{ id: "workspace", label: "Home", group: "surfaces", key: "H" }, { id: "command", label: "Map", group: "surfaces", key: "D" }];
+  const destinations = [...places, ...PAGES];
+  const board = { projectId: "alpha", ideas: [], tasks: [
+    { id: "t1", title: "Fix the login", status: "active", projectId: "alpha" },
+    { id: "t2", title: "Try a darker theme", status: "archived", archived: true, projectId: "alpha" },
+  ] };
+  const reads = [];
+  const env = environment({ destinations, storage, board, nav: { get: (id) => destinations.find((dest) => dest.id === id) ?? null }, api: { tasksList: async () => { reads.push("tasksList"); return { ok: true, projectId: "alpha", tasks: [] }; } } });
+  env.palette.open();
+  await settle();
+  assert.deepEqual(reads, [], "the board is there: Search makes no read of its own");
+  assert.deepEqual(env.shown(), ["# Sessions", "Fix the login", "# Places", "Go to Work", "Go to Map", "# tools", "Task board", "Plans", "# surfaces", "Model booklet", "Value graph"], "the archived session waits for a search; the places are the rail's that exist here");
+  assert.deepEqual(env.hints().slice(0, 3), ["Running", "H", "D"], "a session says its state, a place its key");
+  env.key("Enter"); await pause();
+  assert.deepEqual(plain(env.routes.at(-1)), { id: "tasks", params: { taskId: "t1" } }, "Enter on a session opens it");
+  await openItem(env, "go to map");
+  assert.deepEqual(plain(env.routes.at(-1)), { id: "command" }, "and on a place, its page");
+  assert.deepEqual(stored(storage, "alpha"), ["place:command", "task:t1"]);
+  env.palette.open();
+  assert.deepEqual(env.shown().slice(0, 5), ["# Recent", "Go to Map", "Fix the login", "# Places", "Go to Work"], "Recent leads, and what it holds is not listed a second time");
+  env.type("darker");
+  assert.deepEqual(env.shown(), ["# Sessions", "Try a darker theme"]);
+  assert.deepEqual(env.hints(), ["Archived"]);
+});
 
 test("with the box empty Search starts with what you last opened or ran, kept for each project", async () => {
   const storage = memoryStorage();
   const env = environment({ destinations: PAGES, storage });
   env.palette.open();
-  assert.deepEqual(kinds(env), ["tools", "tools", "surfaces", "surfaces"].map((kind) => kind), "nothing has been opened yet, so there is no Recent group");
-  assert.equal(kinds(env).includes("Recent"), false);
+  assert.deepEqual(env.kinds(), ["tools", "tools", "surfaces", "surfaces"], "nothing has been opened yet, so there is no Recent group");
+  assert.equal(env.kinds().includes("Recent"), false);
   await openItem(env, "plans");
   await openItem(env, "task board");
   assert.deepEqual(env.routes.map((route) => route.id), ["plans", "tasks"], "task board is the page's exact name, so it opens the page");
   assert.deepEqual(stored(storage, "alpha"), ["dest:tasks", "dest:plans"], "newest first, under this project's own key");
   env.palette.open();
   assert.deepEqual(env.labels(), ["Task board", "Plans", "Model booklet", "Value graph"]);
-  assert.deepEqual(kinds(env), ["Recent", "Recent", "surfaces", "surfaces"], "Recent leads, and what it holds is not listed a second time");
-  assert.equal(env.list.children[0].classList.contains("palette-group-start"), true);
-  assert.equal(env.list.children[2].classList.contains("palette-group-start"), true);
+  assert.deepEqual(env.kinds(), ["Recent", "Recent", "surfaces", "surfaces"], "Recent leads, and what it holds is not listed a second time");
+  assert.deepEqual(env.shown(), ["# Recent", "Task board", "Plans", "# surfaces", "Model booklet", "Value graph"], "each group under its own heading");
   env.key("Escape");
 
   // Another project has its own list.
   env.emitProject("beta");
   env.palette.open();
-  assert.equal(kinds(env).includes("Recent"), false, "beta has opened nothing yet");
+  assert.equal(env.kinds().includes("Recent"), false, "beta has opened nothing yet");
   await openItem(env, "value graph");
   assert.deepEqual(stored(storage, "beta"), ["dest:graph"]);
   assert.deepEqual(stored(storage, "alpha"), ["dest:tasks", "dest:plans"], "alpha's list is untouched");
   env.palette.open();
   assert.deepEqual(env.labels().slice(0, 1), ["Value graph"]);
-  assert.equal(kinds(env)[0], "Recent");
+  assert.equal(env.kinds()[0], "Recent");
   env.key("Escape");
   env.emitProject("alpha");
   env.palette.open();
@@ -507,7 +585,7 @@ test("Recent runs, opens and remembers like any result: Enter on a Recent row op
 
 test("Recent is a short list: eight are kept, six are shown, and a repeat moves up instead of doubling", async () => {
   const storage = memoryStorage();
-  const many = Array.from({ length: 12 }, (_, n) => ({ id: `page${n}`, label: `Page ${n}`, group: "tools" }));
+  const many = Array.from({ length: 12 }, (_, n) => ({ id: `page${n}`, label: `Page ${n}`, group: "tools", paletteBrowse: n }));
   const env = environment({ destinations: many, storage });
   for (let n = 0; n < 12; n += 1) { env.palette.open(); await openItem(env, `page ${n}`); }
   env.palette.open(); await openItem(env, "page 5");
@@ -516,8 +594,9 @@ test("Recent is a short list: eight are kept, six are shown, and a repeat moves 
   assert.deepEqual(kept.slice(0, 3), ["dest:page5", "dest:page11", "dest:page10"]);
   assert.equal(new Set(kept).size, 8, "no card twice");
   env.palette.open();
-  assert.equal(kinds(env).filter((kind) => kind === "Recent").length, 6);
+  assert.equal(env.kinds().filter((kind) => kind === "Recent").length, 6);
   assert.deepEqual(env.labels().slice(0, 3), ["Page 5", "Page 11", "Page 10"]);
+  assert.equal(env.labels().length, 12, "six recent, then the other pages up to twelve rows");
   assert.equal(env.labels().filter((label) => label === "Page 5").length, 1, "a recent page is not listed again below");
 });
 
@@ -526,18 +605,18 @@ test("a remembered target that no longer exists is skipped quietly, not shown as
   const env = environment({ destinations: PAGES, storage });
   env.palette.open();
   assert.deepEqual(env.labels().slice(0, 1), ["Plans"]);
-  assert.deepEqual(kinds(env).filter((kind) => kind === "Recent").length, 1);
+  assert.deepEqual(env.kinds().filter((kind) => kind === "Recent").length, 1);
   assert.doesNotMatch(env.status.textContent, /couldn't|error|missing|gone/i);
   assert.deepEqual(stored(storage, "alpha").length, 6, "looking does not rewrite the list");
   env.key("Escape");
   // A damaged entry in storage is the same as none.
   const damaged = environment({ destinations: PAGES, storage: memoryStorage({ [recentKey("alpha")]: "{not json" }) });
   damaged.palette.open();
-  assert.equal(kinds(damaged).includes("Recent"), false);
+  assert.equal(damaged.kinds().includes("Recent"), false);
   assert.equal(damaged.labels().length, 4);
   const wrong = environment({ destinations: PAGES, storage: memoryStorage({ [recentKey("alpha")]: JSON.stringify({ not: "a list" }) }) });
   wrong.palette.open();
-  assert.equal(kinds(wrong).includes("Recent"), false);
+  assert.equal(wrong.kinds().includes("Recent"), false);
 });
 
 test("a recent task shows up when the task list arrives, and goes quietly when the task is gone", async () => {
@@ -550,7 +629,7 @@ test("a recent task shows up when the task list arrives, and goes quietly when t
   deliver({ ok: true, projectId: "alpha", tasks: [{ id: "t1", title: "Welcome screen", projectId: "alpha" }, { id: "t2", title: "Fix the login", projectId: "alpha" }] });
   await settle();
   assert.deepEqual(env.labels().slice(0, 2), ["Fix the login", "Task board"], "the remembered task joins Recent, in its remembered order");
-  assert.equal(env.labels().includes("Welcome screen"), true, "other tasks are listed below as before");
+  assert.deepEqual(env.shown().slice(0, 5), ["# Recent", "Fix the login", "Task board", "# Sessions", "Welcome screen"], "other tasks are listed below as sessions");
   assert.equal(env.labels().filter((label) => label === "Fix the login").length, 1);
   assert.equal(stored(storage, "alpha").length, 3, "the deleted one is still only skipped");
   assert.equal(activeLabel(env), "Fix the login", "the highlight is on the top row, where the last thing you opened joined the list");
@@ -583,7 +662,7 @@ test("with a query typed nothing changed: a highlight on the top row still stays
   await settle();
   env.type("task");
   assert.equal(activeLabel(env), "Task board");
-  assert.equal(env.list.children[0].classList.contains("active"), true);
+  assert.equal(env.options()[0].classList.contains("active"), true);
   deliver({ ok: true, projectId: "alpha", tasks: [{ id: "t1", title: "Task", projectId: "alpha" }] });
   await settle();
   assert.equal(env.labels()[0], "Task", "a task named exactly like the query now leads the results");
@@ -594,12 +673,12 @@ test("Recent is only for the empty box: a query lists its matches as always", as
   const storage = memoryStorage({ [recentKey("alpha")]: JSON.stringify(["dest:plans"]) });
   const env = environment({ destinations: PAGES, storage });
   env.palette.open();
-  assert.equal(kinds(env)[0], "Recent");
+  assert.equal(env.kinds()[0], "Recent");
   env.type("plans");
-  assert.deepEqual(kinds(env), ["tools"]);
+  assert.deepEqual(env.kinds(), ["tools"]);
   assert.deepEqual(env.labels(), ["Plans"]);
   env.type("");
-  assert.equal(kinds(env)[0], "Recent", "clearing the box brings it back");
+  assert.equal(env.kinds()[0], "Recent", "clearing the box brings it back");
 });
 
 test("with Recent switched off nothing is shown or remembered; if the preferences cannot be read it stays on", async () => {
@@ -607,17 +686,17 @@ test("with Recent switched off nothing is shown or remembered; if the preference
   const off = environment({ destinations: PAGES, storage, api: { prefsGet: async () => ({ ok: true, prefs: { searchRecents: false } }) } });
   await settle();
   off.palette.open();
-  assert.equal(kinds(off).includes("Recent"), false);
+  assert.equal(off.kinds().includes("Recent"), false);
   await openItem(off, "task board");
   assert.deepEqual(stored(storage, "alpha"), ["dest:plans"], "and nothing new was remembered");
   const unreadable = environment({ destinations: PAGES, storage, api: { prefsGet: async () => { throw new Error("no host"); } } });
   await settle();
   unreadable.palette.open();
-  assert.equal(kinds(unreadable)[0], "Recent");
+  assert.equal(unreadable.kinds()[0], "Recent");
   const on = environment({ destinations: PAGES, storage, api: { prefsGet: async () => ({ ok: true, prefs: { searchRecents: true } }) } });
   await settle();
   on.palette.open();
-  assert.equal(kinds(on)[0], "Recent");
+  assert.equal(on.kinds()[0], "Recent");
 });
 
 test("switching Recent off while Search is open takes the group away at once", async () => {
@@ -626,12 +705,12 @@ test("switching Recent off while Search is open takes the group away at once", a
   const env = environment({ destinations: PAGES, storage, api: { prefsGet: async () => ({ ok: true, prefs }) } });
   await settle();
   env.palette.open();
-  assert.equal(kinds(env)[0], "Recent");
+  assert.equal(env.kinds()[0], "Recent");
   prefs = { searchRecents: false };
   env.key("Escape");
   env.palette.open();
   await settle();
-  assert.equal(kinds(env).includes("Recent"), false);
+  assert.equal(env.kinds().includes("Recent"), false);
 });
 
 test("storage that is blocked or full never breaks Search: no Recent, and every result still opens", async () => {
@@ -652,15 +731,14 @@ test("typing task or idea and some text puts one Add row on top, above the norma
   const env = environment({ destinations: PAGES, api: { tasksCreate: async (payload) => { calls.push(["task", payload]); return { ok: true, task: { id: "x", title: payload.title } }; }, ideasAction: async (payload) => { calls.push(["idea", payload]); return { ok: true, idea: { id: "y", title: payload.title }, added: true }; } } });
   env.palette.open();
   env.type("task board notes");
-  assert.equal(env.list.children[0].children.find((child) => child.className === "kind").textContent, "Create");
-  assert.equal(env.labels()[0], "Add task: “board notes”");
-  assert.equal(env.list.children[0].classList.contains("active"), true, "it is the highlighted row, so Enter takes it");
-  assert.equal(env.list.children[0].children.find((child) => child.className === "hint").children[0].textContent, "Enter");
+  assert.deepEqual(env.shown().slice(0, 2), ["# Create", "Add task: “board notes”"], "the row has its own heading");
+  assert.equal(env.kinds()[0], "Create");
+  assert.equal(env.options()[0].classList.contains("active"), true, "it is the highlighted row, so Enter takes it");
+  assert.equal(env.hints()[0], "Enter");
   assert.match(env.status.textContent, /Enter adds it; nothing is added until then\./);
-  assert.equal(descriptionOf(env.list.children[0]), "Adds it to the task board; the assistant picks it up.");
   env.type("idea a way to dim the tree");
   assert.equal(env.labels()[0], "Add idea: “a way to dim the tree”");
-  assert.equal(descriptionOf(env.list.children[0]), "Saves it in your ideas. Nothing is built from it until you say so.");
+  assert.equal(env.hints()[0], "Enter");
   // Typing, moving and closing add nothing.
   env.key("ArrowDown"); env.key("ArrowUp");
   env.key("Escape"); await pause();
@@ -678,7 +756,7 @@ test("typing task or idea and some text puts one Add row on top, above the norma
   env.palette.open();
   env.type("task board");
   assert.deepEqual(env.labels(), ["Task board", "Add task: “board”"], "the page first, Add one row down");
-  assert.equal(env.list.children[0].classList.contains("active"), true);
+  assert.equal(env.options()[0].classList.contains("active"), true);
   env.key("Enter"); await pause();
   assert.deepEqual(calls, [], "Enter opens the page and creates nothing");
   assert.deepEqual(env.routes.map((route) => route.id), ["tasks"]);
@@ -813,7 +891,7 @@ test("without the desktop app's bridge there is no Add row and the box does not 
   const tasksOnly = environment({ destinations: PAGES, placeholder: PLAIN, api: { tasksCreate: async () => ({ ok: true, task: { id: "t", title: "x" } }) } });
   await settle();
   tasksOnly.palette.open();
-  assert.match(tasksOnly.input.placeholder, /to add$/, "one kind is enough to mention it");
+  assert.equal(tasksOnly.input.placeholder, "Search, or type “task …” or “idea …” to add one", "one kind is enough to mention it");
   tasksOnly.type("task fix it");
   assert.equal(tasksOnly.labels()[0], "Add task: “fix it”");
   tasksOnly.type("idea fix it");
@@ -827,7 +905,7 @@ test("Add task and Add idea are never remembered as recent", async () => {
   env.palette.open(); env.type("idea something"); env.key("Enter"); await pause();
   assert.equal(storage.map.has(recentKey("alpha")), false);
   env.palette.open();
-  assert.equal(kinds(env).includes("Recent"), false);
+  assert.equal(env.kinds().includes("Recent"), false);
 });
 
 test("with the quick add switched off, task ... is a plain search again and the box says what it said before", async () => {
@@ -843,8 +921,7 @@ test("with the quick add switched off, task ... is a plain search again and the 
   const on = environment({ destinations: PAGES, placeholder: PLAIN, api: { ...bridge, prefsGet: async () => ({ ok: true, prefs: {} }) } });
   await settle();
   on.palette.open(); await settle();
-  assert.equal(on.input.placeholder, "Search · “task …” or “idea …” to add");
-  assert.ok(on.input.placeholder.length <= 36, "short enough to be read whole in a 600px window, which shows about 37 characters");
+  assert.equal(on.input.placeholder, "Search, or type “task …” or “idea …” to add one");
   on.type("task board notes");
   assert.equal(on.labels()[0], "Add task: “board notes”");
 });

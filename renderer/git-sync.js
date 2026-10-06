@@ -1,5 +1,5 @@
 // Git sync: the one Push and Pull control. A status chip (in Vibe's project
-// cluster, and at the tail of the section bar on every other page) says where
+// cluster, and in the 0.5 frame's list column on every other page) says where
 // the open project stands against GitHub in one word; pressing it opens a
 // popover with one plain sentence, the numbers and ONE button that fits the
 // state. The words, tone and glyph of every state come from the host's chip
@@ -13,7 +13,7 @@
 // and push never commits without the dialog, and a public repository needs the
 // name typed back. Routine changes are announced through one persistent status
 // region and only a failure that blocks work through the alert. Hidden in Zen
-// and in the classic shell (git-sync.css). tests/git_sync_ui.test.mjs pins it
+// (git-sync.css). tests/git_sync_ui.test.mjs pins it
 // in a vm with a fake bridge (tests/fixtures/git-sync-bridge.cjs).
 (function () {
   "use strict";
@@ -199,7 +199,7 @@
   const mounts = [];
   function makeMount(host, variant) {
     const slot = el("span", "gs-slot");
-    slot.dataset.variant = variant;
+    if (variant) slot.dataset.variant = variant;
     slot.hidden = true;
     const chip = button("", "gs-chip");
     chip.setAttribute("aria-haspopup", "dialog");
@@ -217,8 +217,8 @@
     return entry;
   }
   const kids = (host) => Array.from(host.children ?? []);
-  // Whether the chip already sits where it goes: nav.js asks on every repaint of
-  // the bar, so this is the cheap answer (no list is built in a browser).
+  // Whether the chip already sits where it goes: the frame's list column asks on
+  // every repaint, so this is the cheap answer (no list is built in a browser).
   function inPlace({ host, slot }, after) {
     if (slot.parentNode !== host) return false;
     if (after && after.parentNode === host) return (slot.previousElementSibling ?? kids(host)[kids(host).indexOf(slot) - 1]) === after;
@@ -232,16 +232,17 @@
       host.insertBefore(slot, list[list.indexOf(after) + 1] ?? null);
     } else host.append(slot);
   }
-  // A surface hands over the place its chip goes (nav.js: the tail of the
-  // section bar; vibe.js: right after New app). Calling again is harmless, and
-  // it puts the chip back when the bar was rebuilt around it.
+  // A surface hands over the place its chip goes (shell.js and sessions.js: the
+  // tail of a row in the list column; vibe.js: right after New app). Calling
+  // again is harmless, and it puts the chip back when the row was rebuilt
+  // around it. With no variant it is the plain tone chip.
   function mount(host, options = {}) {
     if (!host || typeof host.append !== "function") return null;
     let entry = mounts.find((item) => item.host === host);
     if (entry && inPlace(entry, options.after)) return entry.slot;
     layer();
     const fresh = !entry;
-    if (fresh) { entry = makeMount(host, ["vibe", "list"].includes(options.variant) ? options.variant : "bar"); mounts.push(entry); }
+    if (fresh) { entry = makeMount(host, ["vibe", "list"].includes(options.variant) ? options.variant : null); mounts.push(entry); }
     place(entry, options);
     if (fresh) paintMount(entry, view());
     return entry.slot;
@@ -1570,23 +1571,18 @@
   }
 
   // ---- start ----------------------------------------------------------------------------------
-  // A bar that lost its chip when it was rebuilt gets it back on the next
-  // navigation; a project switch forgets the old answer and looks again.
+  // A project switch forgets the old answer and looks again.
   function start() {
     try { layer(); } catch { /* no body yet: the first mount makes it */ }
     const bridge = api();
     if (typeof bridge?.onGitState === "function") bridge.onGitState((raw) => accept(raw));
     if (typeof bridge?.onProjects === "function") bridge.onProjects((payload) => { const found = payload?.projects?.find?.((item) => item.id === payload.activeId); if (found) state.project = { id: found.id, name: String(found.name ?? "").slice(0, 120) }; });
-    // The bar may have been drawn before this file loaded; nav.js asks again on every repaint.
-    const bar = document.getElementById?.("app-local-nav");
-    if (bar) mount(bar, { variant: "bar" });
     window.addEventListener?.("mefi:project-changed", forget);
     window.addEventListener?.("mefi:nav", () => close({ restore: false }));
-    // Zen (a class on body) and the classic shell (an attribute on html) hide the chip by style alone, so an open popover has to notice.
+    // Zen (a class on body) hides the chip by style alone, so an open popover has to notice.
     if (typeof MutationObserver === "function") {
       const hidden = new MutationObserver(() => { if (pop.open && !visible(pop.opener)) close({ restore: false }); });
       if (document.body) hidden.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-      if (document.documentElement) hidden.observe(document.documentElement, { attributes: true, attributeFilter: ["data-shell"] });
     }
     document.addEventListener?.("visibilitychange", () => { if (!document.hidden) void refresh(); });
     void readProject();

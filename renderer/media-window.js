@@ -153,11 +153,10 @@
         const left = clamp(area.left, 0, Math.max(0, window.innerWidth - 320));
         return { left: left + GAP, top: Math.max(GAP, area.top + GAP), right: area.right - GAP, bottom: area.bottom - GAP };
       }
-      // Keep the menu and local navigation reachable even at the 600px app minimum.
+      // Keep the menu reachable even at the 600px app minimum.
       const rail = document.getElementById("app-rail")?.getBoundingClientRect();
-      const nav = document.getElementById("app-local-nav")?.getBoundingClientRect();
       const left = rail?.width > 0 ? clamp(rail.right, 0, Math.max(0, window.innerWidth - 320)) : 0;
-      return { left: left + GAP, top: Math.max(GAP, (nav?.height > 0 ? nav.bottom : 0) + GAP), right: window.innerWidth - GAP, bottom: window.innerHeight - GAP };
+      return { left: left + GAP, top: GAP, right: window.innerWidth - GAP, bottom: window.innerHeight - GAP };
     }
     function limits() {
       const area = bounds();
@@ -427,7 +426,7 @@
     }
     function deepMenu() {
       const route = window.MefiNav?.top?.() || window.MefiNav?.current?.();
-      return route && !["command", "workspace"].includes(route) || document.getElementById("music-dropdown")?.hidden === false || Boolean(document.querySelector(".surface-tools[open], .studio-more[open], .cmd-more-tools[open]"));
+      return route && !["command", "workspace"].includes(route) || document.getElementById("music-dropdown")?.hidden === false || Boolean(document.querySelector(".surface-tools[open]"));
     }
     function pointer(event) {
       if (gesture) {

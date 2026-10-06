@@ -107,3 +107,15 @@ test("tips wait out sheets and switch off from Settings, then come back with Sho
   build.tips.tick();
   assert.ok(build.tips.shown().every((id) => !id.startsWith("vibe-")));
 });
+
+test("the tips point at controls the 0.5 layout shows, and the Map's empty card starts a task", async () => {
+  // The classic task box, Command's dock and the tab row are hidden in every launch: a tip anchored there never shows.
+  const targets = [...source.matchAll(/target: "([^"]+)"/g)].map((match) => match[1]).join(", ");
+  for (const gone of ["#idle-task-input", "#cmd-dock", ".cmd-dock", "#tabs", ".tools-cluster"]) assert.ok(!targets.includes(gone), `no tip anchors to ${gone}`);
+  assert.ok(targets.includes("#map-bar") && targets.includes("#map-zoom"), "the Map's tips sit on its bar and its zoom");
+  // "Start the first task" in Build opens a new task as the Map's N does, not the hidden box.
+  const idle = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
+  const at = idle.indexOf('getElementById("cmd-empty-start")');
+  const handler = idle.slice(at, idle.indexOf("});", at));
+  assert.ok(at > 0 && handler.includes("mapNewTask();") && !handler.includes("idle-task-input"), handler);
+});

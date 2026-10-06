@@ -1,10 +1,9 @@
-// What the frame does when v2 is off (nothing but the way in), the way in itself
-// (the Settings switch, Search's "Switch layout", MEFI_STUDIO_LAYOUT and ?layout=),
-// the module's public surface, the panels other modules mount, and where the
-// frame is registered in the build. Fake DOM: tests/fixtures/shell-vm.mjs.
+// What the frame does when a suite turns it off (nothing at all), that the 0.5 layout is Studio's only layout (no
+// Settings switch, no Search action, no ?layout=, saved choice or MEFI_STUDIO_LAYOUT), the module's public surface,
+// the panels other modules mount, and where the frame is registered in the build. Fake DOM:
+// tests/fixtures/shell-vm.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";
-import vm from "node:vm";
 import { readFile, readdir, mkdtemp, mkdir, copyFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -19,13 +18,12 @@ const read = async (...parts) => lf(await readFile(path.join(studio, ...parts), 
 // A source file is too long to print when a pattern it must not hold is found: say where.
 const absent = (text, pattern, message) => { const found = pattern.exec(text); assert.ok(!found, `${message}: found ${JSON.stringify(found?.[0])} at ${found?.index}`); };
 
-test("v2 off: the frame wires nothing but the way in, and touches no storage, no host and no timer", () => {
+test("v2 off (a suite's page without the frame): the frame wires nothing, registers nothing, and touches no storage, no host and no timer", () => {
   const touched = [];
   const bridge = new Proxy({}, { get: (_target, name) => { touched.push(String(name)); return undefined; } });
-  const page = loadShell({ layout: false, observers: true, ids: ["settings-layout-v2"], extra: { mefiStudio: bridge }, stored: { "mefiStudio.layout": "v1" } });
+  const page = loadShell({ layout: false, observers: true, extra: { mefiStudio: bridge } });
   assert.equal(page.window.MefiShell.active(), false);
-  assert.deepEqual(page.calls.registered.map((row) => row.id), ["layout-switch"], "the only thing registered is the way in");
-  assert.ok(page.$("settings-layout-v2").listeners.change?.length === 1, "and the Settings switch");
+  assert.deepEqual(page.calls.registered, [], "nothing is registered: there is no way in to offer, the layout is always on");
   assert.deepEqual(page.added, [], "no window listener");
   assert.deepEqual(page.document.body.listeners, {}, "no document listener");
   assert.deepEqual(page.observers, [], "no observer");
@@ -39,8 +37,6 @@ test("v2 off: the frame wires nothing but the way in, and touches no storage, no
   assert.deepEqual(page.calls.go, []);
   assert.deepEqual(page.document.body.children.map((node) => node.id), ["app-rail", "app-local-nav"], "nothing added to the page");
   assert.equal(Object.keys(page.root.dataset).includes("frame"), false);
-  // The rows for the shortcut sheet are the frame's, and are not listed either.
-  assert.deepEqual(page.calls.registered.filter((row) => row.id !== "layout-switch"), []);
 });
 
 test("v2 off: the public calls answer quietly and change nothing", () => {
@@ -55,125 +51,31 @@ test("v2 off: the public calls answer quietly and change nothing", () => {
   assert.deepEqual(page.calls.layoutSet, []);
 });
 
-test("the way in: Search's action switches to the other layout, from each", () => {
-  const off = loadShell({ layout: false });
-  const action = off.calls.registered.find((row) => row.id === "layout-switch");
-  assert.equal(action.label, "Switch layout: 0.5 or classic");
-  assert.equal(action.kind, "action");
-  assert.equal(action.section, "settings");
-  assert.equal(action.group, "system");
-  assert.deepEqual(plain(action.showIn), { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false }, "it is a Search action and nothing else: no tab, no dock, no sheet row");
-  assert.match(action.searchTerms, /layout/);
-  assert.match(action.searchTerms, /0\.5/);
-  assert.match(action.searchTerms, /classic/);
-  action.run();
-  assert.deepEqual(off.calls.setLayout, ["v2"]);
-  const on = loadShell({});
-  on.calls.registered.find((row) => row.id === "layout-switch").run();
-  assert.deepEqual(on.calls.setLayout, ["v1"], "from v2 it goes back to classic");
-});
-
-test("switching saves the choice, says so, and reloads after a moment; a failing resume does not stop the reload", () => {
-  const page = loadShell({ layout: false });
-  page.calls.registered.find((row) => row.id === "layout-switch").run();
-  assert.deepEqual(page.calls.setLayout, ["v2"]);
-  assert.deepEqual(page.toasts.at(-1), ["Switching to the 0.5 layout. Studio reloads to do it.", "info"]);
-  assert.deepEqual(page.timers.map((timer) => timer.delay), [350], "the toast is on screen before the window goes");
-  assert.deepEqual(page.reloads, [], "not yet");
-  page.flush();
-  assert.equal(page.calls.saveResume, 1, "the place you were is saved for the reload");
-  assert.deepEqual(page.reloads, ["reload"]);
-  const back = loadShell({});
-  back.nav.saveResume = () => { throw new Error("no resume"); };
-  back.calls.registered.find((row) => row.id === "layout-switch").run();
-  assert.deepEqual(back.toasts.at(-1), ["Going back to the classic layout. Studio reloads to do it.", "info"]);
-  back.flush();
-  assert.deepEqual(back.reloads, ["reload"], "a resume that fails is not a reason to stay");
-  const none = loadShell({ layout: false });
-  none.nav.setLayout = undefined;
-  none.calls.registered.find((row) => row.id === "layout-switch").run();
-  assert.deepEqual(none.timers, [], "without the contract's setter nothing is reloaded");
-});
-
-test("the Settings switch shows the layout that is on, and a change switches and reloads", async () => {
-  const off = loadShell({ layout: false, ids: ["settings-layout-v2"] });
-  const box = off.$("settings-layout-v2");
-  assert.equal(box.checked, false);
-  box.checked = true;
-  await box.trigger("change", {});
-  assert.deepEqual(off.calls.setLayout, ["v2"]);
-  off.flush();
-  assert.deepEqual(off.reloads, ["reload"]);
-  const on = loadShell({ ids: ["settings-layout-v2"] });
-  assert.equal(on.$("settings-layout-v2").checked, true, "it says what is on");
-  on.$("settings-layout-v2").checked = false;
-  await on.$("settings-layout-v2").trigger("change", {});
-  assert.deepEqual(on.calls.setLayout, ["v1"]);
-  // With no setter to call the switch goes back to what it was.
-  const stuck = loadShell({ layout: false, ids: ["settings-layout-v2"] });
-  stuck.nav.setLayout = undefined;
-  stuck.$("settings-layout-v2").checked = true;
-  await stuck.$("settings-layout-v2").trigger("change", {});
-  assert.equal(stuck.$("settings-layout-v2").checked, false);
-  assert.deepEqual(stuck.reloads, []);
-});
-
-test("the way in works with the real contract: the choice is saved, v2 comes on, and the frame is built only by the reload", () => {
-  const page = loadShell({ realNav: true, layout: false, ids: ["settings-layout-v2"] });
-  const action = page.nav.get("layout-switch");
-  assert.ok(action, "the registry has it");
-  assert.equal(action.kind, "action");
-  assert.equal(page.nav.layout.on(), false);
-  action.run();
-  assert.equal(page.store.get("mefiStudio.layout"), "v2", "saved through the contract's own setter");
-  assert.equal(page.nav.layout.on(), true, "the contract is on at once");
-  assert.equal(page.window.MefiShell.active(), false, "and the frame is the reload's: a layout that appears under a page is a flash");
-  assert.deepEqual(page.toasts.at(-1)[1], "info");
-  page.flush();
-  assert.deepEqual(page.reloads, ["reload"]);
-  // The next launch reads the saved choice and builds it.
-  const next = loadShell({ realNav: true, layout: false, stored: { "mefiStudio.layout": "v2" } });
-  next.nav.applyLayout();
-  assert.equal(next.nav.layout.on(), true);
-  next.window.MefiShell.enable();
-  assert.equal(next.window.MefiShell.active(), true);
-});
-
-test("?layout= and MEFI_STUDIO_LAYOUT reach the page the way the contract reads them", async () => {
-  const main = await read("main.cjs");
-  const from = main.indexOf("// ---- Layout v2's way in");
-  const to = main.indexOf("// ---- end of Layout v2's way in ----", from);
-  assert.ok(from > 0 && to > from, "main.cjs has the marked block");
-  const block = main.slice(from, to);
-  const run = (env) => {
-    const context = vm.createContext({ process: { env } });
-    vm.runInContext(`${block}\nglobalThis.api = { layoutFromEnv, layoutQuery };`, context);
-    return { layout: context.api.layoutFromEnv(), query: plain(context.api.layoutQuery()) };
-  };
-  assert.deepEqual(run({}), { layout: "", query: {} }, "unset: the page decides");
-  assert.deepEqual(run({ MEFI_STUDIO_LAYOUT: "v2" }), { layout: "v2", query: { layout: "v2" } });
-  assert.deepEqual(run({ MEFI_STUDIO_LAYOUT: "v1" }), { layout: "v1", query: { layout: "v1" } });
-  assert.deepEqual(run({ MEFI_STUDIO_LAYOUT: " V2 " }), { layout: "v2", query: { layout: "v2" } }, "case and spaces do not matter");
-  for (const junk of ["", "v3", "2", "true", "v2; rm -rf", "classic", "0.5"]) assert.deepEqual(run({ MEFI_STUDIO_LAYOUT: junk }), { layout: "", query: {} }, `${JSON.stringify(junk)} is ignored`);
-  // It is merged into the query the window loads with, and the diagnostic launches keep theirs.
-  // (The startup marks' ?marks=0 rides after it; tests/startup_marks.test.mjs pins that.)
-  assert.match(main, /query: \{ capture: CAPTURE \? "1" : "0", smoke: SMOKE \? "1" : "0", \.\.\.layoutQuery\(\)(, \.\.\.\(typeof startupMarks [^\n]*\))? \}/);
-  // What nav.js makes of the queries main.cjs builds.
-  const cases = [["?capture=0&smoke=0&layout=v2", {}, true], ["?capture=0&smoke=0&layout=v1", { "mefiStudio.layout": "v2" }, false], ["?capture=0&smoke=0", { "mefiStudio.layout": "v2" }, true], ["?capture=1&smoke=0&layout=v2", {}, true], ["?capture=1&smoke=0", { "mefiStudio.layout": "v2" }, false], ["?capture=0&smoke=1&layout=v2", {}, true]];
-  for (const [search, stored, expected] of cases) {
-    const page = loadShell({ realNav: true, layout: false, search, stored });
-    assert.equal(page.nav.applyLayout(), expected, `${search} ${JSON.stringify(stored)}`);
+test("the 0.5 layout is the only layout: no Search action, no Settings switch, and no ?layout=, saved choice, shell choice or MEFI_STUDIO_LAYOUT brings the classic one back", async () => {
+  const page = loadShell({});
+  assert.equal(page.calls.registered.some((row) => row.id === "layout-switch"), false, "Search has no Switch layout");
+  // Every launch the contract reads is v2: the old ways back to classic are not read.
+  for (const [search, stored] of [["", {}], ["?layout=v1", {}], ["", { "mefiStudio.layout": "v1" }], ["?capture=1", {}], ["?smoke=1", {}], ["?shell=classic", { "mefiStudio.shell": "classic" }]]) {
+    const launch = loadShell({ realNav: true, layout: false, search, stored });
+    assert.equal(launch.nav.applyLayout(), true, `${search || "(no query)"} ${JSON.stringify(stored)}: the 0.5 layout`);
+    assert.equal(typeof launch.nav.setLayout, "undefined", "no setter for a choice");
+    assert.equal(typeof launch.nav.setShell, "undefined", "nor for the shell");
+    assert.equal(launch.nav.get?.("shellRail") ?? null, null, "Search has no Switch navigation");
   }
+  const main = await read("main.cjs");
+  absent(main, /MEFI_STUDIO_LAYOUT|layoutQuery|layoutFromEnv/, "main.cjs reads no layout from the environment");
+  assert.match(main, /query: \{ capture: CAPTURE \? "1" : "0", smoke: SMOKE \? "1" : "0"(, \.\.\.\(typeof startupMarks !== "undefined" && startupMarks \? \{\} : \{ marks: "0" \}\))? \}/, "the window loads with the diagnostic flags and the startup marks' switch only");
+  const template = await read("renderer", "booklet.template.html");
+  absent(template, /settings-layout-v2/, "Settings has no layout switch");
 });
 
-test("the docs say all three ways in, under the Layout contract", async () => {
+test("the docs say it is the only layout, under the Layout contract", async () => {
   const docs = await read("docs", "unified-studio.md");
   const section = docs.slice(docs.indexOf("## Layout contract"), docs.indexOf("## The companion"));
-  for (const words of ["Turning it on", "Try the 0.5 layout", "Switch layout: 0.5 or classic", "`?layout=v2`", "MEFI_STUDIO_LAYOUT=v2", "MEFI_STUDIO_LAYOUT=v1"]) assert.ok(section.includes(words), `the section says ${words}`);
+  assert.ok(section.includes("**The only layout.**"), "the section says the 0.5 layout is the only one");
+  absent(section, /Try the 0\.5 layout|Switch layout: 0\.5 or classic|MEFI_STUDIO_LAYOUT/, "and no longer describes the ways in");
   assert.match(docs, /## The frame/);
   assert.match(await read("docs", "architecture.md"), /\*\*Frame \(layout v2\)\*\*/);
-  const template = await read("renderer", "booklet.template.html");
-  assert.match(template, /<label class="switch" id="settings-layout-v2-switch"[^>]*><input type="checkbox" id="settings-layout-v2"><span class="track"><\/span><span>Try the 0\.5 layout<\/span><\/label>/, "the switch is in the Settings page's You switches");
 });
 
 test("the source keeps its promises: one storage key behind try/catch, no write of the contract's variables, no writes to the host", async () => {

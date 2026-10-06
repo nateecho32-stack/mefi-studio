@@ -1056,13 +1056,15 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(await this.run("return document.querySelector('#palette-overlay [role=dialog]')?.getAttribute('aria-label') ?? null;"), "Search Studio", "the palette is called Search Studio");
     for (const [query, label, kind] of [["node tree", "Command view", "Live"], ["api key", "Settings › Connections ›", "Settings"], ["color", "Appearance & audio", "Settings"]]) {
       await this.run(`const input = document.getElementById('palette-input'); input.value = ${JSON.stringify(query)}; input.dispatchEvent(new Event('input', { bubbles: true }));`);
-      const rows = await this.run("return [...document.querySelectorAll('#palette-list [role=option]')].map((row) => ({ label: row.querySelector('.label')?.textContent.trim() ?? '', kind: row.querySelector('.kind')?.textContent.trim() ?? '' }));");
+      const rows = await this.run("return [...document.querySelectorAll('#palette-list [role=option]')].map((row) => ({ label: row.querySelector('.label')?.textContent.trim() ?? '', kind: row.dataset.group ?? '' }));");
       const row = rows.find((entry) => entry.label === label || entry.label.startsWith(label));
       assert(row, `Search finds ${label} for "${query}"`);
       assert.equal(row.kind.toLowerCase(), kind.toLowerCase(), `Search names ${label}'s section, ${kind}, as its kind`);
     }
     await this.capture("00i-search-sections");
-    await this.click("#palette-close");
+    // Search has no Close button (the scrim and Escape close it).
+    this.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+    this.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
     await this.until("document.getElementById('palette-overlay').hidden", "Search closes");
     this.check("The menu has Home, Work, Live, Models and Settings over a foot of Search, Start here, Shortcuts and Community; Settings groups, finds and deep-links its sections and holds Your Studio; ← Command view, Ctrl+, and Search's section kinds work; the window keeps a 600×560 minimum");
   }

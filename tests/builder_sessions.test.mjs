@@ -235,7 +235,7 @@ test("the workspace only hands New task, a task and a change request to the buil
   assert.match(source, /if \(window\.MefiBuilder\?\.active\?\.\(\)\) return window\.MefiBuilder\.requestChange\(task\);/);
   // And the rail hooks in nav.js: the menu decorates only when the builder owns it.
   const nav = await readFile(new URL("../renderer/nav.js", import.meta.url), "utf8");
-  assert.match(nav, /if \(window\.MefiBuilder\?\.paintRail\?\.\(\)\) return;\s*\n\s*const list = document\.getElementById\("app-rail-recent-list"\);/, "paintRecentTasks defers to the builder's list, and only when it painted one");
+  assert.match(nav, /function paintRecentTasks\(\) \{\s*\n(?:\s*\/\/[^\n]*\n)*\s*window\.MefiBuilder\?\.paintRail\?\.\(\);\s*\n\s*\}/, "paintRecentTasks is the builder's list and nothing else: the classic Recent tasks list is gone");
   assert.match(nav, /window\.MefiBuilder\?\.decorateRail\?\.\(\{ sections, foot \}\);\s*\n\s*paintBadges\(/, "renderRail hands the builder the sections and the foot");
 });
 
@@ -1585,7 +1585,7 @@ test("Ask puts your words to Mefi about this task, shows that it is thinking, an
   const sending = submit(app);
   await app.env.settle();
   app.env.flush();
-  assert.deepEqual(clean(bridge.calls.find((call) => call[0] === "assistantMessage")), ["assistantMessage", "About the task \"Add a sitemap\" (s1): Did you include the blog routes?", "p1", { view: "Build · task", companion: "Mefi", taskId: "s1" }]);
+  assert.deepEqual(clean(bridge.calls.find((call) => call[0] === "assistantMessage")), ["assistantMessage", "About the task \"Add a sitemap\" (s1): Did you include the blog routes?", "p1", { view: "Studio · task", companion: "Mefi", taskId: "s1" }]);
   assert.equal(c.send.textContent, "Sending…", "while it is out");
   assert.equal(c.send.disabled, true);
   const asked = feed(app).find((item) => item.head === "You asked" && item.text === "Did you include the blog routes?");

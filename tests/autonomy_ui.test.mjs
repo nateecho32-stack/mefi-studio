@@ -10,7 +10,7 @@ async function fixture() {
   const { document } = createDom();
   const calls = [], events = new Map();
   const config = { ok: true, projectId: "p", level: "auto", elevated: { grant: true, risk: true }, categories: [{ id: "grant", label: "Granting reach", blurb: "More access", warn: "This may widen file access." }, { id: "risk", label: "Irreversible changes", warn: "This may destroy data." }], decisions: [{ id: "d", label: "Retry", reason: "The connection recovered" }], todos: [{ id: "todo", text: "Connect the test device" }] };
-  const learning = { ok: true, projectId: "p", decisions: { enabled: true, scope: "blend" }, models: "blend", profiles: { project: [{ kind: "scope", n: 5, verbs: [{ verb: "narrow", share: .8 }] }], global: [] }, skills: { project: [{ taskType: "fix", model: "Fixture model", wins: 8, losses: 2, n: 10, p: .75 }], global: [] } };
+  const learning = { ok: true, projectId: "p", decisions: { enabled: true, scope: "blend" }, models: "blend", profiles: { project: [{ kind: "scope", n: 5, verbs: [{ verb: "narrow", share: .8 }] }], global: [] }, skills: { project: [{ taskType: "coding-implement", model: "Fixture model", wins: 8, losses: 2, n: 10, p: .75 }], global: [] } };
   const api = {
     autonomyState: async () => structuredClone(config), learningState: async () => structuredClone(learning),
     autonomySet: async (value) => { calls.push(["set", plain(value)]); config.level = value.level || config.level; Object.assign(config.elevated, value.elevated); return structuredClone(config); },
@@ -77,7 +77,7 @@ test("learning scopes and forgetting are explicit and model strengths show measu
   assert.deepEqual(h.calls.find((row) => row[0] === "forget")[1], { projectId: "p", scope: "project", kind: "scope", verb: "narrow" });
   const table = h.document.createElement("div"); h.ui.skills(table);
   assert.match(table.textContent, /Fixture model75%10/);
-  assert.match(h.ui.best(), /8 of 10/);
+  assert.match(h.ui.best(), /Fixture model at implement · 8 of 10/, "the ledger's coding-<intent> kinds are what it reads");
 });
 
 test("history explains saved choices, reports pending Undo, and scopes human to-do actions", async () => {

@@ -348,7 +348,7 @@
       h("div", "sm-itabs", null, h("span", "", { text: "Plan" }), h("span", "sm-on", null, "Changes ", h("em", "", { text: "3" })), h("span", "", { text: "Checks" })),
       h("div", "sm-ipad", null, files, h("div", "sm-card", null, h("div", "sm-card-title", null, "Acceptance checks", h("small", "", { text: "1 of 5" })), h("p", "", { text: "Renders when there are no notes" }))));
     const main = h("div", "sm-main", null,
-      h("div", "sm-top", null, h("span", "sm-seg", null, h("span", "", { text: "Vibe" }), h("span", "sm-on", { text: "Build" })), h("span", "", null, "Notes app / ", h("b", "", { text: SAMPLE.title }))),
+      h("div", "sm-top", null, h("span", "sm-seg", null, h("span", "", { text: "Social" }), h("span", "sm-on", { text: "Studio" })), h("span", "", null, "Notes app / ", h("b", "", { text: SAMPLE.title }))),
       h("div", "sm-tabs", null,
         h("span", "sm-tab sm-pin", null, h("span", "", { text: "Today" })),
         h("span", "sm-tab sm-on", null, h("span", "sm-dot sm-need"), h("span", "", { text: SAMPLE.title })),
@@ -376,7 +376,9 @@
     out.id = `size-${key}-out`;
     input.addEventListener("input", () => change(Number(input.value)));
     const ticks = h("div", "size-ticks", null, ...marks.map(([label, at]) => tick(label, at)));
-    return row(key, h("div", "size-label", null, h("label", "", { for: `size-${key}`, text: title }), out), hint, input, ticks);
+    const name = h("label", "", { for: `size-${key}`, text: title });
+    name.id = `size-${key}-title`;
+    return row(key, h("div", "size-label", null, name, out), hint, input, ticks);
   }
   function choiceRow(key, title, hint, choices, change) {
     const group = h("div", "size-seg", { role: "radiogroup", "aria-label": title });
@@ -415,10 +417,14 @@
     const detail = choiceRow("detail", "Detail", "How much each session row and board card shows.", DETAILS.map(([key, label]) => [key, label]), (value) => preview({ detail: value }));
     const grid = h("dl", "size-grid");
     grid.id = "size-panels";
+    // The page's how-to words sit behind an "i" at the end of the title they explain (MefiUi.tuck, studio-ui.js,
+    // run at the end of build): data-info-anchor names that title for the words that are not right under it.
+    const panelsTitle = h("span", "", { text: "Panels" });
+    panelsTitle.id = "size-panels-title";
     const panels = h("section", "size-panel", { "aria-label": "Panels" },
-      h("h3", "", null, h("span", "", { text: "Panels" }), h("small", "", { text: "" })),
+      h("h3", "", null, panelsTitle, h("small", "", { text: "" })),
       grid,
-      h("p", "size-note", { text: "Each mode remembers its own. Drag the edge of a panel to resize it; a double-click on the edge puts it back." }));
+      h("p", "size-note", { text: "Each mode remembers its own. Drag the edge of a panel to resize it; a double-click on the edge puts it back.", "data-info-anchor": "size-panels-title" }));
     const applyButton = h("button", "primary", { type: "button", text: "Apply" });
     applyButton.id = "size-apply";
     const resetButton = h("button", "ghost", { type: "button", text: "Reset", title: "Back to 100%, default text, comfortable, titles and status" });
@@ -434,19 +440,22 @@
     const mini = buildMini();
     mini.id = "size-mini";
     host.append(mini);
+    const previewTitle = h("b", "", { text: "Preview" });
+    previewTitle.id = "size-preview-title";
     const side = h("div", "size-preview", null,
-      h("div", "size-cap", null, h("b", "", { text: "Preview" }), h("span", "size-sample", { text: "Sample data" }), stateText),
+      h("div", "size-cap", null, previewTitle, h("span", "size-sample", { text: "Sample data" }), stateText),
       host, appliedText,
       h("div", "size-actions", null, applyButton, resetButton, discardButton));
     side.id = "size-preview";
     body.replaceChildren(
       h("div", "size-wrap", null,
-        h("p", "size-intro", { text: "Move a control and the preview beside it changes at once. The rest of the window changes when you press Apply, so you never have to flip back and forth." }),
+        h("p", "size-intro", { text: "Move a control and the preview beside it changes at once. The rest of the window changes when you press Apply, so you never have to flip back and forth.", "data-info-anchor": "size-preview-title" }),
         h("div", "size-controls", null,
           h("section", "size-panel", { "aria-label": "Size and density" }, zoom, size, density, detail),
           panels,
-          h("p", "size-aside", { text: "Pages from before the 0.5 layout are drawn in fixed pixels, so the interface scale is what resizes them. Text size, density and detail change the new panels." })),
+          h("p", "size-aside", { text: "Pages from before the 0.5 layout are drawn in fixed pixels, so the interface scale is what resizes them. Text size, density and detail change the new panels.", "data-info-anchor": "size-zoom-title" })),
         side));
+    window.MefiUi?.tuck?.(body);
     applyButton.addEventListener("click", () => { void apply(); });
     resetButton.addEventListener("click", () => { void reset(); });
     discardButton.addEventListener("click", () => { discard(); });
@@ -521,7 +530,7 @@
   function modeName() {
     let mode = null;
     try { mode = window.MefiShell?.mode?.() ?? window.MefiVibe?.mode?.() ?? null; } catch { /* no mode to name */ }
-    return mode === "vibe" ? "Vibe" : mode === "build" ? "Build" : "";
+    return mode === "vibe" ? "Social" : mode === "build" ? "Studio" : "";
   }
   // The panels' sizes as the window has them, read-only: MefiShell knows them when it is there.
   function panelSizes() {
@@ -681,7 +690,7 @@
   function onZoomPush(payload) {
     if (isNumber(payload?.factor)) setZoom(zoomFromFactor(payload.factor), "keys");
   }
-  // The layout can be switched off and on again while the window is open (MefiNav.setLayout):
+  // A suite can take the layout off and put it back while the window is open (MefiNav.applyLayout):
   // off takes the text size and detail off the window, on puts them back.
   function onLayout(event) {
     const on = event?.detail?.on;

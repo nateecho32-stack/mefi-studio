@@ -44,8 +44,7 @@ html[data-studio-material="solid"] #vibe-layer { --v-glass: var(--studio-panel-b
 /* The Build frame steps aside while Vibe is up; the tree stays as the sky.
    Home's section bar (Back, Forward, Home) is Build's too, and it sat over
    Vibe's own top bar, where it swallowed the Search and Settings buttons. */
-body.vibe-active :is(#app-rail, #workspace-sidebar-toggle, body > header.page-head, #tabs, #tree-rail) { visibility: hidden; }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #app-local-nav { display: none; }
+body.vibe-active :is(#app-rail, #workspace-sidebar-toggle, body > header.page-head, #tree-rail) { visibility: hidden; }
 /* The page under Vibe does not scroll (or offer its scroll arrows) through it. */
 body.vibe-active { overflow: hidden; }
 /* A page opened from Vibe (Tasks, Plans, Ideas...) covers it the way it
@@ -611,8 +610,7 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
    while Vibe is the mode, so the classic-tabs preference only shapes Build. */
 html[data-ui-mode="vibe"][data-shell="rail"],
 html[data-ui-mode="vibe"][data-shell="rail"][data-rail-pinned] { --shell-rail-w: 72px; }
-html[data-ui-mode="vibe"] :is(#app-rail, #tabs, #workspace-sidebar-toggle, body > footer) { display: none !important; }
-html[data-ui-mode="vibe"] #app-local-nav { background: var(--studio-menu-fill); backdrop-filter: var(--studio-menu-blur); }
+html[data-ui-mode="vibe"] :is(#app-rail, #workspace-sidebar-toggle) { display: none !important; }
 
 .vibe-rail {
   position: fixed; top: 0; bottom: var(--shell-y1); left: 0; z-index: var(--z-shell);
@@ -697,8 +695,7 @@ html[data-ui-mode="vibe"] #palette-list { padding: 10px; }
 html[data-ui-mode="vibe"] #palette-list li { border-radius: 14px; transition: background var(--motion-fast) var(--ease-out); }
 html[data-ui-mode="vibe"] #palette-list li:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #palette-list li.active { background: var(--v-menu-pick); outline-color: color-mix(in srgb, var(--gold) 30%, transparent); }
-html[data-ui-mode="vibe"] #palette-list li.palette-group-start .kind { color: var(--gold-bright); font-weight: 600; }
-html[data-ui-mode="vibe"] :is(#palette-list, #help-overlay, #vibe-ask) .key { border-radius: 8px; border-color: color-mix(in srgb, var(--gold) 30%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--ivory); }
+html[data-ui-mode="vibe"] :is(#help-overlay, #vibe-ask) .key { border-radius: 8px; border-color: color-mix(in srgb, var(--gold) 30%, transparent); background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--ivory); }
 html[data-ui-mode="vibe"] .palette-footer { border-top-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
 
 /* Shortcuts, Start here and the other small sheets */
@@ -719,18 +716,9 @@ html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project-icon { border-rad
 html[data-ui-mode="vibe"] #workspace-sidebar-panel :is(button.primary, .primary) { border-radius: 14px; }
 
 /* The section bar over Work, Agents and Settings: pills, not underlines. */
-html[data-ui-mode="vibe"] #app-local-nav { gap: 6px; padding: 8px 18px; border-bottom-color: color-mix(in srgb, var(--ivory) 7%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav .app-local-link { min-height: 38px; padding: 7px 14px; border: 0; border-radius: 999px; }
-html[data-ui-mode="vibe"] #app-local-nav .app-local-link:hover { background: color-mix(in srgb, var(--ivory) 7%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"] { background: var(--v-menu-pick); color: var(--ivory); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 32%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav .studio-history { border-right-color: color-mix(in srgb, var(--ivory) 8%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav :is(.studio-history, .app-task-context) button { border-radius: 12px; }
-/* The bar's own blur leaves a nested menu nothing to blur, so it is near solid. */
-html[data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections { gap: 2px; padding: 8px; border-color: var(--v-menu-edge); background: var(--studio-wash), color-mix(in srgb, var(--theme-panel-solid, var(--panel-solid)) 97%, transparent); }
-html[data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections .app-local-link { border-radius: 12px; }
 
-/* Command's pop-overs (View, Agents, More) and the shared dropdowns */
-html[data-ui-mode="vibe"] #idle-hud :is(.cmd-view-pop, .cmd-agents-pop, .cmd-more-links, .pop) { border-color: var(--v-menu-edge); border-radius: 20px; }
+/* Command's View ▾ pop-over and the shared dropdowns */
+html[data-ui-mode="vibe"] #idle-hud .pop { border-color: var(--v-menu-edge); border-radius: 20px; }
 html[data-ui-mode="vibe"] .studio-choice-popup { border: 1px solid var(--v-menu-edge); border-radius: 18px; }
 html[data-ui-mode="vibe"] .studio-choice-option { border-radius: 12px; }
 html[data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 30%, transparent); }
@@ -747,9 +735,6 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .settings-mode-row .mode-switch button { min-width: 96px; height: 34px; font-size: 13px; }
 
 /* ---- the Build rail's way back ------------------------------------------- */
-#app-rail .app-rail-vibe { margin-bottom: 6px; background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 20%, transparent), color-mix(in srgb, var(--gold) 6%, transparent)); color: var(--gold-bright); font-weight: 600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 26%, transparent); }
-#app-rail .app-rail-vibe:hover { background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 30%, transparent), color-mix(in srgb, var(--gold) 10%, transparent)); color: var(--ivory); }
-html:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-vibe .label { display: none; }
 
 /* ---- what's new ------------------------------------------------------------ */
 .vibe-notes { position: fixed; inset: 0; z-index: calc(var(--z-toast) - 2); display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg-deep) 52%, transparent); backdrop-filter: blur(6px); opacity: 1; transition: opacity var(--motion-slow) var(--ease-out), display var(--motion-slow) allow-discrete; }

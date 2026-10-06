@@ -16,6 +16,18 @@ test("text adapters disable native actions and isolate Codex's user configuratio
   assert.throws(() => argumentsFor("unknown"));
 });
 
+test("text calls carry how hard the model thinks, where the CLI takes it", () => {
+  const claude = argumentsFor("claude", "opus", "low");
+  assert.deepEqual(claude.slice(claude.indexOf("--effort"), claude.indexOf("--effort") + 2), ["--effort", "low"]);
+  const codex = argumentsFor("codex", "", "high");
+  assert.ok(codex.includes("model_reasoning_effort=high"));
+  assert.equal(codex.at(-1), "-", "the prompt still comes from stdin, after every flag");
+  assert.ok(!argumentsFor("claude", "opus").includes("--effort"), "no effort asked, none sent");
+  assert.ok(!argumentsFor("claude", "", "minimal").includes("--effort"), "a word Claude Code does not take is left off");
+  assert.ok(!argumentsFor("grok", "", "high").some((word) => /effort/.test(word)), "Grok takes no effort");
+  assert.ok(!argumentsFor("claude", "", "high && calc").includes("--effort"), "only fixed words reach the command line");
+});
+
 function fixture(onStart) {
   const calls = [], prompts = [];
   return { calls, prompts, spawnImpl(command, args, options) {

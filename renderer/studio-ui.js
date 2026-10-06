@@ -57,7 +57,8 @@
     return { size, at };
   }
   function track(el) {
-    if (!el || regions.has(el) || el.closest?.(".studio-scroll-hint")) return;
+    // An info box draws in the top layer, above the hint layer: no hint for it or its words.
+    if (!el || regions.has(el) || el.closest?.(".studio-scroll-hint, .info-pop")) return;
     const css = getComputedStyle(el);
     if (el !== document.scrollingElement && !/(auto|scroll)/.test(`${css.overflowX} ${css.overflowY}`)) return;
     const hint = node("div", "studio-scroll-hint");
@@ -120,7 +121,7 @@
   // section 17): it cannot show a hint, and measuring inside it would force
   // the skipped layout back. A selector match, not a computed-style read,
   // which would itself force a style recalculation on every refresh.
-  const COVERED = "body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head, #tabs)";
+  const COVERED = "body.command-active:not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head)";
   function skippedRoots() {
     return document.body.classList.contains("command-active") ? [...document.querySelectorAll(COVERED)] : [];
   }
@@ -459,7 +460,7 @@
   // instead of each row lighting up on its own. It is the host's ::after
   // (studio-ui.css "menus in motion"), placed through --glide-* properties, so
   // no element is ever added to a menu that code or tests count.
-  const GLIDE_HOSTS = "#app-help-menu, .agents-nav-subsections, #idle-hud .pop, .surface-tools-menu, .studio-more-links, .studio-choice-list, .workspace .ws-project-actions > div, #app-local-nav, #app-rail";
+  const GLIDE_HOSTS = "#app-help-menu, #idle-hud .pop, .surface-tools-menu, .studio-choice-list, .workspace .ws-project-actions > div, #app-rail";
   const GLIDE_ITEMS = "button, a[href], [role=menuitem], [role=option], .studio-choice-option";
   let glideHost = null, glideItem = null, glideFrame = 0;
   function glideRest() {
@@ -495,6 +496,353 @@
     glidePlace(host, item, false);
   }
   function glideFollow() { if (glideHost && glideItem?.isConnected) glidePlace(glideHost, glideItem, false); }
+  // ---- info circles: the how-to behind a small "i" --------------------------
+  // Pages used to hold their how-to words under every title. An "i" at the end
+  // of the title opens them in a small box instead, so a page shows its
+  // controls first and the words stay one click away. Two calls, shared by
+  // every page (the Team pages call them too, so keep their shape):
+  //
+  //   MefiUi.info(content, { label }) returns the circle, a
+  //     <button type="button" class="info-dot"> named "More about <label>",
+  //     with aria-expanded and aria-controls. It opens a box (.info-pop)
+  //     holding `content`: a string (its line breaks kept) or a Node. The box
+  //     goes in right after the circle once the circle has a parent, so place
+  //     the circle outside a title whose words are read elsewhere, or use tuck.
+  //   MefiUi.tuck(root, { min = 60 } = {}) moves the help words under the field
+  //     and card titles in `root` into such boxes, each circle at the end of its
+  //     title, and returns how many it moved. Run it after every render: words
+  //     already moved stay where they are, so it never wraps anything twice.
+  //
+  // The box is a popover="auto": the top layer (no panel clips it), a click
+  // outside or Esc closes it, one is open at a time. Click, Enter and Space open
+  // and close it; a mouse resting on the circle opens it after a moment and
+  // leaving closes it again, unless a click opened it. It sits under the circle
+  // (over it when there is more room there), inside the window, and follows the
+  // circle while the page scrolls or the window changes size.
+  const TIP_WAIT = 350, TIP_LINGER = 160, TIP_EDGE = 8, TIP_GAP = 8;
+  const POPOVER = typeof HTMLElement === "function" && "popover" in HTMLElement.prototype;
+  const titleTips = new WeakMap();
+  let tipSerial = 0, shownTip = null, tipFrame = 0, tipFollow = null, tipWatch = null;
+  const tipWords = (text) => String(text ?? "").replace(/\s+/g, " ").trim();
+  const mouseOnly = (event) => !event?.pointerType || event.pointerType === "mouse";
+  function tipShown(tip) {
+    if (!POPOVER) return !tip.pop.hidden;
+    try { return tip.pop.matches(":popover-open"); } catch { return tip.shown; }
+  }
+  function makeTip(content, label) {
+    const id = `info-pop-${++tipSerial}`;
+    const pop = node("div", "info-pop"), body = node("div", "info-pop-body");
+    pop.id = id; body.id = `${id}-body`;
+    if (content != null && typeof content === "object" && content.nodeType) body.append(content);
+    else if (content != null && content !== "") { body.classList.add("is-text"); body.textContent = String(content); }
+    pop.append(body);
+    if (POPOVER) pop.setAttribute("popover", "auto"); else pop.hidden = true;
+    const dot = node("button", "info-dot");
+    dot.type = "button";
+    dot.setAttribute("aria-expanded", "false"); dot.setAttribute("aria-controls", id); dot.setAttribute("aria-describedby", body.id);
+    // The circle is its box's invoker, so a click on it is not a click outside
+    // the box: the light dismiss leaves an open box to its circle.
+    if (POPOVER) { try { dot.popoverTargetElement = pop; } catch { /* the circle still opens it */ } }
+    const tip = { dot, pop, body, how: null, wait: 0, linger: 0, overDot: false, overPop: false, shown: false, title: null, control: null, named: false };
+    nameTip(tip, label);
+    wireTip(tip);
+    return tip;
+  }
+  function nameTip(tip, label) {
+    const words = tipWords(label);
+    const name = words ? `More about ${words}` : "More about this";
+    if (tip.dot.getAttribute("aria-label") !== name) tip.dot.setAttribute("aria-label", name);
+  }
+  function wireTip(tip) {
+    const { dot, pop } = tip;
+    dot.addEventListener("click", (event) => {
+      // The circle decides, not the popover target's own toggle: a box the
+      // pointer opened stays open, pinned, when its circle is then clicked.
+      event.preventDefault(); event.stopPropagation();
+      if (!tipShown(tip)) showTip(tip, "click");
+      else if (tip.how === "hover") { tip.how = "click"; clearTimeout(tip.linger); }
+      else hideTip(tip);
+    });
+    dot.addEventListener("pointerenter", (event) => {
+      if (!mouseOnly(event)) return;
+      tip.overDot = true; clearTimeout(tip.linger);
+      if (tipShown(tip)) return;
+      clearTimeout(tip.wait);
+      tip.wait = setTimeout(() => { if (tip.overDot && !tipShown(tip)) showTip(tip, "hover"); }, TIP_WAIT);
+    });
+    dot.addEventListener("pointerleave", (event) => { if (!mouseOnly(event)) return; tip.overDot = false; clearTimeout(tip.wait); lingerTip(tip); });
+    pop.addEventListener("pointerenter", (event) => { if (!mouseOnly(event)) return; tip.overPop = true; clearTimeout(tip.linger); });
+    pop.addEventListener("pointerleave", (event) => { if (!mouseOnly(event)) return; tip.overPop = false; lingerTip(tip); });
+    // The box can sit inside a label: a click on its words must not reach the
+    // label (which would flip its switch) or a clickable row around it.
+    pop.addEventListener("click", (event) => {
+      const control = event.target?.closest?.("a[href], button, input, select, textarea, summary, [tabindex]");
+      if (control && pop.contains(control)) return;
+      event.preventDefault(); event.stopPropagation();
+    });
+    // A click outside and Esc close the box without asking the circle.
+    pop.addEventListener("toggle", (event) => {
+      if (event.newState === "open" && tipShown(tip)) {
+        tip.shown = true;
+        if (shownTip !== tip) { if (shownTip) settleTip(shownTip); shownTip = tip; }
+        if (dot.getAttribute("aria-expanded") !== "true") dot.setAttribute("aria-expanded", "true");
+        placeTip(tip); followTips(true);
+      } else if (event.newState === "closed") settleTip(tip);
+    });
+  }
+  function showTip(tip, how) {
+    clearTimeout(tip.wait); clearTimeout(tip.linger);
+    const { dot, pop } = tip;
+    if (!dot.isConnected) return false;
+    if (!pop.isConnected) dot.after(pop);
+    if (POPOVER) { try { if (!tipShown(tip)) pop.showPopover(); } catch { return false; } }
+    else { if (shownTip && shownTip !== tip) hideTip(shownTip); pop.hidden = false; }
+    // The Popover API closed the box that was open; its circle hears it here.
+    if (shownTip && shownTip !== tip) settleTip(shownTip);
+    tip.shown = true; tip.how = how; shownTip = tip;
+    dot.setAttribute("aria-expanded", "true");
+    placeTip(tip); followTips(true);
+    return true;
+  }
+  function hideTip(tip, { focus = false } = {}) {
+    if (POPOVER) { try { if (tipShown(tip)) tip.pop.hidePopover(); } catch { /* already closed */ } }
+    else tip.pop.hidden = true;
+    settleTip(tip);
+    if (focus && tip.dot.isConnected) tip.dot.focus?.({ preventScroll: true });
+  }
+  function settleTip(tip) {
+    clearTimeout(tip.wait); clearTimeout(tip.linger);
+    tip.shown = false; tip.how = null; tip.overPop = false;
+    if (tip.dot.getAttribute("aria-expanded") !== "false") tip.dot.setAttribute("aria-expanded", "false");
+    if (shownTip === tip) { shownTip = null; followTips(false); }
+  }
+  // A box the pointer opened closes a moment after the pointer leaves both it and its circle.
+  function lingerTip(tip) {
+    if (tip.how !== "hover") return;
+    clearTimeout(tip.linger);
+    tip.linger = setTimeout(() => { if (tip.how === "hover" && !tip.overDot && !tip.overPop) hideTip(tip); }, TIP_LINGER);
+  }
+  // Under the circle, or over it when there is more room there, and never
+  // nearer than TIP_EDGE to the window's edge. A circle scrolled out of the
+  // window, hidden or gone takes its box with it.
+  function placeTip(tip) {
+    const { dot, pop } = tip;
+    const at = dot.isConnected ? dot.getBoundingClientRect() : null;
+    if (!at || (!at.width && !at.height) || at.bottom < 0 || at.top > innerHeight || at.right < 0 || at.left > innerWidth) { hideTip(tip); return; }
+    const box = pop.getBoundingClientRect();
+    const width = Math.min(box.width, innerWidth - TIP_EDGE * 2), height = box.height;
+    const below = innerHeight - TIP_EDGE - (at.bottom + TIP_GAP), above = at.top - TIP_GAP - TIP_EDGE;
+    const up = height > below && above > below;
+    const top = Math.max(TIP_EDGE, Math.min(up ? at.top - TIP_GAP - height : at.bottom + TIP_GAP, innerHeight - TIP_EDGE - height));
+    const middle = at.left + at.width / 2;
+    const left = Math.max(TIP_EDGE, Math.min(middle - width / 2, innerWidth - TIP_EDGE - width));
+    const side = up ? "above" : "below";
+    if (pop.dataset.side !== side) pop.dataset.side = side;
+    pop.style.left = `${Math.round(left)}px`; pop.style.top = `${Math.round(top)}px`;
+    // The little arrow points at the circle, wherever the edge pushed the box.
+    pop.style.setProperty("--info-arrow", `${Math.round(Math.max(12, Math.min(width - 12, middle - left)))}px`);
+  }
+  function followTips(on) {
+    if (on === Boolean(tipFollow)) return;
+    if (on) {
+      tipFollow = () => { if (!tipFrame) tipFrame = requestAnimationFrame(() => { tipFrame = 0; if (shownTip) placeTip(shownTip); }); };
+      document.addEventListener("scroll", tipFollow, { capture: true, passive: true });
+      window.addEventListener("resize", tipFollow);
+      return;
+    }
+    document.removeEventListener("scroll", tipFollow, { capture: true });
+    window.removeEventListener("resize", tipFollow);
+    cancelAnimationFrame(tipFrame); tipFrame = 0; tipFollow = null;
+  }
+  // Esc closes the open box before the sheet, sidebar or page under it hears
+  // the key; the keyboard goes back to its circle. On the window's capture
+  // phase, from the moment this file loads: the Appearance sidebar
+  // (music.js) and others take Esc there too, and they load later.
+  window.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape" || !shownTip) return;
+    const tip = shownTip;
+    if (!tipShown(tip)) { settleTip(tip); return; }
+    event.preventDefault(); event.stopImmediatePropagation();
+    const active = document.activeElement;
+    hideTip(tip, { focus: active === tip.dot || tip.pop.contains(active) });
+  }, true);
+  function info(content, { label = "" } = {}) {
+    const tip = makeTip(content, label);
+    // The box follows its circle into the page, once the caller has placed it.
+    queueMicrotask(() => { if (!tip.pop.parentNode && tip.dot.parentNode) tip.dot.after(tip.pop); });
+    return tip.dot;
+  }
+  // What tuck moves, and where its circle goes:
+  //  - a field's help: a small, p or .field-hint inside a field (a label,
+  //    .field, .studio-field, .settings-control, .setup-helper-field,
+  //    .setup-helper-toggle-words, .size-row, or the words beside a label's
+  //    control), to the field's title: the nearest title before it (b,
+  //    strong, a label, .field-label, .setup-helper-label, a heading), past the
+  //    field's own controls, or the title a row before it starts with;
+  //  - a card's intro: a paragraph right under a heading (h1 to h6, legend,
+  //    .settings-eyebrow), or under a row that starts with its title;
+  //  - help marked data-info-anchor="<id of its title>", whatever its length.
+  // What stays where it is: help under `min` characters; a status line (role
+  // status, alert or log, aria-live, data-tone or data-state, a status, error
+  // or warning class or id, a "Last run:" or "Now:" line); anything under
+  // data-keep-visible; help that holds a control or a link, or sits inside a
+  // page's header (its title and subtitle line), a button, a summary, a
+  // picture or hidden content; help whose title is hidden or inside such a place.
+  // A moved help keeps its element, id and classes inside the box (hidden
+  // until it opens), so code that rewrites it and tests that read textContent
+  // still find it; the box takes its old place, so the order around it holds.
+  // The field's control is described by it (aria-describedby). A label that
+  // wraps its control is pointed at that control (htmlFor), or the circle, a
+  // button before it, would become the label's control; the control is named
+  // by the title's words (aria-label), or the circle's name would join its own.
+  const TUCK_HELP = "p, small, .field-hint, [data-info-anchor]";
+  const TUCK_FIELD = "label, .field, .studio-field, .settings-control, .setup-helper-field, .setup-helper-toggle-words, .size-row";
+  const TUCK_HEADING = "h1, h2, h3, h4, h5, h6, legend, .settings-eyebrow";
+  const TUCK_TITLE = `${TUCK_HEADING}, b, strong, label, .field-label, .setup-helper-label`;
+  const TUCK_CONTROL = "input, select, textarea, button, [role=switch], [role=radio], [role=radiogroup], [role=slider], [role=combobox], [role=group], [contenteditable=true]";
+  const TUCK_OUTSIDE = "header, button, a[href], summary, select, textarea, [role=button], [role=link], [role=radio], [role=option], [role=tab], [role=menuitem], [role=switch], [role=checkbox], [role=img], [inert], [aria-hidden=true], .info-pop";
+  const STATUS_NAME = /(?:^|[\s_-])(?:status|error|warning|alert)(?:$|[\s_-])/i;
+  const STATUS_WORDS = /^(?:last run|now|status)\s*:/i;
+  // A title the stylesheet hides is remembered as hidden: a page that paints
+  // again (Settings on every Find keystroke) would otherwise read its style
+  // again, after the paint's own changes, and force the page's style anew.
+  // Only "hidden" is kept, so the worst a stale answer does is leave words in
+  // view. Off the page (a section drawn before it is attached, as the setup
+  // helper's) nothing is read at all: its titles count as shown.
+  const styleHidden = new WeakSet();
+  function hiddenByStyle(el) {
+    if (styleHidden.has(el)) return true;
+    try { if (typeof getComputedStyle === "function" && el.isConnected && getComputedStyle(el).display === "none") { styleHidden.add(el); return true; } } catch { /* no styles to read */ }
+    return false;
+  }
+  function statusLine(help) {
+    if (help.closest("[role=status], [role=alert], [role=log], [role=progressbar], [aria-live]")) return true;
+    if (help.matches("[data-tone], [data-state], .bad-text, .is-bad") || help.parentElement?.matches("[data-tone], [data-state]")) return true;
+    return STATUS_NAME.test(`${help.id || ""} ${help.getAttribute("class") || ""}`) || STATUS_WORDS.test(tipWords(help.textContent));
+  }
+  function tuckable(help, min, explicit) {
+    if (help.hidden || help.closest(TUCK_OUTSIDE) || help.closest("[data-keep-visible]") || help.matches(TUCK_HEADING)) return false;
+    if (help.querySelector(`a[href], [tabindex], ${TUCK_CONTROL}`) || statusLine(help)) return false;
+    return explicit || tipWords(help.textContent).length >= min;
+  }
+  const holdsControl = (el) => el.matches(TUCK_CONTROL) || Boolean(el.querySelector(TUCK_CONTROL));
+  // A row that starts with its title: Size's label row, a key's head row.
+  function rowTitle(row) {
+    const first = row?.firstElementChild;
+    return first && first.matches(TUCK_TITLE) && !holdsControl(first) ? first : null;
+  }
+  function fieldTitle(help) {
+    const parent = help.parentElement;
+    if (!parent || !(parent.matches(TUCK_FIELD) || parent.parentElement?.matches("label"))) return null;
+    for (let at = help.previousElementSibling; at; at = at.previousElementSibling) {
+      if (at.matches(TUCK_TITLE) && !holdsControl(at)) return at;
+      const lead = rowTitle(at);
+      if (lead) return lead;
+      // The field's own controls (and a switch's drawn track) sit between a title and its help.
+      if (!holdsControl(at) && !at.matches("datalist, .track, .setup-helper-track, [aria-hidden=true]")) return null;
+    }
+    return null;
+  }
+  function cardTitle(help) {
+    const before = help.matches("p") ? help.previousElementSibling : null;
+    if (!before) return null;
+    if (before.matches(TUCK_HEADING)) return before;
+    return before.matches(`p, ul, ol, ${TUCK_FIELD}`) ? null : rowTitle(before);
+  }
+  function anchorTitle(help, root) {
+    const id = help.dataset?.infoAnchor;
+    if (!id) return null;
+    return (root.ownerDocument || document).getElementById(id) ?? root.querySelector(`[id="${id}"]`);
+  }
+  const usableTitle = (title, help) => Boolean(title) && title !== help && !help.contains(title) && !title.hidden && !title.closest(TUCK_OUTSIDE) && !hiddenByStyle(title);
+  // A title's own words, without a count or a note in a span inside it.
+  function titleWords(title) {
+    const own = [...(title?.childNodes || [])].filter((child) => child.nodeType === 3).map((child) => child.textContent).join(" ");
+    return tipWords(own) || tipWords(title?.firstElementChild?.textContent) || tipWords(title?.textContent);
+  }
+  function describeBy(control, help, tip) {
+    const ids = (control.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean);
+    if ((help.id && ids.includes(help.id)) || ids.includes(tip.body.id)) return;
+    control.setAttribute("aria-describedby", [...ids, tip.body.id].join(" "));
+  }
+  function bindTip(tip, help, field) {
+    const title = tip.title, doc = title.ownerDocument || document;
+    const label = title.closest("label");
+    const usable = (el) => el.type !== "hidden" && !el.closest(".info-pop");
+    let control = null;
+    if (label) {
+      control = (label.htmlFor && doc.getElementById(label.htmlFor)) || [...label.querySelectorAll("input, select, textarea")].find(usable) || null;
+      if (control && !label.htmlFor) {
+        if (!control.id) control.id = `info-control-${tipSerial}`;
+        label.htmlFor = control.id;
+      }
+      if (control && !control.hasAttribute("aria-label") && !control.hasAttribute("aria-labelledby")) { control.setAttribute("aria-label", titleWords(title)); tip.named = true; }
+    } else if (field) {
+      const box = tip.pop.parentElement?.closest(TUCK_FIELD) ?? tip.pop.parentElement;
+      control = [...(box?.querySelectorAll("input, select, textarea, [role=radiogroup], [role=group], [role=slider], [role=switch]") ?? [])].find((el) => usable(el) && el.getAttribute("aria-hidden") !== "true") ?? null;
+    }
+    if (!control) return;
+    tip.control = control;
+    describeBy(control, help, tip);
+    // An enhanced select is read through its button (enhanceSelect above).
+    const choice = control.classList?.contains("studio-select-source") ? doc.getElementById(`${control.id}-choice`) : null;
+    if (choice) describeBy(choice, help, tip);
+  }
+  // A title whose words are rewritten (vibe.js renames Open Home on launch for
+  // the mode) gets its circle back at its end, and the names follow the words.
+  function watchTitle(title) {
+    if (typeof MutationObserver !== "function") return;
+    tipWatch ??= new MutationObserver((records) => {
+      const seen = new Set();
+      for (const record of records) {
+        let at = record.target;
+        while (at && !titleTips.has(at)) at = at.parentNode;
+        if (!at || seen.has(at)) continue;
+        seen.add(at);
+        const tip = titleTips.get(at), words = titleWords(at);
+        if (tip.dot.parentNode !== at) at.append(tip.dot);
+        nameTip(tip, words);
+        if (tip.named && tip.control && tip.control.getAttribute("aria-label") !== words) tip.control.setAttribute("aria-label", words);
+      }
+    });
+    tipWatch.observe(title, { childList: true, characterData: true, subtree: true });
+  }
+  function tuckInto(help, title, field) {
+    const known = titleTips.get(title);
+    if (known) {
+      // A second help for the same title joins the first one's box.
+      if (known.dot.parentNode !== title) title.append(known.dot);
+      help.remove(); known.body.append(help);
+      return;
+    }
+    const tip = makeTip(null, titleWords(title));
+    tip.title = title; titleTips.set(title, tip);
+    help.replaceWith(tip.pop);
+    tip.body.append(help);
+    title.append(tip.dot);
+    bindTip(tip, help, field);
+    watchTitle(title);
+  }
+  // The kill switch: localStorage "mefiStudio.infoTips" set to "off" leaves
+  // every help where it was (info() still makes circles for new UI).
+  const tucksOff = () => { try { return localStorage.getItem("mefiStudio.infoTips") === "off"; } catch { return false; } };
+  function tuck(root, { min = 60 } = {}) {
+    if (!root?.querySelectorAll || tucksOff()) return 0;
+    // Every choice is read first and every move made after: a move between two
+    // reads of a title's style forced the whole page's style again each time
+    // (13 moves took 274 ms in Settings; read first, one recalculation).
+    const moves = [];
+    for (const help of [...root.querySelectorAll(TUCK_HELP)]) {
+      const explicit = Boolean(help.dataset?.infoAnchor);
+      if (!tuckable(help, min, explicit)) continue;
+      let title = null, field = false;
+      if (explicit) title = anchorTitle(help, root);
+      else { title = fieldTitle(help); field = Boolean(title); title ??= cardTitle(help); }
+      if (usableTitle(title, help)) moves.push([help, title, field]);
+    }
+    for (const [help, title, field] of moves) tuckInto(help, title, field);
+    return moves.length;
+  }
   function init() {
     layer(); applyAppearance({}, false); scan(); mountAppearance();
     document.addEventListener("scroll", schedule, true);
@@ -580,7 +928,7 @@
     if (/cannot read propert|is not a function|is not defined|is not valid json|unexpected (token|end)|\bundefined\b|\[object /i.test(text)) return fallback;
     return text[0].toUpperCase() + text.slice(1);
   }
-  window.MefiUi = Object.assign(window.MefiUi || {}, { arm, plainError });
+  window.MefiUi = Object.assign(window.MefiUi || {}, { arm, plainError, info, tuck });
   window.MefiScroll = { attach: track, scan, refresh: schedule, owns: (parent, target) => [...regions.values()].some(({ el, hint }) => parent?.contains(el) && hint.contains(target)) };
   window.MefiSelect = { enhance: enhanceSelect, refresh: schedule, close: closeSelect, owns: (parent) => Boolean(popup && parent?.contains(popup.select)), contains: (target) => Boolean(popup?.root.contains(target)), near: (parent, x, y) => { if (!popup || !parent?.contains(popup.select)) return false; const box = popup.root.getBoundingClientRect(); return x >= box.left - 16 && x <= box.right + 16 && y >= box.top - 16 && y <= box.bottom + 16; } };
   window.MefiAppearance = { get: () => ({ ...appearance }), apply: applyAppearance, mount: mountAppearance };

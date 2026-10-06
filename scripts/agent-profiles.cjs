@@ -6,11 +6,13 @@ const addons = require("./agent-addons.cjs");
 const tools = require("./agent-tools.cjs");
 const habits = require("./habits.cjs");
 const agentRules = require("./agent-rules.cjs");
+const modelLadder = require("./model-ladder.cjs");
+const modelKinds = require("./model-kinds.cjs");
 // Loaded on first use: the picture rules are not needed at startup.
 let imagesLoaded = null;
 const images = () => (imagesLoaded ??= require("./image-attach.cjs"));
 const runtime = new AsyncLocalStorage();
-const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentRules", "agentTools", "agentBrain", "agentEfforts", "agentMode", "agentReporting"]);
+const FIELDS = Object.freeze(["aiProvider", "aiRoleProviders", "aiModels", "aiModelsByProvider", "aiAutoProviders", "aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst", "modelSelection", "executorCli", "executorModel", "executorModels", "executorTier", "executorTierModels", "codexHarness", "agentSeats", "agentSubtasks", "agentSkills", "agentHabits", "agentRules", "agentTools", "agentBrain", "agentEfforts", "agentThinking", "agentKinds", "agentMode", "agentReporting"]);
 const PROVIDERS = Object.freeze(["auto", "zai", "opencode", "zen", "openrouter", "grok", "claude", "codex", "chatgpt", "antigravity", "lmstudio", "custom"]);
 const CLIS = Object.freeze(["opencode", "grok", "claude", "codex", "antigravity"]);
 const EFFORTS = Object.freeze(["minimal", "low", "medium", "high", "xhigh", "max"]);
@@ -23,6 +25,11 @@ function extract(settings = {}) {
 function store(settings = {}) {
   const source = record(settings.agentTeams) ? settings.agentTeams : {};
   return { version: 1, revision: Number(source.revision) || 0, projects: record(source.projects) ? clone(source.projects) : {}, presets: Array.isArray(source.presets) ? clone(source.presets) : [] };
+}
+// The projects that saved a team of their own; every other project follows
+// the Studio defaults. "project_none" (no folder open) never holds a team.
+function projectTeams(settings = {}) {
+  return Object.keys(store(settings).projects).filter((id) => id && id !== "project_none");
 }
 function effective(settings, projectId, snapshot) {
   const selected = snapshot?.configuration ?? store(settings).projects[projectId]?.configuration;
@@ -43,7 +50,12 @@ function capabilities(provider, model = "") {
   const extended = /^gpt-6(?:\.\d+)?-/.test(id);
   // Zen and the ChatGPT plan both reach OpenAI's Responses API, which takes an effort.
   const reasoning = (provider === "zen" || provider === "chatgpt" || provider === "openrouter" && /^openai\//i.test(model)) && (extended || /^(gpt-5(?:[.-]|$)|o[134](?:-|$))/.test(id));
-  return { efforts: reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : [], fast: provider === "zen" && extended, vision: images().sees(visionIndex, provider, model), note: reasoning ? "Reasoning is sent to the selected model." : "Effort is managed by this provider or CLI." };
+  // Claude Code takes --effort and Codex model_reasoning_effort on their text
+  // calls too (scripts/cli-text.cjs), so a seat or role on either can think
+  // lighter or harder like an HTTP route.
+  const cli = provider === "claude" || provider === "codex" ? modelLadder.cliEfforts(provider, model) : [];
+  const efforts = reasoning ? extended ? [...EFFORTS] : ["low", "medium", "high"] : cli;
+  return { efforts, fast: provider === "zen" && extended, vision: images().sees(visionIndex, provider, model), note: reasoning ? "Reasoning is sent to the selected model." : cli.length ? "Thinking is sent to the CLI." : "Effort is managed by this provider or CLI." };
 }
 function validate(configuration) {
   if (!record(configuration)) return "A team configuration is required.";
@@ -59,8 +71,13 @@ function validate(configuration) {
   for (const field of ["aiAutoFallback", "aiFallbackOpenCode", "aiSubscriptionFirst"]) if (configuration[field] !== undefined && typeof configuration[field] !== "boolean") return `${field} must be on or off.`;
   for (const field of ["aiRoleProviders", "aiModels", "aiModelsByProvider", "executorModels", "executorTierModels", "agentSeats", "agentBrain", "agentEfforts"]) if (configuration[field] !== undefined && !record(configuration[field])) return `Invalid ${field}.`;
   for (const [role, provider] of Object.entries(configuration.aiRoleProviders || {})) if (!["routine", "heavy"].includes(role) || provider && !PROVIDERS.includes(provider)) return "Unknown role provider.";
+  if (configuration.agentThinking !== undefined) { const error = modelLadder.validate(configuration.agentThinking); if (error) return error; }
+  if (configuration.agentKinds !== undefined) { const error = modelKinds.validate(configuration.agentKinds); if (error) return error; }
   for (const [role, effort] of Object.entries(configuration.agentEfforts || {})) {
-    if (!["routine", "heavy"].includes(role) || effort && !EFFORTS.includes(effort)) return "Unknown reasoning effort.";
+    if (!["routine", "heavy", "builder"].includes(role) || effort && !EFFORTS.includes(effort)) return "Unknown reasoning effort.";
+    // The coding worker's start: the attempt fits it to what its model takes
+    // (model-ladder fitEffort), so any word on the scale is fine here.
+    if (role === "builder") continue;
     const provider = configuration.aiRoleProviders?.[role] || configuration.aiProvider || "auto";
     const model = configuration.aiModelsByProvider?.[provider]?.[role] || configuration.aiModels?.[role] || "";
     if (effort && !capabilities(provider, model).efforts.includes(effort)) return `Reasoning effort is not supported by the ${role} route.`;
@@ -96,7 +113,9 @@ function validate(configuration) {
     if (record(value)) return Object.keys(value).length <= 40 && Object.entries(value).every(([key, item]) => !["__proto__", "prototype", "constructor"].includes(key) && inspect(item, depth + 1));
     return typeof value === "boolean" || value === null;
   };
-  const bounded = { ...configuration }; delete bounded.agentRules;
+  // The kind routes carry their trial's numbers and have their own bounds
+  // (model-kinds validate), like the rules.
+  const bounded = { ...configuration }; delete bounded.agentRules; delete bounded.agentKinds;
   return inspect(bounded) ? null : "Invalid team configuration.";
 }
 function view(settings, projectId) {
@@ -121,12 +140,18 @@ function mutate(settings, request, { id, projectId } = {}) {
     if (error) return { ok: false, error };
   }
   if (action === "save") {
+    // The kind-of-job routes are written by their own call (Try it, Stop) and
+    // by trials as they are judged, never by the page's draft: a draft read
+    // before a trial started or ended must not undo it, so the saved routes
+    // stay whatever the draft says.
+    const kinds = effective(settings, request.scope === "defaults" ? null : projectId).agentKinds;
+    const keepKinds = (configuration) => { const next = { ...configuration }; delete next.agentKinds; if (kinds !== undefined) next.agentKinds = clone(kinds); return next; };
     if (request.scope === "defaults") {
       for (const field of FIELDS) delete settings[field];
-      Object.assign(settings, extract(request.configuration));
+      Object.assign(settings, keepKinds(extract(request.configuration)));
     } else {
       if (!projectId || projectId === "project_none") return { ok: false, error: "Choose a project before saving its team." };
-      saved.projects[projectId] = { name, configuration: extract(request.configuration) };
+      saved.projects[projectId] = { name, configuration: keepKinds(extract(request.configuration)) };
     }
   } else if (action === "rules") {
     // Only the rules change: the rest of the team stays as it was saved. A
@@ -188,4 +213,4 @@ function resume(snapshot, projectId) {
   runtime.getStore().snapshot = clone(snapshot);
   return true;
 }
-module.exports = { FIELDS, PROVIDERS, CLIS, EFFORTS, extract, effective, capabilities, useCatalog, validate, view, mutate, capture, update, run, current, resume };
+module.exports = { FIELDS, PROVIDERS, CLIS, EFFORTS, extract, effective, projectTeams, capabilities, useCatalog, validate, view, mutate, capture, update, run, current, resume };

@@ -100,5 +100,5 @@ test("brief() reads what the last report holds and asks the host for nothing", a
   const after = reads;
   for (let index = 0; index < 5; index += 1) env.window.MefiUsageTracker.brief();
   assert.equal(reads, after, "no read, however often the status bar asks");
-  assert.deepEqual(Object.keys(env.window.MefiUsageTracker).sort(), ["brief", "init", "open", "openTab", "refresh", "report", "setOpen", "tick"], "the rest of the tracker's surface is as it was");
+  assert.deepEqual(Object.keys(env.window.MefiUsageTracker).sort(), ["brief", "init", "open", "openTab", "refresh", "report", "tick"], "the rest of the tracker's surface is as it was; the corner pill's setOpen went with the pill");
 });

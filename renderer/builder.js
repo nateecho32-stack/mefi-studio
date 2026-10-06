@@ -241,10 +241,10 @@
     document.documentElement.dataset.railSessions = "";
     if (!sections.querySelector(".builder-mode-switch")) {
       const group = el("div", "mode-switch builder-mode-switch");
-      group.setAttribute("role", "radiogroup"); group.setAttribute("aria-label", "Studio mode");
+      group.setAttribute("role", "radiogroup"); group.setAttribute("aria-label", "Mode");
       const current = window.MefiVibe?.mode?.() || "build";
       group.dataset.mode = current;
-      for (const [mode, label, icon, title] of [["vibe", "Vibe", "g-home", "Vibe: your home, friends and Mefi"], ["build", "Build", "g-wrench", "Build: tasks, agents and every tool"]]) {
+      for (const [mode, label, icon, title] of [["vibe", "Social", "g-home", "Social: your home, friends and Mefi"], ["build", "Studio", "g-wrench", "Studio: in-depth building with tasks, agents and every tool"]]) {
         const choice = button(label, "", null, { icon, title });
         choice.setAttribute("role", "radio"); choice.dataset.uiMode = mode;
         choice.setAttribute("aria-checked", String(mode === current));
@@ -1191,7 +1191,7 @@
       state.asks.set(task.id, [...(state.asks.get(task.id) || []), ask].slice(-12));
       schedule();
       const title = task.title || window.MefiTasks?.shortTitle?.(task) || "this task";
-      const result = await api().assistantMessage(`About the task "${title}" (${task.id}): ${words}`, data.projectId, { view: "Build · task", companion: companion(), taskId: task.id }, ...(images.length ? [images] : []));
+      const result = await api().assistantMessage(`About the task "${title}" (${task.id}): ${words}`, data.projectId, { view: "Studio · task", companion: companion(), taskId: task.id }, ...(images.length ? [images] : []));
       ask.pending = false;
       if (result?.ok === false) { ask.error = plain(result.error, "No reply came back. Try again."); throw new Error(ask.error); }
       const reply = (result?.state?.messages || []).filter((message) => message.role === "assistant" && stampOf(message.at) >= ask.at - 1000 && message.kind !== "notice").at(-1);
@@ -1429,7 +1429,7 @@
   // panes, so the other layout comes back with a reload.
   window.MefiNav?.register?.({
     id: "home-layout", label: "Switch Home layout: sessions or classic", short: "Home layout", kind: "action", layer: null, section: "settings", group: "system",
-    glyph: "g-frame", badge: null, desc: "Build's Home as a task list with panes (sessions), or the earlier single page (classic)",
+    glyph: "g-frame", badge: null, desc: "Studio's Home as a task list with panes (sessions), or the earlier single page (classic)",
     searchTerms: ["home layout sessions classic claude codex panes windows sidebar"],
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
     run: () => setLayout(sessions() ? "classic" : "sessions"),

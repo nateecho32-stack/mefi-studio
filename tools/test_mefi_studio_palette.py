@@ -112,27 +112,30 @@ class MefiStudioPaletteTests(unittest.TestCase):
     def test_render_marks_the_highlighted_option_for_the_activedescendant(self):
         render = _function_body(self.palette, "render")
         self.assertTrue(render, "palette.js must keep a render() function")
+        # render() handles the empty list and hands the rows to renderV2(), which
+        # builds them (the prototype's rows, under their group headings).
+        self.assertIn("renderV2(items);", render, "render must hand the rows it shows to renderV2")
+        rows = _function_body(self.palette, "renderV2")
+        self.assertTrue(rows, "palette.js must keep a renderV2() function")
         self.assertIn(
             'li.id = `palette-option-${index}`;',
-            render,
+            rows,
             "each option row needs the id the activedescendant points at",
         )
-        self.assertIn('li.setAttribute("role", "option");', render)
+        self.assertIn('li.setAttribute("role", "option");', rows)
         self.assertIn(
             'li.setAttribute("aria-selected", String(index === state.index));',
-            render,
+            rows,
             "aria-selected must report the same row the highlight does",
         )
         self.assertIn(
             'if (index === state.index) li.classList.add("active");',
-            render,
+            rows,
             "the .active class must be the single source the attribute is read from",
         )
-        self.assertGreaterEqual(
-            render.count("setActiveOption();"),
-            2,
-            "render must refresh the activedescendant on the empty path and after building rows",
-        )
+        self.assertIn('head.setAttribute("role", "presentation");', rows, "a group heading is not an option")
+        self.assertIn("setActiveOption();", render, "render must refresh the activedescendant on the empty path")
+        self.assertIn("setActiveOption();", rows, "and after building the rows")
         active = _function_body(self.palette, "setActiveOption")
         self.assertIn(
             'const active = el.list.querySelector("li.active");',
@@ -147,15 +150,15 @@ class MefiStudioPaletteTests(unittest.TestCase):
             "state.index = event.key === \"ArrowDown\" ? (state.index + 1) % span"
             " : (state.index - 1 + span) % span;"
         )
-        # The rows the palette shows: 40, or the 0.5 prototype's twelve in layout v2.
-        self.assertIn("const shownMax = () => (v2() ? 12 : 40);", self.palette, "the wrap span follows the rows shown in each layout")
+        # The rows the palette shows: the 0.5 prototype's twelve.
+        self.assertIn("const SHOWN_MAX = 12;", self.palette, "the wrap span follows the rows shown")
         for key in ("ArrowDown", "ArrowUp"):
             branch = handler.split(f'event.key === "{key}"', 1)
             self.assertEqual(2, len(branch), f"the keydown handler must keep an {key} branch")
             branch = branch[1].split("} else if", 1)[0]
             self.assertIn("event.preventDefault();", branch, f"{key} must not scroll the page behind the palette")
             self.assertIn(
-                "const span = Math.min(shownMax(), state.filtered.length);",
+                "const span = Math.min(SHOWN_MAX, state.filtered.length);",
                 branch,
                 f"{key} must wrap within the rows the palette actually shows",
             )
@@ -204,7 +207,7 @@ class MefiStudioPaletteTests(unittest.TestCase):
     # ---- binding 5: pointer users highlight without focus rings ---------
 
     def test_pointer_paths_never_move_focus(self):
-        render = _function_body(self.palette, "render")
+        render = _function_body(self.palette, "render") + _function_body(self.palette, "renderV2")
         self.assertIn('li.addEventListener("mouseenter"', render, "hover must drive the highlight")
         self.assertIn('li.addEventListener("click", () => run(index));', render, "click must activate the row")
         self.assertNotIn(

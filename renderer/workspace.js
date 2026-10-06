@@ -1362,7 +1362,6 @@
     syncThemeChoice();
     $("motion").checked = storage.get("motion", "1") !== "0";
     $("motion").addEventListener("change", () => { storage.set("motion", $("motion").checked ? "1" : "0"); personalize(); });
-    window.MefiNav?.renderWorkspaceTools?.($("tool-links"));
     api()?.onProjects?.((result) => { adoptProjects(result); refresh(true); });
     api()?.onTasks?.((tasks) => { if (tasks?.some((task) => task.projectId && task.projectId !== state.activeId)) return; revisions.tasks += 1; state.tasks = tasks || []; if (active()) { renderWork(); renderCompanion(); } scheduleBacklogRead(); });
     api()?.onIdeas?.((ideas) => { if (ideas?.some((idea) => idea.projectId && idea.projectId !== state.activeId)) return; revisions.ideas += 1; state.ideas = ideas || []; if (active()) renderWork(); scheduleBacklogRead(); });

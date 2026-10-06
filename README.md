@@ -30,9 +30,9 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/0.5/build.webp" width="960" alt="The 0.5 layout in Build: sessions grouped as Needs you, Running, Review, Queued and Done on the left, a running session with its steps and live output in the middle, and its plan, brief, checks and versions in the inspector on the right">
+  <img src="docs/images/0.5/build.webp" width="960" alt="The 0.5 layout in Studio mode: sessions grouped as Needs you, Running, Review, Queued and Done on the left, a running session with its steps and live output in the middle, and its plan, brief, checks and versions in the inspector on the right">
   <br>
-  <sub>The 0.5 layout in Build, in the new Chrome theme, from the current build on <code>main</code> with sample data.</sub>
+  <sub>The 0.5 layout in Studio mode, in the new Chrome theme, from the current build on <code>main</code> with sample data.</sub>
 </p>
 
 Pick a project folder, say what you want, and coding agents build it while you watch. Every change waits for you to accept or revert it, and the [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is there when you want company, feedback or a hand.
@@ -58,13 +58,13 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
 
 ## Coming in 0.5
 
-0.5 puts Vibe and Build in one frame: your sessions on the left, the work in the middle, an inspector beside it, tabs on top and a status bar below. It is on `main` now and switched off by default: in a source run, turn on **Settings › General › Profile & startup › Try the 0.5 layout** (or **Switch layout** in Search). Studio reloads to switch, and the same switch takes you back.
+0.5 puts both modes in one frame (Vibe is now **Social**, for vibing with friends and keeping a light eye on agents; Build is now **Studio**, for in-depth building): your sessions on the left, the work in the middle, an inspector beside it, tabs on top and a status bar below. It is on `main` now and switched off by default: in a source run, turn on **Settings › General › Profile & startup › Try the 0.5 layout** (or **Switch layout** in Search). Studio reloads to switch, and the same switch takes you back.
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/0.5/today.webp" alt="Vibe in the 0.5 layout: What's next for Sunrise? with a box to build or talk it over, and a board of Needs you, Running, Review and Done today cards">
-      <p><strong>Today.</strong> Vibe's calm home: one box to build or ask, and a board of what needs you, what runs, what to review and what is done.</p>
+      <img src="docs/images/0.5/today.webp" alt="Social in the 0.5 layout: What's next for Sunrise? with a box to build or talk it over, and a board of Needs you, Running, Review and Done today cards">
+      <p><strong>Today.</strong> Social's home: one box to build or ask, and a board of what needs you, what runs, what to review and what is done.</p>
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/0.5/inbox.webp" alt="Work › Inbox: a question from OpenCode with Mefi's suggestion and two options, and a failed check with Try again, It's done and Drop it">

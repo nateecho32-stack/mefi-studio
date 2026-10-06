@@ -85,10 +85,11 @@ app.whenReady().then(async () => {
     fs.writeFileSync(path.join(root, name), (await contents.capturePage()).toPNG());
   };
   const reachable = async (selector) => run(`const element=document.querySelector(${JSON.stringify(selector)});if(!element||element.hidden||element.disabled)return false;element.scrollIntoView({block:'center',behavior:'instant'});await new Promise(resolve=>requestAnimationFrame(resolve));const rect=element.getBoundingClientRect();const hit=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);return rect.width>0&&rect.height>0&&rect.left>=0&&rect.right<=innerWidth+1&&rect.top>=0&&rect.bottom<=innerHeight+1&&(hit===element||element.contains(hit));`);
-  const composerBounds = async () => run("const form=document.getElementById('workspace-form'),rect=form.getBoundingClientRect();const controls=['workspace-input','workspace-send'].every(id=>{const node=document.getElementById(id),box=node.getBoundingClientRect(),hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);return box.width>0&&box.height>0&&box.top>=0&&box.bottom<=innerHeight+1&&(hit===node||node.contains(hit));});return {top:rect.top,bottom:rect.bottom,gap:innerHeight-rect.bottom,visible:rect.top>=0&&rect.bottom<=innerHeight+1&&rect.left>=0&&rect.right<=innerWidth+1,controls};");
+  // The composer against the page's free area (MefiNav.usable(): the window less the 0.5 frame's columns, bars and status bar).
+  const composerBounds = async () => run("const form=document.getElementById('workspace-form'),rect=form.getBoundingClientRect(),free=window.MefiNav.usable();const controls=['workspace-input','workspace-send'].every(id=>{const node=document.getElementById(id),box=node.getBoundingClientRect(),hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);return box.width>0&&box.height>0&&box.top>=free.top-1&&box.bottom<=free.bottom+1&&(hit===node||node.contains(hit));});return {top:rect.top,bottom:rect.bottom,gap:free.bottom-rect.bottom,visible:rect.top>=free.top-1&&rect.bottom<=free.bottom+1&&rect.left>=free.left-1&&rect.right<=free.right+1,controls};");
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
   await until("window.MefiWorkspace && window.MefiTasks && window.MefiNav", "renderer startup");
-  await run("window.MefiNav.go('workspace');");
+  await run("window.MefiNav.go('workspace',{view:'chat'});");
   await until("document.getElementById('workspace-focus-worker').textContent.includes('Fixture builder') && document.getElementById('workspace-preview-state').textContent==='Preview ready'", "Home worker and ready preview");
   report.defaultCollapsed = await run("return ['workspace-studio-details','workspace-queue-details','workspace-help-details','workspace-preview-controls'].every(id=>{const element=document.getElementById(id);return element?.tagName==='DETAILS'&&!element.open;});");
   assert.ok(report.defaultCollapsed, "Home starts with queue, telemetry, help and preview controls collapsed");
@@ -97,18 +98,26 @@ app.whenReady().then(async () => {
   await capture("workflow-building-1440.png");
   await run("window.MefiNav.go('command');");
   await until("window.MefiIdle?.selection?.()?.taskId==='snake'", "Live retains the initial Home task without first opening Work");
-  await run("window.MefiNav.go('workspace');");
+  await run("window.MefiNav.go('workspace',{view:'chat'});");
   await until("!document.getElementById('workspace-layer').hidden", "return to initial Home");
-  await run("document.querySelector('#app-rail-recent-list [data-task-id=snake]').click();");
+  // The 0.5 frame's session list opens the task as a session (renderer/sessions.js), and its thread's "Open on the task board"
+  // opens the same task's page in Work, where the short title heads the full brief.
+  await run("document.querySelector('#sessions-list .sx-row[data-key=snake] .sx-row-main').click();");
+  await until("!document.getElementById('sessions-thread').hidden && document.querySelector('#sessions-thread .sx-title')?.textContent.startsWith('Validate Snake and launch a local preview.')", "the session list opens the task");
+  await capture("workflow-session-1440.png");
+  await run("document.querySelector('#sessions-thread .sx-actions [aria-label=\"Open on the task board\"]').click();");
   await until("document.getElementById('task-title').textContent==='Validate Snake and launch a local preview.'", "short task title");
   report.fullBrief = await run("return document.getElementById('task-detail').textContent.includes('FULL_BRIEF_ACCEPTANCE');"); assert.ok(report.fullBrief);
   await run("document.querySelector('[data-task-action=live]').click();");
   await until("window.MefiIdle?.selection?.()?.taskId==='snake'", "Live selects the same task");
-  await until("document.getElementById('app-task-context')?.textContent.includes('Open current task')", "Live return path");
+  // The way back is the frame's session list, which stays beside the Map with the task's row marked (the classic page bar's
+  // "Open current task" is gone): the row brings the session back, and Home still follows the task.
+  await until("document.querySelector('#sessions-list .sx-row[data-key=snake] .sx-row-main')?.getAttribute('aria-current')==='true'", "Live return path");
   await capture("workflow-live-1440.png");
-  await run("[...document.querySelectorAll('#app-task-context button')].find(button=>button.textContent.startsWith('Open current task')).click();");
-  await until("window.MefiTasks.state.selected==='snake' && !document.getElementById('tasks-overlay').hidden", "return to selected task");
-  await run("document.querySelector('#app-task-context button').click();");
+  assert.ok(await reachable("#sessions-list .sx-row[data-key=snake] .sx-row-main"), "the task's row is on screen beside the Map");
+  await run("document.querySelector('#sessions-list .sx-row[data-key=snake] .sx-row-main').click();");
+  await until("window.MefiNav.current()==='workspace' && !document.getElementById('sessions-thread').hidden && document.querySelector('#sessions-thread .sx-title')?.textContent.startsWith('Validate Snake')", "return to selected task");
+  await run("window.MefiNav.go('workspace',{view:'chat'});");
   await until("!document.getElementById('workspace-layer').hidden && document.getElementById('workspace-focus-task').value==='snake'", "return Home with task context"); report.contextRoundTrip = true;
   await run("window.workflowFixture.conversation(24);document.getElementById('workspace-mode-chat').click();const input=document.getElementById('workspace-input');input.value='Keep this draft while I review the conversation and task progress.';input.dispatchEvent(new Event('input',{bubbles:true}));");
   await until("document.querySelectorAll('#workspace-thread .ws-message').length===24", "populated conversation");
@@ -143,22 +152,26 @@ app.whenReady().then(async () => {
   await until("document.getElementById('workspace-focus-checks').textContent.includes('1/1 recorded checks passed')", "completion checks");
   await run("document.getElementById('workspace-focus-change').click();");
   report.requestChangeDraft = await run("return document.getElementById('workspace-input').value.includes('Requested change:')&&document.getElementById('workspace-input').value.includes('Preserve keyboard controls')&&!window.workflowFixture.calls().some(call=>['tasksCreate','assistantChat'].includes(call.name));"); assert.ok(report.requestChangeDraft);
-  await run("window.workflowDraft=document.getElementById('workspace-input').value;document.getElementById('app-rail-compose').click();");
+  // New task is the 0.5 frame's own (the session list's head, Ctrl N): Home's box in its task purpose, the draft kept.
+  await run("window.workflowDraft=document.getElementById('workspace-input').value;document.getElementById('sessions-new').click();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));");
   report.newTaskPreservesDraft = await run("return document.getElementById('workspace-input').value===window.workflowDraft&&document.activeElement.id==='workspace-input'&&document.getElementById('workspace-mode-work').getAttribute('aria-pressed')==='true'&&!window.workflowFixture.calls().some(call=>['tasksCreate','assistantChat'].includes(call.name));"); assert.ok(report.newTaskPreservesDraft);
   await run("const input=document.getElementById('workspace-input');input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));");
+  // View checks opens the task as a session with the inspector on Checks (sessions.js redirects go("tasks", { panel: "evidence" })),
+  // and the session's own Open app reaches the preview.
   await run("document.getElementById('workspace-focus-check').click();");
-  await until("document.getElementById('task-tab-evidence').getAttribute('aria-selected')==='true'", "Home opens checks directly");
-  await run("document.querySelector('[data-task-action=open-app]').click();");
+  await until("!document.getElementById('sessions-thread').hidden && document.getElementById('sessions-itab-checks')?.getAttribute('aria-selected')==='true'", "Home opens checks directly");
+  await run("document.querySelector('#sessions-thread [data-spec=open-app]').click();");
   await until("window.workflowFixture.calls().some(call=>call.name==='projectPreviewOpen')", "Open app invokes preview bridge");
   for (const [width, height] of [[1440, 900], [1100, 720], [600, 560]]) {
     window.setContentSize(width, height);
     contents.enableDeviceEmulation({ screenPosition: "desktop", screenSize: { width, height }, viewPosition: { x: 0, y: 0 }, viewSize: { width, height }, deviceScaleFactor: 1, scale: 1 });
     await sleep(120);
-    await run("window.MefiNav.go('workspace');if(!document.getElementById('workspace-activity-drawer').hidden)document.getElementById('workspace-activity-close').click();for(const id of ['workspace-studio-details','workspace-queue-details','workspace-help-details','workspace-preview-controls'])document.getElementById(id).open=false;document.getElementById('workspace-conversation-content').scrollTop=0;document.querySelector('.ws-main').scrollTop=0;document.getElementById('workspace-layer').scrollTop=0;");
+    await run("window.MefiNav.go('workspace',{view:'chat'});if(!document.getElementById('workspace-activity-drawer').hidden)document.getElementById('workspace-activity-close').click();for(const id of ['workspace-studio-details','workspace-queue-details','workspace-help-details','workspace-preview-controls'])document.getElementById(id).open=false;document.getElementById('workspace-conversation-content').scrollTop=0;document.querySelector('.ws-main').scrollTop=0;document.getElementById('workspace-layer').scrollTop=0;");
     await until("!document.getElementById('workspace-layer').hidden", "Home layout");
     const homeOverflow = await run("return document.documentElement.scrollWidth>innerWidth+1;");
     const initialComposerVisible = await run("return ['workspace-input','workspace-send'].every(id=>{const rect=document.getElementById(id).getBoundingClientRect();return rect.width>0&&rect.height>0&&rect.left>=0&&rect.right<=innerWidth+1&&rect.top>=0&&rect.bottom<=innerHeight+1;});");
-    const authoringLayout = await run("const layout=document.querySelector('.ws-home-layout').getBoundingClientRect(),composer=document.getElementById('workspace-form').getBoundingClientRect(),body=document.getElementById('workspace-conversation-content'),progress=document.getElementById('workspace-progress');return {correct:Math.abs((composer.left+composer.right)/2-(layout.left+layout.right)/2)<2&&composer.width<=802&&body.contains(progress)&&body.getBoundingClientRect().bottom<=composer.top&&composer.bottom<=innerHeight+1&&innerHeight-composer.bottom<=40};");
+    // The composer sits at the bottom of the page's free area (MefiNav.usable(): above the 0.5 frame's status bar).
+    const authoringLayout = await run("const layout=document.querySelector('.ws-home-layout').getBoundingClientRect(),composer=document.getElementById('workspace-form').getBoundingClientRect(),body=document.getElementById('workspace-conversation-content'),progress=document.getElementById('workspace-progress'),free=window.MefiNav.usable();return {correct:Math.abs((composer.left+composer.right)/2-(layout.left+layout.right)/2)<2&&composer.width<=802&&body.contains(progress)&&body.getBoundingClientRect().bottom<=composer.top&&composer.bottom<=free.bottom+1&&free.bottom-composer.bottom<=40,gap:free.bottom-composer.bottom};");
     const navigation = await run("const rail=document.getElementById('app-rail'),button=rail.querySelector('.app-rail-head'),label=button.querySelector('.app-rail-text'),icon=button.querySelector('.glyph');return {width:rail.getBoundingClientRect().width,labelSize:parseFloat(getComputedStyle(label).fontSize),iconWidth:icon.getBoundingClientRect().width,rowHeight:button.getBoundingClientRect().height,pinned:document.documentElement.hasAttribute('data-rail-pinned')};");
     const composerReadability = await run("const hint=document.getElementById('workspace-compose-hint'),feedback=document.getElementById('workspace-feedback');return {hintHeight:hint.getBoundingClientRect().height,feedbackFits:feedback.scrollWidth<=feedback.clientWidth+1};");
     const compactDefault = await run("return ['workspace-studio-details','workspace-queue-details','workspace-help-details','workspace-preview-controls'].every(id=>!document.getElementById(id).open)&&document.getElementById('workspace-activity-drawer').hidden&&document.getElementById('workspace-progress-state').getBoundingClientRect().height>0&&document.getElementById('workspace-progress-reason').getBoundingClientRect().height>0&&document.getElementById('workspace-result-open').getBoundingClientRect().height>0;");
@@ -178,22 +191,23 @@ app.whenReady().then(async () => {
     await until("document.querySelector('#task-list .task-overview-card.opens-task')", "project work opens in Work");
     const workReachable = await reachable("#task-list .task-overview-card.opens-task");
     await capture(`workflow-home-bottom-${width}.png`);
-    await run("await window.MefiNav.go('workspace');document.getElementById('workspace-activity-toggle').click();document.querySelector('#workspace-preview-controls > summary').click();");
+    await run("await window.MefiNav.go('workspace',{view:'chat'});document.getElementById('workspace-activity-toggle').click();document.querySelector('#workspace-preview-controls > summary').click();");
     await until("document.getElementById('workspace-preview-controls').open", "explicitly opened preview controls");
     const previewControlsReachable = await reachable("#workspace-preview-stop") && await reachable("#workspace-preview-check");
     await capture(`workflow-preview-expanded-${width}.png`);
     await run("document.getElementById('workspace-preview-controls').open=false;document.getElementById('workspace-activity-close').click();");
     await run("document.getElementById('workspace-focus-check').click();");
-    await until("!document.getElementById('tasks-overlay').hidden && document.getElementById('task-tab-evidence').getAttribute('aria-selected')==='true'", "Work checks layout");
+    await until("!document.getElementById('sessions-thread').hidden && document.getElementById('sessions-itab-checks')?.getAttribute('aria-selected')==='true'", "Work checks layout");
     const workOverflow = await run("return document.documentElement.scrollWidth>innerWidth+1;");
-    const homeReachable = await reachable("#app-task-context button");
+    // Home is one press away from the session: the rail's Work (the classic page bar's Home button is gone).
+    const homeReachable = await reachable("#app-rail .app-rail-head[data-nav=workspace]");
     await capture(`workflow-work-${width}.png`);
     report.layouts.push({ width: await run("return innerWidth;"), homeOverflow, workOverflow, checksReachable, homeReachable, inputReachable, sendReachable, workReachable, initialComposerVisible, compactDefault, previewControlsReachable, authoringLayout, navigation, composerReadability });
     assert.ok(!homeOverflow && !workOverflow && checksReachable && homeReachable && inputReachable && sendReachable && workReachable && compactDefault && previewControlsReachable && authoringLayout.correct && initialComposerVisible, JSON.stringify(report.layouts.at(-1)));
     assert.ok(navigation.iconWidth>=18&&navigation.rowHeight>=36&&(navigation.pinned?navigation.width===256&&navigation.labelSize>=14:navigation.width===64), JSON.stringify(navigation));
     assert.ok(composerReadability.hintHeight<=42&&composerReadability.feedbackFits, JSON.stringify(composerReadability));
   }
-  await run("window.MefiNav.go('workspace');document.getElementById('workspace-activity-toggle').click();const select=document.getElementById('workspace-focus-task');select.value='ready';select.dispatchEvent(new Event('change',{bubbles:true}));");
+  await run("window.MefiNav.go('workspace',{view:'chat'});document.getElementById('workspace-activity-toggle').click();const select=document.getElementById('workspace-focus-task');select.value='ready';select.dispatchEvent(new Event('change',{bubbles:true}));");
   await until("document.getElementById('workspace-focus-state').textContent.includes('agents paused')", "ready task with paused agents");
   await run("document.getElementById('workspace-focus-primary').click();");
   await until("window.workflowFixture.calls().some(call=>call.name==='assistantWorkOn')", "explicit start request");
@@ -204,7 +218,11 @@ app.whenReady().then(async () => {
   assert.ok(report.attentionReachable);
   await capture("workflow-attention-600.png");
   await run("document.getElementById('workspace-attention-shortcut').click();");
-  await until("document.getElementById('cmd-rail-tab-ask').getAttribute('aria-selected')==='true' && !document.getElementById('cmd-asks').hidden && document.getElementById('cmd-asks').textContent.includes('Choose a theme')", "attention shortcut opens the actual Ask decision");
+  // In the 0.5 layout what waits on you is decided in the Inbox (renderer/today.js), which the shortcut opens on that question.
+  // The question carries no options of the host's own, so the card's answer is its box, open and on screen.
+  await until("!document.getElementById('today-inbox').hidden && [...document.querySelectorAll('#today-inbox .today-need')].some(card=>card.textContent.includes('Choose a theme')&&card.querySelector('.today-need-input'))", "attention shortcut opens the actual Ask decision");
+  assert.ok(await reachable("#today-inbox .today-need .today-need-input"), "the decision can be answered where it opened");
+  await capture("workflow-attention-inbox-600.png");
   report.attentionNavigated = true;
   assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
   finish();

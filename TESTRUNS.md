@@ -55,6 +55,30 @@ hub_host, relay_credits (the play's why), relay_connect, relay_e2e, booklet_buil
 pass. Also pc_remote_ui, pc_sync_ui, together_ui, friends_mod_ui, friends_navigation, relay_core, app_rail,
 onboarding and palette_layout_v2 on 67e5898. `npm run check` ok. Windows CI runs the full gate on the landing commit
 before the fast-forward; the relay is redeployed with it (front().you.projects and hold, the play's why).
+## 2026-10-06 The Social/Studio names, the scroll fix, the social polish and the models page land while the PCs are offline
+
+Landed by the planning chat (cloud, Linux, Node 24.21.0) after the owner's PC became unreachable at 02:35 UTC. Each
+branch's tip had green Windows CI: ui/social-studio-names 2ee0106 (merge e2d2034); fix/doc-scroll ace7d22 (efec563,
+plus bf0d0ce: the rule split so every selector starts with html[data-frame], the one pin its CI failed);
+wip/social-polish a676b05 (1e54cc5; tabs.js keeps main's agents block and takes "lobby"); wip/models bc490ff (6c9126b;
+both sides kept in main.cjs, executor-core.cjs, agents.js and build-booklet.mjs, the teamLayout() calls dropped since the
+classic layout is gone; d9dad85 updates cli_deadline_host's pin). booklet.html rebuilt after each merge. Hosted Windows
+CI green on 1e54cc5 and d9dad85; main fast-forwarded to d9dad85.
+
+Here, as a non-root user under xvfb: npm run check ok, lint 0 errors (47 warnings, as before), audit 0/0, test:fast ok.
+Every real-window suite, one at a time, before the merges (55494c6) and after them: agent_setup_render, sessions_render
+and today_render failed only after them, each on a fixture that described the old state. Agent setup opened Seats and
+models without a target, and the seat rows now fold under More settings (c385a65 names the row, as an old way in does).
+Sessions pinned " · Vibe" and "Build · task" (c385a65, 15bfec3). Today asserted that Tab never leaves the document,
+which held only because the order walked into the Model catalog's 28 controls under the frame's layers; with
+fix/doc-scroll the order wraps once through the document and back to the frame, which 15bfec3 allows, pinning that no
+stop lands under the layers. After the fixes all three pass; sessions_render's "the keyboard starts on the open
+project" failed once and passed twice, the known flake. Failing on Linux both before and after, and ok on Windows per
+the ui/v2-only row: team_render (Providers sideways at 600x560@1.5), unified_studio_render and project_map_render (the
+map at 600x560@1.5), settings_render (Report a problem's panels at 600x560@1.5), workflow_render (the authoring layout
+at 600) and command_render (task pixels): Linux fonts and software rendering. friends_render and friends_two_render
+pass; their screenshots show the open room as a chat app, rooms as cards, each place's own icon, two Studios catching
+up after one was away, and no scroll arrow over the status bar.
 
 ## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
 
@@ -296,6 +320,36 @@ progress delivers the board at once, untouched cards keep their objects, progres
 nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
 (no Electron in the container); judged on the Windows "Studio checks" run of this commit.
 
+## 2026-10-05 The 0.5 layout is the only layout: the classic layout's code goes, every window fixture runs the 0.5 layout
+
+Branch `ui/v2-only` (gated in `C:\wt\ui-v2only`, merged with main up to f1934aa in `C:\wt\v2m` as 8e4a501). Owner
+chose to remove the classic layout at 0.5.0. The switch and its ways back go (setLayout/setShell, ?layout=,
+MEFI_STUDIO_LAYOUT, the Settings and Search toggles); the classic code goes (nav.js's v1 paths, the classic rail,
+local navigation, dock, sheet links, tab row, footer and help button; the classic Search rows; the Agents navigation;
+the companion hub's Friends section and the Friends page's tab row and Close; Command's .cmd-top with its Ambience,
+View and Agent settings popovers, telemetry pills and corner usage panel; the CSS long tail, ~2,600 net lines of app
+code). Every Electron fixture launches the 0.5 layout; layout_contract_render and its v1 record are retired. Real bugs
+the converted fixtures found are fixed: Team seat rows at 1100, Fleet's fit at 1100, the Project map at 600x560@150%,
+Today's box, an Inbox question without options, the orb drag, the slim rail, the Settings strip, the plan page header,
+Activity over the chat box, Today's permissions popover, the inspector's Team card, the empty Map's Start button,
+hidden key tips, the Inbox keeping the focus on the need pill when its first card was a question without options so
+Escape never closed it (a47ac39), and main's new skills chip pushing Build it off Today's row at 1440x900 (aae6947).
+
+Hosted CI (Windows, the whole Node/Python/check/lint/audit chain; the 43 real-window suites skipped there): green on
+0da4dfd (37397654824), dc5264f (37398953883), 574fa9d (37399987736), 8b5eacb (37401397849) and 8e4a501
+(37402884931). Here, every Electron suite one at a time on 0da4dfd: 44 of 45 ok; shell_render timed out at "Escape
+closed the Inbox" while clean main d71e1e0 passed that step (control run), fixed in a47ac39, after which it stops
+where clean main stops on this PC ("it shrinks to leave the main area its 320", the display-scaling case). npm run
+check and npm run audit on 0da4dfd: exit 0 (audit 0 errors, 0 warnings); npm run check on 8b5eacb and 8e4a501: ok.
+After the merges with main 33c3c4e, d71e1e0, d55269f and f1934aa: friends_render, companion_hub_render,
+settings_render, size_render, skills_render, team_render, today_render, unified_studio_render, workflow_render ok on
+8b5eacb; builder_render (failed on 8b5eacb, the skills chip), today_render, workflow_render ok on aae6947;
+command_render, media_browser_render, media_window_render ok on 8e4a501; Friends, rail and Today unit suites 89/89 and
+59/59. sessions_render failed at "the keyboard starts on the open project" on 8b5eacb and on clean main f1934aa (both
+runs fast, ~45 s) and passed on main d71e1e0, b79b4bc and 0661f8c and on this branch's b632757 (154 s): the timing
+flake an older row here already saw at that step. performance_render, startup_render and renderer_recovery ok on
+b632757 (main's studio log on disk and Trace).
+
 ## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
 
 Branch `fix/linux-ci` (60b90a1, off main dfda798), test expectations only: rust_modules feeds the image-store
@@ -469,56 +523,6 @@ project", passes alone again, 122 s). rust_parity_snapshots ran inside the
 gate and passed (3/3; the twin-repository test took 127 s under load, the
 case the time-limit scale is for). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check`
 ok.
-
-## 2026-10-04 Today in both modes closer to the 0.5 prototype: Build's Home and Vibe's board
-
-Branch `ui/today` in `C:\wt\ui-today` (off land/ui-chrome 74bf360,
-node_modules junctioned), pushed as wip/ui-today: 0b52d4c Build's Today
-(Home with no session open: the greeting and "What's next for <project>?",
-Home's own box borrowed with Add files or an image, the permission mode,
-Talk it over and Build it, the starters and Suggest a next step, Needs you,
-Running now, Finished while you were away; the classic Home is the route's
-"chat" view), 75b3dfa Vibe's Today (the prototype's board: four columns that
-say when they are empty, a waiting card as its session, results under
-Review, Build it with its key, "Today, the board").
-
-`npm run check` ok (271 targets), lint 0 errors (no warning in the touched
-files), `npm run audit` 0 findings. `npm run test:fast` at 0b52d4c's tree
-under heavy load: 6950 tests, 6926 pass, 14 skipped, 8 fail, 2 cancelled,
-all in six host suites that took 700-860 s each (attempt_review_host,
-attempt_snapshots_host, git_actions, pc_vault, rust_parity_git,
-rust_parity_repo): 137 tests, 134 pass, 3 skipped, 0 fail alone.
-
-Full `npm test` at 75b3dfa: Node 6952 tests, 6934 pass, 14 skipped, 4 fail
-(attempt_review_host 2, attempt_snapshots_host, rust_parity_snapshots,
-sync_changes: 63 tests, 60 pass, 3 skipped, 0 fail alone); Electron lane 75:
-72 pass, 1 skipped, 2 fail, layout_contract_render (viewport 1921x1081) and
-shell_render ("373 !== 372" at 1100 px), both as on clean main on this PC;
-sessions_render (with its new Today gallery: Build's Today at 1920x1080 and
-1100x720, 600x560 at 1 and 1.5, Vibe's board, every text 12 px or more and
-4.5:1 in all eleven themes for both) and today_render pass; Python 248 OK
-(1 skipped); path lock ok.
-Captures (1920x1080) in `C:\wt\gap\after-today\final\`, prototype-left
-side-by-sides in `C:\wt\gap\after-today\compare\`.
-## 2026-10-04 The v2 Settings, first run and plan draft page land on main
-
-Branch `land/ui-settings` in `C:\wt\land-ui`: origin/main 349802a with
-wip/ui-settings cd17a4f merged file by file (CHANGELOG keeps both sides'
-entries; TESTRUNS keeps every row of both, checked heading by heading, with a
-row main had rotated left in the October archive only; booklet.html
-regenerated).
-
-Full `npm test` on d2d5ae4 (a Today agent's fixture ran beside it for its
-first minutes): Node 6950 tests, 6934 pass, 14 skipped, 2 fail, both pass
-alone: rust_parity_snapshots (3/3; under load one side's 10 s `rev-parse HEAD`
-timed out and made its start picture without a parent: same tree, other
-commit id) and sync_changes (5/5; a push to a local bare repo failed under
-memory pressure). Electron lane 76: 72 pass, 1 skipped, 3 fail:
-layout_contract_render and shell_render (as on clean main on this PC) and
-tree_dynamics_render, which fails now and then on this PC (failed once alone
-here, then passed 3 times alone; the branch's own run saw it fail on c01604e
-too). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run
-check` ok. Side-by-sides: `C:\wt\gap\after-settings\compare\`.
 
 ## Read Before Any Tests
 

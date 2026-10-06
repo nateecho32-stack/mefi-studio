@@ -6,6 +6,57 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 Today in both modes closer to the 0.5 prototype: Build's Home and Vibe's board
+
+Branch `ui/today` in `C:\wt\ui-today` (off land/ui-chrome 74bf360,
+node_modules junctioned), pushed as wip/ui-today: 0b52d4c Build's Today
+(Home with no session open: the greeting and "What's next for <project>?",
+Home's own box borrowed with Add files or an image, the permission mode,
+Talk it over and Build it, the starters and Suggest a next step, Needs you,
+Running now, Finished while you were away; the classic Home is the route's
+"chat" view), 75b3dfa Vibe's Today (the prototype's board: four columns that
+say when they are empty, a waiting card as its session, results under
+Review, Build it with its key, "Today, the board").
+
+`npm run check` ok (271 targets), lint 0 errors (no warning in the touched
+files), `npm run audit` 0 findings. `npm run test:fast` at 0b52d4c's tree
+under heavy load: 6950 tests, 6926 pass, 14 skipped, 8 fail, 2 cancelled,
+all in six host suites that took 700-860 s each (attempt_review_host,
+attempt_snapshots_host, git_actions, pc_vault, rust_parity_git,
+rust_parity_repo): 137 tests, 134 pass, 3 skipped, 0 fail alone.
+
+Full `npm test` at 75b3dfa: Node 6952 tests, 6934 pass, 14 skipped, 4 fail
+(attempt_review_host 2, attempt_snapshots_host, rust_parity_snapshots,
+sync_changes: 63 tests, 60 pass, 3 skipped, 0 fail alone); Electron lane 75:
+72 pass, 1 skipped, 2 fail, layout_contract_render (viewport 1921x1081) and
+shell_render ("373 !== 372" at 1100 px), both as on clean main on this PC;
+sessions_render (with its new Today gallery: Build's Today at 1920x1080 and
+1100x720, 600x560 at 1 and 1.5, Vibe's board, every text 12 px or more and
+4.5:1 in all eleven themes for both) and today_render pass; Python 248 OK
+(1 skipped); path lock ok.
+Captures (1920x1080) in `C:\wt\gap\after-today\final\`, prototype-left
+side-by-sides in `C:\wt\gap\after-today\compare\`.
+
+## 2026-10-04 The v2 Settings, first run and plan draft page land on main
+
+Branch `land/ui-settings` in `C:\wt\land-ui`: origin/main 349802a with
+wip/ui-settings cd17a4f merged file by file (CHANGELOG keeps both sides'
+entries; TESTRUNS keeps every row of both, checked heading by heading, with a
+row main had rotated left in the October archive only; booklet.html
+regenerated).
+
+Full `npm test` on d2d5ae4 (a Today agent's fixture ran beside it for its
+first minutes): Node 6950 tests, 6934 pass, 14 skipped, 2 fail, both pass
+alone: rust_parity_snapshots (3/3; under load one side's 10 s `rev-parse HEAD`
+timed out and made its start picture without a parent: same tree, other
+commit id) and sync_changes (5/5; a push to a local bare repo failed under
+memory pressure). Electron lane 76: 72 pass, 1 skipped, 3 fail:
+layout_contract_render and shell_render (as on clean main on this PC) and
+tree_dynamics_render, which fails now and then on this PC (failed once alone
+here, then passed 3 times alone; the branch's own run saw it fail on c01604e
+too). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run
+check` ok. Side-by-sides: `C:\wt\gap\after-settings\compare\`.
+
 ## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
 
 Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,

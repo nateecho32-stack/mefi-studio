@@ -7,7 +7,7 @@
 // one page at a time with its title and Find a setting at its right, nothing wider than the page, no scroller that
 // reserves width for a bar, no text under 12 px, and every line of text at 4.5:1 or more against what is behind it,
 // in every theme. Deep links and Search land on the place that now holds the control; Size and density opens its
-// own page. A second launch without ?layout=v2 shows Settings as it was. Screenshots are kept when the test is
+// own page. Screenshots are kept when the test is
 // given a capture folder (MEFI_SETTINGS_CAPTURE_DIR). No application main process or live state is loaded;
 // network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
@@ -190,24 +190,6 @@ app.whenReady().then(async () => {
   ];
   const assertPage = (m, tag, options) => assert.deepEqual(problems(m, tag, options), [], `${tag}: fits, no text under 12 px, 4.5:1`);
   const found = [];
-
-  // ---- v1: Settings as it was ----------------------------------------------------------------------
-  await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1" } });
-  await until("window.MefiNav && window.MefiBooklet && !window.MefiBoot?.isActive?.()", "studio ready (v1)");
-  await run("window.MefiNav.go('studio');");
-  await until("document.getElementById('tab-studio')?.hidden === false", "Settings is up (v1)");
-  report.v1 = await run(`return {
-    layout: document.documentElement.dataset.layout || null, places: document.getElementById('tab-studio').dataset.places || null,
-    rows: [...document.querySelectorAll('#settings-nav [data-settings-category]')].map((row) => row.dataset.settingsCategory),
-    panes: [...document.querySelectorAll('[data-settings-category-pane]')].map((node) => node.dataset.settingsCategoryPane),
-    notificationsIn: document.getElementById('settings-notifications')?.closest('[data-settings-category-pane]')?.dataset.settingsCategoryPane ?? null,
-    updatesIn: document.getElementById('settings-updates')?.closest('[data-settings-category-pane]')?.dataset.settingsCategoryPane ?? null,
-    reportIn: document.getElementById('settings-report')?.closest('[data-settings-category-pane]')?.dataset.settingsCategoryPane ?? null,
-    findIn: document.querySelector('.settings-find')?.parentElement?.id ?? null, model: window.MefiBooklet.settingsPlaces(),
-    placeOnly: [...document.querySelectorAll('.settings-place-only')].filter((node) => node.getClientRects().length).length,
-  };`);
-  assert.deepEqual(report.v1, { layout: null, places: null, rows: ["general", "appearance", "audio", "system"], panes: ["general", "appearance", "audio", "system"], notificationsIn: "general", updatesIn: "system", reportIn: "system", findIn: "settings-nav", model: null, placeOnly: 0 }, "with the layout off Settings keeps its four categories and every card where it was");
-  report.steps.push("v1 is untouched");
 
   // ---- v2 ------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });

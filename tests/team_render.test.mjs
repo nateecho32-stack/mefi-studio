@@ -14,7 +14,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("Team in the 0.5 layout: the prototype's twelve places in the list column under its headings, one place at a time with its title, its panes and the draft's bars only where the team is edited, pages of their own open with the place open in the list, old ways in and Search land on the new places, four window sizes fit with no text under 12 px, and the classic Agents page untouched", { skip: !canRun, timeout: 360000 }, async (t) => {
+test("Team in the 0.5 layout: the prototype's twelve places in the list column under its headings, one place at a time with its title, its panes and the draft's bars only where the team is edited, pages of their own open with the place open in the list, old ways in and Search land on the new places, four window sizes fit with no text under 12 px", { skip: !canRun, timeout: 360000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-team-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));

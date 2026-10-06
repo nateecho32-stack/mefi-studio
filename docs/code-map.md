@@ -154,6 +154,8 @@ one-line hooks; the rules live in the pure modules it composes. See
 | `chatgpt-plan.cjs` | 1,264 | The "ChatGPT plan" provider (Sign in with ChatGPT, OpenAI's open-source token-sharing preview): the loopback OAuth + PKCE sign-in (registration with `dynamic_agent_client`, then the issued client id), ID-token checks against OpenAI's JWKS, single-flight refresh, sign-out with revoke, `/v1/models`, and streamed `/v1/responses` calls in chatCompletion's result shape. Pure helpers `authorizeUrl`, `requestBody`, `parseSse`, `mapError`; fetch, the server, the browser, the clock and the encrypted save/load are injected. `chatgpt_plan.test.mjs` runs it against fake OpenAI servers. |
 | `credentials.cjs` | 93 | Which environment variables may back each saved key: Studio's own `MEFI_STUDIO_*` names and the names other tools share. |
 | `cli-accounts.cjs` | 261 | Several logins per coding CLI: Claude Code's and Codex's main login plus the ones added in Setup (each a folder handed over as `CLAUDE_CONFIG_DIR` / `CODEX_HOME`), which one answers (the first not topped out), a login's usage-limit words and when they say it resets, and what a usage reading says. Pure; main.cjs's "Several logins per coding CLI" block keeps the folders and the limit marks, runs assistant calls over the logins (`cliAccountTurn`) and sets a worker's topped-out login aside in `finish`. See [cli-setup.md](cli-setup.md#more-than-one-login). |
+| `model-ladder.cjs` | 230 | How hard a model thinks and when a stuck coding job steps up: four levels (light, balanced, deep, max) mapped to Claude Code's `--effort`, Codex's `model_reasoning_effort` and OpenCode's `--variant`, the words each CLI takes per model, where a job starts (the owner's pick, the team's mode, what worked before) and `builderStep` (one step harder per miss, a stronger model after two, Max held for the owner). Pure; main.cjs's "How hard a coding attempt thinks" block reads the CLIs' help and model lists and sets each attempt's effort and model. |
+| `model-kinds.cjs` | 240 | Which model does which kind of coding job: the report card (per model, per kind of job, a verdict from checked attempts), suggestions for a weak kind, the team's `agentKinds` routes and how a 5-job trial is judged. Pure; main.cjs's "Which model does which kind of job" block reads every ledger on this PC, routes a job by its kind and answers `team:report` / `team:kind-route`. |
 | `auth-store.cjs` | 93 | Keeps the key ciphertext in `auth.json`, apart from the `settings.json` preferences: splits a settings view into the two, merges them back into one view for callers, and writes the auth file atomically. |
 | `decision-client.mjs` | 629 | The Jev classifier client over its four routes. |
 | `model-routing.mjs` | 428 | The builder-model evaluator: each candidate's verified record on this kind of work, cost, speed and strengths become a win probability (`estimateWinProbability`), whose prior Studio's probe runs and the community feed may shift a little (`probeShift`, `communityShift`); Jev or the stand-in judge answers one probability per candidate, and the highest wins. See [agent-loop.md §12](agent-loop.md#12-choosing-a-builders-model-the-win-probability-evaluator). |
@@ -380,6 +382,7 @@ imports. See [Unified Studio](unified-studio.md) for the interfaces and fixture 
 | `autonomy-ui.js` | 241 | Shared permission controls, elevated warnings, decision learning, model-strength views and the Why/Undo/For you panel. `setLevel(level)` sets the mode from anywhere (Search's "Set permission mode" rows in layout v2). |
 | `file-inputs.js` | 58 | Bounded UTF-8 file drops and picker imports into editable drafts, with project and surface guards; wired by Home, Vibe and Plans. |
 | `agents.js` / `agents.css` | 898 · 225 | The Agents workspace: relocated setup controls, scoped drafts, presets and shared operational state, and the Rules card in Team & models (live character and token counters, the two file switches, its own Save and Discard). |
+| `team-models.js` / `team-models.css` | 985 · 189 | `window.MefiTeamModels`: Team › Seats and models in the 0.5 layout as a plain page (Right now, How Studio decides, Who does what, the report card from `team:report`, How thinking works) over the detailed cards, which `agents.js` folds under More settings; and Team › Providers' "Use one provider for everything" and "Your subscriptions" cards. Edits go through the team draft (Apply changes); Try it / Stop call `team:kind-route` at once. Bundled before `agents.js`. |
 | `studio-ui.js` / `studio-ui.css` | 491 | Scrollbar-free overflow, accessible dropdowns, shared appearance presets and shared glass surface recipes. The stylesheet follows the base page styles; component styles keep their layout and semantic status colours. |
 | `companion-ui.js` / `companion-ui.css` | 384 | The stable adaptive companion panel: hover ownership, dragging, pinning and safe edge roaming. |
 | `companion-hub.js` / `companion-hub.css` | 481 | The shared glowing wisp, ASCII reactions (a plain check without faces), bounded particle bursts, thinking state, petting, idle play and dozing, the setup companion, and the accessible glass bubble menu (Talk, What I'm doing, Needs you, Suggest work, Friends, Personality). It reuses the existing chat, requests, inbox, backlog picks, room connections and audio-link state. |
@@ -483,17 +486,11 @@ commit rewrites the JSON view as well.
 - **The layout contract** (room for a session list, an inspector, a tab strip and
   a status bar; `docs/unified-studio.md`) is pinned by
   `layout_contract_nav.test.mjs` (the one writer of `html[data-layout]` and
-  `data-layout-fold`, the launch choice, the clamps and the 320 px budget, the
-  fold, `usable()` in v1 and v2, the events), `layout_contract_css.test.mjs`
-  (every moved declaration evaluated as CSS would: unchanged in v1, moved by
-  exactly its region in v2; every remaining raw `--shell-rail-w` or
-  `--shell-local-h` read named) and `layout_contract_render.test.mjs` with
-  `fixtures/layout-contract-electron.cjs`, `layout-contract-v2.cjs` and
-  `layout-contract-floats.cjs` (real Chromium, about five minutes: every page and
-  sheet against `layout-contract-v1.json`, the geometry recorded on the base
-  commit, then in v2 at eight window and mode combinations, with real pointer
-  drags of the media window and the orb). `layout-contract-ledger.json` lists the
-  74 declarations that moved.
+  `data-layout-fold`, the clamps and the 320 px budget, the fold, `usable()`,
+  the events) and `layout_contract_css.test.mjs` (every moved declaration
+  evaluated as CSS would: unchanged with the regions at 0, moved by exactly its
+  region otherwise; every remaining raw `--shell-rail-w` or `--shell-local-h`
+  read named). `layout-contract-ledger.json` lists the 73 declarations that moved and are still there.
 - **Size and density** is pinned by `size_model.test.mjs` (limits and steps, the
   old stores, launch painting, Apply/Undo/Reset, broken storage, events),
   `size_page.test.mjs` (the page and its miniature: every combination of the four

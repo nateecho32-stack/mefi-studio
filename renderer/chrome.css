@@ -179,7 +179,6 @@ html[data-studio-theme="chrome"] :is(.sx-switch button:not(.on), .sx-modes butto
    1px and the border's own colour is the other: that border is drawn only if the image cannot be.
    The rail's current place (Build's rail; Vibe's keeps its chrome rim). */
 html[data-studio-theme="chrome"] #app-rail [aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 2px 0 0 var(--chrome-edge), var(--chrome-top); border-image: var(--chrome-holo-bar) 0 0 0 1 / 7px 0 7px 2px; }
-html[data-studio-theme="chrome"] #app-rail .app-rail-compose { background: rgb(255 255 255 / .04); box-shadow: inset 0 0 0 1px var(--chrome-rim), var(--chrome-top); }
 html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] { background: rgb(255 255 255 / .045); box-shadow: inset 0 0 0 1px var(--chrome-rim-hi), var(--chrome-top); }
 html[data-studio-theme="chrome"] .vibe-rail button[aria-current="page"] .glyph { color: var(--chrome-edge); }
 html[data-studio-theme="chrome"] #app-rail .app-rail-brand .monogram { background: var(--chrome-metal); color: var(--chrome-ink); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -1px 0 rgb(0 0 0 / .25), 0 1px 3px rgb(0 0 0 / .5); }
@@ -191,15 +190,11 @@ html[data-studio-theme="chrome"] :is(.sx-row:hover, .sx-row:focus-within):not([d
 html[data-studio-theme="chrome"][data-frame] #palette-overlay #palette-list li.palette-row.active { background: rgb(255 255 255 / .06); box-shadow: inset 2px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-glass-edge); border-image: var(--chrome-holo-bar) 0 0 0 1 / 10px 0 10px 2px; }
 html[data-studio-theme="chrome"] .studio-choice-option[aria-selected="true"] { border-left-color: var(--chrome-edge); background: rgb(255 255 255 / .05); box-shadow: inset 1px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
 html[data-studio-theme="chrome"] .studio-choice-popup[data-layout="tiles"] .studio-choice-option[aria-selected="true"] { border-color: transparent; border-left-color: var(--chrome-edge); box-shadow: inset 1px 0 0 var(--chrome-edge), inset 0 0 0 1px var(--studio-edge-active); }
-html[data-studio-theme="chrome"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { background: rgb(255 255 255 / .05); box-shadow: inset 2px 0 0 var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo-bar) 0 0 0 1 / 6px 0 6px 2px; }
 /* The underline tabs: the holo on the 2px edge they draw (border-image <holo> 0 0 1 0 / 0 0 2px 0), its plain chrome colour under it. */
 html[data-studio-theme="chrome"] :is(.sx-ptab.on, .sx-itab.on) { border-bottom-color: var(--chrome-edge); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
-html[data-studio-theme="chrome"] #app-local-nav .app-local-link[aria-current="page"] { background: transparent; border-bottom-color: var(--chrome-edge); color: var(--ivory); border-image: var(--chrome-holo) 0 0 1 0 / 0 0 2px 0; }
 /* Vibe rounds these further (vibe.css): the same edges, kept clear of its corners; the local navigation's pill keeps
    its own rim and takes the line along its straight foot. */
 html[data-studio-theme="chrome"][data-ui-mode="vibe"] .studio-choice-option[aria-selected="true"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
-html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .agents-nav-subsections .app-local-link[aria-current="page"] { border-image: var(--chrome-holo-bar) 0 0 0 1 / 12px 0 12px 2px; }
-html[data-studio-theme="chrome"][data-ui-mode="vibe"] #app-local-nav .app-local-link[aria-current="page"]:not(.agents-nav-subsections *) { border-image: var(--chrome-holo) 0 0 1 0 / 0 19px 2px 19px; }
 /* The open tab: its plain chrome foot round the corners, the holo along the straight run, inside its ring. */
 html[data-studio-theme="chrome"] .ts-item[data-active] { background: rgb(255 255 255 / .05); box-shadow: inset 0 0 0 1px var(--studio-glass-edge), inset 0 -2px 0 var(--chrome-edge), inset 0 2px var(--studio-glass-highlight); border-image: var(--chrome-holo) 0 0 1 0 / 0 9px 2px 9px; }
 html[data-studio-theme="chrome"] .ts-item[data-active] .ts-ico { color: var(--chrome-edge); }
@@ -225,7 +220,6 @@ html[data-studio-theme="chrome"] .vibe-aurora.three { background: radial-gradien
 html[data-studio-theme="chrome"][data-frame] :is(.shell-top, .shell-tabs) { background: var(--bg); }
 html[data-studio-theme="chrome"][data-frame] .shell-top { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
 html[data-studio-theme="chrome"] .ts-strip { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
-html[data-studio-theme="chrome"] #app-local-nav { border-image: var(--chrome-holo-hairline) 0 0 1 0 / 0 0 1px 0; }
 html[data-studio-theme="chrome"][data-frame] .shell-column:not([data-state="drawer"]) { background: color-mix(in srgb, #0d0d10 94%, transparent); }
 html[data-studio-theme="chrome"][data-frame] .shell-status { background: #0d0d10; box-shadow: inset 0 1px 0 rgb(255 255 255 / .03); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 0 0 0; }
 html[data-studio-theme="chrome"][data-frame] :is(.shell-search, .shell-icon-btn, .shell-pill:not([data-tone="need"])) { border-color: rgb(255 255 255 / .1); box-shadow: var(--chrome-top); }
@@ -239,7 +233,7 @@ html[data-studio-theme="chrome"][data-frame] :is(.shell-split:hover, .shell-spli
 /* Floating menus: the holo hairline along the top edge, kept clear of the corners; the rim the border drew is an inset
    ring. Vibe's own menu rim (a wider radius and a ring of its own in the float shadow) and menus whose header paints
    over their edge, like the media menu's, keep their plain rim. */
-html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"])[data-studio-style] :is(.palette-sheet, .studio-choice-popup, .surface-tools-menu, .studio-more-links) { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
+html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"])[data-studio-style] :is(.palette-sheet, .studio-choice-popup, .surface-tools-menu) { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
 html[data-studio-theme="chrome"]:not([data-ui-mode="vibe"]) .ts-pop { box-shadow: inset 0 0 0 1px var(--studio-glass-edge), var(--studio-float-shadow); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
 html[data-studio-theme="chrome"] .today-inbox { box-shadow: inset 0 0 0 1px var(--t-edge), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }
 html[data-studio-theme="chrome"] :is(.sx-menu, .sx-runmenu) { box-shadow: inset 0 0 0 1px var(--hairline-strong), inset 0 1px var(--studio-glass-highlight), var(--shadow-3); border-image: var(--chrome-holo-hairline) 1 0 0 0 / 1px 18px 0 18px; }

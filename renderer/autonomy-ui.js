@@ -206,10 +206,14 @@
     root.append(tabs, body); paint();
     if (!learned) void refresh({ learning: true }).then(paint);
   }
+  // The model with the best checked record on one kind of job here. Coding
+  // attempts are filed as coding-<intent> (implement, explore, analyze,
+  // document), never "fix", so a fix/repair/debug filter matched nothing.
   function best() {
-    const rows = (learned?.skills?.project || []).filter((row) => /fix|repair|debug/.test(row.taskType));
+    const rows = (learned?.skills?.project || []).filter((row) => Number(row.n) >= 5);
     const row = [...rows].sort((a, b) => b.p - a.p || b.n - a.n)[0];
-    return row ? `Best at fixes here: ${row.model} · ${row.wins} of ${row.n}` : "Model strengths appear as your team finishes work.";
+    const kind = words(String(row?.taskType ?? "").replace(/^coding-?/, "")) || "coding";
+    return row ? `Best here: ${row.model} at ${kind} · ${row.wins} of ${row.n}` : "Model strengths appear as your team finishes work.";
   }
   // The same choice the mode buttons make (autonomy:set with a level), from anywhere: Search's "Set permission mode" rows. It says
   // what it did in a toast, since the place it was chosen from has gone by then.

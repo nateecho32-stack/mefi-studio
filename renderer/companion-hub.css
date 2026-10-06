@@ -395,7 +395,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 #friends-overlay[hidden] { display: none; }
 /* The page's fill is the theme's glass (--studio-page-fill, mostly clear in Chrome), so what it stands over must not read
    through: the content under it steps aside while it shows, as under a workspace page (studio-ui.css). The frame stays. */
-body:has(#friends-overlay:not([hidden])) > :is(header, main, #tabs, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
+body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
 #friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
 #friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
@@ -410,9 +410,4 @@ body:has(#friends-overlay:not([hidden])) > :is(header, main, #tabs, #tree-rail),
 #friends-overlay .friends-place-more { display: flex; flex-wrap: wrap; gap: 8px; }
 /* The places as tabs, and a Close button, where the 0.5 layout's list column does not list them (the classic layout). */
 #friends-overlay .friends-place-head { position: relative; padding-right: 96px; }
-#friends-overlay .friends-place-close { position: absolute; top: 0; right: 0; }
-#friends-overlay .friends-place-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 12px; border-bottom: 1px solid var(--hairline); }
-#friends-overlay .friends-place-tab { min-height: 34px; padding: 6px 14px; border-radius: 999px; font-size: var(--f135, 13.5px); }
-#friends-overlay .friends-place-tab.active { border-color: var(--gold); color: var(--gold-bright); background: color-mix(in srgb, var(--gold) 12%, transparent); }
-html[data-layout="v2"] #friends-overlay :is(.friends-place-tabs, .friends-place-close) { display: none; }
 html[data-layout="v2"] #friends-overlay .friends-place-head { padding-right: 0; }

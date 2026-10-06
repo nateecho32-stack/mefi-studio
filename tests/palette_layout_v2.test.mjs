@@ -1,9 +1,9 @@
-// Search (Ctrl K) in the 0.5 layout (renderer/palette.js, "the 0.5 layout"): the prototype's
-// palette (docs/prototype/mefi-studio-0.5-v5.html) over the same registry, keys, Recent and
-// "task ..." as v1. The empty box is Recent, the sessions that matter, the rail's places and the
-// actions marked for it, twelve rows; a search reaches sessions with their state, the backlog,
-// pages, actions, Layout, Tabs and Permission mode; each row is an icon, a name and its state or
-// key on the right. v1 is pinned by palette_keyboard.test.mjs. Fake DOM: fixtures/renderer-dom.mjs.
+// Search (Ctrl K) as the 0.5 prototype has it (renderer/palette.js, "the prototype's Search";
+// docs/prototype/mefi-studio-0.5-v5.html), the only look it has. The empty box is Recent, the
+// sessions that matter, the rail's places and the actions marked for it, twelve rows; a search
+// reaches sessions with their state, the backlog, pages, actions, Layout, Tabs and Permission mode;
+// each row is an icon, a name and its state or key on the right. The keys, Recent and "task ..."
+// are pinned by palette_keyboard.test.mjs. Fake DOM: fixtures/renderer-dom.mjs.
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
@@ -19,7 +19,7 @@ const now = Date.now();
 const SECTIONS = { home: "Home", work: "Work", agents: "Agents", friends: "Friends", settings: "Settings", help: "Help" };
 const RANKS = Object.keys(SECTIONS);
 
-// The registry as the 0.5 layout fills it: the places' pages, a few pages of their own, and the actions the frame, the
+// The registry as Studio fills it: the places' pages, a few pages of their own, and the actions the frame, the
 // session panels, the inbox, the strip and the permission mode register (their paletteGroup, paletteBrowse and paletteHint).
 function registry({ level = "auto" } = {}) {
   const page = (id, label, section, more = {}) => ({ id, label, kind: "overlay", section, showIn: { palette: true }, ...more });
@@ -64,9 +64,8 @@ function memoryStorage(seed = {}) {
   return { map, getItem: (key) => (map.has(key) ? map.get(key) : null), setItem: (key, value) => map.set(key, String(value)), removeItem: (key) => map.delete(key) };
 }
 
-function environment({ layout = "v2", board = true, destinations = registry(), storage = memoryStorage(), tasksList = null } = {}) {
+function environment({ board = true, destinations = registry(), storage = memoryStorage(), tasksList = null } = {}) {
   const { document, get } = createDom({ ids: ["palette-overlay", "palette-input", "palette-list", "palette-close", "palette-status", "palette-hint"] });
-  if (layout) document.documentElement.dataset.layout = layout;
   const overlay = get("palette-overlay"), input = get("palette-input"), list = get("palette-list"), close = get("palette-close"), status = get("palette-status"), hint = get("palette-hint");
   overlay.hidden = true;
   input.placeholder = "Find a tool, task, or setting…";
@@ -106,7 +105,7 @@ function environment({ layout = "v2", board = true, destinations = registry(), s
   return { palette: window.MefiPalette, window, document, overlay, input, list, close, status, hint, row, key, type, shown, rows, routes, calls, storage };
 }
 
-test("in the 0.5 layout the empty box is twelve rows: the sessions that matter, the rail's places, then the actions marked for it, under one heading each", async () => {
+test("the empty box is twelve rows: the sessions that matter, the rail's places, then the actions marked for it, under one heading each", async () => {
   const env = environment();
   env.palette.open();
   await settle();
@@ -195,7 +194,7 @@ test("Enter runs the row: a session through the router (the session panels take 
   assert.equal(env.shown().filter((row) => Array.isArray(row) && row[1] === "Add an empty state to the notes list").length, 1, "and is not listed twice");
 });
 
-test("the box, the footer and Close read as the prototype's; the count stays for a screen reader; v1 gets its own back", async () => {
+test("the box, the footer and Close read as the prototype's, and read the same each time Search opens", async () => {
   const env = environment();
   env.palette.open();
   await settle();
@@ -209,18 +208,17 @@ test("the box, the footer and Close read as the prototype's; the count stays for
   env.type("task Write the release notes");
   assert.deepEqual(env.shown()[1], ["Create", "Add task: “Write the release notes”", "Enter", "#g-add"]);
   env.key("Escape");
-  // The layout goes off: the next look is v1's again.
-  delete env.document.documentElement.dataset.layout;
+  // Opening again dresses the same box: one magnifier, the same words, still no Close.
   env.palette.open();
   await settle();
-  assert.equal(env.input.placeholder, "Search · “task …” or “idea …” to add");
-  assert.equal(env.close.hidden, false);
-  assert.equal(env.hint.textContent, "↑ ↓ to choose · Enter to open · Esc to close");
-  assert.equal(env.row.querySelector(".palette-search-glyph"), null);
-  assert.equal(env.list.children.some((node) => node.classList.contains("palette-heading")), false, "v1 rows have no headings");
+  assert.equal(env.row.querySelectorAll(".palette-search-glyph").length, 1, "the magnifier is not added twice");
+  assert.equal(env.input.placeholder, "Search, or type “task …” or “idea …” to add one");
+  assert.equal(env.close.hidden, true);
+  assert.deepEqual(env.hint.querySelectorAll("kbd").map((node) => node.textContent), ["↑", "↓", "Enter", "Esc"]);
+  assert.equal(env.list.children.some((node) => node.classList.contains("palette-heading")), true, "the rows sit under their headings");
 });
 
-test("sessions come from the board Home already holds: no read of its own while there is one, v1's read when there is none", async () => {
+test("sessions come from the board Home already holds: no read of its own while there is one, tasks:list when there is none", async () => {
   const env = environment();
   env.palette.open();
   await settle();

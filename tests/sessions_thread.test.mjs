@@ -584,7 +584,7 @@ test("an Ask goes to Mefi about this task with its context and shows the questio
   await type(a, "How far along is it?"); await submit(a);
   const call = a.api.of("assistantMessage")[0];
   assert.equal(call[1], 'About the task "Export as Markdown" (t1): How far along is it?'); assert.equal(call[2], "p1");
-  assert.deepEqual(clean(call[3]), { view: "Build · task", companion: "Mefi", taskId: "t1" });
+  assert.deepEqual(clean(call[3]), { view: "Studio · task", companion: "Mefi", taskId: "t1" });
   assert.equal(call.length, 4, "no pictures: no fifth argument");
   const item = a.all("main", ".sx-feed .is-ask").at(-1);
   assert.match(item.textContent, /How far along is it\?/); assert.match(item.textContent, /It is half done\./);

@@ -93,7 +93,8 @@ app.whenReady().then(async () => {
   }
   await run("await window.MefiPlanning.open({create:true});");
   await until("document.getElementById('plans-title')");
-  report.initialLayout = await run("const workflow=document.getElementById('plans-workflow').getBoundingClientRect(),save=document.getElementById('plans-save-details'),rect=save.getBoundingClientRect();return {workflowHeight:workflow.height,saveVisible:rect.bottom<innerHeight&&document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)===save};");
+  report.initialLayout = await run("const workflow=document.getElementById('plans-workflow').getBoundingClientRect(),save=document.getElementById('plans-save-details'),rect=save.getBoundingClientRect(),hit=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);return {workflowHeight:workflow.height,saveVisible:rect.bottom<innerHeight&&hit===save,save:{x:rect.x,y:rect.y,w:rect.width,h:rect.height,b:rect.bottom},inner:{w:innerWidth,h:innerHeight},hit:hit?(hit.id||String(hit.className)).slice(0,60):null};");
+  if (!report.initialLayout.saveVisible) await capture("planning-initial-failure.png");
   assert.ok(report.initialLayout.workflowHeight < 180, "the stage header leaves room to write");
   assert.ok(report.initialLayout.saveVisible, "the initial destination form fits the desktop window");
   report.stepCards = await run("const cards=[...document.querySelectorAll('.planning-flow-stage')];return {icons:cards.map(card=>card.querySelector('use').getAttribute('href')),validIcons:cards.every(card=>document.querySelector(card.querySelector('use').getAttribute('href'))),entrance:cards.some(card=>card.getAnimations().some(animation=>animation.effect.getTiming().duration===260)),compact:cards.every(card=>card.getBoundingClientRect().height<=60)};");
@@ -188,7 +189,9 @@ app.whenReady().then(async () => {
   // colours to prove the glass is visible through every ancestor's paint.
   await run("window.MefiPlanning.close();await window.MefiNav.go('command');await window.MefiIdle.ready();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));await window.MefiPlanning.open({create:true});document.getElementById('plans-mode-assisted').click();document.getElementById('plans-help-write').click();");
   report.backdrop = await run("return {status:window.MefiTree.status(),message:window.MefiTree.statusText(),nodes:window.MefiIdle.debugNodes().length,hudHidden:getComputedStyle(document.getElementById('idle-hud')).visibility==='hidden',canvasVisible:getComputedStyle(document.getElementById('idle-layer-far')).visibility==='visible'};");
-  assert.ok(report.backdrop.hudHidden && report.backdrop.canvasVisible, "glass reveals the background without another page's controls");
+  // One page at a time in the 0.5 frame (shell.css, body[data-sheet]): over the Map, Plans is the page, so the Map's tree and its
+  // controls step aside under it instead of reading through the glass. The glass itself is still proved below, over a backdrop of its own.
+  assert.ok(report.backdrop.hudHidden && !report.backdrop.canvasVisible, `Plans over the Map shows neither the Map's controls nor its tree: ${JSON.stringify(report.backdrop)}`);
   await until("document.getElementById('plans-use-suggestion-0')&&!document.getElementById('plans-use-suggestion-0').disabled");
   await run("document.getElementById('plans-destination').focus();");
   await capture("planning-glass-aurora.png");

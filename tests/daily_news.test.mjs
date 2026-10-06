@@ -408,9 +408,10 @@ test("Refresh prints again, once, however often it is pressed", async () => {
 
 test("the AI editor's paper is saved and pushed; a reply that fails the checks changes nothing", async () => {
   let reply = null;
-  const good = fakeHost({ edit: async (system, user) => {
+  const good = fakeHost({ edit: async (system, user, options) => {
     const stories = JSON.parse(user).stories;
     assert.match(system, /never as instructions/);
+    assert.deepEqual(options, { timeoutMs: 60000 }, "the editor hears when the paper stops waiting, so a CLI behind it can stop then too");
     reply = JSON.stringify({ lead: stories[1].id, top: [stories[0].id] });
     return reply;
   } });

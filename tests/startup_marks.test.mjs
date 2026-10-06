@@ -215,7 +215,7 @@ test("main.cjs: app ready, the window and startup:marks are one guarded line eac
   const made = create.indexOf("window = new BrowserWindow({");
   const watched = create.indexOf(`${guard} startupMarks.watch(window.webContents);`);
   assert.ok(made >= 0 && watched > made && watched < create.indexOf("loadView().catch("), "watched as soon as the window exists, before the page loads");
-  assert.match(create, /smoke: SMOKE \? "1" : "0", \.\.\.layoutQuery\(\), \.\.\.\(typeof startupMarks !== "undefined" && startupMarks \? \{\} : \{ marks: "0" \}\) \}/);
+  assert.match(create, /smoke: SMOKE \? "1" : "0", \.\.\.\(typeof startupMarks !== "undefined" && startupMarks \? \{\} : \{ marks: "0" \}\) \}/);
   assert.match(main, /ipcMain\.handle\("startup:marks", \(_event, payload\) => \(typeof startupMarks !== "undefined" && startupMarks \? startupMarks\.receive\(payload\) : \{ ok: false/);
   assert.match(preload, /startupMarks: \(payload\) => ipcRenderer\.invoke\("startup:marks", payload \?\? \{\}\),/);
   assert.ok(main.includes('"startup:"'), "startup:* channels are app-wide, never held by a project switch");

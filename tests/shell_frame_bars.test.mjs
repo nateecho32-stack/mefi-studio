@@ -61,12 +61,12 @@ test("the Vibe | Build switch is a radiogroup that calls MefiVibe's own setter, 
   const page = loadShell({});
   const group = page.region("top").querySelector(".mode-switch");
   assert.equal(group.getAttribute("role"), "radiogroup");
-  assert.equal(group.getAttribute("aria-label"), "Studio mode");
+  assert.equal(group.getAttribute("aria-label"), "Mode");
   const [vibe, build] = group.querySelectorAll("button");
   assert.deepEqual([vibe.getAttribute("role"), build.getAttribute("role")], ["radio", "radio"]);
   assert.deepEqual([vibe.dataset.uiMode, build.dataset.uiMode], ["vibe", "build"], "the two values MefiVibe already has; no new uiMode");
   assert.deepEqual([vibe.getAttribute("aria-checked"), build.getAttribute("aria-checked"), group.dataset.mode], ["false", "true", "build"]);
-  assert.deepEqual([vibe.getAttribute("aria-label"), build.getAttribute("aria-label")], ["Vibe", "Build"], "named without their words, which a small bar hides");
+  assert.deepEqual([vibe.getAttribute("aria-label"), build.getAttribute("aria-label")], ["Social", "Studio"], "named without their words, which a small bar hides");
   assert.deepEqual([vibe.tabIndex, build.tabIndex], [-1, 0], "one tab stop, on the mode that is on");
   let stopped = 0, prevented = 0;
   await vibe.click({ stopPropagation: () => { stopped += 1; }, preventDefault: () => { prevented += 1; } });
@@ -261,26 +261,13 @@ test("the page list: on a page of a section with pages, the list column lists th
   assert.equal(pages.hidden, true);
 });
 
-test("the page list draws Agents' sections and views, from agents.js, so every pane and tab is still a press away", async () => {
+test("a page of the agents section outside Team's places lists the section's own routes, as any section does", async () => {
   const page = withPages({ current: "command" });
-  const ran = [];
-  page.window.MefiAgents = { navModel: (id) => [
-    { id: "overview", label: "Overview", current: false, run: () => ran.push("overview"), views: [] },
-    { id: "live", label: "Live", current: id === "command", run: () => ran.push("live"), views: [{ label: "Command", current: id === "command", run: () => ran.push("command") }, { label: "Fleet", current: false, run: () => ran.push("fleet") }] },
-  ] };
-  page.window.dispatchEvent({ type: "mefi:nav" });
-  const pages = page.$("shell-pages");
-  assert.equal(pages.querySelector(".shell-pages-title").textContent, "Agents");
-  assert.deepEqual(pages.querySelector(".shell-pages-list").children.map((node) => [node.tagName.toLowerCase(), node.textContent]), [["button", "Overview"], ["h3", "Live"], ["button", "Command"], ["button", "Fleet"]], "a section with views is a heading over them");
-  const rows = pages.querySelectorAll(".shell-page");
-  assert.deepEqual(rows.map((node) => node.getAttribute("aria-current")), [null, "page", null]);
-  assert.ok(rows.slice(1).every((node) => node.className.includes("is-sub")));
-  await rows[2].click();
-  assert.deepEqual(ran, ["fleet"], "each goes where the classic bar's menu went");
-  // Without agents.js's model the section's own routes stand in.
-  delete page.window.MefiAgents;
+  // agents.js has no classic sections to draw any more: the section's routes (LOCAL_ROUTES) are its list.
+  page.window.MefiAgents = { teamPlaces: () => null };
   page.history = { canBack: false, canForward: true };
   page.window.dispatchEvent({ type: "mefi:nav" });
+  const pages = page.$("shell-pages");
   assert.equal(pages.querySelectorAll(".shell-page").length, 0, "agents and command are not in this registry: nothing to list");
   assert.equal(pages.hidden, true);
 });
@@ -389,7 +376,6 @@ test("Team in the list column: agents.js's places under the prototype's headings
     teamPlaces: () => [place("overview", "Overview"), place("providers", "Providers"), place("rules", "Rules", "Context for agents"), place("skills", "Skills", "Context for agents", [view("Skills")]),
       place("flows", "Workflows", "Context for agents", [view("Brain maps"), view("Context")]), place("models", "Models", "Monitor", [view("Catalog", true), view("Performance")], true), place("inspect", "Inspect", "Monitor", [view("Sessions"), view("Trace")])],
     teamPlace: () => ({ id: "models", label: "Models" }),
-    navModel: () => { throw new Error("the classic sections are not asked for"); },
   };
   page.window.dispatchEvent({ type: "mefi:nav" });
   assert.equal(page.$("shell-pages").querySelector(".shell-pages-title").textContent, "Team");
@@ -512,7 +498,7 @@ test("Search lists what the frame can do, worded for what a press does now, and 
     assert.equal(row.hidden(), false);
   }
   assert.deepEqual(Object.values(rows).map((row) => [row.label, row.chord ?? null, row.paletteGroup, row.paletteBrowse ?? null]), [
-    ["Switch to Vibe", "Ctrl M", "Actions", 4], ["Pause new work", null, "Actions", 2], ["Hide the list", "Ctrl B", "Layout", null], ["Hide the inspector", "[", "Layout", null], ["Reset layout", null, "Layout", null],
+    ["Switch to Social", "Ctrl M", "Actions", 4], ["Pause new work", null, "Actions", 2], ["Hide the list", "Ctrl B", "Layout", null], ["Hide the inspector", "[", "Layout", null], ["Reset layout", null, "Layout", null],
   ]);
   // Each runs what the bar's own control runs, and the words follow.
   rows["shell-do-list"].run();
@@ -523,7 +509,7 @@ test("Search lists what the frame can do, worded for what a press does now, and 
   assert.equal(rows["shell-do-list"].label, "Hide the list");
   rows["shell-do-mode"].run();
   assert.deepEqual(page.calls.vibe.at(-1), ["vibe", { go: true }], "from Home to Home, as the switch does");
-  assert.equal(rows["shell-do-mode"].label, "Switch to Build");
+  assert.equal(rows["shell-do-mode"].label, "Switch to Studio");
   assert.equal(rows["shell-do-mode"].glyph, "g-wrench");
   let clicks = 0;
   page.$("workspace-pause").click = () => { clicks += 1; };
@@ -611,9 +597,10 @@ test("the frame never reaches for setInterval, and its only timer is the 60 ms c
   const source = await readFile(new URL("../renderer/shell.js", import.meta.url), "utf8");
   absent(source, /setInterval|requestIdleCallback|new Worker|fetch\(|XMLHttpRequest|window\.mefiStudio\??\.[a-z][A-Za-z]*\(/, "no poll, no network, no host call made by name");
   const timeouts = [...source.matchAll(/setTimeout\(/g)].length;
-  // The third is the player's time left, once a second only while something plays and the window can be seen (the owner's
-  // pick, 2026-10-05); the usage meters ride on the repaints the frame makes anyway.
-  assert.equal(timeouts, 3, "the feed's coalescer, the layout switch's reload delay and the player's time left");
+  // The second is the player's time left, once a second only while something plays and the window can be seen (the owner's
+  // pick, 2026-10-05); the usage meters ride on the repaints the frame makes anyway. The layout switch's reload delay went
+  // with the switch (0.5.0: the 0.5 layout is the only one).
+  assert.equal(timeouts, 2, "the feed's coalescer and the player's time left");
 });
 
 test("the need pill and the waiting item open the inbox through MefiShell.onInbox first, then MefiToday, then Work's own views", async () => {
@@ -824,7 +811,7 @@ test("the Layout menu: switches for the list, the inspector and the tab strip, e
   assert.equal(menu.getAttribute("role"), "dialog");
   assert.equal(menu.getAttribute("aria-label"), "Layout");
   assert.equal(button.getAttribute("aria-expanded"), "true");
-  assert.match(say(menu), /Build mode/);
+  assert.match(say(menu), /Studio mode/);
   const switches = menu.querySelectorAll('[role="switch"]');
   assert.deepEqual(switches.map((node) => [node.dataset.key, node.getAttribute("aria-checked")]), [["list", "true"], ["inspector", "true"], ["tabs", "true"]]);
   await switches[0].click();
@@ -835,7 +822,7 @@ test("the Layout menu: switches for the list, the inspector and the tab strip, e
   await switches[2].click();
   assert.equal(shell.isOpen("tabs"), true);
   const grid = menu.querySelector(".shell-menu-grid");
-  assert.deepEqual(grid.children.map(say), ["", "Build", "Vibe", "List", "closed", "closed", "Inspector", "388 px", "closed"], "both modes' layouts side by side: Build's list was just closed");
+  assert.deepEqual(grid.children.map(say), ["", "Studio", "Social", "List", "closed", "closed", "Inspector", "388 px", "closed"], "both modes' layouts side by side: Studio's list was just closed");
   shell.resize("inspector", 500);
   assert.equal(say(menu.querySelector(".shell-menu-grid").children[7]), "500 px", "and it follows a resize");
   // The buttons at the foot.
@@ -849,8 +836,8 @@ test("the Layout menu: switches for the list, the inspector and the tab strip, e
   assert.deepEqual(page.calls.go.at(-1), ["worktrees"]);
   await button.click();
   await page.$("shell-menu").querySelectorAll(".shell-action")[0].click();
-  assert.equal(shell.isOpen("list"), true, "Reset layout put Build's preset back");
-  assert.equal(page.toasts.at(-1)[0].startsWith("Layout reset for Build"), true);
+  assert.equal(shell.isOpen("list"), true, "Reset layout put Studio's preset back");
+  assert.equal(page.toasts.at(-1)[0].startsWith("Layout reset for Studio"), true);
   assert.equal(page.document.activeElement, button, "and focus is back on the Layout button");
 });
 
@@ -874,8 +861,8 @@ test("the Layout menu closes on Escape, on a press outside, on the button again 
   const button = item(page, "layout");
   const open = async () => { button.focus(); if (!page.$("shell-menu")) await button.click(); return page.$("shell-menu"); };
   let menu = await open();
-  assert.match(say(menu), /Vibe mode/, "the menu says which mode's layout it is changing");
-  assert.deepEqual(menu.querySelector(".shell-menu-grid").children.map(say), ["", "Build", "Vibe", "List", "280 px", "closed", "Inspector", "388 px", "closed"]);
+  assert.match(say(menu), /Social mode/, "the menu says which mode's layout it is changing");
+  assert.deepEqual(menu.querySelector(".shell-menu-grid").children.map(say), ["", "Studio", "Social", "List", "280 px", "closed", "Inspector", "388 px", "closed"]);
   await page.press(menu.querySelector(".shell-menu-head"));
   assert.ok(page.$("shell-menu"), "a press inside the menu keeps it");
   await page.press(button);

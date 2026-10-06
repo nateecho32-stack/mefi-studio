@@ -21,18 +21,47 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   the companion's bubble labels are 12 px, Play and Star buttons name their
   project for screen readers, the tab switches move with the arrow keys, and
   Search finds The Lobby, the Project hub and moderation.
-- **Friends looks and feels like a chat app.** An open room now fills the
-  page: one header with the room's name, faces of who is here, Listen
-  together and a ⋯ menu (invite code, invite by name, lock, close or leave),
-  the conversation growing above one message box that stays at the bottom.
-  Enter sends and Shift+Enter starts a new line; Report and Delete wait in a
-  small ⋯ on each message; a mention of someone Studio can't name reads
-  "@someone". Rooms are cards with a New room button, the Rooms and Project
-  hub switches show which view is chosen, Rooms and the Project hub have
-  their own icons (and so does every Friends tab), and The Lobby updates
-  within seconds when a friend arrives or leaves. The Playground says what
-  friends see in one plain sentence. It all fits from a small window at 150%
-  to 1920x1080, in dark and light colours.
+- **Vibe is now Social, Build is now Studio.** The two modes have new names
+  for what they are for: **Social** is vibing with friends and keeping a
+  light eye on your agents, **Studio** is in-depth building, with the social
+  features still there. The switch at the top, Search ("Switch to Studio"),
+  the keys sheet, Settings ("Always start in Social") and the Size page say
+  the new names. Nothing else changes: your saved mode, settings and links
+  carry over as they are.
+- **The window no longer scrolls under a page.** The Model catalog and
+  Settings pages sat, invisible, under Home, the Map, Work's pages and
+  Friends and kept the window three screens tall, so a scroll arrow sat
+  over the status bar and the mouse wheel could scroll the window. They
+  are now left out while another page is on show.
+- **Activity, the permissions menu and the Team card no longer cover or
+  cut their own words.** On Home's chat view, Activity used to lie over the
+  conversation, message box and Send included, at every window width in the
+  0.5 layout; in a window 700 px tall or more it now takes the
+  conversation's place above the box, which stays where it was (a shorter
+  window keeps the drawer). The permissions menu on Today opens below its
+  button over the board instead of up under the bars, with its choices
+  wrapped inside it. The inspector's Team card shows a worker's name with
+  an ellipsis and its state whole (it read "ixture builder … workin g").
+- **Team, Fleet and the Project map fit narrow windows in the 0.5 layout.**
+  With the session list beside them they have less room than the window:
+  Team's seat rows now fold by the page's own width (at 1100 px Effort and
+  Fast mode no longer sit on the provider button), Fleet folds its columns
+  by its own width (so Fit shows the whole team at 1100 px), and in the
+  smallest window at 150% the Project map keeps a map with its zoom
+  controls (it had no room left at all).
+- **Studio is lighter: the classic layout's code is gone.** The classic tab
+  row, sidebar menus, Search rows, Agents navigation, Command toolbar and
+  its Ambience, View and Agent settings pop-overs, and the companion's own
+  Friends section are removed, about 2,600 lines of Studio's own code. Every control
+  they held already has its place in the 0.5 layout (Settings › Map look
+  and Sound and music, Team › Overview, the Map's View menu, the Friends
+  page). The short "About these controls" note that sat under the old
+  Agent settings is gone with them.
+- **"Start the first task" on an empty Map works again in Build.** It
+  pointed at the classic task box, which the 0.5 layout hides, so it did
+  nothing; it now opens a new task, as N does. The first-run key tips for
+  the Map sit on its bar and its zoom, and Build's on the rail, instead of
+  on hidden controls where they never showed.
 - **Studio's log is kept, and Trace can read back through it.** The studio
   log, the assistant's log and the window's warnings are now saved on this PC
   (in its local app-data folder, never in OneDrive), packed into monthly
@@ -51,6 +80,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   models can bill them as cache reads, and the usage page counts cached input
   from every provider. `MEFI_STUDIO_PROMPT_CACHE=0` (or `ai.promptCache: false`)
   turns it off.
+- **Friends looks and feels like a chat app.** An open room now fills the
+  page: one header with the room's name, faces of who is here, Listen
+  together and a ⋯ menu (invite code, invite by name, lock, close or leave),
+  the conversation growing above one message box that stays at the bottom.
+  Enter sends and Shift+Enter starts a new line; Report and Delete wait in a
+  small ⋯ on each message; a mention of someone Studio can't name reads
+  "@someone". Rooms are cards with a New room button, the Rooms and Project
+  hub switches show which view is chosen, Rooms and the Project hub have
+  their own icons (and so does every Friends tab), and The Lobby updates
+  within seconds when a friend arrives or leaves. The Playground says what
+  friends see in one plain sentence. It all fits from a small window at 150%
+  to 1920x1080, in dark and light colours.
 - **Test runs on one PC take turns.** When several sessions test Studio from
   their own folders at once, `npm test` and the new `npm run test:one --
   tests/x.test.mjs` now wait for their turn instead of starving each other:
@@ -116,6 +157,66 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   in, Studio connects by itself a few seconds after it opens, so friends see
   you online without you opening Friends (untick Show me as online to hide).
   The Lobby is also in the rail's Friends menu and in Search.
+- **Claude Code, Codex and OpenCode now think lightly first and harder when
+  stuck.** Studio never told the coding CLIs how hard to think, so every run
+  used the CLI's default. Every job now starts with light thinking
+  (`--effort` for Claude Code, `model_reasoning_effort` for Codex, `--variant`
+  for OpenCode models that list one). A coding job that fails its check
+  retries one step harder; after two misses a stronger model takes it (the
+  Heavy tier, else Flash to Pro on OpenCode Go and Sonnet to Opus on Claude
+  Code); Max thinking waits for you. Seats and the chat on Claude Code or
+  Codex take a thinking level too. Each attempt's level is written to the
+  model record and the attempt list, and when a harder level keeps working
+  for one kind of job, that kind of job starts there. Team settings:
+  `agentThinking` (mode, step up, ask before Max, try other models). A CLI
+  whose own help does not list the flag gets none, and
+  `MEFI_STUDIO_THINKING_OFF=1` turns the flags off.
+- **A report card, and each kind of coding job on the model that does it
+  best.** Team › Seats and models reads every checked coding task on this PC
+  and says what each model is good and bad at (building features, exploring a
+  codebase, analysing code...). A kind of job the usual model keeps failing
+  gets a suggestion; "Try it" sends the next 5 jobs of that kind to that model,
+  and Studio keeps it for that kind only if it did clearly better. With "Try
+  other models now and then" on and models picked automatically, Studio starts
+  such a trial itself (one at a time, Sonnet on your Claude login first) and
+  says so in the feed. Team setting: `agentKinds`.
+- **Use for the whole studio now covers every project.** A project that had
+  saved its own team kept its old providers; now each one moves to the chosen
+  subscription too (its rules stay), and the message says how many project
+  teams were switched.
+- **A coding CLI is stopped when Studio stops waiting for it.** The Jev
+  stand-in (15 s), the Daily editor (60 s), the chat and the outside-work
+  check gave up on a slow Claude Code or Codex answer while the CLI ran on for
+  up to three minutes on your subscription; now it is stopped then, and that
+  does not count as the tool failing.
+- **The first project map moves to your next login too.** On Claude Code or
+  Codex it ran on the main login only; now a login at its usage limit hands
+  the map to the next one, like every other call, a paused tool is not
+  started for it, and the map's call is counted in Usage.
+- **The scout no longer spends a CLI login on every new task.** A scout on
+  Claude Code, Codex, Grok or Antigravity (as after "Use for the whole
+  studio") started the CLI for each task made from chat and dropped the
+  answer after 8 s; now it makes no call, the task keeps its local code
+  matches, and the log says so once. Scouts on Zen and other keyed routes
+  are unchanged.
+- **Jev stays on your subscription after "Use for the whole studio".** Sorting
+  new work against the board and sizing cards could still go to the Vercel AI
+  Gateway, TypeSafe, Zen or OpenRouter when a Jev key sat in Settings or in
+  your environment; while the team is held to one subscription, the assistant
+  on that subscription answers those questions instead.
+- **Team › Seats and models is simpler.** It opens on who does what in plain
+  words, six choices for how Studio decides (pick models, how hard to think,
+  what a stuck job does, asking before Max, trying other models, subscriptions
+  first), one line per job with its model, what it is good for, its thinking
+  and its results on this PC, the report card, and the steps a stuck job
+  climbs. The how-to sits in small "i" circles, and the detailed cards wait
+  under More settings. Team › Providers starts with "Use one provider for
+  everything" and your subscription logins.
+- **How-to text waits behind a small "i".** In Settings, Size and density,
+  the setup helper and Start here's account step, the longer explanations
+  under a title now sit behind a round "i" beside it: click it (or press
+  Enter or Space), or rest the pointer on it, to read them; Esc or a click
+  elsewhere closes it. Short hints, warnings and status lines stay in view.
 - **Studio times its own launch.** Trace shows one `[startup]` line per
   launch (app ready, first paint, each loading step and when the window was
   ready), and `--startup-report <file>` writes the same as JSON.
@@ -161,12 +262,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - **One page at a time over the Map.** In the 0.5 layout, Fleet, Pipelines,
   Team and the other pages that open over the Map no longer show the Map's
   nodes faintly through the theme's glass.
-- **The 0.5 layout is now the default.** Studio opens in the new layout
+- **The 0.5 layout is Studio's only layout.** Studio opens in it every time
   (Work, Map, Team and Friends on the rail, the session list, tabs and the
-  status bar) unless you chose the classic one before. The classic layout
-  is still one switch away: Settings › You "Try the 0.5 layout", or Search's
-  "Switch layout: 0.5 or classic". `MEFI_STUDIO_LAYOUT=v1` still opens
-  classic for one launch.
+  status bar), whatever was chosen before. The way back to the classic
+  layout is gone: Settings › You no longer has "Try the 0.5 layout",
+  Search no longer offers "Switch layout: 0.5 or classic" or the rail
+  switch, and `MEFI_STUDIO_LAYOUT` and `?layout=` are no longer read. The
+  old choice stays in this PC's storage and does nothing.
 - **The Command view is the Map in the 0.5 layout, as in the prototype.** With
   the new layout on (`?layout=v2`), the Map keeps your sessions in the list
   beside it, and a small bar over the tree holds Map | Fleet | Pipelines,

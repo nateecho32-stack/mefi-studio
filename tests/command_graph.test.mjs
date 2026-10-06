@@ -314,8 +314,8 @@ test("Music, menus, typing, dragging, hidden windows and other views cannot ente
     ({ state }) => { state.rotating = { x: 1 }; },
     ({ state }) => { state.query = "work"; },
     ({ state }) => { state.feedMenuOpen = true; },
-    ({ el }) => { el.pop = { hidden: false }; },
-    ({ el }) => { el.viewPop = { hidden: false }; },
+    ({ el }) => { el.mapPop = { hidden: false }; },
+    ({ document }) => { document.getElementById = (id) => (id === "music-dropdown" ? { hidden: false } : null); },
     ({ document }) => { document.activeElement = { matches: () => true }; },
     ({ document }) => { document.querySelectorAll = () => [{ closest: () => null }]; },
     ({ document }) => { document.hidden = true; },
@@ -446,8 +446,6 @@ const box = (left, top, width, height) => ({ hidden: false, getBoundingClientRec
 function graphContext({ width = 1440, height = 900, chat = false } = {}) {
   const el = {
     width, height,
-    top: box(24, 20, width - 48, 100),
-    bottom: box(200, height - 74, width - 400, 54),
     feed: box(24, 140, 320, height - 240),
     chatLog: box(width - 324, 140, 300, chat ? height - 240 : 64),
   };
@@ -499,13 +497,13 @@ test("automatic Overview keeps stable anchors and accurate projection through dy
   }
 });
 
-test("graph uses measured header, activity rail, chat and dock space", () => {
+test("graph uses the measured activity rail and chat space", () => {
   const { env, state } = graphContext({ chat: true });
   const area = env.usableArea();
   assert.equal(area.x, 372);
-  assert.equal(area.y, 140);
+  assert.equal(area.y, 110);
   assert.equal(area.x + area.w, 1088);
-  assert.equal(area.y + area.h, 802);
+  assert.equal(area.y + area.h, 814);
   state.nodes = [{ x: -215, y: 0, z: -215 }, { x: 215, y: 116, z: 215 }];
   env.autoFit();
   for (const node of state.nodes) {
@@ -1309,13 +1307,12 @@ test("cancelled audio requests cannot restore capture after the toggle was switc
 test("audio permission denial is visible and does not repeatedly reopen capture", async () => {
   let requests = 0;
   const state = { active: true, reactive: true, captureArmed: true, audioSource: "mic", inputGeneration: 0, inputPending: null, inputStream: null, inputError: null, bands: {}, audio: {} };
-  const status = { textContent: "" };
-  const env = vm.createContext({ Date, Math, Promise, String, Boolean, window: {}, state, el: { musicStatus: status }, noMotion: () => false, writeStore() {}, ensureAudio() {}, navigator: { mediaDevices: { getUserMedia: () => { requests += 1; return Promise.reject({ name: "NotAllowedError" }); } } } });
+  const env = vm.createContext({ Date, Math, Promise, String, Boolean, window: {}, state, el: {}, noMotion: () => false, writeStore() {}, ensureAudio() {}, navigator: { mediaDevices: { getUserMedia: () => { requests += 1; return Promise.reject({ name: "NotAllowedError" }); } } } });
   vm.runInContext(section("function useReactiveInput()", "function bell("), env);
   env.useReactiveInput();
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(state.inputError, /not allowed/);
-  assert.equal(status.textContent, "Audio unavailable");
+  assert.equal(env.audioStatus().text, "Audio unavailable", "the status the music dropdown and the player read says so");
   env.useReactiveInput();
   assert.equal(requests, 1);
 });
@@ -1375,8 +1372,7 @@ test("the rail retains finishing roles without making queued roles look active",
 
 test("the music node opens the audio dropdown and does not claim Spotify playback is known", () => {
   let opened = 0;
-  const anchor = {};
-  const env = vm.createContext({ String, el: { musicToggle: anchor }, window: { MefiMusic: { status: () => ({ source: "spotify", title: "Spotify playlist", playing: false, externalPlayback: true }), openAudio: (opener) => { assert.equal(opener, anchor); opened += 1; } } }, bumpHud() {} });
+  const env = vm.createContext({ String, el: {}, window: { MefiMusic: { status: () => ({ source: "spotify", title: "Spotify playlist", playing: false, externalPlayback: true }), openAudio: (opener) => { assert.equal(opener, undefined, "the dropdown hangs from its own anchor"); opened += 1; } } }, bumpHud() {} });
   vm.runInContext(section("function musicNodeDetails()", "function syncMusicNode()"), env);
   vm.runInContext(section("function selectNode(", "function select(id)"), env);
   const details = env.musicNodeDetails();
@@ -1436,18 +1432,18 @@ test("Spotify switches and removing the last track disconnect local analysis wit
   assert.equal(captures, 0);
 });
 
-test("reduced motion keeps music meter levels static while retaining truthful audio status", () => {
-  const levels = {};
+test("the audio status is published once per change, with the truthful text, and not on every frame", () => {
+  const events = [];
   const state = { reactive: true, audioSource: "desktop", localAudio: {}, inputError: null, inputPending: null, music: { energy: 0.9 }, bands: { bass: 0.9, mid: 0.6, treble: 0.7 } };
-  const el = {
-    musicStatus: { textContent: "" },
-    musicLevel: { style: { setProperty: (name, value) => { levels[name] = value; } }, children: [0, 1, 2].map((index) => ({ style: { setProperty: (_name, value) => { levels[index] = value; } } })) },
-  };
-  const env = vm.createContext({ Date, Math, Promise, String, Boolean, window: {}, state, el, noMotion: () => true });
+  const env = vm.createContext({ Date, Math, Promise, String, Boolean, JSON, window: { dispatchEvent: (event) => events.push(event) }, CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init.detail; } }, state, el: {}, noMotion: () => true });
   vm.runInContext(section("function renderMusicStatus(", "function bell("), env);
   env.renderMusicStatus(true);
-  assert.equal(el.musicStatus.textContent, "Track linked");
-  assert.deepEqual(levels, { 0: "0", 1: "0", 2: "0", "--music-level": "0" });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "mefi-audio-change");
+  assert.equal(events[0].detail.text, "Track linked");
+  state.bands = { bass: 0.2, mid: 0.1, treble: 0.4 };
+  env.renderMusicStatus(true);
+  assert.equal(events.length, 1, "a new FFT frame with the same connection is not news");
 });
 
 function followContext() {
@@ -1576,8 +1572,6 @@ test("Follow can refit its task and session after a narrower viewport and expand
   const oldFit = state.fit;
   el.width = 1100;
   el.height = 720;
-  el.top = box(24, 20, 1052, 100);
-  el.bottom = box(200, 646, 700, 54);
   el.feed = box(24, 140, 320, 500);
   el.chatLog = box(776, 140, 300, 500);
   state.chatLogOpen = true;

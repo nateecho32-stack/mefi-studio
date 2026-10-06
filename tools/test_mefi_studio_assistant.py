@@ -614,7 +614,7 @@ class MefiStudioAssistantTests(unittest.TestCase):
     # --- static: renderer + docs ---------------------------------------------------------
 
     def test_template_ids(self):
-        for element_id in ("assistant-input", "assistant-send", "assistant-thread", "assistant-activity", "assistant-service", "idle-pill-assistant"):
+        for element_id in ("assistant-input", "assistant-send", "assistant-thread", "assistant-activity", "assistant-service"):
             with self.subTest(element_id=element_id):
                 self.assertIn(f'id="{element_id}"', self.template)
 

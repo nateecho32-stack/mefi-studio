@@ -22,6 +22,7 @@ const taskHandoffs = require("./task-handoffs.cjs");
 const { buildWindowsCmdArgs } = require("./windows-command-line.cjs");
 // Only its pure launch builder (appServerInvocation) runs from here.
 const codexAppServer = require("./codex-harness.cjs");
+const modelLadder = require("./model-ladder.cjs");
 
 const MINUTE_MS = 60 * 1000;
 // A card is parked for a manual reopen at its fifth charged failure.
@@ -790,6 +791,9 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     const args = ["--output-format", "plain", "--always-approve", "--max-turns", "60", "--no-alt-screen", "--verbatim", ...(selected ? ["-m", selected] : []), "--prompt-file", promptFile];
     return { ...binaryLaunch("grok", args, platform, shim), stdio: ["ignore", "pipe", "pipe"], stdin: null, env: route.env, dropped: [] };
   }
+  // `route.effort` is how hard this attempt thinks (the host's builder step,
+  // scripts/model-ladder.cjs): one of the ladder's fixed words, never free text.
+  const thinking = modelLadder.effortArgs(["claude", "codex", "grok", "antigravity"].includes(cli) ? cli : "opencode", route.effort);
   if (cli === "claude") {
     // Claude Code's headless print mode: permission checks bypassed, the
     // prompt on stdin (never cmd's command line), plain text so the sentinel
@@ -799,7 +803,7 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     // --mcp-config takes a list, so it goes last.
     const selected = modelArg(route.model);
     const session = live && SESSION_UUID.test(String(sessionId ?? "")) ? ["--session-id", String(sessionId)] : [];
-    const args = ["-p", "--output-format", ...(live ? ["stream-json", "--verbose", ...session] : ["text"]), "--dangerously-skip-permissions", ...(selected ? ["--model", selected] : []), ...(desk?.claude ? ["--mcp-config", desk.claude] : [])];
+    const args = ["-p", "--output-format", ...(live ? ["stream-json", "--verbose", ...session] : ["text"]), "--dangerously-skip-permissions", ...(selected ? ["--model", selected] : []), ...thinking, ...(desk?.claude ? ["--mcp-config", desk.claude] : [])];
     return { ...shellLaunch("claude", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: [], ...(live ? { stream: "claude" } : {}) };
   }
   if (cli === "codex") {
@@ -810,7 +814,7 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     // With live progress, --json prints its events on stdout as JSONL.
     const selected = modelArg(route.model);
     const mcp = codexMcpArgs(desk?.servers);
-    const args = ["exec", ...(live ? ["--json"] : []), "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never", ...(selected ? ["-m", selected] : []), ...mcp.args, "-"];
+    const args = ["exec", ...(live ? ["--json"] : []), "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never", ...(selected ? ["-m", selected] : []), ...thinking, ...mcp.args, "-"];
     return { ...shellLaunch("codex", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: mcp.dropped, ...(live ? { stream: "codex" } : {}) };
   }
   if (cli === "antigravity") {
@@ -834,7 +838,10 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
   // CLI prints its help and exits 1. Write + end is a clean prompt and a clean
   // EOF. The attachment's path rides the environment, which needs no quoting.
   const env = desk?.opencode ? { ...(route.env ?? {}), OPENCODE_CONFIG: desk.opencode } : route.env;
-  return { command: "cmd.exe", args: ["/d", "/s", "/c", `opencode run --auto${route.modelArgs}`], verbatim: false, stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env, dropped: [] };
+  // --variant is OpenCode's reasoning effort; the host sets route.effort only
+  // to a variant this model lists, since an unknown one fails the run.
+  const variant = thinking.length ? ` ${thinking.join(" ")}` : "";
+  return { command: "cmd.exe", args: ["/d", "/s", "/c", `opencode run --auto${route.modelArgs ?? ""}${variant}`], verbatim: false, stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env, dropped: [] };
 }
 
 // ---- a heavier retry ------------------------------------------------------------------

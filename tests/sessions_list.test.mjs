@@ -421,7 +421,8 @@ test("renderer/nav.js hands a task opened by its id to the thread, and the layou
   const blocks = [...nav.matchAll(/ *\/\/ ---- sessions \(renderer\/sessions\.js\) ----\n([\s\S]*?)\n *\/\/ ---- end of sessions ----/g)].map((match) => match[1]);
   assert.equal(blocks.length, 2, "one in go(), one in applyLayout()");
   assert.ok(nav.indexOf("function go(") < nav.indexOf(blocks[0]) && nav.indexOf(blocks[0]) < nav.indexOf("// In Vibe mode, Home is Vibe"), "the redirect comes first in go(), before anything is closed or opened");
-  assert.ok(nav.indexOf("function applyLayout(") < nav.indexOf(blocks[1]) && nav.indexOf(blocks[1]) < nav.indexOf("function setLayout("), "the switch is the last thing applyLayout() does");
+  const applyAt = nav.indexOf("function applyLayout(");
+  assert.ok(applyAt < nav.indexOf(blocks[1]) && nav.indexOf(blocks[1]) < nav.indexOf("\n  function ", applyAt + 1), "the switch is the last thing applyLayout() does");
   const goBlock = vm.runInNewContext(`(function (window, go, id, params, options) { ${blocks[0]}\n return "fell through"; })`);
   const seen = [];
   const follow = (...args) => { seen.push(args); return "followed"; };

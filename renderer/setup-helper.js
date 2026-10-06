@@ -477,6 +477,8 @@
     if (!chatgptBridge()) return null;
     const plan = data.chatgpt || {};
     const box = card("Use your ChatGPT plan", "Complete eligible AI requests in this app with usage included in your ChatGPT plan or credits balance.", "setup-helper-card setup-helper-chatgpt-card");
+    // OpenAI's words stay as written and in view: none of them goes behind an "i" (MefiUi.tuck).
+    box.dataset.keepVisible = "";
     const manage = (className) => button("Manage usage", () => { void api()?.openExternal?.(plan.manageUsageUrl || CHATGPT_USAGE_URL); }, className);
     if (state.chatgptWelcome) {
       const welcome = node("div", "setup-helper-chatgpt-welcome");
@@ -1305,6 +1307,11 @@
       if (serial === renderSerial) say(plain(error, "This section could not load."), "bad");
     }
     if (serial !== renderSerial) return;
+    // A card's long description and a field's long hint sit behind an "i" at the end of its title
+    // (MefiUi.tuck, studio-ui.js), so a section reads as its controls. Done while the section is still
+    // off the page, where tuck reads no style, and before the focus is put back, so a circle that had
+    // the keyboard is found again by its name.
+    window.MefiUi?.tuck?.(content);
     const active = document.activeElement;
     const held = els.content.contains?.(active) ? { label: active.getAttribute?.("aria-label"), text: active.tagName === "BUTTON" ? active.textContent : null, tag: active.tagName, row: active.closest?.(".setup-helper-toggle")?.querySelector?.("strong")?.textContent || null } : null;
     els.content.removeAttribute("aria-busy");
