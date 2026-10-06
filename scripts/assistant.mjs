@@ -409,7 +409,25 @@ function normalizeMessage(entry, index) {
   }
   const offers = normalizeOffers(entry.offers);
   if (message.role === "assistant" && offers.length) message.offers = offers;
+  // The skills and tools a reply used (main.cjs chatUsed), as the chips under it show them.
+  const used = normalizeUsed(entry.used);
+  if (message.role === "assistant" && used.length) message.used = used;
   return message;
+}
+
+function normalizeUsed(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value.slice(0, 8)) {
+    if (!isObject(item) || !["skill", "tool"].includes(item.kind) || !str(item.name) || !str(item.label)) continue;
+    const row = { kind: item.kind, name: clip(str(item.name), 120), label: clip(str(item.label), 60) };
+    if (typeof item.ok === "boolean") row.ok = item.ok;
+    if (item.loaded === true) row.loaded = true;
+    const count = Math.floor(num(item.count, 0));
+    if (count > 1) row.count = Math.min(count, 99);
+    out.push(row);
+  }
+  return out;
 }
 
 // A reply to the owner, as opposed to a notice about a task.

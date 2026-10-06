@@ -835,36 +835,14 @@
     $("agents-overlay")?.setAttribute("data-places", "v2");
     return true;
   }
-  // Connectors: the stdio servers Studio already runs for an agent (~/.mefi-studio/mcp.json, read with the team), each
-  // with its tools, and where each agent is allowed to use them. What the prototype adds (adding, approving, testing and
-  // importing a connector from here) does not exist yet, and the page says so.
+  // Connectors: Team › Connectors is its own module (renderer/connectors.js): add, approve, test and import the MCP
+  // servers agents use, and where each is used. Without it (an older bundle) the pane says where they live.
   function buildConnectors(root) {
-    const yours = card("Your connectors", "Stdio servers from ~/.mefi-studio/mcp.json. Studio starts one only for an agent you allowed to use its tools.");
-    yours.id = "agents-connectors-yours";
-    const rows = node("div", "agents-connector-rows"); rows.id = "agents-connector-rows";
-    const actions = node("div", "agents-actions");
-    actions.append(button("Choose who may use them", () => go("agents", { place: "seats" }), "ghost"), button("Reload saved settings", discard, "ghost"));
-    yours.append(rows, actions);
-    const own = card("Studio's own tools", "Search the web, read web pages you link and read project files. Each agent has its own switches, with the + beside it in Seats and models; a builder can use at most sixteen connector tools.");
-    const missing = card("Not in Studio yet", "Adding a connector from this page, approving its command, testing it, and importing the ones Claude Code already has. Until then, add a server to ~/.mefi-studio/mcp.json and reload.");
-    missing.classList.add("agents-gap");
-    root.append(yours, own, missing);
+    if (window.MefiConnectors?.mount) { window.MefiConnectors.mount(root); return; }
+    root.append(card("Connectors", "Connectors live in ~/.mefi-studio/mcp.json on this PC."));
   }
   function paintConnectors() {
-    const rows = $("agents-connector-rows");
-    if (!rows) return;
-    const tools = Array.isArray(draft()?.saved?.mcpTools) ? draft().saved.mcpTools : [];
-    const servers = new Map();
-    for (const tool of tools) { if (!tool?.server) continue; if (!servers.has(tool.server)) servers.set(tool.server, []); servers.get(tool.server).push(tool); }
-    rows.replaceChildren();
-    if (!servers.size) { rows.append(node("p", "muted", "No connectors yet. Add a stdio server to ~/.mefi-studio/mcp.json, then reload saved settings.")); return; }
-    for (const [server, list] of servers) {
-      const row = node("div", "agents-connector"); row.dataset.server = server;
-      const words = node("div", "agents-connector-words");
-      words.append(node("strong", "", server), node("small", "muted", `${list.length} tool${list.length === 1 ? "" : "s"}: ${list.map((tool) => tool.name).join(", ")}`));
-      row.append(words);
-      rows.append(row);
-    }
+    window.MefiConnectors?.refresh?.();
   }
   // Related folders: Studio has none yet. What it has is said, with the way to it.
   function buildFolders(root) {

@@ -39,6 +39,34 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
+
+Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
+answer styles with ELI5 the default, `use_skill`, Team › Connectors, the parallel tool loop, the MCP pool and
+Streamable HTTP; 6318720 the twelve fixes an independent review found), landed from `land/skills` in
+`C:\wt\skills-land` with main merged twice (648e6ea over 00d32ca, 6e11811 over 33c3c4e: no conflicts beyond
+CHANGELOG, booklet.html rebuilt) and the release scope updated (1d5334a: Connectors move from 0.5.x into 0.5.0).
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on every step of the
+branch: fef2aef (run 37395870981), 6318720 (37397466087), 1d5334a (37397753111) and the landing commit 6e11811
+(37398222559). On this PC, on the landing tree: `npm run check` ok, `npm run audit` 0 errors and 0 warnings,
+`npm run lint` 0 errors and 45 warnings (as main). The suites this change touches or the merges brought in, run
+together on 6e11811: 321 tests, 320 pass, 1 skipped (skill_use, connectors, connectors_ui, chat_tools_ui,
+agent_tools_skills, skills_connectors_host, agent_rules, agent_rules_host, mentions_host, today_home,
+module_purity, skills_ipc, app_wide_ipc, booklet_build, size_page, friends_front_ui, friends_navigation, hub_host,
+project_hub_ui, rooms_ui, app_rail, relay_credits, relay_connect). Before the second merge, 568 tests on the touched
+suites: 567 pass, 1 skipped. Real windows, one at a time while no other session's window suite ran: team_render 1/1 (84 s) and sessions_render 1/1
+(134 s), the two fixtures this change edits; today_render, skills_render, composer_render, autonomy_render,
+agent_setup_render and unified_studio_render were still queued behind other sessions' window suites at landing.
+
+Measured: offering skills to a role (`autoSkills`, 30 skills in project and home) costs about 11 ms a call warm and
+114 ms cold; a second call to a connector reuses its open session (the pool keeps it 3 minutes, four servers at most;
+a worker keeps its own for the run). The review's fixes are pinned: an online connector gets only its saved values
+(never the PC's environment or the GitHub sign-in), one connector's calls keep their order, a bare `null` line, a
+404'd session and a server still starting at quit are handled, the values file is never wiped, `%TEMP%` tool folders
+are swept after six hours, `/name` counts only in the owner's own words. Kill switches MEFI_STUDIO_NO_SKILL_USE,
+MEFI_STUDIO_NO_CONNECTORS, MEFI_STUDIO_NO_MCP_POOL and MEFI_STUDIO_SERIAL_TOOLS, each pinned.
+
 ## 2026-10-06 Friends › Moderation, Report on projects and pop-ups from friends land on main
 
 Branch `wip/friends-mod` in `C:\wt\mod` (9e2d43d Moderation and project reports; 1679ae6 pop-ups and the relay's
@@ -501,33 +529,6 @@ same picture apart from attempt_review_host "a shot that is slow" (28/28
 alone). A first run was stopped and its children kept running into a second
 one: overlapping runs failed to start processes (0xC0000142) and wrote one
 log; neither is counted here. `cargo test --lib` 26 pass.
-
-## 2026-10-04 The Studio Daily lands: DevDay branch merged with main, Since you were away
-
-Branch `land/devday` in `C:\wt\devday-land`: origin/wip/feat/devday-2026 (the
-daily paper, GPT-6.1 Sol defaults, Codex over app-server, ChatGPT plan
-sign-in, Catalog/Performance face lift) with origin/main b98fad5 merged file
-by file (main.cjs app-wide channels and the picture-aware assistant body,
-agent-profiles FIELDS/providers/vision, main's BOOKLET_INPUTS with the paper's
-two files, booklet regenerated, TESTRUNS and archives rebuilt from both
-sides' rows with none missing). Two fixes the merge needed: the catalog
-toolbar reads --shell-y0 (layout_contract_css), and the catalog folds by its
-own width with a container query (size_render: "1100x720@1: the page
-overflows", the six columns pushed the document to 1157px). New: "Since you
-were away" above the news (scripts/front-page.cjs, main.cjs news:away,
-renderer/daily-paper.js band, MefiStartup.pick).
-
-Full `npm test` after the last commit: Node 6882 tests, 6867 pass, 14
-skipped, 1 fail (attempt_review_host "a shot that is slow", ENOENT under
-load: 28/28 alone); Electron lane 75: 71 pass, 4 fail: layout_contract_render
-and shell_render (fail identically on clean main on this PC, viewport
-1921x1081), command_render and planning_render (each passes alone); Python
-248 OK; path lock ok; `npm run audit` 0 findings; `npm run check` ok (271
-targets). The earlier test:fast run on this branch lost 5 git suites to
-memory pressure (0.68 GB free; push to a local bare repo failed): sync and
-rust_parity_repo 25/25 alone. New suites: front_page 7, news_away_host 5,
-daily_paper 10 (3 new). Before/after launch captures at 1920x1080 with a fake
-bridge: `C:\wt\shots\launch-before.png`, `launch-after.png`.
 
 ## Read Before Any Tests
 

@@ -1,8 +1,10 @@
 # Agent skills, web search, web pages and MCP
 
-Open **Agents → Setup**, then the **+** on a role. Each role can select its
-own installed skills, web search, web page reads, project file reads and
-individual MCP tools.
+Open **Team › Seats and models** (Agents › Setup in the classic layout), then
+the **+** on a role. Each role can select its own installed skills, web search,
+web page reads, project file reads and individual MCP tools. How every skill is
+used in the chat, by the helper agents and by the builders is on the Skills
+page (below); connectors are on **Team › Connectors**.
 Save the team to apply the draft. Project teams, Studio defaults, presets and
 captured attempts retain these choices separately. Skills provide instructions;
 they do not grant permissions. Up to eight skills and sixteen MCP tools can be
@@ -19,6 +21,41 @@ the [Brave Search API](https://api-dashboard.search.brave.com/app/documentation/
 Neither search backend downloads the result pages; reading a page is the
 separate `web_read` tool below. Search failures are returned to the agent
 explicitly, never presented as successful research.
+
+## How skills are used
+
+A skill is instructions in a `SKILL.md` (the Skills page, `.agents/skills`, or
+another tool's folder). Studio also ships **answer styles**, skills of its own:
+Explain like I'm 5 (`eli5`), Short answers (`brief`), Teach me (`teach-me`),
+Brainstorm (`brainstorm`), Poke holes (`poke-holes`) and Expert (`expert`). A
+style changes how an agent says things, never what it does or claims.
+
+Each skill is used one of three ways, separately in three places:
+
+| | Always on | When it fits | Only when called |
+| --- | --- | --- | --- |
+| What happens | Its text is in every request there | Its name and description are listed; the model loads it with `use_skill` when a request matches | Only when `/name` appears in a chat message, or in a task's own words for that task's builder |
+| **Chat** (the companion) | ELI5, until you pick another style | Every skill of 16,000 characters or less | The other styles, and bigger skills |
+| **Agents** (planning, sizing, reviews, the desk, the overseer, the scout) | nothing | Every skill of 16,000 characters or less | Styles, and bigger skills |
+| **Builders** (Claude Code, Codex, OpenCode, Studio's builder prompt) | nothing | Every skill of 16,000 characters or less | Styles, and bigger skills |
+
+The table's middle rows are the defaults. Change them on the Skills page's
+**How skills are used** section (one row per skill, a choice per place, and a
+"picks skills by itself" switch per place: off, every "When it fits" there acts
+as "Only when called"), or the chat's style from the chip beside the message
+box. Choices are kept by skill name in `settings.skillUse`, only what differs
+from the default, so a choice follows a skill of that name into every project.
+A name resolves the project's skill first, then the home folder's, then
+Studio's own: a project's `eli5` replaces Studio's, and **Copy to this
+project** writes the built-in one there to edit. The team's own per-agent picks
+(the **+** on a seat) still apply on top, always on for that agent.
+
+Budgets: always-on skills share 16,000 characters and eight skills per request
+with the team's picks; the list a model may load from holds at most 24 skills
+with descriptions cut to 160 characters (about 4,000 characters); one answer
+loads at most 16,000 characters with `use_skill`. A loaded skill is the owner's
+own instructions, so it goes beside the system prompt, not into the untrusted
+tool transcript, and a model can load only a skill it was offered.
 
 ## Reading web pages (`web_read`)
 
@@ -73,6 +110,12 @@ rounds, eight tool calls and three calls per round, followed by a final answer.
 An envelope is found anywhere in a reply: inside a code fence, repeated, or
 with stray text before or after it (identical calls in one reply run once).
 Calls past the per-round or total cap are skipped and the model is told so.
+The calls one reply asks for run side by side, and their results go into the
+transcript in the order they were asked for. `use_skill` is the one tool whose
+result is not transcript: a loaded skill joins the instructions (see "How skills
+are used"), and the transcript only notes that it was loaded. A connector's
+answer is shown to the model as its text, with each picture or audio part named
+and sized instead of pasted.
 A reply that still asks for tools when the budget is spent, or whose envelope
 does not parse, is never shown as the answer: the model gets one more turn
 without tools to give its final answer, and if that reply asks for tools again
@@ -159,12 +202,76 @@ file's text.
 
 `MEFI_STUDIO_NO_PROJECT_SEARCH=1` removes both tools and leaves `project_read`.
 
-## Register a trusted MCP server
+## Connectors (MCP servers)
 
-Create `~/.mefi-studio/mcp.json` in your user home directory. This is a device
-configuration, outside project repositories and exported team presets. It is
-not read from a project's `.mcp.json`. Example (replace the command and script
-with your installed server):
+A connector is an [MCP](https://modelcontextprotocol.io/) server that gives
+agents extra tools, like a browser or GitHub. They are kept in
+`~/.mefi-studio/mcp.json` in your user home folder: a device configuration,
+outside project repositories and exported team presets, and never read from a
+project's `.mcp.json` by itself.
+
+**Team › Connectors** manages the file:
+
+- **Add a connector**: a name and the command, the way you would type it
+  (`npx -y @playwright/mcp@latest`; quotes keep spaces, nothing runs through a
+  shell), or an `https://` address (plain `http://` only on this PC). List the
+  settings it needs (`GITHUB_PERSONAL_ACCESS_TOKEN`) and, if you like, their
+  values. It goes into the file as `pending`.
+- **Review and approve**: Studio shows exactly what it would run and approves
+  that, stamped with a fingerprint of the command, its arguments, its settings'
+  names and its address. Studio never starts a connector you have not approved,
+  and if any of those change (by hand, or by another app) it waits for your
+  approval again. A server you wrote into the file yourself, with no approval
+  stamp, is your own act and is used as it always was.
+- **Test**: starts it, asks for its tools (up to eight pages), saves them and
+  stops it. Nothing has to be declared by hand any more; a tool whose name
+  Studio can't use (letters, numbers, `_` and `-`, up to 48) is left out and
+  counted.
+- **Who can use it**: Chat, Agents and Builders, each a switch. A new connector
+  is on for the builders only. Each tool can be turned off on its own, and the
+  whole connector switched off.
+- **Import from other apps**: lists the servers configured by Claude Code
+  (`~/.claude.json`, including the open project's entry), Claude Desktop,
+  Cursor, VS Code, Windsurf, Codex (`~/.codex/config.toml`), OpenCode and
+  Gemini CLI, plus the open project's `.mcp.json`, `.vscode/mcp.json` and
+  `.cursor/mcp.json`. Nothing loads by itself: picked ones arrive pending. A
+  value those apps saved (a token) comes along only when you tick "Bring their
+  saved values too"; a placeholder such as `${env:TOKEN}` is never a value. The
+  older SSE-only servers are listed but can't be imported.
+- **Featured**: Playwright, Context7, GitHub, Memory and Step-by-step thinking,
+  each one command to read before you approve it.
+- **Remove** keeps a copy of the file first (`connector-backups/` in Studio's
+  data folder, ten copies).
+
+**Values.** A value a connector needs is kept encrypted with Windows' data
+protection (Electron `safeStorage`) in `connector-secrets.json` in Studio's data
+folder, never in `mcp.json` and never sent back to the page, which only shows
+whether one is saved. A setting with no saved value is read from Studio's own
+environment (as `envKeys` always were), and Studio's GitHub sign-in stands in
+for `GITHUB_PERSONAL_ACCESS_TOKEN`, `GITHUB_TOKEN` and `GH_TOKEN`. A PC that
+can't encrypt refuses to save a value and says to set it in Windows instead.
+Only basic process variables, the named settings and their values reach a
+server; Studio's provider keys never do.
+
+**Who gets which tools.** An agent gets the connector tools its team picked for
+it (the **+** on its seat), then every tool of each connector that is on for
+its place, sixteen at most; the page shows how many each place gets. The host
+refuses a tool an agent was not given, whatever a model asks.
+
+**Calls.** Studio's own models keep a connector's server open between calls
+and let it go after three quiet minutes, when its definition changes, after a
+call that timed out, and when Studio quits (at most four open). A coding
+worker's tool server keeps one open for the length of its run. So a stateful
+server works: a browser a builder opened is still there for its next click.
+A call waits up to a minute; starting a server, 30 seconds (Test allows two
+minutes, for a first `npx` download). Output is capped at 4 MB a message.
+Streamable HTTP servers (MCP 2025-03-26 and later) are supported, with
+`Mcp-Session-Id` sessions and server-sent events; a header such as
+`Authorization` is filled from a saved value (`headerKeys`). MCP sampling,
+elicitation, resources and OAuth sign-in are not implemented.
+
+The file, for reference (everything but `command`/`args` or `url` is
+optional; Studio writes the rest):
 
 ```json
 {
@@ -173,46 +280,29 @@ with your installed server):
       "command": "C:/Program Files/nodejs/node.exe",
       "args": ["C:/Tools/docs-server/server.js"],
       "envKeys": ["DOCS_API_KEY"],
-      "tools": [
-        {
-          "name": "search_docs",
-          "description": "Search the documentation index",
-          "inputSchema": {
-            "type": "object",
-            "properties": { "query": { "type": "string" } },
-            "required": ["query"]
-          }
-        }
-      ]
-    }
+      "places": ["builders", "chat"],
+      "off": ["delete_page"],
+      "tools": [{ "name": "search_docs", "description": "Search the documentation index", "inputSchema": { "type": "object" } }]
+    },
+    "remote": { "transport": "http", "url": "https://mcp.example.com/mcp", "headerKeys": { "Authorization": "REMOTE_AUTH" } }
   }
 }
 ```
 
-Reload saved settings, select `docs · search_docs` on the intended role and
-save. Declarations should match the server's tool names and argument schemas.
-Listing the setup screen never starts a server. A selected tool call starts
-the configured executable without a shell, initializes MCP, verifies the tool
-through `tools/list`, calls it and closes the connection. Calls time out after
-20 seconds and server output is capped. Pagination is supported for up to eight
-tool-list pages. MCP client sampling, elicitation, resources, OAuth and remote
-HTTP/SSE transports are not implemented; this integration supports
-[stdio MCP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports).
-Use a real executable such as `node.exe`, not a Windows `.cmd` launcher.
-
-Only basic process variables and explicitly named `envKeys` are forwarded.
-Secrets belong in the device environment, never in the tool descriptions or
-team configuration. Selecting a tool trusts its server executable and allows
-its side effects; MCP is not an operating-system sandbox. Review tools that can
-write, run commands or send messages before selecting them. Removed/unselected
-tools are denied by the host even if a model asks for them.
+Selecting a connector trusts its program and allows its side effects; MCP is
+not an operating-system sandbox. Review tools that can write, run commands or
+send messages before turning them on. `MEFI_STUDIO_NO_CONNECTORS=1` makes Team ›
+Connectors read-only: nothing is added, approved, tested, changed or imported,
+and the servers already in the file are used as before.
 
 ## Coding workers
 
 OpenCode, Claude Code and Codex receive a per-run MCP attachment exposing
 Studio search, web page reads, project reads (not the list and search tools
-above: a coding worker has its own), selected MCP tools and, for builders
-only, `run_check` and `project_logs` (below); OpenCode
+above: a coding worker has its own), `use_skill` for the skills builders may
+pick by themselves, the connector tools settled when the run starts (the
+team's picks, then the connectors on for builders, sixteen at most) and, for
+builders only, `run_check` and `project_logs` (below); OpenCode
 and Claude Code also take the optional desk tool. OpenCode reads its config file through
 `OPENCODE_CONFIG` and Claude Code through `--mcp-config`; Codex has no
 per-run config file flag, so the server is passed as `-c mcp_servers.*`
@@ -225,6 +315,12 @@ when the attempt ends or is canceled. Grok and Antigravity have no per-run MCP
 flag and retain their own native tool and search configuration; Studio does
 not inject its tool bridge into them.
 
+The values those connectors need ride the run's private policy file (mode
+0600, gone when the run ends), like the desk's token, never Codex's command
+line. The run's tool server keeps each connector's server open until the run
+ends, and passes a connector's pictures on as pictures (at most four of 2 MB
+each, text cut at 12,000 characters).
+
 **The Studio checkboxes do not restrict native coding CLI tools.** Existing
 workers run with automatic approvals and broad command/file access. Configure
 native CLI permissions and MCP servers in that CLI; the setup UI explicitly
@@ -233,9 +329,12 @@ tool, but an explicitly selected MCP server can provide those capabilities.
 
 Skills are discovered from project/user `.agents/skills`, `.claude/skills`,
 `.codex/skills` and `.opencode/skills` (user OpenCode uses
-`.config/opencode/skills`). Add a named folder containing `SKILL.md`, reload
-saved settings and choose it on the agent. Selected skills are capped at 16 KB
-of prompt content; oversized or unavailable entries are skipped.
+`.config/opencode/skills`), plus the answer styles built into Studio. Add a
+named folder containing `SKILL.md`; by default an agent picks it by itself when
+it fits ("How skills are used"), or choose it on the agent to have it always
+on there. Always-on skills are capped at 16 KB of prompt content; oversized or
+unavailable entries are skipped. A task whose words say `/skill-name` gives its
+builder that skill too.
 
 ## Checks and logs for builders (`run_check`, `project_logs`)
 

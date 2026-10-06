@@ -79,6 +79,31 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   about 690 KB on a 134-card board), and a running task's progress travels as
   a few hundred bytes. Nothing on screen changes. `MEFI_STUDIO_FULL_PUSHES=1`
   brings back whole-board pushes for one launch.
+- **Answer styles for the chat, with ELI5 as the default.** Mefi now explains
+  things like you're five unless you pick another style: Short answers, Teach
+  me, Brainstorm, Poke holes, Expert or plain. The new chip beside the
+  permission mode in Vibe's and Build's message boxes shows the style and
+  changes it; `/eli5` (or any style or skill) in a message uses it once. A
+  reply now shows chips for the skills and tools it used.
+- **Skills, any way you want them.** Every skill (the project's, your home
+  folder's, and the styles built into Studio) can be always on, picked by the
+  agent when it fits, or used only when called, separately for the chat,
+  Studio's helper agents and the builders (Skills › How skills are used). A
+  skill that fits is loaded on demand with a new `use_skill` tool instead of
+  being pasted into every request, coding workers get the same skills through
+  Studio's tool server, and a task that says `/skill-name` gives its builder
+  that skill. A built-in style can be copied into the project and edited.
+- **Connectors you can manage from Studio.** Team › Connectors now adds,
+  approves, tests and imports MCP servers: Studio shows the exact command
+  before anything runs, finds a server's tools by itself, imports the ones
+  Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Codex, OpenCode and
+  Gemini CLI already use, keeps their tokens encrypted, and lets you choose
+  which ones the chat, the helper agents and the builders get. Online
+  (Streamable HTTP) servers work too.
+- **A faster, steadier tool harness.** The tool calls a model asks for in one
+  turn run side by side, a connector's server stays open between calls (so a
+  browser it opened is still there for the next click), and a connector's
+  pictures reach a builder as pictures.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part
