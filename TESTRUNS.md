@@ -39,6 +39,28 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The Lobby, one sign-in, online at launch, credits that cannot be farmed, and no Discord roles land on main
+
+Branch `wip/credits-guard` in `C:\wt\credits` (bcc51f3 the Lobby front page, Sign in with Discord and online at launch;
+4970d71 the anti-farming rules and moderator review; 2ba413e Flame rank lists a room, no Discord roles needed), with
+main dfda798 merged (5506e9c) and the scope note's Friends lines updated.
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on 4970d71 and 2ba413e, and
+run again on the landing commit before the fast-forward. On this PC the full gate could not get the machine to itself
+(other sessions' suites ran throughout); the one full `npm test` on bcc51f3: Node 7048 tests, 7013 pass, 20 fail, every
+one in the git-heavy suites that fail when git cannot start under load (attempt_review_host, attempt_snapshots_host,
+git_actions, rust_parity_repo, sync, sync_changes, sync_lineage, worktree_actions, worktrees; they passed alone on this
+branch's parent earlier today); Electron 88: layout_contract_render and shell_render as on clean main, and
+media_browser_render (not touched here). Python contracts and the path lock pass.
+
+Run alone after each change: relay_core 9/9, relay_e2e 9/9, relay_credits 10/10 (alts, one player and many projects,
+the 15-a-week pair limit, stars once a week, midnight replay, rate limits, Forget me's 30-day hold, a moderator's review
+and take-back), relay_connect 4/4, hub_client 16/16, hub_host 13/13, friends_front_ui 9/9, project_hub_ui 6/6,
+rooms_ui 13/13, friends_navigation 8/8, app_rail 40/40, onboarding 43/43, module_purity 58/58, booklet_build 5/5,
+layout_contract_nav 15/15, shell_frame_bars 34/34, community_rules 17/17; friends_render, companion_hub_render and
+unified_studio_render 1/1 each (friends_render walks The Lobby and the signed-out card at four window sizes with no
+text under 12 px). `npm run check` ok; lint adds no warning; audit 0. The relay was redeployed (version
+4b641b0c) and `relay/scripts/smoke.mjs` passes against it.
 ## 2026-10-06 Startup marks and the settings cache (S1) land on main
 
 Branch `land/s1-boot` in a cloud session (Linux, Node 24.21.0), stacked on S3 over main dfda798: the parked slice
@@ -521,35 +543,6 @@ UTF-16); a real file dropped through the DevTools protocol got its path; a
 clicked getDisplayMedia gave 1 audio track, 0 video, no picker, and peak
 0.029 back while the page played a 440 Hz tone at gain 0.03. Release host
 build 4 min (2 jobs), portable folder 123 MB.
-
-## 2026-10-03 Rust stage 2: the Git chip's actions move into Rust
-
-Branch `wip/rust-host`, after d428f9d. `scripts/git-actions.cjs` (glance,
-glanceMany, preview, save, pushBranch, publish, link, owners, nameCheck,
-publishPreview, account, identity) and the git-link/pc-setup/redaction/
-share-review rules it reads now have a Rust port in
-`crates/mefi-core/src/git/`, reached through the `git-actions` factory under
-the Rust host only. New: `jsre.rs` (JavaScript regexes with JavaScript's
-meaning) and the `MEFI_STUDIO_RUST_OFF` kill switch.
-
-`npm run check` ok (265 targets); `npm run test:fast` 6773 tests, 0 fail,
-14 skipped; lint 0 errors, 42 warnings (all pre-existing); audit ok;
-mefi-core 26 unit tests, host 13. Parity: `tests/rust_parity_git.test.mjs`
-(2 tests: about 330 pure-helper calls, and 89 steps on two identical
-folder trees with a local bare GitHub and a fake gh: every kind of save
-row, secrets by name and content, UTF-16 keys, a junction out of the
-project, 50/100 MB files, lock retries, merge in progress, push with a
-failing and a passing check, a rejected push, every publish path including
-resume and a taken name, and link related/unrelated/empty), all identical,
-with identical commit ids; `tests/rust_modules.test.mjs` 4 tests. The Git
-chip's existing suites (git_actions, git_host, git_link, git_link_host) and
-the other three parity suites: 202 tests, 0 fail. Live self-test on the Rust
-host: `git:state`, `projects:glance` and `git:save-preview` answered through
-Rust (rustCalls core.git.glance 3, glanceMany 1, preview 1); this checkout's
-preview (17 rows) and glance were byte-identical JSON to the JavaScript's.
-Timing on this checkout: glance about 330 ms and preview about 720 ms in
-both (git's own time). `fsutil fsinfo volumeinfo` is refused without admin
-on this PC, so the weak-drive check reads unknown in both languages.
 
 ## Read Before Any Tests
 

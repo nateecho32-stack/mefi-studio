@@ -19,9 +19,10 @@
   const button = (text, run, id) => { const el = node("button", "ghost rooms-button", text); el.type = "button"; if (id) el.id = id; el.addEventListener("click", run); return el; };
   const bridge = () => window.mefiStudio;
   const REASONS = {
-    "room-host-role": "Creating rooms needs the Room Host role in the Void Engine server.",
+    "listed-rank": "Showing a room in the list opens at Flame rank (200 credits, earned when friends play and star what you share). Untick \"Show it in the room list\" to make it now and invite people.",
+    "room-host-role": "Showing a room in the list needs the Room Host role in the Void Engine server.",
     "new-member": "New members can do this after their first day in the server.",
-    "week-member": "Making your own rooms opens after a week in the server. Ask a Room Host to make one meanwhile.",
+    "week-member": "Making your own rooms opens after a week in the server. Meanwhile, join one with a code or from the list.",
     "owned-rooms": "You already own 3 open rooms. Close one first.",
     "daily-creates": "You have made 5 rooms today. Try again tomorrow.",
     "hub-full": "The room service is full right now.",
@@ -109,7 +110,8 @@
     return String(message.text ?? "").replace(/<@!?(\d{17,20})>/g, (raw, id) => (names.get(id) ? `@${names.get(id)}` : raw));
   }
 
-  function panel() {
+  // options.room: a room to open once the list is in (The Lobby's rooms and people).
+  function panel(options = {}) {
     const root = node("section", "rooms");
     root.id = "rooms";
     root.setAttribute("aria-labelledby", "rooms-title");
@@ -132,6 +134,7 @@
     // What the room service carries (hub-client status): the Lobby, join codes, Who's online.
     let flags = { lobby: false, joinCodes: false, online: false };
     let lobbyOpened = false, people = null, showOnline = true, onlineTimer = null;
+    let wanted = typeof options?.room === "string" && options.room ? options.room : null;
     const codes = new Map(); // room id -> { code, link }
     let rooms = [], requests = [], invites = [], messages = [], more = false;
     // Fields keyed by what they hold. A repaint gives each its text back, and
@@ -250,7 +253,7 @@
       listed.type = "checkbox";
       listed.id = "rooms-create-listed";
       listed.checked = true;
-      listedLabel.append(listed, node("span", "", " Show it in the room list"));
+      listedLabel.append(listed, node("span", "", " Show it in the room list (opens at Flame rank)"));
       const create = button("Make room", () => guard("Making the room…", async () => {
         const answer = await call("createRoom", { name: name.value.trim(), kind: kind.value, policy: policy.value, listed: listed.checked });
         status.textContent = answer?.ok ? `${answer.room.name} is ready.` : why(answer, answer?.error === "bad-request" ? "Give the room a one-line name of up to 80 characters." : "The room could not be made.");
@@ -661,9 +664,11 @@
         return false;
       }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to use rooms. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "rooms-link"));
+        // Friends' one sign-in card (renderer/friends-front.js) when it is in this build.
+        const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); } });
+        status.textContent = gate ? "" : "Link your Discord account to use rooms. Discord asks once in your browser.";
+        body.replaceChildren(gate ?? button("Link Discord", () => { void linkHere(); }, "rooms-link"));
         return false;
       }
       if (hub.error === "not-member") { notMember(); return false; }
@@ -695,7 +700,11 @@
       if (!explain(hub)) return;
       status.textContent = hub.paused ? "The room service is paused right now; you can read but not post." : `Signed in as ${me?.name || "you"}.`;
       await refresh();
-      // Open Friends and you are with everyone: the Lobby opens by itself, once.
+      // A room asked for by name opens; otherwise you are with everyone: the Lobby opens by itself, once.
+      const asked = wanted && !openRoom ? rooms.find((room) => room.id === wanted && ["member", "owner"].includes(room.you)) : null;
+      if (wanted && !openRoom && !asked) status.textContent = "That room isn't one of yours yet. Ask to join it from the list.";
+      wanted = null;
+      if (asked) { lobbyOpened = true; await open(asked); return; }
       const lobby = flags.lobby && !lobbyOpened && !openRoom ? rooms.find((room) => room.id === "lobby" && ["member", "owner"].includes(room.you)) : null;
       if (lobby) { lobbyOpened = true; await open(lobby); }
     }
@@ -757,5 +766,6 @@
     return root;
   }
 
-  window.MefiRooms = { panel, pending, subscribe, readable };
+  // recount(): Friends' front page asks for the invites and requests waiting, with Rooms itself closed.
+  window.MefiRooms = { panel, pending, subscribe, readable, recount: () => recountQuietly(bridge()) };
 })();

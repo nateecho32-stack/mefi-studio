@@ -136,6 +136,28 @@ test("a credits frame updates the balance and says why", async () => {
   assert.equal(card.find("project-hub-status").textContent, "Play counted: +2 credits for you.");
 });
 
+test("credits on hold say why and until when; credits taken back say so", async () => {
+  const until = Date.UTC(2026, 9, 12);
+  const day = new Date(until).toLocaleDateString([], { day: "numeric", month: "long" });
+  for (const [hold, words] of [
+    [{ reason: "new-account", until }, `Credits start when your Discord account is 30 days old on ${day}. Until then, plays and stars you give count for no one.`],
+    [{ reason: "new-member", until }, `Credits start a week after you joined the Void Engine server on ${day}.`],
+    [{ reason: "forgot-me", until }, `Credits are paused for 30 days after Forget me, until ${day}.`],
+    [{ reason: "read-only", until: null }, "Credits are paused while your account is read-only in the server."],
+  ]) {
+    const env = environment({ replies: { me: me({ canEarn: false, hold }) } });
+    const card = env.hub.card();
+    await flush();
+    assert.equal(card.byClass("project-hub-hold")[0].textContent, words, hold.reason);
+  }
+  const env = environment();
+  const card = env.hub.card();
+  await flush();
+  assert.equal(card.byClass("project-hub-hold").length, 0, "nothing to say when credits count");
+  env.push({ type: "credits", balance: 40, lifetime: 40, today: 0, delta: -8, reason: "revoked", rank: "spark" });
+  assert.equal(card.find("project-hub-status").textContent, "A moderator took back 8 credits that came from farming.");
+});
+
 test("main lets the renderer call only the hub's project methods, and plays only https links", () => {
   assert.match(main, /const HUB_PROJECT_METHODS = Object\.freeze\(\{ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1 \}\);/);
   assert.match(main, /ipcMain\.handle\("hub:projects", async \(_event, payload\) => hubProjects\(String\(payload\?\.method \?\? ""\), Array\.isArray\(payload\?\.args\) \? payload\.args : \[\]\)\);/);

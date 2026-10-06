@@ -294,7 +294,7 @@
     // Friends is a page of its own (openPlace below): asked for, it opens there instead of a bubble.
     if (section === "friends" && !window.MefiBoot?.isActive?.()) {
       if (hub.open) close({ immediate: true, restore: false });
-      window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" });
+      window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "lobby" });
       return true;
     }
     if (!host || window.MefiBoot?.isActive?.() || otherDialog()) return false;
@@ -342,7 +342,7 @@
   function action(title, run) { return button(title, () => navigate(run), "ghost agent-hub-action"); }
   function select(section, target = null) {
     // The Friends bubble goes to the Friends place (openPlace).
-    if (section === "friends") { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" })); return; }
+    if (section === "friends") { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "lobby" })); return; }
     const previous = hub.section; hub.section = section;
     if (host.panel.parentElement === el.detail) {
       host.toggle(false); document.body.append(host.panel); host.panel.inert = hub.locked.has(host.panel) ? true : false;
@@ -510,15 +510,17 @@
   // calls; nothing is copied. renderer/nav.js sends go("friends") and its three ways in here (the
   // route "friends-page", { place }), and renderer/shell.js draws the list (friendsPlaces) and the breadcrumb (friendsPlace).
   const FRIENDS_PLACES = Object.freeze([
+    // renderer/friends-front.js: Friends' front page, and the sign-in card for anyone not signed in yet.
+    { id: "lobby", label: "The Lobby", glyph: "g-community", about: "Who's online, the rooms open now and what your friends are making." },
     { id: "rooms", label: "Rooms", glyph: "g-orbit", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
     { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
     { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
   ]);
-  // A way in may name its place by target (rooms, pcs, playground, hub).
+  // A way in may name its place by target (lobby, rooms, pcs, playground, hub).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
-  const friendsPage = { place: null, root: null, body: null, title: null, about: null };
+  const friendsPage = { place: null, root: null, body: null, title: null, about: null, room: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
   const friendsOpen = () => Boolean(friendsPage.root && friendsPage.root.hidden === false);
   function mountFriendsPage() {
@@ -538,7 +540,8 @@
   function paintFriendsPlace(place) {
     for (const child of [...friendsPage.body.children]) child.dispose?.();
     let card = null;
-    if (place.id === "rooms") card = window.MefiRooms?.panel?.();
+    if (place.id === "lobby") card = window.MefiFriendsFront?.card?.();
+    else if (place.id === "rooms") card = window.MefiRooms?.panel?.({ room: friendsPage.room });
     else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
     else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
     else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
@@ -558,11 +561,13 @@
     const place = friendsPlaceById(params.place) ?? friendsPlaceById(friendsPlaceOfTarget(params.target)) ?? friendsPlaceById(friendsPage.place) ?? FRIENDS_PLACES[0];
     window.MefiNav?.claim?.("friends-page");
     const moved = friendsPage.place !== place.id;
+    // A room asked for by name (The Lobby's rooms and people) opens in Rooms, even when Rooms is already up.
+    friendsPage.room = place.id === "rooms" && typeof params.room === "string" ? params.room : null;
     friendsPage.root.hidden = false;
     friendsPage.root.dataset.place = place.id;
     friendsPage.title.textContent = place.label;
     friendsPage.about.textContent = place.about;
-    if (moved || !friendsPage.body.childElementCount) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
+    if (moved || !friendsPage.body.childElementCount || friendsPage.room) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
     friendsPage.place = place.id;
     if (moved) window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: place.id } }));
     window.MefiNav?.paintCurrent?.();

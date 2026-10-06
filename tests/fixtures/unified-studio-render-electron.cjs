@@ -351,11 +351,11 @@ app.whenReady().then(async () => {
   const friendsMotionWasOff=await run("const off=document.body.classList.contains('no-motion');document.body.classList.add('no-motion');return off;");
   report.friendsNavigation=[];
   // Friends is a page of its own (renderer/companion-hub.js openPlace), not the companion's bubble: each way in opens it at its place.
-  for (const [id, heading, place] of [['rooms','rooms-title','rooms'],['your-pcs','pc-sync-title','pcs'],['playground','friends-title','playground'],['project-hub','project-hub-title','hub']]) {
+  for (const [id, heading, place] of [['the-lobby','#friends-front','lobby'],['rooms','#rooms-title','rooms'],['your-pcs','#pc-sync-title','pcs'],['playground','#friends-title','playground'],['project-hub','#project-hub-title','hub']]) {
     const keyboard = await run(`
       const rail=document.getElementById('app-rail'),head=rail.querySelector('.app-rail-head[data-section=friends]');
       document.documentElement.dataset.railDrawer='';head.focus();
-      for(const child of ['rooms','your-pcs','playground','project-hub']) {
+      for(const child of ['the-lobby','rooms','your-pcs','playground','project-hub']) {
         document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true}));
         if(child===${JSON.stringify(id)}) break;
       }
@@ -364,10 +364,11 @@ app.whenReady().then(async () => {
     `);
     assert.equal(keyboard.id,id);assert.ok(keyboard.height>=28&&keyboard.top>=0&&keyboard.bottom<=keyboard.viewport+1&&keyboard.hit,'Friends keyboard target is reachable: '+JSON.stringify(keyboard));
     await run("document.activeElement.click();");
-    // The page's own title names the place (the card's heading steps aside under it) and takes the focus; the card is the place's own.
-    await until(`!document.getElementById('friends-overlay')?.hidden&&document.getElementById('friends-overlay').dataset.place===${JSON.stringify(place)}&&document.getElementById(${JSON.stringify(heading)})&&document.activeElement?.id==='friends-place-title'`,`Friends opens ${id}`);
-    assert.ok(await reachable('#friends-place-title'),'Friends place is named on screen: '+id);
-    assert.ok(await run(`const card=document.getElementById(${JSON.stringify(heading)}).closest('#friends-place-body > *');const r=card?.getBoundingClientRect();return Boolean(r&&r.width>100&&r.height>28&&r.top<innerHeight);`),'Friends card is visible: '+id);
+    // The page's own title names the place and takes the focus (the card's heading steps aside under it; on The Lobby the
+    // page's title steps aside for the front page's masthead, still focused); the card is the place's own.
+    await until(`!document.getElementById('friends-overlay')?.hidden&&document.getElementById('friends-overlay').dataset.place===${JSON.stringify(place)}&&document.querySelector(${JSON.stringify(heading)})&&document.activeElement?.id==='friends-place-title'`,`Friends opens ${id}`);
+    assert.ok(await reachable(place==='lobby'?'#friends-place-body':'#friends-place-title'),'Friends place is named on screen: '+id);
+    assert.ok(await run(`const card=document.querySelector(${JSON.stringify(heading)})?.closest('#friends-place-body > *');const r=card?.getBoundingClientRect();return Boolean(r&&r.width>100&&r.height>${place==='lobby'?1:28}&&r.top<innerHeight);`),'Friends card is visible: '+id);
     report.friendsNavigation.push(id);
     await run("window.MefiNav.closeAll();await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
   }

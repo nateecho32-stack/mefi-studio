@@ -10,7 +10,7 @@
 // What is kept, and why, is listed in relay/README.md. Chat text, files, IP
 // addresses and Discord tokens are never written here.
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 // One statement per entry: Cloudflare's exec runs a single statement when it has bindings.
 const V1 = [
@@ -181,10 +181,23 @@ const V3 = [
   `ALTER TABLE members ADD COLUMN online_hidden INTEGER NOT NULL DEFAULT 0`,
 ];
 
+// v4: credits that cannot be farmed (relay/src/credits.mjs GUARD). A project's
+// plays count once per player and day (play_log); a star counts only from a
+// member in good standing (stars.counted); after Forget me, a keyed
+// fingerprint of the account holds its credits for 30 days (credit_holds);
+// and credits between two members are summed by pair (credit_events_pair).
+const V4 = [
+  `CREATE TABLE IF NOT EXISTS play_log (project_id TEXT NOT NULL, player_id TEXT NOT NULL, day INTEGER NOT NULL, PRIMARY KEY (project_id, player_id, day)) STRICT, WITHOUT ROWID`,
+  `CREATE TABLE IF NOT EXISTS credit_holds (fingerprint TEXT PRIMARY KEY, until INTEGER NOT NULL) STRICT, WITHOUT ROWID`,
+  `ALTER TABLE stars ADD COLUMN counted INTEGER NOT NULL DEFAULT 1`,
+  `CREATE INDEX IF NOT EXISTS credit_events_pair ON credit_events (actor_id, target_id, at)`,
+];
+
 export const MIGRATIONS = Object.freeze([
   { version: 1, statements: V1 },
   { version: 2, statements: V2 },
   { version: 3, statements: V3 },
+  { version: 4, statements: V4 },
 ]);
 
 const bindValue = (value) => (value === undefined ? null : value === true ? 1 : value === false ? 0 : value);

@@ -102,7 +102,7 @@ candidate moves to 0.5.x instead of holding the release.
 | Work | Where it is | State |
 | --- | --- | --- |
 | Subscriptions and agent routing | `wip/models` | On today's `main`, in CI |
-| Credits that cannot be farmed; the Lobby front page and one Sign in with Discord card | `wip/credits-guard`, `wip/social` | Ready to gate and land. Role features wait for the Discord role IDs and can land switched off |
+| Credits that cannot be farmed; the Lobby front page and one Sign in with Discord card; no Discord roles needed (Flame rank lists a room, moderators are named accounts) | `wip/credits-guard` (includes `wip/social`) | Windows CI green; landing with the relay redeployed. Nothing waits on Discord role IDs any more |
 | Load times and agents sending only what is new: row push deltas (S3), startup marks and a settings cache (S1), live CLI progress and the prompt cache (S12), the log core (S2) | `wip/s3-row-push`, `wip/s1-boot-startup-marks`, `wip/s12-cli-stream`, `wip/s2-log-core` | Partial, parked on a 3 October base. Being finished one at a time, measured before and after. S1's cache sits in front of settings, which the Rust host also reads, so the parity rule applies |
 | Vibe and Build as two modes of one shell | in progress | The labels are yours to decide (below) |
 | Two real-window suites red on the PCs, even on clean `main`: `layout_contract_render` (the window opens at 1921x1081) and `shell_render` (one pixel at 1100 px) | tests | Display-scaling rounding; to be fixed without weakening what they check. Hosted CI skips them |
@@ -120,8 +120,10 @@ decision, and each has an owner-side default already in the code.
 
 **On each PC, once `main` is pulled**
 
-- Send the Discord role IDs for moderators and Room Hosts to the Friends work,
-  and finish whatever the Discord developer portal still needs from you.
+- Friends: one real Sign in with Discord (Friends, Sign in with Discord,
+  Authorize in the browser, The Lobby appears). Optionally, the Discord user
+  IDs of anyone else who should moderate. No Discord role IDs are needed, and
+  the developer portal settings are done.
 - Publish every branch that exists only on a PC (`overhaul/phase2`,
   `codex/release-signing-gated`, the `C:\wt\*` worktrees) as `wip/<topic>`
   with GitHub Desktop, then run `npm run worktrees` and `npm run sync`. A
@@ -227,9 +229,9 @@ geometry, not how it feels)
   colour; the front ring of two overlapping nodes runs under the one behind), and
   the media queue rule (it is still in progress, tests pin today's order, and the
   redesign has no kill switch).
-- Friends: whether it ships switched on in 0.5.0 if the Discord role IDs or a
-  real sign-in test are not done by the release candidate (it can ship
-  switched off; the relay is already deployed).
+- Friends: whether it ships switched on in 0.5.0 if the real sign-in test is
+  not done by the release candidate (it can ship switched off; the relay is
+  deployed, and nothing waits on Discord roles).
 - The new shell: the two modes' labels (keep Vibe and Build, or rename),
   whether the classic chrome is deleted at 0.5.0 or 0.5.1 (the plan says
   0.5.1), and the pinned tree strip as an optional panel. In the tabs: that

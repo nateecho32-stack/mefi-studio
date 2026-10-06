@@ -133,9 +133,9 @@ app.whenReady().then(async () => {
   await until("document.querySelector('[data-hub-section=\"friends\"] .agent-hub-count')?.textContent==='2'", "background look badges Friends");
   assert.match(await run("return document.querySelector('[data-hub-section=\"friends\"]').getAttribute('aria-label');"), /2 to sync between your PCs/);
   await capture("07b-friends-badge");
-  // Friends is a place of its own: the bubble lets the hub go and opens the Friends page on Rooms.
+  // Friends is a place of its own: the bubble lets the hub go and opens the Friends page at The Lobby.
   await click('[data-hub-section="friends"]');
-  await until("document.getElementById('friends-overlay')?.hidden===false && document.getElementById('friends-overlay').dataset.place==='rooms' && !window.MefiCompanionHub.isOpen()", "Friends opens its page on Rooms");
+  await until("document.getElementById('friends-overlay')?.hidden===false && document.getElementById('friends-overlay').dataset.place==='lobby' && !window.MefiCompanionHub.isOpen()", "Friends opens its page at The Lobby");
   await run("window.MefiNav.go('friends-page',{place:'pcs'});");
   await until("document.querySelector('#friends-overlay .pc-sync')?.dataset.state==='pending'", "Friends › Your PCs looks");
   // Looks only: the card's own and the project-switch look at startup, never a sync.
