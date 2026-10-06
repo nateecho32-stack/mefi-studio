@@ -497,6 +497,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   "View in Live" read "Open in Map" and "View in Map", and the companion's
   "Open the Map" (it was "Open live agent work") opens the Map instead of
   Team's Overview.
+- **Start here speaks plainly and walks to the 0.5 places.** The guided
+  tour's seven stops are rewritten for someone new to building with AI: Pick
+  the AI that builds for you, Open your project, Let your AI map your
+  project, See your AI accounts, Tell Studio what to make, Watch your AI work
+  and Check what your AI made. They name places as they are now (Today,
+  Ideas, the Map, the Inbox, Team › Providers, Help › Start here and Help ›
+  Setup guide), and every Walk me to… button lands on something you can see:
+  Team › Providers, the Map with Live work in front, the box on Today in
+  either mode, and for review Today's Review column in Social or the task
+  board's Review in Studio (it pointed at Home's old Review filter, which 0.5
+  hides). In Studio the walk to the box no longer switches it to Create task,
+  so what you typed stays in view. Your AI's advice in the tour uses the same
+  words, and the toast after the welcome says the tour waits under Help ›
+  Start here.
 - **Vibe's board lists a waiting task once.** A queued task that has asked
   you something (a permission, a question) is under Needs you only, not also
   "up next" under Running.

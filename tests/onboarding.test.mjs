@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 const source = await readFile(new URL("../renderer/onboarding.js", import.meta.url), "utf8");
 const KEY = "mefiStudio.walkthrough.v2";
 const LEGACY_KEY = "mefiStudio.walkthrough.v1";
-// Stop order: Scan, Your workspace, First map, Connections, Create, Monitor, Review.
+// Stop order: Your AI (the scan), Your project, First map, AI accounts, First task, Watch, Check.
 const STOPS = 7;
 const SCAN = 0, WORKSPACE = 1, MAP = 2, CONNECT = 3, CREATE = 4, MONITOR = 5, REVIEW = 6;
 const allDone = (...indexes) => Array.from({ length: STOPS }, (_, index) => indexes.includes(index));
@@ -74,7 +74,7 @@ test("first launch opens the guide once, at the scan stop, and closing it keeps 
   assert.equal(env.el("overlay").hidden, true);
   assert.equal(env.guide.startup(), true);
   assert.equal(env.el("overlay").hidden, false);
-  assert.match(env.el("title").textContent, /scan this computer/i);
+  assert.match(env.el("title").textContent, /Pick the AI that builds for you/);
   assert.equal(env.el("scan").hidden, false);
   assert.equal(env.el("map").hidden, true);
   assert.equal(env.el("action").hidden, true, "a panel stop has no menu to walk to");
@@ -113,7 +113,7 @@ test("the workspace and create stops offer the saved build choice and only an ex
   env.guide.startup();
   assert.equal(env.el("build-mode").hidden, true);
   env.el("next").click();
-  assert.match(env.el("title").textContent, /Welcome to Mefi/);
+  assert.match(env.el("title").textContent, /Open your project/);
   assert.equal(env.el("build-mode").hidden, false);
   assert.equal(env.el("auto-build").checked, true);
   assert.equal(env.el("auto-build").disabled, false);
@@ -122,7 +122,7 @@ test("the workspace and create stops offer the saved build choice and only an ex
   await env.settle();
   assert.deepEqual(calls, [false]);
   assert.equal(env.el("build-mode-label").textContent, "Verify first");
-  assert.match(env.el("build-mode-note").textContent, /Unapproved work waits/);
+  assert.match(env.el("build-mode-note").textContent, /waits for your OK/);
   env.el("next").click(); assert.equal(env.el("build-mode").hidden, true);
   env.el("next").click(); assert.equal(env.el("build-mode").hidden, true);
   env.el("next").click(); assert.equal(env.el("build-mode").hidden, false);
@@ -144,7 +144,7 @@ test("dismissed and completed guides never automatically reopen but remain acces
   assert.equal(reloaded.el("invitation").hidden, true);
   reloaded.guide.open();
   assert.equal(reloaded.el("overlay").hidden, false);
-  assert.match(reloaded.el("title").textContent, /scan this computer/i);
+  assert.match(reloaded.el("title").textContent, /Pick the AI that builds for you/);
   reloaded.el("steps").children[REVIEW].click(); reloaded.el("next").click();
   const completed = environment(env.storage);
   assert.equal(completed.guide.startup(), false);
@@ -162,7 +162,7 @@ test("capture and smoke initialization does not open or consume the first-run wa
 test("lesson progress survives closing, reload and navigation without calling host APIs", () => {
   const env = environment(); env.guide.open();
   for (let i = 0; i < CREATE; i++) env.el("next").click();
-  assert.match(env.el("title").textContent, /clear task/);
+  assert.match(env.el("title").textContent, /Tell Studio what to make/);
   env.el("action").click();
   assert.deepEqual(env.routes, ["workspace"]);
   assert.equal(env.get("workspace-mode-work").clicks, 1);
@@ -183,12 +183,16 @@ test("each menu stop's action reaches the intended control without performing th
     assert.equal(env.el("action").hidden, false);
     env.el("action").click();
   }
-  assert.deepEqual(env.routes, ["workspace", "studio", "workspace", "command", "workspace"]);
-  // Connections deep-links Settings at its Providers card; no other stop carries params.
-  assert.deepEqual({ ...env.routeParams[1] }, { section: "settings-assistant" }); // copied out of the vm realm
-  for (const at of [0, 2, 3, 4]) assert.equal(env.routeParams[at], null, `${env.routes[at]} opens without a deep link`);
+  // The 0.5 places: Home (Today), Team › Providers, Home's box, the Map, and (in Studio) the task board.
+  assert.deepEqual(env.routes, ["workspace", "agents", "workspace", "command", "tasks"]);
+  // Team opens at Providers, the Map on its Live work tab and the board on Review; Home's stops carry no params.
+  assert.deepEqual({ ...env.routeParams[1] }, { place: "providers" }); // copied out of the vm realm
+  assert.deepEqual({ ...env.routeParams[3] }, { rail: "work" });
+  assert.deepEqual({ ...env.routeParams[4] }, { filter: "review" });
+  for (const at of [0, 2]) assert.equal(env.routeParams[at], null, `${env.routes[at]} opens without a deep link`);
+  assert.equal(env.document.activeElement, env.get("task-filter-review"), "the review walk lands on the board's Review filter");
   assert.equal(env.get("workspace-add-project").clicks, 0);
-  assert.equal(env.get("workspace-review").clicks, 1);
+  assert.equal(env.get("workspace-review").clicks, 0, "Home's old Review filter, hidden in 0.5, is never pressed");
   assert.equal(env.get("workspace-send").clicks, 0);
   for (const index of [SCAN, MAP]) {
     env.guide.open();
@@ -222,14 +226,14 @@ test("walk with me stays in the corner, follows the menus, highlights the real c
   assert.deepEqual(env.routes, ["workspace"]);
   assert.deepEqual(env.releases, ["onboarding"]);
   assert.equal(env.get("workspace-mode-work").clicks, 0);
-  assert.match(env.el("coach-progress").textContent, /Step 2 of 7 · Your workspace/);
-  assert.match(env.el("coach-copy").textContent, /project menu/);
+  assert.match(env.el("coach-progress").textContent, /Step 2 of 7 · Your project/);
+  assert.match(env.el("coach-copy").textContent, /project list/);
   assert.equal(env.query("#workspace-add-project").classList.contains("walkthrough-focus"), true);
   // The next stop is the map panel: the coach steps aside and the sheet opens there.
   env.el("coach-next").click();
   assert.equal(env.el("coach").hidden, true);
   assert.equal(env.el("overlay").hidden, false);
-  assert.match(env.el("title").textContent, /Map the folder/);
+  assert.match(env.el("title").textContent, /map your project/);
   assert.equal(env.el("map").hidden, false);
   const saved = JSON.parse(env.storage.get(KEY));
   assert.equal(saved.done[WORKSPACE], true);
@@ -239,9 +243,9 @@ test("walk with me stays in the corner, follows the menus, highlights the real c
   // From Connections the coach walks again.
   env.el("next").click();
   env.el("action").click();
-  assert.deepEqual(env.routes, ["workspace", "studio"]);
+  assert.deepEqual(env.routes, ["workspace", "agents"]);
   assert.equal(env.query("#settings-assistant-heading").classList.contains("walkthrough-focus"), true);
-  assert.match(env.el("coach-progress").textContent, /Step 4 of 7 · Connections/);
+  assert.match(env.el("coach-progress").textContent, /Step 4 of 7 · AI accounts/);
   env.el("coach-back").click();
   assert.equal(env.el("coach").hidden, true);
   assert.equal(env.el("overlay").hidden, false);
@@ -254,12 +258,12 @@ test("the guided walk moves focus to its own Next when a stop has no real contro
   env.el("steps").children[WORKSPACE].click();
   env.el("action").click();
   assert.equal(env.document.activeElement, env.get("workspace-add-project"));
-  // Connections has no single control to land on, so focus goes to the coach's Next.
+  // Team › Providers has no single control to land on, so focus goes to the coach's Next.
   env.guide.open();
   env.el("steps").children[CONNECT].click();
   env.el("action").click();
   assert.equal(env.document.activeElement, env.el("coach-next"));
-  assert.deepEqual(env.routes.slice(-1), ["studio"]);
+  assert.deepEqual(env.routes.slice(-1), ["agents"]);
 });
 
 test("the workspace stop ticks itself off when the user actually selects a project", () => {
@@ -272,7 +276,7 @@ test("the workspace stop ticks itself off when the user actually selects a proje
   env.emit("mefi:project-changed", { detail: { projectId: "alpha" } });
   const saved = JSON.parse(env.storage.get(KEY));
   assert.equal(saved.done[WORKSPACE], true);
-  assert.match(env.el("coach-hint").textContent, /Project selected/);
+  assert.match(env.el("coach-hint").textContent, /Project open/);
   assert.match(env.el("coach-next").textContent, /Next stop/);
   assert.match(env.el("invite-steps").children[WORKSPACE].textContent, /✓/);
   assert.doesNotMatch(env.el("invite-steps").children[SCAN].textContent, /✓/);
@@ -307,7 +311,7 @@ test("repeated action events never regress or duplicate progress and refresh the
   env.emit("mefi:connection-saved", { detail: {} });
   const saved = JSON.parse(env.storage.get(KEY));
   assert.equal(saved.done[CONNECT], true);
-  assert.match(env.el("coach-hint").textContent, /Connections checked/);
+  assert.match(env.el("coach-hint").textContent, /Accounts checked/);
   env.emit("mefi:connection-saved", { detail: {} });
   assert.deepEqual(JSON.parse(env.storage.get(KEY)).done, saved.done);
   assert.match(env.el("invite-steps").children[CONNECT].textContent, /✓/);
@@ -315,12 +319,12 @@ test("repeated action events never regress or duplicate progress and refresh the
 
 test("the invitation can resume as a guided walk at the saved stop", () => {
   const env = environment(new Map([[KEY, JSON.stringify({ version: 2, step: CREATE, status: "reading" })]]));
-  assert.match(env.el("invite-walk").textContent, /Walk with me · Create/);
+  assert.match(env.el("invite-walk").textContent, /Walk with me · First task/);
   env.el("invite-walk").click();
   assert.equal(env.el("coach").hidden, false);
   assert.deepEqual(env.routes, ["workspace"]);
   assert.equal(env.get("workspace-mode-work").clicks, 1);
-  assert.match(env.el("coach-progress").textContent, /Step 5 of 7 · Create/);
+  assert.match(env.el("coach-progress").textContent, /Step 5 of 7 · First task/);
 });
 
 test("Escape ends the guided walk without disturbing the app around it", () => {
@@ -333,7 +337,7 @@ test("Escape ends the guided walk without disturbing the app around it", () => {
   assert.equal(event.stopped, 1);
   assert.equal(env.el("coach").hidden, true);
   assert.equal(JSON.parse(env.storage.get(KEY)).mode, "idle");
-  assert.match(env.el("invite-walk").textContent, /Walk with me · Your workspace/);
+  assert.match(env.el("invite-walk").textContent, /Walk with me · Your project/);
   env.emit("keydown", { key: "Escape" });
   assert.equal(env.el("coach").hidden, true);
 });
@@ -484,7 +488,7 @@ test("guided OpenCode scan and apply are reachable from First map", async () => 
   assert.ok(calls.some((call) => call[0] === "map"));
 });
 
-test("Connections opens the tool setup even when the guide was left at Review", async () => {
+test("Team › Providers opens the tool setup even when the guide was left at Review", async () => {
   const env = environment(); env.guide.open();
   env.el("steps").children[REVIEW].click(); env.guide.close();
   env.get("settings-guided-cli").click();
@@ -524,7 +528,7 @@ test("the scan stop reads OpenCode only on an explicit press, shows the facts, a
   assert.match(env.el("scan-status").textContent, /Setup saved\. Explorer nemotron.*stand-in judge is saved/);
   assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], true);
   assert.match(env.el("invite-steps").children[SCAN].textContent, /✓/);
-  assert.match(env.el("steps").children[SCAN].textContent, /✓ 1\. Scan/);
+  assert.match(env.el("steps").children[SCAN].textContent, /✓ 1\. Your AI/);
 });
 
 test("a setup saved earlier (or from Settings) ticks the scan stop off from the host's record", async () => {
@@ -557,7 +561,7 @@ test("the map stop needs a selected project, streams the explorer's steps and ti
   env.el("steps").children[MAP].click();
   env.el("map-run").click();
   await env.settle();
-  assert.match(env.el("map-status").textContent, /Select a project first/);
+  assert.match(env.el("map-status").textContent, /Open a project first/);
   assert.ok(!calls.some((call) => call[0] === "map"));
   env.get("workspace-project-name").textContent = "My project";
   let resolveMap;
@@ -574,9 +578,9 @@ test("the map stop needs a selected project, streams the explorer's steps and ti
   await env.settle();
   assert.equal(env.el("map-run").disabled, false);
   assert.equal(env.el("map-cancel").hidden, true);
-  assert.match(env.el("map-status").textContent, /Folder mapped: 2 areas, 1 check, 2 first tasks saved as ideas/);
+  assert.match(env.el("map-status").textContent, /Project mapped: 2 areas, 1 check, 2 first tasks saved as ideas/);
   const facts = env.el("map-facts").children.map((item) => item.textContent);
-  assert.deepEqual(facts, ["2 areas, 1 check, 2 first tasks saved as ideas.", "2 new ideas saved to Your work, 1 updated.", "A small tool.", "src (src/): The code."]);
+  assert.deepEqual(facts, ["2 areas, 1 check, 2 first tasks saved as ideas.", "2 new ideas saved in Ideas, 1 updated.", "A small tool.", "src (src/): The code."]);
   assert.equal(JSON.parse(env.storage.get(KEY)).done[MAP], true);
   assert.match(env.el("invite-steps").children[MAP].textContent, /✓/);
   env.el("map-cancel").click();
@@ -585,9 +589,9 @@ test("the map stop needs a selected project, streams the explorer's steps and ti
 
 test("a refused, cancelled or unparsable map explains what to do and leaves the stop unticked", async () => {
   const cases = [
-    [{ ok: false, reason: "free-tier-refused", error: "The free tier refused this run." }, /refused this run\. Choose a paid model in Settings/],
+    [{ ok: false, reason: "free-tier-refused", error: "The free tier refused this run." }, /refused this run\. Connect a paid AI in Team › Providers/],
     [{ ok: false, reason: "no-scan", error: "Run the first scan first." }, /Connect an AI right here.*I have an API key or a local model server/],
-    [{ ok: false, reason: "unparsable", error: "The explorer's reply contained no JSON object." }, /Map again; a second pass/],
+    [{ ok: false, reason: "unparsable", error: "The explorer's reply contained no JSON object." }, /Map again: a second try/],
     [{ ok: false, reason: "cancelled", error: "The map was cancelled." }, /was cancelled/],
   ];
   for (const [result, expected] of cases) {
@@ -665,12 +669,12 @@ test("Use this setup and continue maps the selected folder and asks the linked A
   assert.ok(calls.some((call) => call[0] === "status"));
   assert.match(env.el("progress").textContent, /Step 3 of 7/);
   assert.equal(JSON.parse(env.storage.get(KEY)).done[MAP], true);
-  assert.match(env.el("map-status").textContent, /Folder mapped/);
+  assert.match(env.el("map-status").textContent, /Project mapped/);
   assert.equal(env.el("activity").hidden, true);
   assert.equal(env.el("assist").hidden, false);
   assert.match(env.el("assist-status").textContent, /Mapped; connect a key next\. \(From your assistant \(deepseek-v4\.1-flash\)\.\)/);
   const lines = env.el("assist-list").children.map((item) => item.textContent);
-  assert.deepEqual(lines, ["Connections: Save a Jev key.", "Create: Start with the README task."]);
+  assert.deepEqual(lines, ["AI accounts: Save a Jev key.", "First task: Start with the README task."]);
   assert.equal(JSON.stringify(calls.find((call) => call[0] === "assist")[1].progress.done), JSON.stringify([true, false, true, false, false, false, false]));
   env.el("next").click();
   assert.equal(env.el("assist-list").children[0].attrs["aria-current"], "step");
@@ -787,12 +791,12 @@ test("with no folder open the workspace stop stays open and Use this setup never
   assert.ok(!calls.some((call) => call[0] === "map"), "no map without a folder");
   env.el("steps").children[MAP].click();
   env.el("map-run").click(); await env.settle();
-  assert.match(env.el("map-status").textContent, /Select a project first/);
+  assert.match(env.el("map-status").textContent, /Open a project first/);
   assert.ok(!calls.some((call) => call[0] === "map"));
   // Walking the workspace stop never claims a project that is not there.
   env.el("steps").children[WORKSPACE].click();
   env.el("action").click();
-  assert.doesNotMatch(env.el("coach-hint").textContent, /Project selected/);
+  assert.doesNotMatch(env.el("coach-hint").textContent, /Project open/);
   assert.match(env.el("coach-next").textContent, /Done — next stop/);
   // The header text alone (no workspace module) is read the same way.
   const bare = environment(new Map());
@@ -827,7 +831,7 @@ test("Use for the whole studio with no folder open waits at the workspace stop",
   assert.ok(!calls.some((call) => call[0] === "map"));
 });
 
-test("in Vibe mode the Create and Review walks use Vibe's box and Tasks panel, not Build's hidden controls", async () => {
+test("in Social the box and review walks use Today's own box and Review column, not Studio's hidden controls", async () => {
   const panels = [];
   const { host } = bridge();
   host.firstAssist = async () => ({ ok: true, via: "assistant", advice: { summary: "Next.", stops: {}, firstTask: { title: "Add a README run section", brief: "Check: README names the command." } }, warnings: [] });
@@ -837,17 +841,20 @@ test("in Vibe mode the Create and Review walks use Vibe's box and Tasks panel, n
   env.el("steps").children[CREATE].click();
   env.el("action").click();
   assert.deepEqual(env.routes, ["workspace"]);
-  assert.equal(env.get("workspace-mode-work").clicks, 0, "Build's composer is never switched behind Vibe");
+  assert.equal(env.get("workspace-mode-work").clicks, 0, "Studio's composer is never switched behind Social");
   assert.equal(env.document.activeElement, env.get("vibe-input"));
   assert.equal(env.query("#vibe-input").classList.contains("walkthrough-focus"), true);
   assert.equal(env.query("#workspace-input").classList.contains("walkthrough-focus"), false);
-  assert.match(env.el("coach-copy").textContent, /Social's box .*Build it/);
-  env.el("coach-next").click(); // Monitor
-  env.el("coach-next").click(); // Review
-  assert.deepEqual(panels, [["tasks", { fold: "done" }]]);
+  assert.match(env.el("coach-copy").textContent, /box on Today, in Social.*Build it/);
+  env.el("coach-next").click(); // Watch
+  env.el("coach-next").click(); // Check
+  // Today (go("workspace") lands on Social's own) shows the Review column: no panel opens and Studio's board stays shut.
+  assert.deepEqual(env.routes, ["workspace", "command", "workspace"]);
+  assert.deepEqual(panels, [], "no Social panel is opened for review");
   assert.equal(env.get("workspace-review").clicks, 0);
-  assert.equal(env.query("#vibe-panel").classList.contains("walkthrough-focus"), true);
-  assert.match(env.el("coach-copy").textContent, /Tasks in Social/);
+  assert.equal(env.query('#today-board [data-group="review"]').classList.contains("walkthrough-focus"), true);
+  assert.equal(env.query("#task-filter-review").classList.contains("walkthrough-focus"), false);
+  assert.match(env.el("coach-copy").textContent, /Review column/);
   // The suggested first task lands in the box the user actually sees.
   env.get("workspace-project-name").textContent = "My project";
   env.guide.open();
@@ -862,7 +869,7 @@ test("in Vibe mode the Create and Review walks use Vibe's box and Tasks panel, n
   assert.equal(env.get("vibe-build").clicks, 0, "placing a task never builds it");
 });
 
-test("I have an API key or a local model server walks to Connections and a usable save brings back a fresh scan", async () => {
+test("I have an API key or a local model server walks to Team › Providers and a usable save brings back a fresh scan", async () => {
   let keySaved = false;
   const auto = { ok: true, applied: false, planned: true, summary: "Assistant on z.ai GLM, fixed model defaults, no builder CLI installed yet.", notes: [], active: { provider: "zai" } };
   const { host, calls } = bridge({
@@ -875,8 +882,8 @@ test("I have an API key or a local model server walks to Connections and a usabl
   env.el("cli-keys").click();
   assert.equal(env.el("overlay").hidden, true);
   assert.equal(env.el("coach").hidden, false);
-  assert.deepEqual(env.routes.slice(-1), ["studio"]);
-  assert.deepEqual({ ...env.routeParams.at(-1) }, { section: "settings-assistant" });
+  assert.deepEqual(env.routes.slice(-1), ["agents"]);
+  assert.deepEqual({ ...env.routeParams.at(-1) }, { place: "providers" });
   assert.equal(env.el("coach-next").textContent, "Back to the scan");
   assert.match(env.el("coach-hint").textContent, /LM Studio/);
   // A cleared key, or one that leaves no working route, changes nothing.
@@ -935,13 +942,13 @@ test("a closed setup window refreshes the installed tools so Check connection co
   assert.equal(statusCalls, before + 1, "focus only refreshes after a setup window was opened");
 });
 
-test("a first launch after the setup helper connected an AI starts at Your workspace and does not scan", async () => {
+test("a first launch after the setup helper connected an AI starts at Your project and does not scan", async () => {
   const { host, calls } = bridge();
   const env = environment(new Map(), { host });
   env.context.window.MefiSetupHelper = { connected: () => true };
   assert.equal(env.guide.startup(), true);
   await env.settle();
-  assert.match(env.el("title").textContent, /Welcome to Mefi/);
+  assert.match(env.el("title").textContent, /Open your project/);
   assert.equal(calls.filter((call) => call[0] === "scan").length, 0, "the helper already linked an AI");
   assert.equal(JSON.parse(env.storage.get(KEY)).done[SCAN], true);
   // Without a connection the helper's answer changes nothing: the scan stop and its scan.
@@ -950,7 +957,7 @@ test("a first launch after the setup helper connected an AI starts at Your works
   unlinked.context.window.MefiSetupHelper = { connected: () => false };
   assert.equal(unlinked.guide.startup(), true);
   await unlinked.settle();
-  assert.match(unlinked.el("title").textContent, /scan this computer/i);
+  assert.match(unlinked.el("title").textContent, /Pick the AI that builds for you/);
   assert.equal(fresh.calls.filter((call) => call[0] === "scan").length, 1);
 });
 
@@ -967,4 +974,32 @@ test("in Vibe the walk stays in Vibe: the project, task and review stops use Vib
   assert.deepEqual(modes, [], "the walk never switches the owner into Build");
   assert.equal(mode, "vibe");
   assert.ok(env.routes.includes("workspace"), "Home is reached through go(), which lands on Vibe in Vibe mode");
+  assert.ok(!env.routes.includes("tasks"), "Social's review stays on Today instead of opening Studio's task board");
+});
+
+test("in Studio the box walk keeps Today's words and purpose, the Map opens on Live work and review opens the board on Review", () => {
+  const env = environment();
+  // Studio's Today (renderer/today.js, layout v2) borrows Home's box, with its own Talk it over and Build it.
+  env.context.window.MefiToday = { hostsComposer: () => true };
+  env.guide.open();
+  env.el("steps").children[CREATE].click();
+  env.el("action").click();
+  assert.deepEqual(env.routes, ["workspace"]);
+  assert.equal(env.get("workspace-mode-work").clicks, 0, "Today's box is never switched to Create task: its draft stays in view");
+  assert.equal(env.document.activeElement, env.get("workspace-input"));
+  assert.equal(env.query("#workspace-input").classList.contains("walkthrough-focus"), true);
+  assert.match(env.el("coach-copy").textContent, /box on Today, in Studio/);
+  env.el("coach-next").click(); // Watch: the Map, with Live work in front of a remembered tab or a selected task
+  assert.deepEqual(env.routes.slice(-1), ["command"]);
+  assert.deepEqual({ ...env.routeParams.at(-1) }, { rail: "work" });
+  assert.equal(env.query("#idle-feed").classList.contains("walkthrough-focus"), true);
+  assert.equal(env.document.activeElement, env.el("coach-next"), "the Map has no single control to land on");
+  env.el("coach-next").click(); // Check: Studio's Today has no Review column, so the board opens on its Review filter
+  assert.deepEqual(env.routes, ["workspace", "command", "tasks"]);
+  assert.deepEqual({ ...env.routeParams.at(-1) }, { filter: "review" });
+  assert.equal(env.get("workspace-review").clicks, 0, "Home's hidden Review filter is never pressed");
+  assert.equal(env.document.activeElement, env.get("task-filter-review"));
+  assert.equal(env.query("#task-filter-review").classList.contains("walkthrough-focus"), true);
+  assert.match(env.el("coach-copy").textContent, /task board, on Review/);
+  assert.equal(env.get("task-filter-review").clicks, 0, "the filter comes from the route; nothing is pressed for the owner");
 });

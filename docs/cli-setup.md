@@ -1,8 +1,9 @@
 # Guided CLI setup
 
-Open **Start here** from Help or **Agents › Setup › Connections**. The same
-connection controls appear at Scan and First map, so a missing tool never
-sends a new user back through the walkthrough.
+Open **Start here** from Help, or **Install a coding tool or use one
+subscription for Studio** in **Team › Providers**. The same connection controls
+appear at the tour's Your AI (scan) and First map stops, so a missing tool
+never sends a new user back through the walkthrough.
 
 1. Choose Codex, Claude Code, Grok, Antigravity or OpenCode. Installed tools
    are detected locally; detection alone does not claim that a login works.
@@ -80,7 +81,7 @@ block (the folders, the marks file, `cliAccountTurn` for assistant calls,
 `cliAccountLimitHit` in the executor's `finish`).
 
 No subscription tool? **I have an API key or a local model server** walks to
-Agents › Setup › Connections, where a z.ai, OpenRouter, OpenCode Go or Zen key,
+Team › Providers, where a z.ai, OpenRouter, OpenCode Go or Zen key,
 a custom endpoint or LM Studio can be set up. A saved key that gives the
 assistant a working route (or **Back to the scan**, e.g. after picking LM
 Studio) returns to Scan and scans again; **Use this setup** then saves the
