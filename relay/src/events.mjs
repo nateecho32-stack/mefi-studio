@@ -13,9 +13,11 @@
 //   at least two votes share the rest 50/30/20. Votes stay hidden until then.
 // - Co-work hours. Three times a day (02:00, 10:00 and 18:00 UTC) the relay
 //   opens a listed co-work room for an hour. It looks who is there at three
-//   moments (15, 35 and 55 minutes in); everyone seen at two of them, with at
-//   least one other member seen too, earns 4 credits. The room closes at the
-//   end of the hour.
+//   moments (15, 35 and 55 minutes in): a member who joined that hour's room
+//   and has Studio connected, on any page (a restart mid-hour reconnects by
+//   itself, so it never loses anyone their place). Everyone seen at two of
+//   the three, with at least one other member seen too, earns 4 credits. The
+//   room closes at the end of the hour.
 // - Building together. In any member's co-work room, two or more members with
 //   the room open at once earn a tick each time the relay looks (at most every
 //   10 minutes); three ticks in a day pay 4 credits, once a day.
@@ -143,7 +145,8 @@ export function splitPool(pool, ranked) {
  * createEvents({ store, now, credits, economy, rooms })
  *   credits: { award(o) -> Promise<number>, standing(uid, held), heldUntil(uid) -> Promise<number>, card(uid) }
  *   economy: createEconomy(...)
- *   rooms:   { present(roomId) -> uid[], open({ name, maxMembers }) -> roomId, join(roomId, uid) -> result, close(roomId), member(roomId, uid) -> bool }
+ *   rooms:   { present(roomId) -> uid[] (members with the room open), online(roomId) -> uid[] (members with Studio connected),
+ *              open({ name, maxMembers }) -> roomId, join(roomId, uid) -> result, close(roomId), member(roomId, uid) -> bool }
  * -> { routes(route), tick(), nextDue(), forget(uid), upkeep(), summary(uid) }
  */
 export function createEvents({ store, now, credits, economy, rooms }) {
@@ -288,7 +291,7 @@ export function createEvents({ store, now, credits, economy, rooms }) {
       endsAt: row.ends_at,
       started: at >= row.starts_at,
       joined: row.status === 'open' && row.room_id ? rooms.member(row.room_id, uid) : false,
-      here: row.status === 'open' && row.room_id ? rooms.present(row.room_id).length : 0,
+      here: row.status === 'open' && row.room_id ? rooms.online(row.room_id).length : 0,
       checks: Number(store.get('SELECT checks FROM event_attendance WHERE event_id = ? AND user_id = ?', row.id, uid)?.checks ?? 0),
       checksDone: row.checks_done,
       checksNeeded: COWORK.checksNeeded,
@@ -302,7 +305,7 @@ export function createEvents({ store, now, credits, economy, rooms }) {
     if (row.status !== 'open') return;
     const due = COWORK.checksAt.filter((offset) => at >= row.starts_at + offset).length;
     if (due > row.checks_done && row.room_id) {
-      const here = rooms.present(row.room_id);
+      const here = rooms.online(row.room_id);
       store.transaction(() => {
         const fresh = eventRow(row.id);
         if (fresh.checks_done >= due) return;
@@ -418,7 +421,7 @@ export function createEvents({ store, now, credits, economy, rooms }) {
     const cowork = currentCowork(at);
     return {
       jam: jam ? { id: jam.id, theme: jam.theme, phase: jamPhase(jam, at), entriesUntil: jam.entries_until, endsAt: jam.ends_at, entries: Number(store.get('SELECT COUNT(*) AS n FROM event_entries WHERE event_id = ?', jam.id)?.n ?? 0), entered: Boolean(store.get('SELECT 1 AS yes FROM event_entries WHERE event_id = ? AND user_id = ?', jam.id, uid)) } : null,
-      cowork: cowork ? { id: cowork.id, startsAt: cowork.starts_at, endsAt: cowork.ends_at, here: cowork.room_id && cowork.status === 'open' ? rooms.present(cowork.room_id).length : 0 } : { id: null, startsAt: nextCoworkStart(at), endsAt: null, here: 0 },
+      cowork: cowork ? { id: cowork.id, startsAt: cowork.starts_at, endsAt: cowork.ends_at, here: cowork.room_id && cowork.status === 'open' ? rooms.online(cowork.room_id).length : 0 } : { id: null, startsAt: nextCoworkStart(at), endsAt: null, here: 0 },
     };
   }
 

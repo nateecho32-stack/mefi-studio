@@ -36,13 +36,15 @@ function api(relay) {
   return as;
 }
 
-/** A member with a room open in Studio: a raw socket that said hello, subscribed, and renews when told. */
-async function present(relay, token, roomId) {
+/** A member with Studio connected (a raw socket that said hello), with a room open when one is named, renewing when told. */
+async function present(relay, token, roomId = null) {
   const raw = await rawSocket(relay, token);
   raw.send({ type: "hello", session: raw.session, protocol: 1 });
   await until(() => raw.of("ready").length, `${token} ready`);
-  raw.send({ type: "subscribe", roomId });
-  await until(() => raw.frames.some((frame) => frame.type === "presence" && frame.roomId === roomId), `${token} in ${roomId}`);
+  if (roomId) {
+    raw.send({ type: "subscribe", roomId });
+    await until(() => raw.frames.some((frame) => frame.type === "presence" && frame.roomId === roomId), `${token} in ${roomId}`);
+  }
   return {
     ...raw,
     // The test clock jumps further than a session lasts: hand the socket a fresh one, as Studio does on its own timer.
@@ -208,8 +210,9 @@ test("a co-work hour: the relay opens the room, looks three times, pays who stay
   assert.deepEqual({ ...room }, { kind: "cowork", listed: 1, owner_id: null });
 
   for (const token of ["tok-alice", "tok-bob", "tok-cara", "tok-newbie"]) assert.equal((await as(token, "POST", `/v1/events/${eventId}/join`)).status, 200, token);
-  // Alice, Bob and the new member keep the room open; Cara joined but never opened it.
-  const sockets = [await present(relay, "tok-alice", roomId), await present(relay, "tok-bob", roomId), await present(relay, "tok-newbie", roomId)];
+  // Alice keeps the room open, Bob has Studio connected on another page (that counts: a restart mid-hour reconnects by
+  // itself), the new member keeps it open too, and Cara joined but never connected.
+  const sockets = [await present(relay, "tok-alice", roomId), await present(relay, "tok-bob"), await present(relay, "tok-newbie", roomId)];
   const before = Object.fromEntries(await Promise.all(["tok-alice", "tok-bob", "tok-cara", "tok-newbie"].map(async (token) => [token, (await as(token, "GET", "/v1/me")).credits.balance])));
   for (const offset of [...COWORK.checksAt, COWORK.lengthMs]) {
     clock.at = start + offset;
@@ -224,6 +227,7 @@ test("a co-work hour: the relay opens the room, looks three times, pays who stay
   assert.equal(await gained("tok-alice"), COWORK.amount);
   assert.equal(await gained("tok-bob"), COWORK.amount);
   assert.equal(await gained("tok-cara"), 0, "joining without being there pays nothing");
+  assert.equal(await gained("tok-bob"), COWORK.amount, "connected on any page counts");
   assert.equal(await gained("tok-newbie"), 0, "a new member earns nothing yet");
   const paid = relay.sql(`SELECT actor_id, target_id FROM credit_events WHERE kind = 'cowork' AND amount > 0 ORDER BY target_id`);
   assert.deepEqual(paid.map((row) => [row.target_id, row.actor_id]), [[ALICE.id, BOB.id], [BOB.id, ALICE.id]], "the giver is the other member who was there, so the pair limit applies");

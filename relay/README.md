@@ -106,9 +106,10 @@ plays and stars, with both sides in good standing, once each, under the caps:
   two votes or more share the rest 50/30/20. A prize's giver is the event,
   and moderators see it as "a community event", never as farming.
 - **Co-work hours** at 02:00, 10:00 and 18:00 UTC: a listed co-work room the
-  relay opens ten minutes early and closes after the hour. It looks who has
-  the room open at 15, 35 and 55 minutes; everyone seen twice, with at least
-  one other member seen too, earns 4 credits (twice a day at most).
+  relay opens ten minutes early and closes after the hour. At 15, 35 and 55
+  minutes it looks who joined that hour's room and has Studio connected (on
+  any page, so a restart costs nobody their place); everyone seen twice, with
+  at least one other member seen too, earns 4 credits (twice a day at most).
 - **Building together** in members' own co-work rooms: each look (at most
   every 10 minutes) that finds two or more members in the room counts once
   for each; three in a day pay 4 credits, once a day.
@@ -189,6 +190,10 @@ WebSocket messages count 20 to 1, and the keepalive ping is free. One awake
 Hub object uses at most 10,800 of the 13,000 GB-seconds a day. Chat, presence
 and pings write no rows. A signed-in Studio stays connected while it is open:
 its keepalive is free and renewing its session is about 100 requests a day,
-and The Lobby reads once a minute only while it is on screen. That fits a
+and The Lobby reads once a minute only while it is on screen. The community
+events add about 15 short alarms a day (three co-work hours, each opened,
+looked at three times and closed) and one jam close a week; the building
+together looks ride on the 15-minute sweep that already runs while anyone is
+connected, and Friends › Events reads once when it opens. That fits a
 community of several hundred people a day; past that, the $5 Workers Paid plan
 lifts every limit.
