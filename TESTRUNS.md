@@ -39,6 +39,39 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
+
+Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
+hand with both sides kept; d1344bc puts the Playlists entry back to once after an earlier merge took 0e9f37f, not
+d55269f as its message says). Relay: `relay/src/economy.mjs` (a daily community budget, 200 + 25 per member seen this
+week who is old enough to earn) and `relay/src/events.mjs` (the weekly Build Jam, co-work hours at 02:00, 10:00 and
+18:00 UTC, building together), run on the relay's alarm; schema v5; credits.mjs gains together, cowork and jam kinds
+paid through award(). Studio: hub-client events calls, main.cjs HUB_EVENT_METHODS, preload hubEvents,
+renderer/friends-events.js + .css as Friends › Events.
+
+A read-only review of the social side found, in this branch, an alarm that would have woken the relay every second
+before each co-work hour and through a pause, a listed co-work room nobody could approve requests for, prizes two
+votes could win, and Forget me leaving names in results; all fixed in 113ca61 with tests. Its findings in other
+files went to the social session, which landed them on main (711ceb5).
+
+Gate on 132132d (main f1934aa merged): the parallel stage at 4 suites at a time, 7227 tests, 7210 pass, 3 fail, all a
+git time limit hit under load (29 to 780 MB free while other sessions ran): git_actions "a listener that throws does
+not stop a publish half-way", rust_parity_git "the actions answer like the JavaScript" and rust_parity_snapshots
+"the same attempt on two identical repositories". Python contracts 248 OK (1 skipped), normalized-path lock OK,
+`npm run audit` 0 findings. The Electron lane did not finish: media_window_render and layout_contract_render each
+kept an Electron window alive all night (their kill timers never landed at that memory) and held the machine-wide
+lane about nine hours until killed at 06:11 (a stage limit for exactly this is on wip/test-speed). The Electron
+suites were then run one at a time on the merged tree 0d82a1a through the lease with a 12-minute guard each:
+42 of 47 pass on the first pass (layout_contract_render left out: it fails on clean main here and retires with
+ui/v2-only). Of the five: shell_render is the known display-scaling failure on clean main; agent_setup_render and
+unified_studio_render fail on main's own renderer too (a control run in C:\wt\speed, at other assertions:
+load-sensitive); today_render and tree_dynamics_render, which had run 10 and 15 minutes under load, pass alone
+(101 s and 14 s). friends_render, companion_hub_render and friends_two_render pass. The three git time-limit
+suites pass alone: git_actions, rust_parity_git and rust_parity_snapshots, 72/72 in 2 min 41 s through `npm run
+test:one`.
+
+After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
+
 ## 2026-10-06 The social review's fixes land with the polish: say what helps, why a play earned nothing, one vocabulary
 
 Branch `wip/social-polish-2` in `C:\wt\polish2`: wip/social-polish (a676b05, Windows CI green) + 67e5898, the fixes from
@@ -501,28 +534,6 @@ clean main (393 s). settings_render fails exactly as on clean main (600x560 at
 1.5: the Report a problem rows 7 px past the page's edge); with that one size
 left out in a throwaway copy, its every-theme contrast pass is green for
 Chrome and the other twelve palettes, on this tree and on clean main.
-
-## 2026-10-05 Today in both modes and the snapshot time limits land on main
-
-Branch `land/ui-today` in `C:\wt\land-ui`: origin/main 3daf9d8 with
-rust/snapshot-timeouts 1a1c1f4 (attempt snapshots take a `timeoutScale` for
-every git time limit, in JavaScript and in Rust; the snapshot parity test uses
-6 on both sides) and ui/today merged (3780663), then 577bf4e: the today_render
-and sessions_render fixtures expect a run that waits on you under Needs you
-only. Both fixtures failed alone on 3780663 (they pinned the old picture) and
-pass alone on 577bf4e (72 s and 117 s).
-
-Full `npm test` on 577bf4e (quiet machine apart from a cleanup session doing
-git work): Node 6970 tests, 6953 pass, 14 skipped, 3 fail, all pass alone:
-advisory_checks (26/26; EPERM removing its temp folder), attempt_review_host
-(28/28; "a claim cancelled before its worker started", known under load) and
-update_continuity (9/9; read a helper mid-write under load). Electron lane 76:
-72 pass, 1 skipped, 3 fail: layout_contract_render and shell_render (as on
-clean main on this PC) and sessions_render ("the keyboard starts on the open
-project", passes alone again, 122 s). rust_parity_snapshots ran inside the
-gate and passed (3/3; the twin-repository test took 127 s under load, the
-case the time-limit scale is for). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run check`
-ok.
 
 ## Read Before Any Tests
 
