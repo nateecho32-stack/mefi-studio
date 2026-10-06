@@ -39,6 +39,29 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The Lobby, one sign-in, online at launch, credits that cannot be farmed, and no Discord roles land on main
+
+Branch `wip/credits-guard` in `C:\wt\credits` (bcc51f3 the Lobby front page, Sign in with Discord and online at launch;
+4970d71 the anti-farming rules and moderator review; 2ba413e Flame rank lists a room, no Discord roles needed), with
+main dfda798 merged (5506e9c) and the scope note's Friends lines updated.
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on 4970d71 and 2ba413e, and
+run again on the landing commit before the fast-forward. On this PC the full gate could not get the machine to itself
+(other sessions' suites ran throughout); the one full `npm test` on bcc51f3: Node 7048 tests, 7013 pass, 20 fail, every
+one in the git-heavy suites that fail when git cannot start under load (attempt_review_host, attempt_snapshots_host,
+git_actions, rust_parity_repo, sync, sync_changes, sync_lineage, worktree_actions, worktrees; they passed alone on this
+branch's parent earlier today); Electron 88: layout_contract_render and shell_render as on clean main, and
+media_browser_render (not touched here). Python contracts and the path lock pass.
+
+Run alone after each change: relay_core 9/9, relay_e2e 9/9, relay_credits 10/10 (alts, one player and many projects,
+the 15-a-week pair limit, stars once a week, midnight replay, rate limits, Forget me's 30-day hold, a moderator's review
+and take-back), relay_connect 4/4, hub_client 16/16, hub_host 13/13, friends_front_ui 9/9, project_hub_ui 6/6,
+rooms_ui 13/13, friends_navigation 8/8, app_rail 40/40, onboarding 43/43, module_purity 58/58, booklet_build 5/5,
+layout_contract_nav 15/15, shell_frame_bars 34/34, community_rules 17/17; friends_render, companion_hub_render and
+unified_studio_render 1/1 each (friends_render walks The Lobby and the signed-out card at four window sizes with no
+text under 12 px). `npm run check` ok; lint adds no warning; audit 0. The relay was redeployed (version
+4b641b0c) and `relay/scripts/smoke.mjs` passes against it.
+
 ## 2026-10-05 The Mefi Studio relay, the Project hub, the Lobby and one Friends page land on main
 
 Branch `wip/friends-ux` in `C:\wt\fux`: wip/relay (the Cloudflare relay under `relay/`, hub-client, room history,
@@ -539,25 +562,6 @@ assistant tick 1); `MEFI_HOST_SELFTEST` recorded a 1825x1175 page capture, 40
 invokes, 29 channels listened to, live pushes and an accepted toast. Electron
 44.4.1 safeStorage round trip verified both ways on synthetic data in a scratch
 app folder. No change to what the Electron build does.
-
-## 2026-10-03 Weak-drive check without administrator rights
-
-`fsutil fsinfo volumeinfo C:\` refuses a normal user on the owner's PC
-("Error 3", and "Error 5: Access is denied" for `C:`), so the Publish
-dialog's weak-drive warning and Set up this PC's exFAT/FAT checks could never
-show. Both now ask PowerShell for `[IO.DriveInfo]::new('C:').DriveFormat`,
-falling back to CIM `Win32_LogicalDisk` under constrained language mode, with
-the 10 s timeout kept. Timed from Node's execFile (4 runs each): DriveInfo
-194-315 ms, CIM 369-784 ms, Get-Volume 1139-1667 ms; the CIM fallback under
-constrained language 327-362 ms; a missing drive prints nothing (unknown).
-
-`npm run check`, `npm run lint` (no new warnings) and `npm run audit` pass.
-`tests/pc_setup.test.mjs` 8/8, including a live query of the system drive
-without elevation; `tests/git_actions.test.mjs` plus `tests/git_host.test.mjs`
-118/118; `npm run test:fast` 6745 pass, 0 fail, 14 skipped (365 s). Not run
-against a real exFAT drive (none on this PC). The Rust port on
-`wip/rust-host` (`drive_of`, `rules::filesystem_of`, parity cases) still
-runs fsutil and must follow.
 
 ## Read Before Any Tests
 
