@@ -95787,7 +95787,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const togglePanel = (kind) => (window.MefiVibePanels?.current?.() === kind ? window.MefiVibePanels.close() : openPanel(kind));
   const VIBE_KEYS = [
     ["/", "vibe-key-box", "Social: type in the box", () => { const input = $("input"); input.focus({ preventScroll: true }); try { input.setSelectionRange(input.value.length, input.value.length); } catch { /* not a text field */ } }],
-    ["N", "vibe-key-needs", "Social: what needs you", () => { const waiting = needs(); if (waiting.length) openNeed(waiting[0]); else feedback("Nothing needs you right now.", "good"); }],
+    ["N", "vibe-key-needs", "Social: what needs you", () => {
+      const waiting = needs();
+      if (!waiting.length) { feedback("Nothing needs you right now.", "good"); return; }
+      // The 0.5 layout answers in the Inbox (renderer/today.js), as openNeedById does; Social's own drawer is the way otherwise.
+      if (!window.MefiToday?.openNeed?.({ kind: waiting[0].kind, id: waiting[0].id })) openNeed(waiting[0]);
+    }],
     ["C", "vibe-key-chat", "Social: the conversation", () => (state.chatOpen ? closeChat() : openChat())],
     ["T", "vibe-key-tasks", "Social: your tasks", () => togglePanel("tasks")],
     ["P", "vibe-key-plans", "Social: plans", () => togglePanel("plans")],
@@ -103803,7 +103808,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (event.defaultPrevented) return;
     if (modifier && !event.altKey && !event.shiftKey && (code === "KeyM" || key === "m")) { event.preventDefault?.(); setMode(currentMode() === "vibe" ? "build" : "vibe"); return; }
     if (modifier && !event.altKey && !event.shiftKey && (code === "KeyB" || key === "b")) { event.preventDefault?.(); toggle("list"); return; }
-    if (!modifier && !event.altKey && event.key === "[" && !typing(event.target) && !nav()?.state?.transient) { event.preventDefault?.(); toggle("inspector"); }
+    // On the Map, [ and ] step through its tasks (renderer/idle.js): the bracket is the Map's there, and the top bar's button
+    // and Search still show or hide the inspector.
+    let onMap = false;
+    try { onMap = window.MefiIdle?.isActive?.() === true; } catch { /* no Map to ask */ }
+    if (!modifier && !event.altKey && event.key === "[" && !typing(event.target) && !nav()?.state?.transient && !onMap) { event.preventDefault?.(); toggle("inspector"); }
   }
   // Display-only rows for the shortcut sheet (nav.js skips the "command" group; onKey acts).
   function registerKeyRows() {

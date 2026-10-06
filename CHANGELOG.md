@@ -29,7 +29,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Settings; the Ruins Runner launcher showed without the game; the status
   bar's player opened the media menu in the wrong place; Plans squeezed its
   editor in a smaller window; the breadcrumb cut every crumb to a few letters;
-  Size and density's picture could take most of the page beside its controls.
+  Size and density's picture could take most of the page beside its controls;
+  N on Social's Today opened the old decision drawer instead of the Inbox; and
+  on the Map, [ hid the inspector instead of stepping back through the tasks.
   Team lists Resources, the place row turns into one picker in a narrow page
   and steps aside in a very short window, and the startup settings read
   *Open Today on launch*, *Always start in Social mode* and *Agents when
