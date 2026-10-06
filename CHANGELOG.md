@@ -38,6 +38,19 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ### Everything in 0.5.0
 
+- **A more compact Studio: less empty space, more of your work on screen.**
+  Today puts its board about 130 px higher. The line of keys under the box
+  is gone (Talk it over shows Enter, Build it shows Ctrl Enter), the scope
+  line shows only once you narrow it to an area, "Decided for you" is a
+  count beside the others, the drop-files hint waits until it has news, and
+  the project picker is one line, in line with the page. Every page's header
+  is 48 px with an 18 px title (it was 64 px and 22 px), Team's header lost
+  its extra band, a board card no longer keeps an empty row under a one-line
+  title, Studio's Today sets its greeting beside a smaller orb, and the
+  session list puts the Git chip and the worktree count on one row. The
+  launch switch reads *Open Today on launch* in both modes. Fixed: the
+  project's cards in Studio's inspector ran past the window's right edge at
+  1920 px (a long team member's name now ends in "…").
 - **0.5 polish: an easier first run, and menus that behave.** A new
   install now starts with **Start a new app** (Studio makes the folder) beside
   **Open a folder…**, and the Studio Daily says *Welcome to Studio*. The first

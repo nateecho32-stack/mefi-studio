@@ -531,14 +531,15 @@ html[data-shell=rail] body:has(.workspace-page:not([hidden])) #idle-layer-far { 
 /* The project map is a page like the others: no frame of its own. */
 html[data-shell=rail] .workspace-page > .agent-brain-sheet { background: transparent; border: 0; border-radius: 0; box-shadow: none; backdrop-filter: none; }
 
-/* One header band: same height, padding and title on every page. */
+/* One header band: same height, padding and title on every page, compact as an app's (48 px and an 18 px title under the frame's
+   own top bar and tabs, which already say where you are). */
 html[data-shell=rail] :is(.workspace-page, #plans-overlay) :is(.sheet-head, .explorer-head, .planning-head, .brains-head, .agent-brain-head),
 html[data-shell=rail] .agents-head {
-  min-height: 64px; padding: 12px 16px; gap: 12px; align-items: center;
+  min-height: 48px; padding: 8px 16px; gap: 12px; align-items: center;
   border-bottom: 1px solid var(--studio-glass-edge);
 }
 html[data-shell=rail] :is(.sheet-head .sheet-title h2, .planning-head h2, .brains-head h2, .agent-brain-head h2, .agents-head h1, .settings-category-head h2, #page-title) {
-  margin: 0; font-family: var(--font-display); font-size: 22px; font-weight: 600; line-height: 1.2;
+  margin: 0; font-family: var(--font-display); font-size: var(--f18, 18px); font-weight: 600; line-height: 1.25;
 }
 html[data-shell=rail] .planning-head p { margin-top: 2px; }
 

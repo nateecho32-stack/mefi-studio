@@ -15,11 +15,11 @@
    tokens the cards already use are re-pointed at the 0.5 type ladder (renderer/size.css, never under 12 px), as
    Settings does (#tab-studio[data-places="v2"]), so a card written for the classic page reads at least 12 px too. */
 #agents-overlay[data-places="v2"] { --fs-2xs: var(--f12, 12px); --fs-xs: var(--f12, 12px); --fs-sm: var(--f125, 12.5px); --fs-md: var(--f135, 13.5px); --fs-base: var(--f14, 14px); }
-#agents-overlay[data-places="v2"] .agents-head h1 { font-size: var(--f22, 22px); }
+#agents-overlay[data-places="v2"] .agents-head h1 { font-size: var(--f18, 18px); }
 /* The prototype's page: no frame around it, its head and body in one centred column (page-pad, 1080 px). */
 #agents-overlay[data-places="v2"] { --team-pad: max(16px, calc((100% - 1080px) / 2)); }
 #agents-overlay[data-places="v2"] .agents-sheet { border: 0; border-radius: 0; background: transparent; box-shadow: none; }
-#agents-overlay[data-places="v2"] .agents-head { padding: 22px var(--team-pad) 10px; border-bottom: 0; background: transparent; }
+#agents-overlay[data-places="v2"] .agents-head { padding: 12px var(--team-pad) 6px; border-bottom: 0; background: transparent; }
 #agents-overlay[data-places="v2"] .agents-body { padding: 8px var(--team-pad) 20px; }
 #agents-overlay[data-places="v2"] :is(#agents-team, .agents-team-toolbar) { max-width: none; }
 /* A <small> left at the browser's "smaller" reads 12 px at least (no specificity: a card's own size still wins); the few

@@ -70,7 +70,7 @@ test("Build's Home is Today: the page goes first in Home's layer, borrows the bo
   assert.equal(tools.parentNode, byId(t, "workspace-form"), "one row of controls under the words, inside the box");
   assert.deepEqual(tools.children.map((child) => child.id), ["today-build-attach", "today-build-files", "today-build-autonomy", "today-build-chat-tools", "today-build-talk", "today-build-build"]);
   assert.equal(words(byId(t, "today-build-attach")), "Add files or an image");
-  assert.equal(words(byId(t, "today-build-talk")), "Talk it over");
+  assert.equal(words(byId(t, "today-build-talk")), "Talk it overEnter", "Talk it over carries its key too, so no line of keys is needed under the box");
   assert.equal(words(byId(t, "today-build-build")), "Build itCtrl Enter", "Build it carries its key, as the prototype's");
   assert.deepEqual(logOf(t, "autonomy.mount"), [[{ id: "today-build-autonomy-control" }]], "the permission mode is autonomy-ui.js's own control, mounted once");
   assert.deepEqual(logOf(t, "chatTools.mount"), [[{ id: "today-build-chat-tools-chip" }]], "how Mefi answers (its style, skills and tools) is chat-tools.js's own chip, mounted once");
