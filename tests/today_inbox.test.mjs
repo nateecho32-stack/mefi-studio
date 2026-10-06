@@ -152,7 +152,7 @@ test("a question with no options of its own is answered in words: its box is ope
   const form = card.querySelector("form");
   assert.ok(form, "the Inbox is where it is decided, so it takes an answer here");
   assert.equal(form.hidden, false, "the box is open: there are no options to read first");
-  assert.equal(card.querySelector(".today-own-words").hidden, true);
+  assert.equal(card.querySelector(".today-own-words"), null, "no link, not even a hidden one: the Inbox focuses a card's first button, and a hidden one cannot take it");
   assert.equal(card.querySelector(".today-need-options"), null, "no empty group of options");
   assert.equal(card.querySelectorAll(".today-option").length, 0);
   const input = card.querySelector(".today-need-input");

@@ -90763,8 +90763,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (kept?.text || state.ownWords.has(item.key)) openOwnWords();
       else if (!item.options.length) { form.hidden = false; own.hidden = true; }
       else form.hidden = true;
-      if (item.options.length) node.append(choices);
-      node.append(own, form);
+      // Without options the link is not in the card at all: the Inbox gives the focus to a card's first button, and a
+      // hidden one cannot take it (the focus stayed on the pill, so Escape never reached the Inbox).
+      if (item.options.length) node.append(choices, own);
+      node.append(form);
     } else {
       for (const action of actionsOf(item, state.data || {})) {
         // A way to look (Review changes) only goes somewhere; everything else is a decision, through perform().
