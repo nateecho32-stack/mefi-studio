@@ -11,11 +11,11 @@ import { createDom, Element } from "./fixtures/renderer-dom.mjs";
 const source = await readFile(new URL("../renderer/key-tips.js", import.meta.url), "utf8");
 
 function load({ storage = new Map(), vibe = true } = {}) {
-  const { document, get } = createDom({ ids: ["vibe-compose", "vibe-dock", "vibe-pulse", "settings-key-tips"] });
+  const { document, get } = createDom({ ids: ["vibe-compose", "vibe-build", "vibe-dock", "vibe-pulse", "settings-key-tips"] });
   const lookup = document.getElementById;
   document.getElementById = (id) => lookup(id) ?? document.querySelector(`#${id}`);
   document.readyState = "complete";
-  for (const id of ["vibe-compose", "vibe-dock", "vibe-pulse"]) document.body.append(get(id));
+  for (const id of ["vibe-compose", "vibe-build", "vibe-dock", "vibe-pulse"]) document.body.append(get(id));
   // Laid out on screen: every node answers with a visible box.
   Element.prototype.getBoundingClientRect ??= function () { return { left: 400, top: 300, right: 700, bottom: 360, width: 300, height: 60 }; };
   Element.prototype.getClientRects ??= function () { return this.hidden ? [] : [{}]; };
@@ -46,7 +46,7 @@ test("a first launch shows two Vibe tips beside their controls, with keycaps", (
   env.tips.tick();
   assert.deepEqual([...env.tips.shown()], ["vibe-box", "vibe-dock"]);
   const box = env.shown()[0];
-  assert.equal(box.dataset.side, "right", "beside the box, not over the headline");
+  assert.equal(box.dataset.side, "bottom", "under Build it: never over the button it names, nor the headline");
   const caps = box.querySelectorAll("kbd").map((cap) => cap.textContent);
   assert.deepEqual(caps, ["/", "Enter", "Ctrl", "Enter"]);
   assert.ok(env.registered.some((dest) => dest.id === "keyTipsToggle") && env.registered.some((dest) => dest.id === "keyTipsAgain"), "Search can switch them off and bring them back");
@@ -64,6 +64,17 @@ test("a tip never pops over the What's new sheet that opens after an update", ()
   sheet.hidden = true;
   env.tips.tick();
   assert.equal(env.tips.shown().length, 2, "and the tips come once it is closed");
+});
+
+test("a tip never pops over the first run's welcome, and comes once it is closed", () => {
+  const env = load();
+  let open = true;
+  env.window.MefiSetupHelper = { isOpen: () => false, welcomeOpen: () => open };
+  env.tips.tick();
+  assert.deepEqual([...env.tips.shown()], [], "the welcome is a dialog: nothing pops over it");
+  open = false;
+  env.tips.tick();
+  assert.equal(env.tips.shown().length, 2);
 });
 
 test("a click fades a tip away for good; pressing its key does too", () => {
