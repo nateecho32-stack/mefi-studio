@@ -2818,3 +2818,87 @@ test("A video dropped on the card plays now, and a row dropped there leaves Up n
   fire(nowCard, "drop", { dataTransfer: stale });
   assert.equal(env.music.linkElement().url, "https://example.com/c.mp4"); assert.deepEqual(queuedNames(env), ["A", "C"], "a row whose place has changed plays without a queue row being taken");
 });
+
+test("Playlists: its section and Save buttons appear once renderer/playlists.js registers, and a list plays and lines up through the player", async () => {
+  const env = environment({ mediaWindow: true, queueSaved: [{ url: "https://example.com/waiting.mp4", title: "Waiting" }], bridge: { youtubeSearch: async () => ({ ok: true, results: [{ id: YT, title: "First", channel: "One", duration: "3:10" }, { id: "M7lc1UVf-VE", title: "Second" }] }) } });
+  env.music.openAudio(env.ids.get("settings-audio-open"));
+  assert.equal(env.ids.get("music-section-playlists"), undefined, "without playlists.js there is no section");
+  assert.equal(env.ids.get("music-video-save").hidden, true);
+  const saves = [], shown = [];
+  let open = true;
+  const hands = env.music.playlists({ save: (anchor, item) => saves.push({ ...item }), dismiss: () => { const was = open; open = false; return was; }, offer: () => false, shown: () => shown.push(true) });
+  assert.equal(hands.host, env.ids.get("music-playlists"));
+  assert.ok(env.ids.get("music-section-playlists"), "the section joins the tabs");
+  env.music.openSection("playlists");
+  assert.equal(env.ids.get("music-playlists").hidden, false); assert.ok(shown.length, "and is told when it shows");
+  // A list starts at its first video; the rest go ahead of what was waiting,
+  // and what the player can't take is left out.
+  hands.play([{ url: `https://youtu.be/${YT}`, title: "One" }, { url: "https://example.com/two.mp4", title: "Two" }, { url: "javascript:alert(1)" }, { url: "https://example.com/three.mp4", title: "" }], "Mix");
+  assert.equal(env.music.linkElement().url, `https://www.youtube.com/watch?v=${YT}`);
+  assert.deepEqual(queuedNames(env), ["Two", "Video file · three.mp4", "Waiting"]);
+  assert.equal(hands.queue([{ url: "https://example.com/four.mp4", title: "Four" }], "Mix"), 1);
+  assert.equal(queuedNames(env).at(-1), "Four");
+  const many = Array.from({ length: 60 }, (_, i) => ({ url: `https://example.com/v${i}.mp4`, title: `V${i}` }));
+  assert.equal(hands.queue(many), 46, "Up next still holds fifty");
+  assert.equal(queuedNames(env).length, 50);
+  assert.equal(hands.queue(many), 0);
+  // Save, on the playing card and on each Browse card.
+  const saveNow = env.ids.get("music-video-save");
+  assert.equal(saveNow.hidden, false);
+  saveNow.click();
+  assert.deepEqual(saves.at(-1), { url: `https://www.youtube.com/watch?v=${YT}`, title: "One", channel: "" });
+  env.ids.get("music-link-url").value = "quiet"; env.ids.get("music-link-load").click(); await flush();
+  const card = env.ids.get("music-youtube-results").children[0];
+  assert.equal(card.children[4].attrs["aria-label"], "Save First to a playlist");
+  card.children[4].click();
+  assert.deepEqual(saves.at(-1), { url: `https://www.youtube.com/watch?v=${YT}`, title: "First", channel: "One", duration: "3:10" });
+  // Escape closes the Save list first, then the menu.
+  const dropdown = env.ids.get("music-dropdown");
+  dropdown.dispatch("keydown", { key: "Escape" }); assert.equal(dropdown.hidden, false);
+  dropdown.dispatch("keydown", { key: "Escape" }); assert.equal(dropdown.hidden, true);
+});
+
+test("Playlists: More › This menu turns the section, its Save buttons and the Browse hand-off off, and the choice is kept", async () => {
+  const env = environment({ mediaWindow: true });
+  env.music.openAudio(env.ids.get("settings-audio-open"));
+  const switchBox = env.ids.get("music-playlists-switch");
+  assert.equal(switchBox.parentElement.hidden, true, "no switch without playlists.js");
+  const offered = [];
+  env.music.playlists({ save() {}, dismiss: () => false, offer: (text) => offered.push(text) > 0, shown() {} });
+  assert.equal(switchBox.parentElement.hidden, false); assert.equal(switchBox.checked, true);
+  env.music.playLink(`https://www.youtube.com/watch?v=${YT}`);
+  env.music.openSection("playlists");
+  assert.equal(env.ids.get("music-dropdown").dataset.section, "playlists");
+  switchBox.checked = false; switchBox.dispatch("change");
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.mediaMenu.v1")).playlists, false);
+  assert.notEqual(env.ids.get("music-dropdown").dataset.section, "playlists", "the deck leaves the section");
+  assert.equal(env.ids.get("music-playlists").hidden, true);
+  assert.equal(env.ids.get("music-video-save").hidden, true);
+  assert.equal(env.ids.get("music-dropdown").dataset.playlists, "false");
+  env.music.openSection("browse");
+  env.ids.get("music-link-url").value = `Mefi Studio playlist: Mix 1. One <https://youtu.be/${YT}>`;
+  env.ids.get("music-link-load").click();
+  assert.equal(offered.length, 0, "Browse keeps what is typed in it");
+  const restored = environment({ menuSaved: JSON.parse(env.storage.get("mefiStudio.mediaMenu.v1")) });
+  restored.music.playlists({ save() {}, dismiss: () => false, offer: () => false, shown() {} });
+  assert.equal(restored.ids.get("music-playlists-switch").checked, false, "off survives a restart");
+  assert.equal(restored.music.openSection("playlists") === "playlists", false);
+});
+
+test("Playlists: a shared list typed into Browse goes to Playlists, and Find more searches without changing what plays", async () => {
+  const asked = [];
+  const env = environment({ bridge: { youtubeSearch: async (query) => { asked.push(query); return { ok: true, results: [{ id: YT, title: `About ${query}` }] }; } } });
+  env.music.openAudio(env.ids.get("settings-audio-open"));
+  const offered = [];
+  const hands = env.music.playlists({ save() {}, dismiss: () => false, offer: (text) => { offered.push(text); return text.startsWith("Mefi Studio playlist:"); }, shown() {} });
+  await hands.browse("2swap");
+  assert.equal(env.music.status().source, "local", "the music source stays as it was");
+  assert.equal(env.ids.get("music-dropdown").dataset.section, "browse");
+  assert.deepEqual(asked, ["2swap"]);
+  env.music.setSource("link"); env.music.openSection("browse");
+  const box = env.ids.get("music-link-url");
+  box.value = `Mefi Studio playlist: Mix 1. One <https://youtu.be/${YT}> 2. Two <https://youtu.be/M7lc1UVf-VE>`;
+  env.ids.get("music-link-load").click(); await flush();
+  assert.equal(offered.length, 1); assert.equal(box.value, "", "the box is handed over, not searched");
+  assert.deepEqual(asked, ["2swap"]);
+});

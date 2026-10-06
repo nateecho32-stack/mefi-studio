@@ -64,8 +64,28 @@ While iterating:
 
 ```
 npm run test:fast   # Node suites only, minus the nine that launch Electron
+npm run test:one -- tests/x.test.mjs   # one or a few suites, taking turns with other runs
+npm run test:lease  # who is running tests on this PC right now (--slowest: the slowest suites)
 npm run lint        # eslint, check-only: undefined identifiers fail, unused ones warn
 ```
+
+**Test runs take turns on one PC.** Several Claude Code, Codex and Studio
+sessions often gate this repository from their own worktrees at once, and on
+a 16 GB laptop three runs together starve each other: git and Electron fail
+to start and a gate that takes 40 minutes takes two hours. `npm test` and
+`npm run test:one` therefore take a turn first (`scripts/test-lease.mjs`):
+one Electron lane on the machine at a time, two parallel Node stages at a
+time, first come first served, with a line every 30 seconds naming who holds
+the turn. A run that died or stopped answering never holds it, and nobody
+waits more than an hour. Run single suites through `npm run test:one` rather
+than a bare `node --test`, which takes no turn. The parallel stage runs as
+many suites at once as free memory allows (one per hardware thread less one
+when there is room, never fewer than four), the Electron lane runs one window
+at a time when memory is short, and each stage starts its slowest suites
+first from the timings every run records (`scripts/test-timings.mjs`, shared
+by every worktree). Switches: `MEFI_TEST_LEASE=off`, `MEFI_TEST_WIDTH`,
+`MEFI_TEST_WINDOW_WIDTH`, `MEFI_TEST_LEASE_MAX_WAIT_MIN`, `MEFI_TEST_LEASE_DIR`
+and `MEFI_TEST_TIMINGS`.
 
 `npm test` needs Python 3 and a real desktop. The runner finds Python before
 anything runs, trying `python`, then `py -3` (Windows), then `python3`, and

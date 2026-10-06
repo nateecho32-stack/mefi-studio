@@ -6,6 +6,65 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 The v2 Work view closer to the 0.5 prototype: breadcrumb, list head, run menu, inspector
+
+Branch `wip/ui-work-view` (worktree off main 39d98e3, node_modules junctioned),
+five commits: af36359 top bar (the prototype's breadcrumb; a section's pages
+as a page list in the list column with Back, Forward and the Git chip's new
+"list" look), 7cba1f0 session list head (project menu, Git chip, N worktrees,
+plan drafts in Backlog), 30076fc thread and box (head chips, one run menu,
+Attach for every purpose), 8520670 inspector (Worktree tab, More, Steps from
+runProgress.todos and Acceptance checks, the project's inspector on Home, a
+vacant inspector folds away), a4ecc88 a 1920x1080 gallery in sessions_render.
+
+`npm run check` ok (271 targets), lint 0 errors (42 warnings, all
+pre-existing), `npm run audit` 0 findings. `npm run test:fast` 6899 tests:
+6883 pass, 14 skipped, attempt_review_host "a shot that is slow" and
+run_node_tests_fast "--list ... slow reader" (timeout) failed under load and
+pass alone (28/28, 2/2). Electron fixtures one by one: sessions_render pass
+(project menu, Git chip, run menu at 1920/1440/1100 with nothing under
+12 px, Worktree tab, project inspector, the column folding on Work pages),
+composer_render pass, today_render pass, worktrees_render pass;
+shell_render passes every size config, the walk and the Tab walk (now 28
+steps: Home's inspector has the project's controls) and stops at the known
+1 px check at 1100 px ("373 !== 372", same as clean main here).
+
+Full `npm test` at a4ecc88: Node 6899 tests, 6882 pass, 14 skipped, 3 fail
+(advisory_checks EPERM removing its temp folder, attempt_review_host,
+update_rehearsal "Roll back restores...": 26/26, 28/28 and 7/7 alone);
+Electron lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render
+(viewport 1921x1081) and shell_render (the 1 px check), both failing the
+same way on clean main on this PC; command_render and planning_render pass;
+Python 248 OK (1 skipped); path lock ok. Captures at 1920x1080 in
+`C:\wt\gap\after-work\` with prototype-left side-by-sides in
+`C:\wt\gap\after-work\compare\`.
+
+## 2026-10-04 Rust stage 2: five more modules move into Rust
+
+Branch `rust/stage2-ports` in `C:\wt\rust2` (pushed as wip/rust-stage2-ports):
+the Skills page's files (55281f0), a message's pictures (cd8cc2c), attempt
+snapshots (0ff6869), settings + keys + projects (1435ae9), and the Git chip's
+host layer with git-link's describe and chip (c5a1e03), each behind a
+Rust-backed factory in scripts/rust-modules.cjs, each with its parity test
+(rust_parity_skills, rust_parity_images, rust_parity_snapshots: twin repos
+with a fixed clock give the same commit ids; rust_parity_settings: main.cjs's
+own settings code from its text against Rust on twin userData folders;
+rust_parity_git: describe on about 830 sets of facts and 28 host steps on
+two boxes with the fake gh). `mefi-core repo-batch` now answers a
+{ $mefi: "fn" } argument with null and lists its calls.
+
+Full `npm test` on c5a1e03: Node 6899 tests, 6885 pass, 14 skipped, 0 fail;
+Electron lane 75: 70 pass, 1 skipped, 4 fail: layout_contract_render and
+shell_render (viewport 1921x1081, as on clean main on this PC),
+evidence_capture ("UnknownVizError") and task_overview_render ("No fixture
+report"), both while another worktree's full run shared the Electron stage:
+each passes alone (1/1, 1/1). Python 248 OK; path lock ok; `npm run audit` 0
+findings; `npm run check` ok (271 targets). An earlier run on 1435ae9 had the
+same picture apart from attempt_review_host "a shot that is slow" (28/28
+alone). A first run was stopped and its children kept running into a second
+one: overlapping runs failed to start processes (0xC0000142) and wrote one
+log; neither is counted here. `cargo test --lib` 26 pass.
+
 ## 2026-10-04 The Studio Daily lands: DevDay branch merged with main, Since you were away
 
 Branch `land/devday` in `C:\wt\devday-land`: origin/wip/feat/devday-2026 (the
