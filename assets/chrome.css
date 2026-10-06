@@ -1,277 +1,77 @@
 /* Mefi Studio — Chrome, the site's default look (and Studio's Chrome theme).
-   Matte black surfaces with a fine grain, silver type, brushed metal for the
-   few things you press or should notice first, and an iridescent layer over
-   it all: silver-white, ice blue, lilac and pale aqua, like anodised metal,
-   in the light on the page, the edges, the hairlines and the highlights.
-   Everything here applies only while Chrome is the theme (assets/theme.js
-   clears data-theme for it), so the other palettes keep their own colours.
-   Loaded on every page after fx.css; the tokens (--metal, --holo, --edge,
-   --matte ...) live in site.css. */
+   Matte black, silver type, brushed metal on the few things you press, and an
+   iridescent layer (silver-white, ice blue, lilac and pale aqua, like
+   anodised metal) in the highlighted words, the rims and the light. Every
+   rule starts with :root:not([data-theme]), so it applies only while Chrome is
+   the theme (assets/theme.js clears data-theme for it) and the other palettes
+   keep their own colours. Headlines stay solid text, so the words that rise
+   one by one (fx.js) keep their colour; only .grad words carry the shimmer. */
 
-/* An angle the iridescent rims can turn through (cards under the cursor). */
-@property --holo-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-
-/* ---- ground: matte black, an overhead light, an iridescent haze, a fine grain ---- */
 :root:not([data-theme]) {
-  --hairline: rgb(255 255 255 / 0.075);
-  --hairline-strong: rgb(255 255 255 / 0.16);
-  --accent-dim: rgb(255 255 255 / 0.06);
-  --ring: 0 0 0 1px #0a0a0c, 0 0 0 3px rgb(168 197 255 / 0.62);
-  --shadow: 0 18px 44px rgb(0 0 0 / 0.6);
-  --shadow-lg: 0 44px 100px -12px rgb(0 0 0 / 0.85);
-  --glow: 0 0 0 1px rgb(0 0 0 / 0.9), 0 40px 100px -24px rgb(0 0 0 / 0.95), 0 0 150px -44px rgb(168 197 255 / 0.3);
-  --grad: var(--holo-text);
-  /* The metal's headline band, cooled a touch toward the ice. */
-  --metal-text: linear-gradient(180deg, #ffffff 0%, #eef2f8 30%, #b2bbd0 50%, #c9d6f7 62%, #e6defd 82%, #fbfcfe 100%);
-  --metal-soft: linear-gradient(180deg, #ffffff 0%, #e9eef7 42%, #c3cde4 54%, #e3dcfb 80%, #f6f8fc 100%);
-  /* Panels: a diagonal matte, a shade lighter where the light comes from. */
-  --matte: linear-gradient(155deg, #17171c 0%, #121216 45%, #0e0e11 100%);
-  --matte-raised: linear-gradient(155deg, #1d1d23 0%, #16161b 50%, #111115 100%);
-  --matte-tint: radial-gradient(140% 90% at 0% 0%, rgb(168 197 255 / 0.05), transparent 55%);
-  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  --accent-4: #9de8da;
+  --grad: linear-gradient(100deg, #f6f8fc 0%, #c3d6ff 24%, #d9cdff 50%, #bff2e8 74%, #f6f8fc 100%);
+  --edge-grad: linear-gradient(160deg, rgb(255 255 255 / 0.24), rgb(168 197 255 / 0.08) 34%, rgb(198 180 255 / 0.04) 62%, rgb(157 232 218 / 0.16));
+  --ring: 0 0 0 2px #070709, 0 0 0 4px rgb(168 197 255 / 0.7);
 }
+
+/* the light: an overhead wash, ice and lilac at the sides, aqua below */
 :root:not([data-theme]) body {
-  background-color: var(--bg);
   background-image:
-    var(--grain),
-    radial-gradient(1200px 520px at 50% -12%, rgb(255 255 255 / 0.07), transparent 62%),
+    radial-gradient(1200px 560px at 50% -12%, rgb(255 255 255 / 0.06), transparent 62%),
     radial-gradient(900px 640px at -8% 6%, rgb(168 197 255 / 0.07), transparent 62%),
-    radial-gradient(900px 640px at 108% 12%, rgb(198 180 255 / 0.06), transparent 62%),
-    radial-gradient(1100px 700px at 50% 104%, rgb(157 232 218 / 0.045), transparent 66%);
-  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+    radial-gradient(900px 640px at 108% 14%, rgb(198 180 255 / 0.06), transparent 62%),
+    radial-gradient(1100px 700px at 50% 104%, rgb(157 232 218 / 0.04), transparent 66%);
 }
-/* The three drifting blooms behind the page (fx.css) carry the three tints. */
-:root:not([data-theme]) .ambient { opacity: 0.6; }
 :root:not([data-theme]) .ambient .b1 { background: radial-gradient(circle, rgb(168 197 255 / 0.15), rgb(168 197 255 / 0.04) 48%, transparent 72%); }
 :root:not([data-theme]) .ambient .b2 { background: radial-gradient(circle, rgb(198 180 255 / 0.13), rgb(198 180 255 / 0.04) 50%, transparent 72%); }
 :root:not([data-theme]) .ambient .b3 { background: radial-gradient(circle, rgb(157 232 218 / 0.1), transparent 70%); }
-:root:not([data-theme]) ::selection { background: rgb(168 197 255 / 0.32); color: #fff; }
+
+/* type */
+:root:not([data-theme]) h3, :root:not([data-theme]) h4 { color: #f4f6f8; }
+:root:not([data-theme]) .grad { filter: drop-shadow(0 0 22px rgb(168 197 255 / 0.22)); }
 :root:not([data-theme]) a { color: #e9ecf0; }
 :root:not([data-theme]) a:hover { color: #fff; }
-/* Links inside running text are white like bold text, so they carry a quiet, icy underline. */
-:root:not([data-theme]) :is(p, dd, td, .prose li, .ticks li, .faq li, .feature-copy li, .item li) a:not(.btn):not(.chip):not(.card):not(.more):not(.now-strip) {
+/* Links inside running text are as bright as bold text, so they keep a quiet icy underline. */
+:root:not([data-theme]) :is(p, dd, td, .prose li, .ticks li, .faq li, .feature-copy li, .item li) a:not(.btn):not(.chip):not(.card):not(.more):not(.now-strip):not(.hero-pill) {
   text-decoration: underline; text-decoration-color: rgb(168 197 255 / 0.45); text-underline-offset: 3px; text-decoration-thickness: 1px;
 }
 :root:not([data-theme]) :is(p, dd, td, .prose li, .ticks li, .faq li, .feature-copy li, .item li) a:not(.btn):hover { text-decoration-color: rgb(198 180 255 / 0.95); }
-:root:not([data-theme]) :focus-visible { outline-color: #c3d6ff; }
 
-/* ---- type: chrome headlines, iridescent highlights, quiet silver labels ---- */
-/* Each line gets its own band of metal (background-size: one line high). */
-:root:not([data-theme]) h1,
-:root:not([data-theme]) h2 {
-  background: var(--metal-text); background-size: 100% 1lh; background-repeat: repeat-y;
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-:root:not([data-theme]) h2 { background-image: var(--metal-soft); }
-/* Small headings that are labels, not titles, stay solid. */
-:root:not([data-theme]) :is(.foot-col h2, .theme-pop h2, .lane-head h2, .cta-band h2, .wiki-side h4, .visually-hidden) {
-  background: none; color: inherit;
-}
-:root:not([data-theme]) .lane-head h2, :root:not([data-theme]) .cta-band h2 { color: var(--ivory); }
-:root:not([data-theme]) h3, :root:not([data-theme]) h4 { color: #f4f6f8; }
-/* The highlighted words ("Make it together.", "with people.") are iridescent and drift slowly;
-   the hero's line also keeps its passing glint (fx.css .shine). */
-:root:not([data-theme]) .grad, :root:not([data-theme]) .shine { filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.6)) drop-shadow(0 0 18px rgb(168 197 255 / 0.18)); }
-:root:not([data-theme]) .grad:not(.shine) { background-image: var(--holo-text); background-size: 220% 100%; animation: holo-drift 16s ease-in-out infinite alternate; }
-@keyframes holo-drift { from { background-position: 0% 50%; } to { background-position: 100% 50%; } }
-:root:not([data-theme]) .eyebrow { color: #c4cddd; letter-spacing: 0.24em; }
-:root:not([data-theme]) .eyebrow:not(:has(.status, .badge))::before {
-  content: ""; display: inline-block; width: 26px; height: 1px; margin-right: 12px; vertical-align: 0.32em;
-  background: linear-gradient(90deg, transparent, #a8c5ff 55%, #eef2f7);
-}
-:root:not([data-theme]) .center .eyebrow:not(:has(.status, .badge))::after, :root:not([data-theme]) .eyebrow.center:not(:has(.status, .badge))::after {
-  content: ""; display: inline-block; width: 26px; height: 1px; margin-left: 12px; vertical-align: 0.32em;
-  background: linear-gradient(90deg, #eef2f7, #c6b4ff 45%, transparent);
-}
-
-/* ---- header, status strip and footer ------------------------------------- */
-:root:not([data-theme]) .site-head { background: linear-gradient(180deg, rgb(12 12 15 / 0.82), rgb(10 10 12 / 0.7)); border-bottom-color: transparent; }
-:root:not([data-theme]) .site-head::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; pointer-events: none; background: var(--holo-line); opacity: 0.7;
-}
-:root:not([data-theme]) .brand img { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.4), 0 4px 12px rgb(0 0 0 / 0.7), 0 0 16px -2px rgb(168 197 255 / 0.35); }
-:root:not([data-theme]) .tabs { background: linear-gradient(180deg, #121215, #0c0c0e) padding-box, var(--holo-edge) border-box; border: 1px solid transparent; box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.6); }
-:root:not([data-theme]) .tabs a:hover { background: linear-gradient(180deg, rgb(168 197 255 / 0.08), rgb(198 180 255 / 0.05)); }
-:root:not([data-theme]) .tabs a[aria-current="page"],
-:root:not([data-theme]) .chip[aria-pressed="true"],
-:root:not([data-theme]) .chip[aria-current="true"],
-:root:not([data-theme]) .look-tabs [aria-selected="true"],
-:root:not([data-theme]) .tabset [role="tab"][aria-selected="true"] {
-  color: #0b0b0d; background: var(--metal); border-color: transparent;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(0 0 0 / 0.28), 0 0 0 1px rgb(168 197 255 / 0.3), 0 8px 22px -10px rgb(168 197 255 / 0.55);
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.45);
-}
-:root:not([data-theme]) .now-strip {
-  position: relative; color: #b9c1cf;
-  background: linear-gradient(90deg, rgb(168 197 255 / 0.09), rgb(198 180 255 / 0.07) 50%, rgb(157 232 218 / 0.09)), linear-gradient(180deg, #111114, #0c0c0e);
-  border-bottom-color: transparent;
-}
-:root:not([data-theme]) .now-strip::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; pointer-events: none; background: var(--holo-line); opacity: 0.35; }
-:root:not([data-theme]) .now-strip .now-more { background: var(--holo-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
-:root:not([data-theme]) .site-foot {
-  background: radial-gradient(900px 260px at 50% 100%, rgb(168 197 255 / 0.06), transparent 70%), linear-gradient(180deg, transparent, rgb(0 0 0 / 0.5));
-  border-top-color: transparent; position: relative;
-}
-:root:not([data-theme]) .site-foot::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--holo-line); opacity: 0.5; }
-:root:not([data-theme]) .foot-col h2 { color: #a3abb9; }
-:root:not([data-theme]) .scroll-progress { background: var(--holo); box-shadow: 0 0 12px rgb(168 197 255 / 0.55); height: 2px; }
-
-/* ---- buttons: brushed metal in an iridescent rim for the main action, matte with a chrome rim for the rest ---- */
+/* brushed metal for the main action, with an iridescent rim */
 :root:not([data-theme]) .btn-primary,
-:root:not([data-theme]) .home .pill b {
-  color: #0b0b0d; background: var(--metal) padding-box, var(--holo) border-box; border: 1px solid transparent;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(0 0 0 / 0.3), 0 0 0 1px rgb(0 0 0 / 0.65), 0 12px 30px -10px rgb(0 0 0 / 0.95), 0 0 26px -8px var(--holo-glow);
+:root:not([data-theme]) .intro-build,
+:root:not([data-theme]) .mode-knob {
+  color: #0b0b0d; background: var(--metal);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -1px 0 rgb(0 0 0 / 0.3), 0 0 0 1px rgb(168 197 255 / 0.35), 0 14px 36px -12px rgb(168 197 255 / 0.55), 0 0 70px -24px rgb(198 180 255 / 0.55);
   text-shadow: 0 1px 0 rgb(255 255 255 / 0.5);
 }
-:root:not([data-theme]) .btn-primary:hover {
-  background: var(--metal-hover) padding-box, var(--holo) border-box; color: #000; border-color: transparent;
-  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgb(0 0 0 / 0.3), 0 0 0 1px rgb(0 0 0 / 0.65), 0 14px 34px -10px rgb(0 0 0 / 0.95), 0 0 36px -6px rgb(168 197 255 / 0.5);
+:root:not([data-theme]) .btn-primary:hover, :root:not([data-theme]) .intro-build:hover {
+  background: var(--metal-hover);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 rgb(0 0 0 / 0.3), 0 0 0 1px rgb(198 180 255 / 0.55), 0 20px 46px -12px rgb(168 197 255 / 0.7), 0 0 90px -20px rgb(157 232 218 / 0.5);
 }
-:root:not([data-theme]) .btn-primary:active { transform: translateY(0); filter: brightness(0.93); }
-:root:not([data-theme]) .btn-primary::after { background: linear-gradient(108deg, transparent 34%, rgb(255 255 255 / 0.7) 44%, rgb(198 180 255 / 0.55) 50%, rgb(168 197 255 / 0.5) 54%, transparent 64%); }
-:root:not([data-theme]) .btn:not(.btn-primary):not(.btn-void),
-:root:not([data-theme]) .chip:not([aria-pressed="true"]):not([aria-current="true"]),
-:root:not([data-theme]) .home .pill {
-  background: var(--matte) padding-box, var(--edge-strong) border-box; border: 1px solid transparent;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 10px 24px -14px rgb(0 0 0 / 0.9);
-}
-:root:not([data-theme]) .btn:not(.btn-primary):not(.btn-void):hover,
-:root:not([data-theme]) .chip:not([aria-pressed="true"]):not([aria-current="true"]):hover,
-:root:not([data-theme]) .home .pill:hover {
-  background: var(--matte-raised) padding-box, var(--holo-edge-strong) border-box;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 12px 30px -14px rgb(168 197 255 / 0.45);
-  color: #fff;
-}
-:root:not([data-theme]) .icon-link:hover, :root:not([data-theme]) .theme-btn:hover, :root:not([data-theme]) .theme-btn[aria-expanded="true"] {
-  background: linear-gradient(180deg, rgb(168 197 255 / 0.1), rgb(198 180 255 / 0.06)); border-color: rgb(198 180 255 / 0.28);
+:root:not([data-theme]) .chip[aria-pressed="true"], :root:not([data-theme]) .chip[aria-current="true"],
+:root:not([data-theme]) .tabset [role="tab"][aria-selected="true"] {
+  color: #0b0b0d; background: var(--metal); border-color: transparent;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), 0 0 0 1px rgb(168 197 255 / 0.3), 0 8px 22px -10px rgb(168 197 255 / 0.55);
 }
 
-/* ---- surfaces: matte panels with an edge that catches the light, iridescent where it matters ---- */
-:root:not([data-theme]) :where(.card, .item, .step, .faq details, .release-card, .wiki-nav a, .menu-panel, .theme-pop, .feat-legend > div, .cm-way, .rm-stages li, .lane) {
-  background: var(--matte-tint) padding-box, var(--matte) padding-box, var(--holo-edge) border-box; border: 1px solid transparent;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.035), 0 16px 40px -22px rgb(0 0 0 / 0.95);
+/* the iridescent rim on surfaces under the cursor */
+@property --holo-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+:root:not([data-theme]) .bento-card.spot::before, :root:not([data-theme]) .jam-card.spot::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 2;
+  background: conic-gradient(from var(--holo-angle), rgb(238 242 247 / 0.5), rgb(168 197 255 / 0.4), rgb(198 180 255 / 0.35), rgb(157 232 218 / 0.4), rgb(238 242 247 / 0.5));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  opacity: 0; transition: opacity .4s ease; animation: holo-turn 6s linear infinite;
 }
-:root:not([data-theme]) .lane { background: linear-gradient(180deg, rgb(168 197 255 / 0.06), transparent 140px) padding-box, linear-gradient(180deg, #111114, #0b0b0d) padding-box, var(--holo-edge) border-box; border: 1px solid transparent; }
-/* Feature cards keep their status edge (features.css), and take the matte and the rim. */
-:root:not([data-theme]) .feat { background: var(--matte-tint) padding-box, var(--matte) padding-box, var(--edge) border-box; border: 1px solid transparent; }
-/* Under the cursor, a card's rim turns iridescent and slowly comes around. */
-:root:not([data-theme]) :is(.card-link, .item, .faq details, .cm-way, .wiki-nav a):hover {
-  background: var(--matte-raised) padding-box, conic-gradient(from var(--holo-angle, 0deg), rgb(238 242 247 / 0.7), rgb(168 197 255 / 0.55), rgb(198 180 255 / 0.45), rgb(157 232 218 / 0.55), rgb(238 242 247 / 0.7)) border-box;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), 0 18px 44px -20px rgb(168 197 255 / 0.32);
-  animation: holo-turn 6s linear infinite;
-}
+:root:not([data-theme]) .bento-card.spot:hover::before, :root:not([data-theme]) .jam-card.spot:hover::before { opacity: 1; }
 @keyframes holo-turn { to { --holo-angle: 360deg; } }
-/* The cards that lead a section wear the iridescent edge at rest. */
-:root:not([data-theme]) .card-feature { background: linear-gradient(160deg, #1b1b21, #0e0e11) padding-box, var(--holo-edge) border-box; }
-:root:not([data-theme]) .card-glow { background: var(--matte-raised) padding-box, var(--holo-edge) border-box; box-shadow: var(--glow); }
-:root:not([data-theme]) :is(.rm-now-card, .release-card) { background: linear-gradient(160deg, #19191e, #0d0d10) padding-box, var(--holo-edge) border-box; border: 1px solid transparent; }
-:root:not([data-theme]) .dl-card {
-  background:
-    radial-gradient(520px 220px at 100% 0%, rgb(198 180 255 / 0.12), transparent 70%),
-    radial-gradient(520px 260px at 0% 100%, rgb(168 197 255 / 0.1), transparent 70%),
-    linear-gradient(160deg, #17171c, #0d0d10) padding-box, var(--holo-edge) border-box;
-  border: 1px solid transparent;
-}
-:root:not([data-theme]) .band {
-  background:
-    radial-gradient(900px 340px at 88% 0%, rgb(168 197 255 / 0.085), transparent 70%),
-    radial-gradient(820px 320px at 8% 100%, rgb(198 180 255 / 0.07), transparent 70%),
-    radial-gradient(600px 260px at 50% 50%, rgb(157 232 218 / 0.025), transparent 70%),
-    linear-gradient(170deg, rgb(255 255 255 / 0.03), transparent 38%);
-  border-block-color: rgb(255 255 255 / 0.06);
-}
-:root:not([data-theme]) .cta-band {
-  background: radial-gradient(640px 260px at 0% 0%, rgb(168 197 255 / 0.12), transparent 70%), radial-gradient(640px 260px at 100% 100%, rgb(198 180 255 / 0.11), transparent 70%), var(--matte) padding-box, var(--holo-edge) border-box;
-  border: 1px solid transparent;
-}
-:root:not([data-theme]) .card .glyph, :root:not([data-theme]) .glyph:not(.void):not(.gold) {
-  color: #111118; background: var(--holo); border: 1px solid rgb(255 255 255 / 0.55);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85), inset 0 -1px 0 rgb(0 0 0 / 0.22), 0 8px 22px -8px rgb(168 197 255 / 0.55);
-}
-:root:not([data-theme]) .step::before { background: var(--holo-text); -webkit-background-clip: text; background-clip: text; color: transparent; }
-:root:not([data-theme]) .strip div { border-left: 0; position: relative; }
-:root:not([data-theme]) .strip div::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: var(--holo-bar); }
-:root:not([data-theme]) .code { background: #08080a; }
 
-/* ---- product shots: an iridescent bezel and a matte title bar ------------ */
-:root:not([data-theme]) .frame {
-  background: #0d0d10 padding-box, linear-gradient(160deg, rgb(255 255 255 / 0.44), rgb(168 197 255 / 0.22) 24%, rgb(198 180 255 / 0.08) 60%, rgb(157 232 218 / 0.24)) border-box;
-  border: 1px solid transparent;
-}
-:root:not([data-theme]) .window-bar { background: linear-gradient(180deg, #1e1e24, #141418); border-bottom-color: rgb(0 0 0 / 0.8); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08); color: #98a0ad; }
-/* The three window dots are small beads of the three tints. */
-:root:not([data-theme]) .window-bar i { box-shadow: 0 0 0 1px rgb(0 0 0 / 0.6); opacity: 0.9; }
-:root:not([data-theme]) .window-bar i:nth-child(1) { background: radial-gradient(circle at 35% 30%, #ffffff, #a8c5ff 55%, #4d5a78); }
-:root:not([data-theme]) .window-bar i:nth-child(2) { background: radial-gradient(circle at 35% 30%, #ffffff, #c6b4ff 55%, #5b4f7d); }
-:root:not([data-theme]) .window-bar i:nth-child(3) { background: radial-gradient(circle at 35% 30%, #ffffff, #9de8da 55%, #44685f); }
-:root:not([data-theme]) .frame figcaption { background: #0c0c0e; }
-:root:not([data-theme]) .rm-now-shot { border-color: rgb(198 180 255 / 0.3); }
+/* the header and footer hairlines */
+:root:not([data-theme]) .site-foot::before { background: var(--holo-line); opacity: 0.6; }
+:root:not([data-theme]) .scroll-progress { background: var(--holo); box-shadow: 0 0 14px rgb(168 197 255 / 0.6); }
+:root:not([data-theme]) .brand img { box-shadow: 0 0 0 1px rgb(255 255 255 / 0.4), 0 4px 12px rgb(0 0 0 / 0.7), 0 0 18px -2px rgb(168 197 255 / 0.4); }
+:root:not([data-theme]) .eyebrow { color: #cfd7e6; }
 
-/* ---- small things ---------------------------------------------------------- */
-:root:not([data-theme]) .ticks li::before { background: linear-gradient(160deg, #2a2a33, #141418); border-color: rgb(198 180 255 / 0.3); }
-:root:not([data-theme]) .ticks li::after { background: var(--holo); }
-:root:not([data-theme]) .feature-copy li::before { border-color: #c3d6ff; }
-:root:not([data-theme]) :not(pre) > code { background: rgb(255 255 255 / 0.06); border-color: rgb(168 197 255 / 0.18); color: #eef1f5; }
-:root:not([data-theme]) blockquote { border-left-color: #a8c5ff; background: linear-gradient(90deg, rgb(168 197 255 / 0.07), rgb(198 180 255 / 0.02) 60%, transparent); }
-:root:not([data-theme]) .faq summary::after { color: #c3d6ff; }
-:root:not([data-theme]) .search input { background: #0d0d10; border-color: rgb(255 255 255 / 0.14); }
-:root:not([data-theme]) .search input:focus { border-color: rgb(168 197 255 / 0.6); }
-:root:not([data-theme]) kbd.key { background: linear-gradient(180deg, #24242a, #151519); border-color: rgb(255 255 255 / 0.18); box-shadow: 0 1px 0 #000, inset 0 1px 0 rgb(255 255 255 / 0.1); }
-/* The page you are on in a side list: a thin iridescent bar. */
-:root:not([data-theme]) :is(.wiki-side li a[aria-current="page"], .menu-panel a[aria-current="page"]) {
-  color: #fff; box-shadow: none;
-  background: var(--holo-bar) left center / 2px 100% no-repeat, linear-gradient(90deg, rgb(168 197 255 / 0.1), rgb(198 180 255 / 0.04) 70%, transparent);
-}
-:root:not([data-theme]) .wiki-toc li a.active { color: #fff; box-shadow: none; background: var(--holo-bar) left center / 2px 100% no-repeat; }
-:root:not([data-theme]) .swatch[aria-pressed="true"] { border-color: rgb(198 180 255 / 0.55); background: linear-gradient(180deg, rgb(168 197 255 / 0.1), rgb(198 180 255 / 0.05)); }
-:root:not([data-theme]) .status.released { color: #eef1f5; background: rgb(255 255 255 / 0.06); border-color: rgb(255 255 255 / 0.2); }
-:root:not([data-theme]) .spot::after { background: radial-gradient(380px circle at var(--mx, 50%) var(--my, 50%), rgb(168 197 255 / 0.08), rgb(198 180 255 / 0.03) 40%, transparent 62%); }
-
-/* ---- home ------------------------------------------------------------------ */
-:root:not([data-theme]) .home .hero::before {
-  background:
-    radial-gradient(640px 360px at 50% 14%, rgb(255 255 255 / 0.1), transparent 70%),
-    radial-gradient(560px 360px at 12% 60%, rgb(168 197 255 / 0.09), transparent 70%),
-    radial-gradient(560px 360px at 90% 56%, rgb(198 180 255 / 0.09), transparent 70%),
-    radial-gradient(420px 260px at 50% 92%, rgb(157 232 218 / 0.06), transparent 70%);
-}
-:root:not([data-theme]) .home .hero-sky { opacity: 0.6; }
-:root:not([data-theme]) .home .pill b { padding: 3px 10px; }
-/* An iridescent halo behind the hero window, and a pool of light under it, as if it stood on a dark, polished floor. */
-:root:not([data-theme]) .home .hero-shot::before {
-  content: ""; position: absolute; inset: -7% -5% 0%; z-index: -1; pointer-events: none; border-radius: 80px;
-  background: conic-gradient(from 210deg at 50% 50%, rgb(168 197 255 / 0.9), rgb(198 180 255 / 0.85), rgb(157 232 218 / 0.75), rgb(238 242 247 / 0.6), rgb(168 197 255 / 0.9));
-  filter: blur(90px); opacity: 0.42;
-}
-:root:not([data-theme]) .home .hero-shot::after {
-  content: ""; position: absolute; left: 8%; right: 8%; bottom: -46px; height: 70px; z-index: -1; pointer-events: none;
-  background: radial-gradient(50% 50% at 50% 50%, rgb(214 222 245 / 0.18), transparent 72%); filter: blur(6px);
-}
-:root:not([data-theme]) .home .look-tabs { background: linear-gradient(180deg, #121215, #0c0c0e) padding-box, var(--holo-edge) border-box; border: 1px solid transparent; }
-:root:not([data-theme]) .home .look-shot { box-shadow: var(--glow); }
-:root:not([data-theme]) .marquee li { background: var(--matte) padding-box, var(--edge) border-box; border: 1px solid transparent; }
-:root:not([data-theme]) .marquee li::before,
-:root:not([data-theme]) .marquee li:nth-child(3n+1)::before { background: radial-gradient(circle at 35% 30%, #fff, #a8c5ff 60%, #4d5a78); box-shadow: 0 0 10px rgb(168 197 255 / 0.55); }
-:root:not([data-theme]) .marquee li:nth-child(3n+2)::before { background: radial-gradient(circle at 35% 30%, #fff, #c6b4ff 60%, #5b4f7d); box-shadow: 0 0 10px rgb(198 180 255 / 0.55); }
-:root:not([data-theme]) .marquee li:nth-child(3n)::before { background: radial-gradient(circle at 35% 30%, #fff, #9de8da 60%, #44685f); box-shadow: 0 0 10px rgb(157 232 218 / 0.5); }
-:root:not([data-theme]) .stats { background: var(--matte) padding-box, var(--holo-edge) border-box; border: 1px solid transparent; }
-:root:not([data-theme]) .stat .num { background: var(--holo-text); -webkit-background-clip: text; background-clip: text; filter: drop-shadow(0 0 16px rgb(168 197 255 / 0.2)); }
-:root:not([data-theme]) .band, :root:not([data-theme]) section.band { border-block: 0; position: relative; }
-:root:not([data-theme]) .band::before, :root:not([data-theme]) .band::after {
-  content: ""; position: absolute; left: 0; right: 0; height: 1px; pointer-events: none; background: var(--holo-line); opacity: 0.32;
-}
-:root:not([data-theme]) .band::before { top: 0; }
-:root:not([data-theme]) .band::after { bottom: 0; }
-
-/* ---- stage numbers (home's Rust stages, roadmap's stages) ------------------- */
-:root:not([data-theme]) .home .stage.is-done .stage-n { background: var(--metal) padding-box, var(--holo) border-box; border: 2px solid transparent; color: #0b0b0d; box-shadow: inset 0 1px 0 #fff, 0 0 0 1px rgb(0 0 0 / 0.6), 0 0 18px -4px rgb(168 197 255 / 0.45); }
-:root:not([data-theme]) .home .stages::before { background: linear-gradient(180deg, #eef2f7, #a8c5ff 26%, var(--live) 50%, rgb(198 180 255 / 0.35) 78%, rgb(255 255 255 / 0.08)); }
-:root:not([data-theme]) .home .stage::before { background: var(--matte) padding-box, var(--edge) border-box; }
-:root:not([data-theme]) .home .stage.is-now::before { background: var(--matte-raised) padding-box, linear-gradient(180deg, rgb(87 255 154 / 0.45), rgb(87 255 154 / 0.12)) border-box; }
-:root:not([data-theme]) .rm-stages li.is-now { background: linear-gradient(160deg, rgb(87 255 154 / 0.07), #0f0f12 60%) padding-box, linear-gradient(180deg, rgb(87 255 154 / 0.45), rgb(87 255 154 / 0.12)) border-box; }
-
-@media (prefers-reduced-motion: reduce) {
-  :root:not([data-theme]) .shine { background-image: var(--holo-text); }
-  :root:not([data-theme]) .grad:not(.shine) { animation: none; background-size: 100% 100%; }
-  :root:not([data-theme]) :is(.card-link, .item, .faq details, .cm-way, .wiki-nav a):hover { animation: none; background: var(--matte-raised) padding-box, var(--holo-edge-strong) border-box; }
-}
+/* status colours stay as they are (they mean something); the iridescent badge on Home's pill */
+:root:not([data-theme]) .hero-pill b { background: var(--holo); }

@@ -103,8 +103,10 @@
     t.classList.add("in");
     if (t.hasAttribute("data-count")) count(t);
   }
+  // [data-split-manual] headlines are split here but revealed by their page
+  // (Home's hero waits for its opening).
   function reveal(scope) {
-    var targets = (scope || document).querySelectorAll("[data-reveal], [data-split], [data-draw], [data-count]");
+    var targets = (scope || document).querySelectorAll("[data-reveal], [data-split]:not([data-split-manual]), [data-draw], [data-count]");
     if (still() || !("IntersectionObserver" in window)) { targets.forEach(shown); return; }
     root.classList.add("js-reveal");
     (scope || document).querySelectorAll("[data-stagger]").forEach(function (group) {

@@ -54,22 +54,25 @@
     "  return normalize(e.xyy * map(p + e.xyy) + e.yyx * map(p + e.yyx) + e.yxy * map(p + e.yxy) + e.xxx * map(p + e.xxx));",
     "}",
     "",
-    // A photo studio around the orb: an overhead soft box, coloured strips at the sides, a dark floor and a horizon glint.
+    // A photo studio around the orb, the classic chrome-ball set: lit walls over a dark floor, a bright
+    // horizon line all the way round, an overhead soft box, a big soft box behind the camera and coloured
+    // strip lights at the sides in the theme's colours.
     "vec3 env(vec3 r) {",
     "  float ca = cos(uMouse.x * 0.7), sa = sin(uMouse.x * 0.7);",
     "  r.xz = mat2(ca, -sa, sa, ca) * r.xz;",
     "  float cb = cos(uMouse.y * 0.45), sb = sin(uMouse.y * 0.45);",
     "  r.yz = mat2(cb, -sb, sb, cb) * r.yz;",
     "  float y = r.y;",
-    "  vec3 col = vec3(0.01, 0.01, 0.014);",
-    "  col += uD * 0.07 * smoothstep(-1.0, 0.1, y);",
-    "  col += vec3(0.9) * exp(-abs(y + 0.04) * 26.0) * 0.22;",
-    "  col += uA * smoothstep(0.5, 0.94, y) * 1.35;",
-    "  col += uB * smoothstep(0.5, 0.96, r.x) * 1.05 * smoothstep(-0.7, 0.5, y);",
-    "  col += uC * smoothstep(0.52, 0.96, -r.x) * 0.95 * smoothstep(-0.8, 0.4, y);",
-    "  col += mix(uB, uC, 0.5) * smoothstep(0.7, 1.0, -r.z) * 0.55;",
-    "  float win = smoothstep(0.06, 0.0, abs(r.x - 0.42) - 0.16) * smoothstep(0.06, 0.0, abs(y - 0.5) - 0.1) * step(0.0, r.z);",
-    "  col += vec3(1.0) * win * 1.6;",
+    "  vec3 col = mix(vec3(0.02, 0.02, 0.026), vec3(0.11, 0.11, 0.13) + uD * 0.05, smoothstep(-0.5, 0.7, y));",
+    "  col *= mix(0.3, 1.0, smoothstep(-0.22, 0.04, y));",
+    "  col += mix(vec3(0.85), uA, 0.4) * exp(-abs(y - 0.03) * 16.0) * 0.55;",
+    "  col += uA * smoothstep(0.58, 0.92, y) * 1.3;",
+    "  vec2 q = vec2(r.x + 0.3, y - 0.3);",
+    "  float box = smoothstep(0.1, 0.0, max(abs(q.x) - 0.3, abs(q.y) - 0.18)) * smoothstep(0.05, 0.35, r.z);",
+    "  col += vec3(1.0) * box * 1.75;",
+    "  col += uB * smoothstep(0.52, 0.95, r.x) * 1.1 * smoothstep(-0.6, 0.3, y);",
+    "  col += uC * smoothstep(0.52, 0.95, -r.x) * 1.0 * smoothstep(-0.6, 0.3, y);",
+    "  col += mix(uB, uC, 0.5) * smoothstep(0.62, 1.0, -r.z) * 0.6;",
     "  return col;",
     "}",
     "",
@@ -121,8 +124,9 @@
     "      outc = vec4(col * cover, cover);",
     "    }",
     "  }",
+    // A soft glow round the orb that fades out before the canvas edge, so the canvas never shows as a box.
     "  float rr = length(uv);",
-    "  float halo = exp(-max(0.0, rr - 0.5) * 3.0) * 0.2 * (1.0 - outc.a);",
+    "  float halo = exp(-max(0.0, rr - 0.5) * 3.0) * 0.2 * (1.0 - outc.a) * smoothstep(1.0, 0.62, rr);",
     "  outc.rgb += mix(uB, uC, 0.5 + 0.5 * uv.x) * halo;",
     "  outc.a += halo;",
     "  gl_FragColor = outc;",
@@ -199,11 +203,13 @@
       gl.uniform3fv(U.uD, readColor("--accent-rgb", [195, 200, 208]));
     }
 
+    // The layout size, not the drawn one: a transform (Home flies the orb in
+    // from a small slot) must not leave it rendering at the small size.
     function size() {
-      var r = host.getBoundingClientRect();
+      var cw = host.clientWidth, ch = host.clientHeight;
       var dpr = Math.min(window.devicePixelRatio || 1, opts.maxDpr || 1.5) * state.quality;
-      var w = Math.max(2, Math.round(r.width * dpr)), h = Math.max(2, Math.round(r.height * dpr));
-      state.cssW = r.width; state.cssH = r.height;
+      var w = Math.max(2, Math.round(cw * dpr)), h = Math.max(2, Math.round(ch * dpr));
+      state.cssW = cw; state.cssH = ch;
       if (w !== state.w || h !== state.h) {
         state.w = w; state.h = h; canvas.width = w; canvas.height = h;
         gl.viewport(0, 0, w, h);
@@ -222,11 +228,11 @@
     function frame(now) {
       if (!state.running) return;
       var dt = state.last ? Math.min(0.05, (now - state.last) / 1000) : 0.016;
-      // A slow GPU gets fewer pixels (down to 45%), a quick one gets them back.
+      // A slow GPU gets fewer pixels (down to 60%), a quick one gets them back.
       if (state.last) {
         var ms = now - state.last;
         if (ms > 26) { state.slow++; state.fast = 0; } else if (ms < 18) { state.fast++; state.slow = 0; }
-        if (state.slow > 24 && state.quality > 0.46) { state.quality = Math.max(0.45, state.quality - 0.15); state.slow = 0; size(); }
+        if (state.slow > 40 && state.quality > 0.61) { state.quality = Math.max(0.6, state.quality - 0.1); state.slow = 0; size(); }
         else if (state.fast > 240 && state.quality < 1) { state.quality = Math.min(1, state.quality + 0.1); state.fast = 0; size(); }
       }
       state.last = now;
@@ -239,7 +245,7 @@
     }
 
     function start() {
-      if (state.running || reduce.matches || document.hidden || !state.onScreen) return;
+      if (state.running || state.held || reduce.matches || document.hidden || !state.onScreen) return;
       state.running = true; state.last = 0;
       requestAnimationFrame(frame);
     }
@@ -269,6 +275,8 @@
 
     var api = {
       canvas: canvas,
+      // Stop drawing while something covers the orb (Home's demo), and carry on after.
+      hold: function (on) { state.held = !!on; if (on) stop(); else start(); },
       setFriends: function (v) { state.friendsAim = v; if (!state.running) { state.friends = v; still(); } },
       // Where friend i is on the host, in CSS pixels, and whether it is behind the companion.
       friend: function (i) {

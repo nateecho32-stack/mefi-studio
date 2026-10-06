@@ -24,16 +24,15 @@
 <meta name="theme-color" content="#070709">
 <link rel="icon" href="assets/favicon.ico">
 <script>
-  /* The opening (the "Build it" screen) plays once a visit, and never for a
-     link to a section, a reload in the same tab or reduced motion.
-     ?intro=1 shows it anyway, ?intro=0 skips it. */
+  /* The gate (Try the app or Skip to the site) opens a visit once: not for a
+     link to a section or a reload in the same tab. ?intro=1 shows it anyway,
+     ?intro=0 skips it. */
   (function () {
     try {
       var want = new URLSearchParams(location.search).get("intro");
-      var still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      var seen = sessionStorage.getItem("mefiSite.intro.v1");
-      if (want === "1" || (want !== "0" && !still && !seen && !location.hash)) document.documentElement.classList.add("intro-on");
-    } catch (e) { /* storage blocked: no opening */ }
+      var seen = sessionStorage.getItem("mefiSite.gate.v1");
+      if (want === "1" || (want !== "0" && !seen && !location.hash)) document.documentElement.classList.add("gate-on");
+    } catch (e) { /* storage blocked: no gate */ }
   })();
 </script>
 <link rel="stylesheet" href="assets/site.css">
@@ -41,6 +40,7 @@
 <link rel="stylesheet" href="assets/chrome.css">
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/home.css">
+<link rel="stylesheet" href="assets/play.css">
 </head>
 <body class="home">
 <a class="skip-link" href="#main">Skip to content</a>
@@ -78,41 +78,20 @@
 
 <main id="main">
 
-<!-- THE OPENING: Studio's own "What's next?" box. Build it plays a short,
-     sped-up build and the site opens out of the button. home.js runs it;
-     without script (or after six seconds of nothing) it gets out of the way. -->
-<div class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="intro-title" aria-describedby="intro-hint">
-  <div class="intro-sky" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-  <div class="intro-card">
-    <div class="intro-head">
-      <span class="intro-orb-slot" id="intro-orb-slot" aria-hidden="true"><span class="intro-pearl"></span></span>
-      <div>
-        <p class="intro-hello"><span id="intro-greeting">Hello</span> · Social</p>
-        <h1 class="intro-title" id="intro-title">What do you want to make?</h1>
-      </div>
+<!-- THE GATE: the first screen of a visit. Try the app opens a playable mini
+     Studio (assets/play.js); Skip to the site opens the page. home.js runs it;
+     without script (or if it never starts) the gate steps aside by itself. -->
+<div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title" aria-describedby="gate-note">
+  <div class="gate-sky" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="gate-inner">
+    <span class="gate-orb-slot" id="gate-orb-slot" aria-hidden="true"><span class="gate-pearl"></span></span>
+    <p class="gate-brand"><img src="assets/icon-256.png" width="26" height="26" alt="">Mefi Studio</p>
+    <h1 class="gate-title" id="gate-title"><span class="gl">Hang out. Work alongside.</span> <span class="gl"><span class="grad">Build when you want.</span></span></h1>
+    <div class="gate-actions">
+      <button type="button" class="gate-play" id="gate-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg>Try the app</button>
+      <button type="button" class="gate-skip" id="gate-skip">Skip to the site<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </div>
-    <form class="intro-box" id="intro-form" autocomplete="off">
-      <label class="visually-hidden" for="intro-idea">Your idea</label>
-      <textarea id="intro-idea" rows="2" maxlength="120" spellcheck="false" placeholder="Describe an idea, a fix or a question…"></textarea>
-      <div class="intro-row">
-        <div class="intro-ideas" role="group" aria-label="Ideas to try">
-          <button type="button" class="intro-idea" data-idea="game" aria-pressed="true">Game-night page</button>
-          <button type="button" class="intro-idea" data-idea="pixel" aria-pressed="false">Pixel art tool</button>
-          <button type="button" class="intro-idea" data-idea="band" aria-pressed="false">Our band's site</button>
-          <button type="button" class="intro-idea" data-idea="own" aria-pressed="false">My own idea</button>
-        </div>
-        <button type="submit" class="intro-build" id="intro-build"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c.6 3.6 2.4 5.4 6 6-3.6.6-5.4 2.4-6 6-.6-3.6-2.4-5.4-6-6 3.6-.6 5.4-2.4 6-6Z"/><path d="M19 15.5c.25 1.5 1 2.25 2.5 2.5-1.5.25-2.25 1-2.5 2.5-.25-1.5-1-2.25-2.5-2.5 1.5-.25 2.25-1 2.5-2.5Z"/></svg><span>Build it</span><kbd>Enter</kbd></button>
-      </div>
-    </form>
-    <div class="intro-run" id="intro-run" aria-hidden="true">
-      <div class="intro-session"><i class="intro-spin"></i><b id="intro-session-title">Game-night page</b><span id="intro-session-state">Planning the steps</span></div>
-      <div class="intro-tasks" id="intro-tasks"></div>
-      <div class="intro-checks" id="intro-checks"><span><i></i>Tests pass</span><span><i></i>Lint is clean</span><span><i></i>It builds</span></div>
-    </div>
-    <p class="intro-foot">
-      <button type="button" class="intro-skip" id="intro-skip">Skip to the site</button>
-      <span id="intro-hint">Press <b>Build it</b> to open the site. The build is sped up: a real one takes a few minutes, and you check what lands.</span>
-    </p>
+    <p class="gate-note" id="gate-note">A one-minute play-through in your browser. Nothing to install.</p>
   </div>
 </div>
 
@@ -135,11 +114,12 @@
       <div class="hero-live h-enter" style="--d:6">
         <p class="pulse" data-discord-pulse hidden><span class="dot" aria-hidden="true"></span><span data-pulse-text></span></p>
         <p class="hero-release" data-latest-hint>Latest release on <a href="https://github.com/nateecho32-stack/mefi-studio/releases/latest" rel="noopener">GitHub</a></p>
+        <button type="button" class="replay" data-play-demo hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg>Try the app in your browser</button>
       </div>
     </div>
-    <div class="hero-stage h-enter" style="--d:2" aria-hidden="true">
+    <div class="hero-stage" aria-hidden="true">
       <div class="orb" id="hero-orb"><span class="orb-pearl"></span></div>
-      <ul class="orb-friends" id="orb-friends">
+      <ul class="orb-friends h-enter" style="--d:6" id="orb-friends">
         <li class="orb-friend" data-i="0"><i style="--h:146">M</i><b>Maxwell</b><span>building Pixel Forge</span></li>
         <li class="orb-friend" data-i="1"><i style="--h:268">J</i><b>Juno</b><span>in Friday jam</span></li>
         <li class="orb-friend" data-i="2"><i style="--h:32">R</i><b>Rook</b><span>listening together</span></li>
@@ -147,7 +127,6 @@
       </ul>
     </div>
   </div>
-  <button type="button" class="replay h-enter" style="--d:7" id="replay-intro" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Watch it build again</button>
 </section>
 
 <!-- SHOWCASE: the real app, four screens -->
@@ -266,7 +245,7 @@
           <li data-step="4"><b>Checked, then yours</b><span>Finished work waits for its checks. Accept it, or take it back.</span></li>
           <li data-step="5"><b>Share it</b><span>Put it on the Project hub. When friends play it, you both earn credits.</span></li>
         </ol>
-        <p class="fine jn-note">An illustration with made-up friends, sped up to fit the page.</p>
+        <p class="fine jn-note">An illustration with made-up friends, sped up to fit the page. <button type="button" class="linkish" data-play-demo hidden>Play it yourself</button></p>
       </div>
       <div class="jn-stage" aria-hidden="true">
         <div class="jn-fit">
@@ -338,6 +317,11 @@
                     </div>
                     <span class="jn-credit">+5 credits</span>
                   </div>
+                  <div class="jn-more">
+                    <div class="jn-mini"><i class="art a1"></i><b>Pixel Forge</b><small>Maxwell · tool · 40 plays</small></div>
+                    <div class="jn-mini"><i class="art a2"></i><b>Tiny Tides</b><small>Tess · game · 9 plays</small></div>
+                    <div class="jn-mini"><i class="art a3"></i><b>Patch Notes Bot</b><small>Rook · tool · 3 plays</small></div>
+                  </div>
                   <div class="jn-toast"><i class="av" style="--h:146">M</i><p><b>Maxwell played Game night</b>You both earned credits.</p></div>
                 </div>
               </div>
@@ -374,7 +358,7 @@
         </div>
         <p class="fine">Switch any time with <kbd class="key">Ctrl</kbd> <kbd class="key">M</kbd>. Your friends come with you in both.</p>
       </div>
-      <div class="mode-win" data-reveal="scale">
+      <div class="mode-win" data-reveal="iris">
         <div class="win" data-tilt="2">
           <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><span>Mefi Studio <em class="mw-social">Social · Today</em><em class="mw-studio">Studio · Sessions</em></span></div>
           <div class="win-screens">
@@ -402,7 +386,7 @@
           <svg class="map-svg" viewBox="0 0 520 260">
             <defs>
               <radialGradient id="mg-node" cx="35%" cy="30%" r="70%"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="rgb(var(--accent-2-rgb))"/><stop offset="1" stop-color="rgb(var(--accent-3-rgb))" stop-opacity=".9"/></radialGradient>
-              <linearGradient id="mg-wire" x1="0" x2="1"><stop offset="0" stop-color="rgb(var(--accent-2-rgb))" stop-opacity=".9"/><stop offset="1" stop-color="rgb(var(--accent-3-rgb))" stop-opacity=".5"/></linearGradient>
+              <linearGradient id="mg-wire" gradientUnits="userSpaceOnUse" x1="60" y1="0" x2="470" y2="0"><stop offset="0" stop-color="rgb(var(--accent-2-rgb))" stop-opacity=".9"/><stop offset="1" stop-color="rgb(var(--accent-3-rgb))" stop-opacity=".5"/></linearGradient>
             </defs>
             <g class="wires" fill="none" stroke="url(#mg-wire)" stroke-width="1.6">
               <path id="w1" class="w" d="M80 130 C 150 130, 170 60, 240 60"/>
@@ -453,7 +437,7 @@
             <p class="diff-head"><b>4 files changed</b><span class="add">+212</span><span class="del">−18</span></p>
             <p class="row"><code>src/export/markdown.ts</code><span class="tag">Added</span><span class="rv">Revert</span></p>
             <p class="row"><code>src/notes/Toolbar.tsx</code><span class="n">+31 −4</span><span class="rv">Revert</span></p>
-            <p class="row gone"><code>src/export/names.ts</code><span class="tag">Added</span><span class="rv done">Reverted ↺</span></p>
+            <p class="row gone"><code>src/export/names.ts</code><span class="tag">Added</span><span class="rv-slot"><span class="rv">Revert</span><span class="rv done">Reverted ↺</span></span></p>
             <p class="row"><code>tests/export.test.ts</code><span class="n">+33 −14</span><span class="rv">Revert</span></p>
             <p class="diff-foot"><span class="acc">Accept changes</span><span class="ra">Revert attempt</span></p>
           </div>
@@ -557,7 +541,7 @@
       </div>
       <p class="fine theme-now" data-reveal>Showing <b id="theme-name">Chrome</b>. Your pick is remembered on this device.</p>
     </div>
-    <div class="themes-stage" data-reveal="scale">
+    <div class="themes-stage" data-reveal="iris">
       <div class="win" data-tilt="2.5">
         <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><span>Mefi Studio <em id="theme-win-name">Chrome</em></span></div>
         <div class="win-screens theme-screens" id="theme-screens">
@@ -733,6 +717,7 @@
 <script src="assets/site.js"></script>
 <script src="assets/fx.js"></script>
 <script src="assets/orb.js"></script>
+<script src="assets/play.js"></script>
 <script src="assets/home.js"></script>
 </body>
 </html>
