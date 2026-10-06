@@ -13,7 +13,7 @@ Check the project name at the top before you send any work. In Vibe, the project
 
 Starting from nothing? **New app**, the button beside Vibe's project picker, asks for a name and a description. Studio makes a folder under **Mefi Apps** in your home folder, starts Git there with a short README, opens it, and sends your description through **Build it** as the first request.
 
-> <span class="status next">Coming in 0.5</span> The launch screen has one **Open** button with a **Start agents** switch, and **Open a folder…**, **Start a new app** and **Get from GitHub** at its foot. **Settings › General › When Studio opens** decides whether agents start: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+> <span class="status next">Coming in 0.5</span> The launch screen has one **Open** button with a **Start agents** switch, and **Open a folder…**, **Start a new app** and **Get from GitHub** at its foot. **Settings › General › Agents when Studio opens** decides whether agents start: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
 
 ## 2. Connect your tools
 
