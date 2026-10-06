@@ -39,6 +39,34 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
+
+Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
+answer styles with ELI5 the default, `use_skill`, Team › Connectors, the parallel tool loop, the MCP pool and
+Streamable HTTP; 6318720 the twelve fixes an independent review found), landed from `land/skills` in
+`C:\wt\skills-land` with main merged twice (648e6ea over 00d32ca, 6e11811 over 33c3c4e: no conflicts beyond
+CHANGELOG, booklet.html rebuilt) and the release scope updated (1d5334a: Connectors move from 0.5.x into 0.5.0).
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on every step of the
+branch: fef2aef (run 37395870981), 6318720 (37397466087), 1d5334a (37397753111) and the landing commit 6e11811
+(37398222559). On this PC, on the landing tree: `npm run check` ok, `npm run audit` 0 errors and 0 warnings,
+`npm run lint` 0 errors and 45 warnings (as main). The suites this change touches or the merges brought in, run
+together on 6e11811: 321 tests, 320 pass, 1 skipped (skill_use, connectors, connectors_ui, chat_tools_ui,
+agent_tools_skills, skills_connectors_host, agent_rules, agent_rules_host, mentions_host, today_home,
+module_purity, skills_ipc, app_wide_ipc, booklet_build, size_page, friends_front_ui, friends_navigation, hub_host,
+project_hub_ui, rooms_ui, app_rail, relay_credits, relay_connect). Before the second merge, 568 tests on the touched
+suites: 567 pass, 1 skipped. Real windows, one at a time while no other session's window suite ran: team_render 1/1 (84 s) and sessions_render 1/1
+(134 s), the two fixtures this change edits; today_render, skills_render, composer_render, autonomy_render,
+agent_setup_render and unified_studio_render were still queued behind other sessions' window suites at landing.
+
+Measured: offering skills to a role (`autoSkills`, 30 skills in project and home) costs about 11 ms a call warm and
+114 ms cold; a second call to a connector reuses its open session (the pool keeps it 3 minutes, four servers at most;
+a worker keeps its own for the run). The review's fixes are pinned: an online connector gets only its saved values
+(never the PC's environment or the GitHub sign-in), one connector's calls keep their order, a bare `null` line, a
+404'd session and a server still starting at quit are handled, the values file is never wiped, `%TEMP%` tool folders
+are swept after six hours, `/name` counts only in the owner's own words. Kill switches MEFI_STUDIO_NO_SKILL_USE,
+MEFI_STUDIO_NO_CONNECTORS, MEFI_STUDIO_NO_MCP_POOL and MEFI_STUDIO_SERIAL_TOOLS, each pinned.
+
 ## 2026-10-06 The Lobby, one sign-in, online at launch, credits that cannot be farmed, and no Discord roles land on main
 
 Branch `wip/credits-guard` in `C:\wt\credits` (bcc51f3 the Lobby front page, Sign in with Discord and online at launch;
@@ -509,40 +537,6 @@ memory pressure (0.68 GB free; push to a local bare repo failed): sync and
 rust_parity_repo 25/25 alone. New suites: front_page 7, news_away_host 5,
 daily_paper 10 (3 new). Before/after launch captures at 1920x1080 with a fake
 bridge: `C:\wt\shots\launch-before.png`, `launch-after.png`.
-
-## 2026-10-04 Rust stage 1 finished: the host's last Electron gaps, the portable host build and the updater bridge
-
-Branch `wip/rust-host` (main merged at 1178ac7), gated in a short-path
-worktree (`C:\wt\rust-gate`, node_modules junctioned). New on the Rust host:
-the Media browser as a child webview, evidence shots in a hidden in-private
-window, dropped files' paths, the Electron build's page localStorage carried
-over once, Zen's desktop audio from WASAPI loopback, did-fail-load,
-trashItem, the page's WebView2 profile under userData; `npm run
-package:host` builds the portable host layout and `release-updater.mjs` can
-install and roll back either kind of build.
-
-Full `npm test` at 087fa29: Node 6788 tests, 6774 pass, 0 fail, 14 skipped;
-Electron lane 74: 71 pass, 1 skipped, 2 fail (`layout_contract_render`
-viewport 1921x1081 and `shell_render`), and both fail identically on a clean
-origin/main worktree (1178ac7) on this PC, so they are this display's state;
-Python 248 OK (1 skipped); path lock ok. After the last commits (ca10561):
-`npm run check` ok (265 targets), `npm run test:fast` 6788 tests, 0 fail, 14
-skipped, `npm run audit` 0 findings, lint 0 errors. `tests/rust_host_bridge`
-8/8 (new: Media browser through the shim, drop, localStorage hand-over,
-loopback stream), `rust_modules` 5/5 (new: evidence factory),
-`package_host` and `update_host_bridge` (new) with the updater suites 48/48,
-`rust_parity_git` 2/2 with the PowerShell drive check, host unit tests 15/15.
-
-Live, debug host and then the packaged release build run as an installed copy
-(no MEFI_STUDIO_ROOT: found resources/app, ran its own node.exe), each with
-`MEFI_HOST_SELFTEST_WEB` against a local page and a scratch userData seeded by
-Electron 44: Media browser titles A/B, back/forward, mute, refused mailto:,
-close; evidence PNG 1280x800 with no third-party request leaving (the beacon
-server saw none from the shot's page); localStorage keys carried (Latin-1 and
-UTF-16); a real file dropped through the DevTools protocol got its path; a
-clicked getDisplayMedia gave 1 audio track, 0 video, no picker, and peak
-0.029 back while the page played a 440 Hz tone at gain 0.03. Release host
-build 4 min (2 jobs), portable folder 123 MB.
 
 ## Read Before Any Tests
 
