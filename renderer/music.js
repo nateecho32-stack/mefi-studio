@@ -36,8 +36,8 @@
     // stylesheets answer with a light color-scheme, softer shadows and deeper
     // status hues. "bright" is the accent's deeper ink here, as it is its
     // paler one on a dark theme: links, focus rings and chosen tabs use it.
-    daylight: { name: "Daylight", accent: "#2c5cc0", bright: "#1d479e", rgb: "44,92,192", bg: "#eef1f5", panel: "#fbfcfd", muted: "#4b5567", text: "#18202c", tone: "light" },
-    paper: { name: "Paper", accent: "#a14b26", bright: "#843815", rgb: "161,75,38", bg: "#f3eee4", panel: "#fffcf6", muted: "#625849", text: "#2b241d", tone: "light" },
+    daylight: { name: "Daylight", accent: "#2753b2", bright: "#1d479e", rgb: "39,83,178", bg: "#eef1f5", panel: "#fbfcfd", muted: "#4b5567", text: "#18202c", tone: "light" },
+    paper: { name: "Paper", accent: "#8f421d", bright: "#7a3312", rgb: "143,66,29", bg: "#f3eee4", panel: "#fffcf6", muted: "#625849", text: "#2b241d", tone: "light" },
     // The Void collection, free like every theme: each carries a second hue
     // (accent2) that the "duo" tier paints with, and the pickers list them
     // under their own small heading.

@@ -2417,6 +2417,8 @@ html:not([data-starting]) #boot-layer { display: none; }
 .boot-project-icon { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--tint-gold-3); color: var(--gold-bright); font: 600 14px/1 var(--font-display); }
 .boot-row:hover:not(:has(> .boot-project:disabled)) .boot-project-icon { background: color-mix(in srgb, var(--gold) 22%, transparent); }
 .boot-row:has(> .boot-project.selected) .boot-project-icon { background: color-mix(in srgb, var(--gold) 30%, transparent); }
+/* On a light page the chosen row's tint stacks under the badge's: a lighter badge keeps its initial at 4.5:1. */
+:root[data-studio-theme-tone="light"] .boot-row:has(> .boot-project.selected) .boot-project-icon { background: color-mix(in srgb, var(--gold) 18%, transparent); }
 .boot-project-text { display: grid; flex: 1; min-width: 0; gap: 1px; }
 .boot-project-name { font: 500 13px/1.3 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The drive and the folder name stay; the middle of a long path gives way. */
@@ -71396,8 +71398,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // stylesheets answer with a light color-scheme, softer shadows and deeper
     // status hues. "bright" is the accent's deeper ink here, as it is its
     // paler one on a dark theme: links, focus rings and chosen tabs use it.
-    daylight: { name: "Daylight", accent: "#2c5cc0", bright: "#1d479e", rgb: "44,92,192", bg: "#eef1f5", panel: "#fbfcfd", muted: "#4b5567", text: "#18202c", tone: "light" },
-    paper: { name: "Paper", accent: "#a14b26", bright: "#843815", rgb: "161,75,38", bg: "#f3eee4", panel: "#fffcf6", muted: "#625849", text: "#2b241d", tone: "light" },
+    daylight: { name: "Daylight", accent: "#2753b2", bright: "#1d479e", rgb: "39,83,178", bg: "#eef1f5", panel: "#fbfcfd", muted: "#4b5567", text: "#18202c", tone: "light" },
+    paper: { name: "Paper", accent: "#8f421d", bright: "#7a3312", rgb: "143,66,29", bg: "#f3eee4", panel: "#fffcf6", muted: "#625849", text: "#2b241d", tone: "light" },
     // The Void collection, free like every theme: each carries a second hue
     // (accent2) that the "duo" tier paints with, and the pickers list them
     // under their own small heading.

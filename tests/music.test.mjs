@@ -661,6 +661,10 @@ test("Daylight and Paper are light themes whose every ink reads at 4.5:1 on the 
       for (const surface of ["surface", "background"]) assert.ok(helpers.contrast(palette[ink], palette[surface]) >= 4.5, `${key}: ${ink} on ${surface} at ${helpers.contrast(palette[ink], palette[surface]).toFixed(2)}`);
     }
     assert.ok(helpers.contrast(palette.text, palette.background) >= 7, `${key}: body text at AAA on the page`);
+    // Accent words sit on accent-tinted rows and chips too (the sweep found them under 4.5 at a lighter accent).
+    const tint = (base, amount) => `#${[1, 3, 5].map((at) => { const from = parseInt(base.slice(at, at + 2), 16), to = parseInt(palette.accent.slice(at, at + 2), 16); return Math.round(from + (to - from) * amount).toString(16).padStart(2, "0"); }).join("")}`;
+    assert.ok(helpers.contrast(palette.accent, tint(palette.background, .14)) >= 4.5, `${key}: the accent on its own 14% tint`);
+    assert.ok(helpers.contrast(palette.bright, tint(palette.surface, .3)) >= 4.5, `${key}: bright on a 30% accent tint`);
     for (const fill of ["accent", "actionEnd"]) assert.ok(helpers.contrast(palette.onAccent, palette[fill]) >= 4.5, `${key}: the ink on ${fill}`);
     assert.ok(helpers.contrast(palette.border, palette.surface) >= 3, `${key}: the strong hairline`);
     for (const ink of ["text", "muted"]) assert.ok(helpers.contrast(palette.canvas[ink], palette.canvas.background) >= 4.5, `${key}: the Map's ${ink}`);
