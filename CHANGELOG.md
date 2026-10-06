@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A test that hangs no longer holds the PC.** A stage of `npm test` that runs
+  far past its time (two hours for the quick suites, 90 minutes for the live
+  test windows) is stopped together with everything it started, and the run
+  says which suites were still going. One stuck test window had held every
+  session's window tests for nine hours.
 - **Vibe is now Social, Build is now Studio.** The two modes have new names
   for what they are for: **Social** is vibing with friends and keeping a
   light eye on your agents, **Studio** is in-depth building, with the social

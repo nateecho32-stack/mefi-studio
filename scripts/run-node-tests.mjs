@@ -30,7 +30,9 @@
 // The parallel stage's width follows free memory (Node's default of one suite
 // per hardware thread less one meant 15 at once on the owner's laptop, with
 // ~0.7 GB free), and each stage starts its slowest suites first, from the
-// timings scripts/test-timings.mjs records after every run.
+// timings scripts/test-timings.mjs records after every run. A stage that runs
+// past its limit (test-lease.mjs stageLimitMs) is stopped with everything it
+// started, and the runner names the suites that were still running.
 //
 // Before any of that: the vm/section() suites eval slices of the real sources
 // (main.cjs, renderer/idle.js, ...) in sandboxes stubbed for the current
@@ -156,7 +158,7 @@ let samplesSeq = 0;
 // a single suite ran, printing nothing but "stage failed".
 // The child runs asynchronously: a blocked event loop would stop the lease's
 // heartbeat, and after ten silent minutes other runs would take the turn.
-const runGroup = async (files, concurrency = 0) => {
+const runGroup = async (files, concurrency = 0, kind = "suites") => {
   const flags = concurrency > 0 ? [`--test-concurrency=${concurrency}`] : [];
   const samples = path.join(samplesDir, `stage-${(samplesSeq += 1)}.jsonl`);
   const reporters = [
@@ -164,14 +166,27 @@ const runGroup = async (files, concurrency = 0) => {
     `--test-reporter=${pathToFileURL(path.join(studio, "scripts", "test-timings.mjs")).href}`, `--test-reporter-destination=${samples}`,
   ];
   const ordered = timings.longestFirst(files, timingStore, studio);
+  const limit = lease.stageLimitMs(kind);
+  let stopped = false;
   const outcome = await new Promise((resolve) => {
     const child = spawn(process.execPath, ["--test", ...flags, ...reporters, ...ordered.map((file) => path.relative(studio, file))], { cwd: studio, stdio: "inherit" });
-    child.once("error", (error) => resolve({ error }));
-    child.once("close", (status) => resolve({ status }));
+    // A hung suite must not hold its lane for good: past the limit the stage goes, with everything it started.
+    const timer = setTimeout(() => { stopped = true; lease.killTree(child.pid); }, limit);
+    child.once("error", (error) => { clearTimeout(timer); resolve({ error }); });
+    child.once("close", (status) => { clearTimeout(timer); resolve({ status }); });
   });
   if (outcome.error) console.error(`run-node-tests: could not start node --test: ${outcome.error.message}`);
+  if (stopped) {
+    let text = "";
+    try { text = await readFile(samples, "utf8"); } catch { /* nothing finished */ }
+    const finished = new Set(timings.parseSamples(text).map((sample) => path.resolve(sample.file)));
+    const left = ordered.filter((file) => !finished.has(path.resolve(file))).map((file) => path.relative(studio, file).split(path.sep).join("/"));
+    const span = limit >= 60_000 ? `${Math.round(limit / 60_000)} min` : `${Math.round(limit / 1000)} s`;
+    console.error(`run-node-tests: this stage ran past its ${span} limit and was stopped with everything it started; ` +
+      `still running then: ${left.slice(0, 10).join(", ") || "(none recorded)"}${left.length > 10 ? ` and ${left.length - 10} more` : ""}`);
+  }
   await timings.recordRun(samples, { root: studio }).catch((error) => console.error(`run-node-tests: suite timings not saved (${error.message})`));
-  return { failed: outcome.status !== 0 || Boolean(outcome.error), status: outcome.status };
+  return { failed: stopped || outcome.status !== 0 || Boolean(outcome.error), status: stopped ? 1 : outcome.status };
 };
 
 // The CPU-only suites run first at a width that follows free memory; a
@@ -182,9 +197,9 @@ const runGroup = async (files, concurrency = 0) => {
 // passed, so a fix needed a second full run just to learn that. The exit
 // reports them all.
 const failures = [];
-const runStage = async (files, concurrency, label) => {
+const runStage = async (files, concurrency, label, kind = "suites") => {
   if (!files.length) return;
-  const outcome = await runGroup(files, concurrency);
+  const outcome = await runGroup(files, concurrency, kind);
   if (!outcome.failed) return;
   failures.push({ label, status: outcome.status ?? 1 });
   if ((await sourceFingerprint()) !== settledAtLaunch) {
@@ -222,14 +237,14 @@ if (heavyLane.length || exclusive.length) {
     const width = lease.suggestWindowWidth({ freeMB });
     await turn.update({ width });
     if (heavyLane.length) console.log(`run-node-tests: Electron lane, ${width} window(s) at a time (${Math.round(freeMB)} MB free)${waitedNote(turn)}`);
-    await runStage(heavyLane, width, "Electron fixture");
+    await runStage(heavyLane, width, "Electron fixture", "windows");
     // The exclusive fixtures each get their own invocation: a single
     // `node --test a b` call still runs the two files concurrently, and two
     // live windows fighting over occlusion and visibility is exactly what this
     // stage exists to prevent.
     for (const file of exclusive) {
       await turn.update({ label: `npm test: ${path.basename(file)}` });
-      await runStage([file], 0, `exclusive ${path.basename(file)}`);
+      await runStage([file], 0, `exclusive ${path.basename(file)}`, "exclusive");
     }
   } finally {
     await turn.release();

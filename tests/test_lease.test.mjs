@@ -9,8 +9,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  LANES, acquire, admits, describeBoard, laneForFiles, leaseDir, leaseOff, parseRunArgs, pidAlive, readBoard,
-  suggestWidth, suggestWindowWidth, withLease,
+  LANES, STAGE_LIMITS_MIN, acquire, admits, describeBoard, killTree, laneForFiles, leaseDir, leaseOff, parseRunArgs, pidAlive, readBoard,
+  stageLimitMs, suggestWidth, suggestWindowWidth, withLease,
 } from "../scripts/test-lease.mjs";
 
 const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -216,4 +216,26 @@ test("two processes: a command run under the lease holds the Electron lane until
   await lease.release();
   assert.equal(await exited, 3, "the command's exit code passes through");
   assert.deepEqual(await readdir(dir), []);
+});
+
+test("a stage has an end: past its limit the runner stops it with everything it started", () => {
+  assert.deepEqual({ ...STAGE_LIMITS_MIN }, { suites: 120, windows: 90, exclusive: 30 });
+  assert.equal(stageLimitMs("windows", {}), 90 * 60_000);
+  assert.equal(stageLimitMs("exclusive", {}), 30 * 60_000);
+  assert.equal(stageLimitMs("anything else", {}), 120 * 60_000);
+  assert.equal(stageLimitMs("windows", { MEFI_TEST_STAGE_LIMIT_MIN: "0.5" }), 30_000);
+  assert.equal(stageLimitMs("windows", { MEFI_TEST_STAGE_LIMIT_MIN: "nonsense" }), 90 * 60_000);
+  // Windows: taskkill /T, tried again when a starved machine cannot start it, and a plain kill as the last resort.
+  const calls = [];
+  const failing = (command, args) => { calls.push([command, ...args]); return { status: 1 }; };
+  const killed = [];
+  assert.equal(killTree(4242, { platform: "win32", spawnSyncImpl: failing, kill: (pid, signal) => killed.push([pid, signal]) }), true);
+  assert.equal(calls.length, 3);
+  assert.deepEqual(calls[0], ["taskkill", "/PID", "4242", "/T", "/F"]);
+  assert.deepEqual(killed, [[4242, "SIGKILL"]]);
+  const once = [];
+  assert.equal(killTree(7, { platform: "win32", spawnSyncImpl: (command, args) => { once.push(args); return { status: 0 }; }, kill: () => { throw new Error("not reached"); } }), true);
+  assert.equal(once.length, 1);
+  assert.equal(killTree(7, { platform: "linux", spawnSyncImpl: () => { throw new Error("no taskkill here"); }, kill: () => {} }), true);
+  assert.equal(killTree(0, { platform: "win32" }), false);
 });
