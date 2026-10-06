@@ -41,6 +41,7 @@ test("main lets the renderer call only the Shop's methods, with the hub client's
   assert.match(main, /ipcMain\.handle\("hub:shop", async \(_event, payload\) => hubShop\(String\(payload\?\.method \?\? ""\), Array\.isArray\(payload\?\.args\) \? payload\.args : \[\]\)\);/);
   assert.match(preload, /hubShop: \(method, \.\.\.args\) => ipcRenderer\.invoke\("hub:shop", \{/);
   assert.equal((main.match(/process\.env\.MEFI_STUDIO_SHOP_ALL/g) ?? []).length, 1, "the switch is read once");
+  assert.match(main, /const SHOP_ALL = typeof process !== "undefined" && process\.env\.MEFI_STUDIO_SHOP_ALL === "1";/, "read guarded: some suites run this part of main.cjs in a vm with no process");
   const h = host();
   assert.deepEqual(Object.keys(h.api.HUB_SHOP_METHODS), METHODS);
   for (const [method, args] of [["nope", []], ["__proto__", []], ["toString", []], ["shopOwned", ["x"]], ["shopBuy", ["studio:fx-embers", 90, 0, "extra"]], ["shopPublish", [{}, {}]], ["shop", "studio"]]) {

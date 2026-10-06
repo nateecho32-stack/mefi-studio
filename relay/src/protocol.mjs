@@ -12,7 +12,8 @@
 // "companion.direct"), relayed and never stored, and the peer history frames
 // (feature "history.peer") that let a member's own Studio fill a gap in
 // another member's room history, since the relay keeps none. My PCs (feature
-// "pcs", docs/my-pcs.md) adds the pc* frames, also relayed and never stored.
+// "pcs", docs/my-pcs.md) adds the pc* frames, also relayed and never stored,
+// and Pets (feature "pets") the pet frame and roomPets, kept on the socket only.
 //
 // Validators return normalised copies holding only known fields, so nothing
 // extra a client sends rides along into the hub. Strings are checked, never
@@ -80,6 +81,8 @@ export const LIMITS = Object.freeze({
   companionCardBytes: 8 * 1024, // a companion card as JSON
   historyMessages: 100, // messages in one historyReply
   historyReplyBytes: 15 * 1024, // a historyReply frame; under frameBytes
+  petNameChars: 24, // a member's pet's name (feature "pets")
+  roomPets: 12, // pets in one roomPets frame
 });
 
 /** ready.features this relay can list (the remote needs the Discord bot, so it is listed only when one is linked). */
@@ -100,6 +103,7 @@ export const FEATURES = Object.freeze({
   building: 'building', // building: what a member is making right now, with their say-so (The Lobby's Building now)
   pcs: 'pcs', // My PCs: pcHello / pcState / pcSend, and the pcs / pcState / pcMsg frames (relay/src/pcs.mjs)
   shop: 'shop', // GET /v1/shop: Studio's own items and members' style packs, bought with credits (relay/src/shop.mjs)
+  pets: 'pets', // pet / roomPets: a member's pet visits the rooms they have open (relay/src/pets.mjs); also a hello feature
 });
 
 /** listen{action}: a room's shared player. */
@@ -119,6 +123,9 @@ export const REMOTE_NOTICE_KINDS = Object.freeze(['needs-you', 'done', 'failed',
 export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'success', 'danger']);
 /** pcHello{pc.kind}: My PCs tells a laptop (it has a battery to watch) from a desktop. */
 export const PC_KINDS = Object.freeze(['desktop', 'laptop']);
+/** pet{pet}: a member's pet (feature "pets"), as Studio's renderer/pets.js draws it; "theme" wears the theme's colours. */
+export const PET_KINDS = Object.freeze(['dragon']);
+export const PET_SKINS = Object.freeze(['theme', 'frost', 'jade', 'void', 'gold']);
 
 /** Project cards (feature "projects") and why a credits frame was sent (feature "credits"; "shop" a purchase, "sale" a pack's maker paid). */
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
@@ -443,6 +450,10 @@ const pcView = () =>
     since: timestamp(), // when it said pcHello on this connection
   });
 
+// A member's pet (feature "pets"): what it is, which skin, and its name. The
+// relay keeps it on the member's own connection only (relay/src/pets.mjs).
+const petLook = () => object({ kind: oneOf(PET_KINDS), skin: oneOf(PET_SKINS), name: line(0, LIMITS.petNameChars) });
+
 // ---- WebSocket frames ------------------------------------------------------------
 
 /** Client -> hub. Every frame is {type, ...fields}. */
@@ -488,6 +499,8 @@ export const CLIENT_FRAMES = Object.freeze({
   pcHello: { pc: object({ id: machineId(), name: pcName(), kind: oneOf(PC_KINDS) }), keys: pcKeys(), lendTo: list(snowflake(), LIMITS.pcLendTo) },
   pcState: { state: opaqueObject(LIMITS.pcStateBytes) },
   pcSend: { to: machineId(), env: opaqueObject(LIMITS.pcEnvBytes), nonce: optional(nonce()) },
+  // Pets (feature "pets"): this member's pet for the rooms this socket has open, or null for none.
+  pet: { pet: nullable(petLook()) },
 });
 
 /** Hub -> client. */
@@ -549,6 +562,9 @@ export const HUB_FRAMES = Object.freeze({
   pcs: { pcs: list(pcView(), LIMITS.pcsPerViewer) },
   pcState: { from: machineId(), state: opaqueObject(LIMITS.pcStateBytes) },
   pcMsg: { from: machineId(), fromUser: snowflake(), fromName: line(1, 100), keys: pcKeys(), env: opaqueObject(LIMITS.pcEnvBytes) },
+  // Pets (feature "pets", to Studios whose hello listed it): the pets of a room's members with Studio open on it,
+  // each member once, never one who hides from Who's online; `name` is the member's display name.
+  roomPets: { roomId: opaqueId(), pets: list(object({ userId: snowflake(), name: line(1, 100), pet: petLook() }), LIMITS.roomPets) },
 });
 
 function validateFrame(table, frame) {
