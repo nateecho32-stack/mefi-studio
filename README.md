@@ -56,7 +56,7 @@ The download stays on the latest published release.
 
 ## Wiki pages
 
-Add a markdown file under `wiki/pages/` and list it in `wiki/pages.json` (title, section and a one-line summary). Link between pages with `#/slug`. Mark what the next release adds with `<span class="status next">Coming in 0.5</span>` (it becomes `New in 0.5` once 0.5 is out), and work that isn't built yet with `<span class="status progress">In progress</span>` or `<span class="status planned">Planned</span>`. A mark inside a heading doesn't change that heading's link, so other pages' `#/page/heading` links keep working when a mark changes.
+Add a markdown file under `wiki/pages/` and list it in `wiki/pages.json` (title, section and a one-line summary). Link between pages with `#/slug`. Mark what the latest release added with `<span class="status next">New in 0.5</span>` (and what the next one will add with `Coming in 0.5.x`), and work that isn't built yet with `<span class="status progress">In progress</span>` or `<span class="status planned">Planned</span>`. A mark inside a heading doesn't change that heading's link, so other pages' `#/page/heading` links keep working when a mark changes.
 
 ## Names and assets
 

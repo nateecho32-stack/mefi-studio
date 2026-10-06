@@ -1,61 +1,59 @@
-# What's new in 0.4.4
+# What's new in 0.5
 
-Studio 0.4.4 came out on 27 September 2026, and it's the current download. [Download it for Windows](../../download.html) or open the [GitHub release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4).
+Studio 0.5 came out on __RELEASE_DATE__, and it's the current download. [Download it for Windows](../../download.html) or open the [GitHub release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.5.0). It took in what was planned for 0.4.5 and 0.4.6, which were never released on their own. [Everything new in 0.5](coming-in-0-5.md) has the full list.
 
-## Easier setup
+> **Coming from 0.4.4?** Its in-app update can't install 0.5, so [update by hand](updates.md#update-from-044-by-hand) this once. From 0.5 on, updates install themselves.
 
-**Start here** can install Codex, Claude Code, Grok or Antigravity, open its sign-in and check the connection. **Use for the whole studio** then runs chat, project mapping, planning, the agents and coding through that one account. In 0.4.4 the install and sign-in window may close at once: see [Known problems](#known-problems-in-044).
+## One layout, and new names
 
-**New app**, beside Vibe's project picker, makes a project folder under Mefi Apps, starts Git in it and sends your description through **Build it** as the first request.
+- **Social and Studio.** Vibe is now **Social**, for time with friends and a light eye on your agents, and Build is now **Studio**, for in-depth building with the social side still there. Switch in the top bar or with `Ctrl M`. Your saved mode and settings carry over.
+- **One layout.** A top bar, a rail with **Work**, **Map**, **Team** and **Friends**, your sessions in a list, an inspector, tabs you pin and a status bar. The classic layout is gone. See [the 0.5 layout](coming-in-0-5.md#the-05-layout).
+- **The Map and Team.** The Command view is now the Map, with **Map | Fleet | Pipelines** over the tree, and Agents is now Team.
+- **Today and one Inbox.** Both modes open on Today, and one Inbox (`Ctrl J`) holds everything waiting on you.
 
-[Set up your first project](getting-started.md).
+## Friends with nothing to set up
 
-## Work you can follow
+Rooms, room chat, Listen together, playdates and cowork claims run through the Mefi Studio relay, a free service built into Studio. Sign in with Discord once. **The Lobby** shows who's online, the **Project hub** lets you share projects and play other people's for credits, and **Friends › Events** runs a weekly Build Jam. See [Friends, rooms and playdates](friends-and-rooms.md).
 
-**Build it** in Vibe can split a bigger request into two to six steps. A **Plan in flight** card follows them, and **Make it one task** puts the steps that haven't started back into a single task.
+## Building with agents
 
-When you reopen a project, Studio reports what changed while it was closed: commits, uncommitted edits, and Claude Code or OpenCode sessions in that folder. It checks queued tasks against that work before a worker takes them. A task that looks already done waits under **Needs you** with **Mark it done**, **Drop it** or **Build it anyway**, and only you answer it.
+- See the files a worker changed, then accept them or revert one file or the whole attempt.
+- **Team › Connectors** adds, approves, tests and imports MCP servers, and skills can be always on, picked when they fit, or used only when called.
+- Mefi explains things simply unless you pick another answer style.
+- Claude Code, Codex and OpenCode think lightly first, and harder only when a job fails its check.
+- Pictures on a message, and the `@ # /` picker.
 
-Vibe's cards come and go with what they have to say: **Needs you**, **Building now**, **Freshly done** and **Fresh ideas**. Tasks, Plans, Ideas, Team and Settings open as compact panels inside Vibe. The Tasks panel shows a list or lanes, and a finished task has **Ask for a change** for another pass. See [Vibe mode](vibe-mode.md).
+## Getting set up
 
-## More control over agents
+- A new install starts with a three-step welcome: pick the AI that builds for you, choose a project, and say what Studio should make first.
+- The [setup helper](setup-helper.md) holds every agent setting in one place.
+- Add up to six Claude Code or Codex logins, and use your ChatGPT plan. See [Connect an AI](connections.md).
+- **Settings › Other apps**, off until you turn it on, lets Claude Code, Codex and your scripts talk to Studio.
 
-There are four permission modes: **Always ask**, **Accept per task**, **Auto** and **Elevated only**. **Auto** is the default. Every choice Mefi makes for you keeps its reason, with **Why** and **Undo**, and things only a person can do go into a short **For you** list.
+## Your PCs
 
-Mefi learns from your answers. You can scope what it learns to this project or all projects, switch **Learn from my answers** off, or **Forget** what it learned.
+Your PCs share the work: each PC you sign in to Friends on shows live, **Send work here** starts a task on another, and a laptop low on battery hands its tasks to a paired PC. **Set up this PC**, **Share between my PCs** and **Share with friends** are new too. See [Your PCs](your-pcs.md).
 
-In **Auto** and **Elevated only**, the desk agent settles ordinary questions for you and marks its answers **Mefi decided**. Questions about permissions, risk or things only you can do always wait for you. The companion's list of what needs you gains **Clear list**. [Permissions and decisions](permissions.md) has the details.
+## Keeping you posted
 
-## Appearance and media
+Windows notifications with quiet hours, **Report a problem**, **What's new** after an update, and in-app updates that finish installing. **Team › Resources** can make room for your agents by holding other apps back.
 
-Every theme and node style is free, including the Void collection. Pick them in **Appearance**; you don't need Discord for any of them. See [Themes, node styles and looks](appearance.md).
+## Looks and media
 
-Music & video puts the player and the saved queue in one panel. **Browse here** opens websites inside the player, and local music shows record artwork. See [Music, video and the player](media-player.md).
+**Chrome**, matte black with brushed metal and an iridescent finish, is the look a new install opens in; a theme you already picked stays. **Size and density** changes the scale with a live preview, and the media menu has **Playlists**. See [Themes, node styles and looks](appearance.md).
 
-## Across PCs
+## Good to know
 
-**Friends › Your PCs** shows how this PC compares with the project's default branch on GitHub. **Sync this PC** pulls and pushes that branch without ever force-pushing. Conversations, settings and saved keys stay on each PC. See [Your PCs](your-pcs.md).
-
-## Other changes
-
-**Trace**, under **Agents › Live**, shows Studio's log channels in one viewer. See [Trace, logs and diagnostics](trace.md).
-
-An update's **Restart now** stops the coding agents, saves their latest work and relaunches Studio paused, instead of waiting for builds to finish. This release also brings many bug fixes and a faster Command view.
-
-## Known problems in 0.4.4
-
-- **In-app updates don't finish installing.** Studio can check GitHub, download a new release and verify it, but the step that installs it after Studio closes doesn't run. When 0.5 comes out, [update by hand](updates.md#update-from-044-by-hand); the 0.5 release will say how. The fix ships in 0.5, so in-app updates work from 0.5 on.
-- **Guided sign-in windows may close at once.** [Sign in from a terminal](connections.md#sign-in-from-a-terminal), then use **Check connection** and **Use for the whole studio**. Fixed in 0.5.
-
-## Coming in 0.5
-
-0.4.4 is still the current download. The next release is 0.5, and it's being built now, with no release date yet. There is no 0.4.5 or 0.4.6: both were folded into 0.5.
-
-0.5 is taking shape on `main`: one new layout, with Vibe and Build renamed Social and Studio, the Map and Team; Friends with nothing to set up, with The Lobby, rooms, the Project hub and a weekly Build Jam; the setup helper, clearer reasons when agents aren't working, more than one Claude Code or Codex login, sharing between your own PCs, Windows notifications, undo for deleted tasks and ideas, Sign in with ChatGPT, and more. A faster launch is still <span class="status progress">In progress</span>. [Coming in 0.5](coming-in-0-5.md) lists it all.
+- Studio isn't code-signed yet, so Windows SmartScreen may ask the first time: choose **More info**, then **Run anyway**.
+- Some pages of this guide still show 0.4.4's screens and names (Vibe, Build, the Command view and Agents). Their **New in 0.5** marks say what changed.
 
 ## Studio is moving to Rust
 
-On 3 October 2026, work started on moving Studio to Rust with Tauri 2, in stages. The screens stay HTML and JavaScript, with the same settings and API keys. The Electron build is unchanged and is still what ships, and there's no date for the switch. [Studio is moving to Rust](coming-in-0-5.md#studio-is-moving-to-rust) has the stages.
+On 3 October 2026, work started on moving Studio to Rust with Tauri 2, in stages. The screens stay HTML and JavaScript, with the same settings and API keys. 0.5 is still the Electron build, and there's no date for the switch. [Studio is moving to Rust](coming-in-0-5.md#studio-is-moving-to-rust) has the stages.
+
+## Earlier: 0.4.4
+
+Studio 0.4.4 came out on 27 September 2026. It brought **Start here** setup for Codex, Claude Code, Grok and Antigravity with **Use for the whole studio**, **Build it** sizing and **New app**, a report of work done while Studio was closed, four permission modes, every theme and node style for free, and **Friends › Your PCs**. Its [release notes](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4) have the rest.
 
 ## Full history
 

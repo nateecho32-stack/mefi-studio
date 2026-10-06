@@ -2,11 +2,11 @@
 
 When something goes wrong, Trace shows you what Studio was doing. It puts Studio's logs in one viewer that you can search, filter and follow live. For slowdowns and connection checks, **Settings › System › Diagnostics** has a few more tools.
 
-Trace arrived in 0.4.4. Small fixes, and a log that's kept instead of starting empty, are <span class="status next">Coming in 0.5</span>.
+Trace arrived in 0.4.4. Small fixes, and a log that's kept instead of starting empty, are <span class="status next">New in 0.5</span>.
 
 ## Open Trace
 
-- In Build's menu, go to **Agents › Live › Trace**. It sits beside **Activity**. <span class="status next">Coming in 0.5</span> It's under **Team › Inspect**.
+- In Build's menu, go to **Agents › Live › Trace**. It sits beside **Activity**. <span class="status next">New in 0.5</span> It's under **Team › Inspect**.
 - Or press `Ctrl K` and type *trace*.
 
 Trace has no single-key shortcut. `Esc` closes it.
@@ -37,7 +37,7 @@ The **Studio log** and **Window** channels live in memory. They keep this sessio
 6. **Newest first** flips to **Oldest first** and back.
 7. **Copy** copies the lines shown. **Open file** shows the log file in its folder, for channels that have a file.
 
-<span class="status next">Coming in 0.5</span> The chips keep keyboard focus while **Follow** updates them, the level chips no longer read "All undefined", errors read as plain sentences, and an empty channel says so where the lines would be.
+<span class="status next">New in 0.5</span> The chips keep keyboard focus while **Follow** updates them, the level chips no longer read "All undefined", errors read as plain sentences, and an empty channel says so where the lines would be.
 
 ## Diagnostics
 
@@ -61,7 +61,7 @@ You can also ask for help in the [Void Engine Discord](https://discord.gg/xgfKc5
 
 ## The log is kept
 
-> <span class="status next">Coming in 0.5</span> Studio's log, the assistant's log and the window's warnings are saved on this PC, in its local app-data folder (never in OneDrive), and packed into monthly archives that are never deleted. **Load older** pages back past the last few thousand lines, and **Open file** shows the folder. Trace also shows one line per launch with how long each startup step took. `MEFI_STUDIO_LOG_CORE=0` keeps the log in memory only, as in 0.4.4. See the [roadmap](../roadmap.html).
+> <span class="status next">New in 0.5</span> Studio's log, the assistant's log and the window's warnings are saved on this PC, in its local app-data folder (never in OneDrive), and packed into monthly archives that are never deleted. **Load older** pages back past the last few thousand lines, and **Open file** shows the folder. Trace also shows one line per launch with how long each startup step took. `MEFI_STUDIO_LOG_CORE=0` keeps the log in memory only, as in 0.4.4. See the [roadmap](../roadmap.html).
 
 ## Related pages
 

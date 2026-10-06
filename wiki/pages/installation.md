@@ -14,10 +14,10 @@ Mefi Studio runs on Windows 10 or 11. The portable download is the quickest way 
 
 ## Portable build
 
-1. Open the [0.4.4 release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4), or the [download page](../../download.html), and download the Windows `win32-x64` zip.
+1. Open the [0.5 release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.5.0), or the [download page](../../download.html), and download the Windows `win32-x64` zip.
 2. Right-click the zip and choose **Extract All…**. Put the whole folder somewhere you can keep it: Studio saves your tasks, plans and conversations inside it.
 3. Open `Mefi Studio AI+.exe` inside the extracted folder. Keep its supporting files beside it. Opening it from inside the zip won't work.
-4. Choose a project folder, then select **Open studio** or **Open and start agents**.
+4. A short welcome asks which AI builds for you, which project to open and what Studio should make first. See [First launch](#first-launch).
 
 The executable keeps its older name. That's expected: the public name is Mefi Studio.
 
@@ -28,28 +28,25 @@ The build is unsigned, so Windows SmartScreen may ask before it opens. Check the
 The release includes a `.sha256` file. From the folder that holds both files, run:
 
 ```powershell
-Get-FileHash ".\Mefi-Studio-AI+-v0.4.4-win32-x64.zip" -Algorithm SHA256
-Get-Content ".\Mefi-Studio-AI+-v0.4.4-win32-x64.zip.sha256"
+Get-FileHash ".\Mefi-Studio-AI+-v0.5.0-win32-x64.zip" -Algorithm SHA256
+Get-Content ".\Mefi-Studio-AI+-v0.5.0-win32-x64.zip.sha256"
 ```
 
 The two hashes should match.
 
 ## First launch
 
-The launch screen asks which project to open. Pick one or choose **Open another folder…**, then:
+A new install starts with a three-step welcome. Pick the AI that builds for you: each coding tool on this PC shows **Ready** or **Sign in**, and **Other ways to connect** covers keys and local models. Then choose a project (or open a folder, or start a new app), and say what Studio should make first: Studio adds that task and starts it. **Skip** leaves the [setup helper](setup-helper.md) waiting in Help and Search.
 
-- **Open studio** opens the project with the agents off. Press **Start agents** when you're ready.
-- **Open and start agents** opens the project and starts them.
+Later launches open on the project picker: one **Open** button with a **Start agents** switch, and **Open a folder…**, **Start a new app** and **Get from GitHub** at its foot. **Settings › General › When Studio opens** decides whether agents start: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
 
-**Help › Start here** then walks you through setup, sign-in and a connection check. Continue with [Your first project](getting-started.md).
-
-> <span class="status next">Coming in 0.5</span> A new install starts with a three-step welcome: pick the AI that builds for you, choose a project, and say what Studio should make first. The [setup helper](setup-helper.md) opens once after you update, and waits in Help and Search. The launch screen has one **Open** button with a **Start agents** switch, and **Open a folder…**, **Start a new app** and **Get from GitHub** at its foot. **Settings › General › When Studio opens** decides whether agents start: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+**Help › Start here** walks you through setup, sign-in and a connection check. Continue with [Your first project](getting-started.md).
 
 ## Connect an AI account
 
 Studio can use a Claude Code, Codex, Grok, Antigravity or OpenCode sign-in, an API key or a local model. [Connect an AI](connections.md) explains each one.
 
-In 0.4.4 the guided sign-in window may close as soon as it opens. If that happens, [sign in from a terminal](connections.md#sign-in-from-a-terminal), then come back to Studio and check the connection.
+If a guided sign-in window closes before it finishes (in 0.4.4 it often did), [sign in from a terminal](connections.md#sign-in-from-a-terminal), then come back to Studio and check the connection.
 
 You can browse the model catalog and write plans by hand before you connect anything. Building needs a signed-in coding CLI.
 
@@ -66,7 +63,7 @@ Saved keys are encrypted for the Windows account that saved them. On another PC,
 
 ## Updates
 
-Open **Settings › System › Updates** and press **Check GitHub** to look for a newer release. In 0.4.4 the in-app update can't finish installing, so move to 0.5 [by hand](updates.md#update-from-044-by-hand) when it comes out. [Update Studio](updates.md) has the details.
+Open **Settings › System › Updates** and press **Check GitHub** to look for a newer release. On 0.4.4 the in-app update can't install 0.5, so move to it [by hand](updates.md#update-from-044-by-hand) once; from 0.5 on, updates install themselves. [Update Studio](updates.md) has the details.
 
 ## From source
 
@@ -82,7 +79,7 @@ npm start
 
 Run these commands from the repository root. If Studio says that `ELECTRON_RUN_AS_NODE` is set, clear that variable in your shell and try again.
 
-A source install runs what's on `main`. It already has the changes marked <span class="status next">Coming in 0.5</span>, and it changes often. On `main`, `npm ci` downloads Electron for you and stops if your Node.js is older than 24.
+A source install runs what's on `main`, which has the newest work before it's released, and it changes often. On `main`, `npm ci` downloads Electron for you and stops if your Node.js is older than 24.
 
 `Run Mefi's Studio AI+.cmd` starts the portable build in `dist/` when there is one, otherwise the source install. `npm run start:web` opens a browser preview at <http://localhost:4173>. The preview can't launch coding workers.
 

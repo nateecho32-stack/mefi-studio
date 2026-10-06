@@ -26,7 +26,7 @@ Some work, such as a small edit in a project with no test command, can be verifi
 
 In 0.4.4, Studio reads its evidence from OpenCode sessions. Work built by Claude Code, Codex, Grok or Antigravity leaves no session Studio can read, so it usually waits for you to check it and confirm it yourself, or to retry it on OpenCode.
 
-> <span class="status next">Coming in 0.5</span> Studio verifies builds from every coding tool with its own checks, instead of handing them back to you.
+> <span class="status next">New in 0.5</span> Studio verifies builds from every coding tool with its own checks, instead of handing them back to you.
 
 ## If the task is still waiting
 
@@ -58,7 +58,7 @@ Your code stays in the project folder you opened. Studio's own records, such as 
 
 Pushing a project to GitHub doesn't copy Studio's records to another PC.
 
-> <span class="status next">Coming in 0.5</span> **Friends › Your PCs › Share between my PCs** carries the items you choose between your own PCs, through a private, sealed GitHub repository: open tasks and ideas, model results, learned decisions, team setups, brains, Playbook recipes, memory notes and preferences. Keys go only after you type a confirmation. Conversations stay on each PC. See [Your PCs](your-pcs.md).
+> <span class="status next">New in 0.5</span> **Friends › Your PCs › Share between my PCs** carries the items you choose between your own PCs, through a private, sealed GitHub repository: open tasks and ideas, model results, learned decisions, team setups, brains, Playbook recipes, memory notes and preferences. Keys go only after you type a confirmation. Conversations stay on each PC. See [Your PCs](your-pcs.md).
 
 ## Back up or recover
 
@@ -68,6 +68,6 @@ Updating keeps your data: the in-app update leaves `resources\app\data` in place
 
 If Studio went away while work was running, and that work was less than ten minutes old, the next launch reopens the same folder and picks up where you left off. If the window crashed or disappeared, reopen Studio and check the saved project before you start the same tasks again.
 
-> <span class="status next">Coming in 0.5</span> **Settings › General › When Studio opens** decides whether agents start on launch: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+> <span class="status next">New in 0.5</span> **Settings › General › When Studio opens** decides whether agents start on launch: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
 
 For a blank window, a missing project or repeated failed checks, see [Troubleshooting](troubleshooting.md). In a bug report, include your Studio version, the task's state and the error, and leave keys and private project content out.

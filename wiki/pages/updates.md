@@ -1,10 +1,10 @@
 # Updates
 
-The current release is **0.4.4**, from 27 September 2026. The next one is 0.5, and it's being built now. It includes work built on `main` and selected usability fixes, and it has no release date. There is no 0.4.5 or 0.4.6: both were folded into 0.5. See [the 0.5 scope](#/coming-in-0-5/what-will-and-wont-ship). A source install gets new work by pulling `main`.
+The current release is **0.5.0**, from __RELEASE_DATE__. It took in what was planned for 0.4.5 and 0.4.6, which were never released on their own: see [everything new in 0.5](#/coming-in-0-5/what-will-and-wont-ship). The next updates are 0.5.x. A source install gets new work by pulling `main`.
 
 Open **Settings › System › Updates** to see your version and look for a newer one.
 
-> **In 0.4.4, in-app updates don't finish installing.** Studio downloads and verifies the new release, but the step that installs it after Studio closes never runs. So when 0.5 comes out, [update by hand](#update-from-044-by-hand), just this once. The 0.5 release will say how. <span class="status next">Coming in 0.5</span> The install step works, so from 0.5 on, updates install themselves.
+> **In 0.4.4, in-app updates don't finish installing.** Studio downloads and verifies the new release, but the step that installs it after Studio closes never runs. So to move from 0.4.4 to 0.5, [update by hand](#update-from-044-by-hand), just this once. <span class="status next">New in 0.5</span> The install step works, so from 0.5 on, updates install themselves.
 
 ## How the portable build updates
 
@@ -16,11 +16,13 @@ Studio checks GitHub for a new release every 20 minutes. When one is out, a noti
 
 Studio updates only when no build is running; if one is, it asks you to try again once it finishes. It downloads the release zip and checks its published SHA-256 when there is one. Then a helper replaces the app files after Studio closes, keeps your `resources\app\data` folder, and opens Studio again. In 0.4.4 that helper never runs, which is why you update by hand this once.
 
+> <span class="status next">New in 0.5</span> Studio keeps a copy of the build it updated from. If the new one misbehaves, **Roll back** in **Settings › Updates** goes back to it.
+
 The zip and the executable keep the older **Mefi Studio AI+** names. That's expected: the public name is Mefi Studio.
 
 ## Update from 0.4.4 by hand
 
-These are the steps as they stand today. The 0.5 release will say how to move to it, so read its release notes first.
+Moving from 0.4.4 to 0.5 takes these steps, once. The [0.5 release notes](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.5.0) have them too.
 
 1. Download the new release zip from the [download page](../../download.html) or [GitHub releases](https://github.com/nateecho32-stack/mefi-studio/releases). You can [check its SHA-256](installation.md#check-the-download) first.
 2. Quit Studio. Closing the window only hides it in the tray, so right-click the tray icon and choose **Quit**.
@@ -57,7 +59,7 @@ Turn off **Apply updates automatically** if you'd rather choose when changes app
 
 A public release needs no GitHub token. A private repository needs a read-only token, saved in **Settings › System › Updates**.
 
-> <span class="status next">Coming in 0.5</span> The [setup helper](setup-helper.md)'s **Machine & app** section also holds **Install updates automatically** and the GitHub token.
+> <span class="status next">New in 0.5</span> The [setup helper](setup-helper.md)'s **Machine & app** section also holds **Install updates automatically** and the GitHub token.
 
 ## Publishing a release
 

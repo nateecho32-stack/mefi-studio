@@ -1,6 +1,6 @@
 # The setup helper
 
-> <span class="status next">Coming in 0.5</span> The setup helper isn't in the 0.4.4 download. It's finished on main and ships with 0.5. On 0.4.4, read [Set up in 0.4.4](#/setup-helper/set-up-in-044) below.
+> <span class="status next">New in 0.5</span> The setup helper came with 0.5. Still on 0.4.4? Read [Set up in 0.4.4](#/setup-helper/set-up-in-044) below.
 
 The setup helper is one guided sheet for everything that decides what your agents do. You connect an AI, choose who does what, decide how much Mefi may do on its own and set how Studio behaves on your PC, all in one place.
 
@@ -101,4 +101,4 @@ These are the sign-in commands Studio runs for each tool:
 - [Connect an AI](#/connections) covers every provider in more detail.
 - [Permissions and decisions](#/permissions) explains the four permission modes.
 - [Settings and Configuration](#/settings) covers everything that isn't about agents.
-- [Coming in 0.5](#/coming-in-0-5) lists everything else that's on its way.
+- [Everything new in 0.5](#/coming-in-0-5) lists everything else 0.5 added.

@@ -42,7 +42,7 @@
   const metaDescription = document.querySelector('meta[name="description"]');
   const baseDescription = metaDescription ? metaDescription.getAttribute("content") : "";
 
-  let manifest = { title: "Mefi Studio guide", sections: [], aliases: {}, release: "0.4.4", next: "0.5" };
+  let manifest = { title: "Mefi Studio guide", sections: [], aliases: {}, release: "0.5.0", next: "0.5.x" };
   let flat = [];
   let current = null;   // the page being shown or loaded
   let rendered = null;  // the slug whose content is in the article
@@ -132,8 +132,8 @@
       sections,
       title: data.title || "Mefi Studio guide",
       aliases: data.aliases && typeof data.aliases === "object" ? data.aliases : {},
-      release: data.release || "0.4.4",
-      next: data.next || "0.5",
+      release: data.release || "0.5.0",
+      next: data.next || "0.5.x",
     };
     return manifest;
   }

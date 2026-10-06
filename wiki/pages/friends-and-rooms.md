@@ -2,31 +2,31 @@
 
 Friends is the social side of Studio. You can join rooms with people from the [Void Engine Discord](#/discord), chat, listen to the same song at the same moment, share what you make, and let your companion play with your friends' companions. Your own PCs live here too. See [Your PCs](#/your-pcs).
 
-> <span class="status next">Coming in 0.5</span> The Lobby, rooms, the Project hub, Events and playdates with friends arrive with 0.5. They run on the **Mefi Studio relay**, a free service built into Studio, so there's nothing to set up and no PC has to stay on. In 0.4.4, Friends holds Your PCs and Listen together, which has no room service to connect to yet.
+> <span class="status next">New in 0.5</span> The Lobby, rooms, the Project hub, Events and playdates with friends came with 0.5. They run on the **Mefi Studio relay**, a free service built into Studio, so there's nothing to set up and no PC has to stay on. In 0.4.4, Friends held Your PCs and Listen together, which had no room service to connect to.
 
 ## Open Friends
 
 Click your [companion](#/companion) at the foot of the menu, or press **Esc** on a workspace page. Then choose the **Friends** bubble.
 
-<span class="status next">Coming in 0.5</span> Friends is a place of its own on the rail: one page with **The Lobby**, **Rooms**, **Your PCs**, **Playground**, the **Project hub** and **Events** in the list beside it. Search and the companion's **Friends** bubble open it at the right place, and each place can be a tab. The bubble shows a badge when invites or join requests wait for you, or when a PC has work to sync.
+<span class="status next">New in 0.5</span> Friends is a place of its own on the rail: one page with **The Lobby**, **Rooms**, **Your PCs**, **Playground**, the **Project hub** and **Events** in the list beside it. Search and the companion's **Friends** bubble open it at the right place, and each place can be a tab. The bubble shows a badge when invites or join requests wait for you, or when a PC has work to sync.
 
-In 0.4.4, Friends holds three things:
+In 0.4.4, Friends held three things:
 
-- **Connect with Discord** opens **Settings › General › Community**.
-- **Friends & listening rooms** opens [Listen together](#listen-together) in Music & video.
-- **Your PCs** keeps your own PCs in step. See [Your PCs](#/your-pcs).
+- **Connect with Discord** opened **Settings › General › Community**.
+- **Friends & listening rooms** opened [Listen together](#listen-together) in Music & video.
+- **Your PCs** kept your own PCs in step. See [Your PCs](#/your-pcs).
 
 ## What you need
 
 - A Discord account in the Void Engine server. [Join the Discord](#/discord) first. If your account isn't in the server yet, Studio offers **Join the Discord** and checks again.
-- <span class="status next">Coming in 0.5</span> **Sign in with Discord**, once, in Friends. Discord asks in your browser, and from then on Studio connects by itself a few seconds after it opens. Until you sign in, The Lobby, Rooms and the Project hub show one **Sign in with Discord** card; Your PCs and the Playground work without it.
+- <span class="status next">New in 0.5</span> **Sign in with Discord**, once, in Friends. Discord asks in your browser, and from then on Studio connects by itself a few seconds after it opens. Until you sign in, The Lobby, Rooms and the Project hub show one **Sign in with Discord** card; Your PCs and the Playground work without it.
 - Nothing else. The relay's address is built into Studio, so there's no hub address to enter and no Discord role to get.
 
 Studio 0.4.4 doesn't ship the Mefi Studio Link app ID, so its **Link my Discord** button stays hidden.
 
 Signing in reads only who you are: your Discord id and name, and your roles and join date in the Void Engine server. It never reads your messages, and nothing about your projects is sent. [Link your Discord in Studio](#/discord/link-your-discord-in-studio) has the details.
 
-## The Lobby <span class="status next">Coming in 0.5</span>
+## The Lobby <span class="status next">New in 0.5</span>
 
 Friends opens on **The Lobby**, a front page: who is online right now and which room they're in, the week's top project with a **Play** button, the rooms open now, what was shared this week, who moved up a rank, and your own credits and week. Everyone signed in is also in the **Lobby** room, so there's always someone to say hi to.
 
@@ -38,7 +38,7 @@ At its foot:
 - **Pop-ups from friends**: Studio says when someone you share a room with opens Studio, invites you, asks to join your room, or plays or stars your project. Untick it to turn them off.
 - **Share what I'm building**: off until you turn it on. Friends then see your open project's name with a small live tree, a lit leaf for each task running, but never task titles or files.
 
-## Rooms <span class="status next">Coming in 0.5</span>
+## Rooms <span class="status next">New in 0.5</span>
 
 A room is a place to talk with a few people, inside Studio. Open **Friends › Rooms**.
 
@@ -63,7 +63,7 @@ Anyone a week or more in the Void Engine server can make a room, and you can own
 - **Lock** the room to stop new posts and requests, and unlock it again;
 - **Close** the room for everyone. Studio asks once more first.
 
-## The Project hub <span class="status next">Coming in 0.5</span>
+## The Project hub <span class="status next">New in 0.5</span>
 
 **Friends › Project hub** lists members' shared projects as a star map and as lists: **New**, **Top** and **Mine**.
 
@@ -74,7 +74,7 @@ Anyone a week or more in the Void Engine server can make a room, and you can own
 
 Credits are never bought, never earned by inviting people, and never tied to activity in the Discord. They start once your Discord account is 30 days old and you've been in the server a week, and one person can make another earn at most 15 credits a week, so a second account gains nothing. Ranks go Spark, Ember, Flame, Comet, Star, Nova and Void by the credits you've earned. Your balance is yours alone; others see your rank.
 
-## Events <span class="status next">Coming in 0.5</span>
+## Events <span class="status next">New in 0.5</span>
 
 **Friends › Events** runs by itself:
 
@@ -84,7 +84,7 @@ Credits are never bought, never earned by inviting people, and never tied to act
 
 Prizes and co-work rewards come from a daily community pot that grows with the number of people active that week, so credits keep their worth as the community grows. To bring a friend, send them your room's code: nothing earns credits for inviting people.
 
-## Agents working together <span class="status next">Coming in 0.5</span>
+## Agents working together <span class="status next">New in 0.5</span>
 
 A cowork room can stop agents on different PCs from editing the same file at once.
 
@@ -94,7 +94,7 @@ A cowork room can stop agents on different PCs from editing the same file at onc
 
 The room lists what is claimed and by which PC. A finished run keeps its claim until its PC pushes the change, or for 30 minutes. Without a linked room, nothing waits.
 
-## Listen together <span class="status next">Coming in 0.5</span>
+## Listen together <span class="status next">New in 0.5</span>
 
 Play a link for one of your rooms, and everyone who listens along hears it at the same point. Studio's side has been in the app since 0.4.0; from 0.5 it runs through the relay.
 
@@ -111,7 +111,7 @@ Audio and video files stay in step to the second. YouTube, Vimeo and SoundCloud 
 
 ## Playground and playdates
 
-<span class="status next">Coming in 0.5</span> **Friends › Playground** is where companions meet. Like toys that link up, they play short scripted playdates: high fives, races, rock-paper-scissors, hide and seek and sticker swaps.
+<span class="status next">New in 0.5</span> **Friends › Playground** is where companions meet. Like toys that link up, they play short scripted playdates: high fives, races, rock-paper-scissors, hide and seek and sticker swaps.
 
 - **Practice with Pip** plays a playdate with Pip, a practice buddy that never leaves your PC. Nothing is sent, and you need neither Discord nor the relay.
 - **Play with a friend.** When a friend's companion is out in a room you have open, it shows up with **Play with …**. Both screens show the same scene, each from its own side.
@@ -148,7 +148,7 @@ Nothing about you or your work leaves until you allow it. Open **What Mefi may s
 
 ## When Friends can't connect
 
-<span class="status next">Coming in 0.5</span> When the room service can't be reached, Friends says why in one sentence and offers only what helps:
+<span class="status next">New in 0.5</span> When the room service can't be reached, Friends says why in one sentence and offers only what helps:
 
 | Friends offers | Why |
 | --- | --- |

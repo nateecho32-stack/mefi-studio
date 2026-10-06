@@ -35,17 +35,17 @@ The pin button, **Keep the menu open**, keeps the menu open beside the page in w
 | **Work** | Tasks, Plans, Ideas and Analyzer |
 | **Agents › Overview** | Your team, whether it's ready, and the queue switches |
 | **Agents › Setup** | Team & models, Providers, Routing & fallback, Run behavior |
-| **Agents › Live** | Command, Pipelines, Sessions, Activity, Trace, Overhead; <span class="status next">Coming in 0.5</span> Fleet, beside the Map |
+| **Agents › Live** | Command, Pipelines, Sessions, Activity, Trace, Overhead; <span class="status next">New in 0.5</span> Fleet, beside the Map |
 | **Agents › Workflows** | Brain maps, Playbook, Project map, Context |
 | **Agents › Models** | Catalog, Performance |
 | **Agents › Usage** | Recorded calls, Provider accounts |
 | **Settings** | General, Appearance, Audio, System. See [Settings](settings.md). |
 
-> <span class="status next">Coming in 0.5</span> **M+** opens Projects with keyboard focus on the project you're in.
+> <span class="status next">New in 0.5</span> **M+** opens Projects with keyboard focus on the project you're in.
 
-<span class="status next">Coming in 0.5</span> The 0.5 layout replaces this menu with a rail of four places: **Work** (Tasks, Plans, Ideas, the Inbox, the Analyzer and Worktrees), **Map** (the live tree, Fleet and Pipelines), **Team** (everything under Agents today) and **Friends** (The Lobby, Rooms, Your PCs, Playground, the Project hub and Events), with **Search**, **Settings** and **Help** at its foot. Search opens any place directly, and the companion's Friends bubble stays available. See [the 0.5 layout](coming-in-0-5.md#the-05-layout).
+<span class="status next">New in 0.5</span> The 0.5 layout replaces this menu with a rail of four places: **Work** (Tasks, Plans, Ideas, the Inbox, the Analyzer and Worktrees), **Map** (the live tree, Fleet and Pipelines), **Team** (everything under Agents today) and **Friends** (The Lobby, Rooms, Your PCs, Playground, the Project hub and Events), with **Search**, **Settings** and **Help** at its foot. Search opens any place directly, and the companion's Friends bubble stays available. See [the 0.5 layout](coming-in-0-5.md#the-05-layout).
 
-## In the 0.5 layout <span class="status next">Coming in 0.5</span>
+## In the 0.5 layout <span class="status next">New in 0.5</span>
 
 | Key | Action |
 | --- | --- |
@@ -87,7 +87,7 @@ These work when you're not typing in a text field.
 | --- | --- |
 | `Ctrl K` | Search Studio |
 | `Ctrl ,` | Open Settings, even while typing |
-| `Ctrl Shift ,` | <span class="status next">Coming in 0.5</span> Open **Configuration**: every setting in one searchable tree |
+| `Ctrl Shift ,` | <span class="status next">New in 0.5</span> Open **Configuration**: every setting in one searchable tree |
 | `/` | Search the model catalog |
 | `R` | Refresh the model catalog |
 | `G` | Pin the node-tree preview |

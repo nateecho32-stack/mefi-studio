@@ -1,34 +1,34 @@
 # About this guide
 
-This guide helps you get started with Mefi Studio and find the next step when something is unclear. Its pages describe **Studio 0.4.4**, the current download. For conversation, ideas and works in progress, join the [Discord community](https://discord.gg/xgfKc5pVxG).
+This guide helps you get started with Mefi Studio and find the next step when something is unclear. Its pages describe **Studio 0.5**, the current download, though some still show 0.4.4's screens and names. For conversation, ideas and works in progress, join the [Discord community](https://discord.gg/xgfKc5pVxG).
 
 ## How pages mark what's new
 
-Anything that isn't in the 0.4.4 download carries a mark, so you always know what you can use today:
+What the latest release added, and anything that isn't in a download yet, carries a mark, so you always know what you can use today:
 
 | Mark | Meaning |
 | --- | --- |
 | <span class="status released">Released</span> | In the current download. Most pages leave this mark out. |
-| <span class="status next">Coming in 0.5</span> | Finished on `main`, and ships with 0.5, the next release. |
+| <span class="status next">New in 0.5</span> | New in 0.5, the current download. |
 | <span class="status rolling">Rolling out</span> | Built, but it needs a part outside Studio first, such as the Studio bot's side of Reach this PC from Discord. |
 | <span class="status progress">In progress</span> | Being built right now. |
 | <span class="status planned">Planned</span> | On the [roadmap](../roadmap.html), not started. |
 | <span class="status idea">Idea</span> | Being thought about. The details are open. |
 
-There was no 0.4.5 or 0.4.6 release. Both were folded into 0.5: what was marked for 0.4.5 is built on `main` and ships with 0.5, and so is most of what was in progress for 0.4.6.
+There was no 0.4.5 or 0.4.6 release. Both were folded into 0.5.
 
-Pages describe 0.4.4, so they use its names. In 0.5, Vibe is called **Social**, Build is called **Studio**, the Command view is **the Map** and Agents is **Team**; a page's 0.5 marks use the new names.
+In 0.5, Vibe became **Social**, Build **Studio**, the Command view **the Map** and Agents **Team**. Pages that still describe 0.4.4's screens use the old names; their **New in 0.5** marks use the new ones.
 
-In a page's Markdown, write a mark as a span, for example `<span class="status next">Coming in 0.5</span>`. The classes are `released`, `next`, `rolling`, `progress`, `planned` and `idea`. A mark inside a heading doesn't change that heading's link.
+In a page's Markdown, write a mark as a span, for example `<span class="status next">New in 0.5</span>`. The classes are `released`, `next`, `rolling`, `progress`, `planned` and `idea`. A mark inside a heading doesn't change that heading's link.
 
 To colour a whole note, start a quote with the mark, or with bold words that begin with the status:
 
 ```markdown
-> <span class="status next">Coming in 0.5</span> The setup helper opens first.
+> <span class="status next">New in 0.5</span> The setup helper holds every agent setting.
 > **Rolling out:** Reach this PC from Discord needs the Studio bot.
 ```
 
-A page's `"status"` in `wiki/pages.json` (`"next"` or `"rolling"`) adds a tag beside it in the page list. When a release ships, a maintainer updates `release` and `next` in `pages.json` and removes the marks for what shipped.
+A page's `"status"` in `wiki/pages.json` (`"next"` or `"rolling"`) adds a tag beside it in the page list. When a release ships, a maintainer updates `release` and `next` in `pages.json`, turns its "Coming in" marks into "New in" marks, and removes the previous release's "New in" marks.
 
 ## Fix a page
 

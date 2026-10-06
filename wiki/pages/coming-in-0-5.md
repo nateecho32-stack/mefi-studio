@@ -1,20 +1,20 @@
-# Coming in 0.5
+# Everything new in 0.5
 
-> <span class="status next">Coming in 0.5</span> This is the scope for the next release: work built on main, the app’s development branch. 0.5 is being finished now. It isn't published yet and has no release date. The current download is 0.4.4, from 27 September 2026. [What’s new in 0.4.4](#/whats-new) covers that release.
+> <span class="status next">New in 0.5</span> Studio 0.5 came out on __RELEASE_DATE__, and it's the current download. This page lists everything it added; [What’s new in 0.5](#/whats-new) is the short version.
 
-**Where did 0.4.5 and 0.4.6 go?** Both were skipped and folded into 0.5. Everything that was coming in 0.4.5 is built on main and ships in 0.5, and so is most of what was in progress for 0.4.6. A faster launch is [still being built](#/coming-in-0-5/still-being-built-for-05).
+**Where did 0.4.5 and 0.4.6 go?** Both were skipped and folded into 0.5. What was planned for them is in 0.5, apart from [what's still being built](#/coming-in-0-5/still-being-built-for-05).
 
-**On 0.4.4?** Its in-app update can't install 0.5 for you, so when 0.5 is out, [update by hand](#/updates/update-from-044-by-hand) this once. The 0.5 release will say how. From 0.5 on, updates install themselves.
+**Coming from 0.4.4?** Its in-app update can't install 0.5, so [update by hand](#/updates/update-from-044-by-hand) this once. From 0.5 on, updates install themselves.
 
-**New names.** In 0.5, Vibe is called **Social**, Build is called **Studio**, the Command view is **the Map** and Agents is **Team**. The rest of this guide describes 0.4.4, so it still uses the old names.
+**New names.** In 0.5, Vibe is called **Social**, Build is called **Studio**, the Command view is **the Map** and Agents is **Team**. Some pages of this guide still show 0.4.4's screens and use the old names.
 
-A source install on main already has everything below. See [Install Studio](#/installation).
+<span id="what-will-and-wont-ship"></span>
 
-## What will and won’t ship
+## What 0.5 brings, and what comes later
 
-0.5 brings one new layout, with Social and Studio, the Map, Team, tabs and one Inbox; Friends with nothing to set up, on a relay built into Studio, with The Lobby, rooms, the Project hub, credits and a weekly Build Jam; the setup helper; Connectors, skills any way you want them and thinking that steps up when a job is stuck; a review of each worker run's changes; Windows notifications; Sign in with ChatGPT; My PCs, Other apps and Resources; and the new Chrome look. The lists below cover the built work.
+0.5 brings one new layout, with Social and Studio, the Map, Team, tabs and one Inbox; Friends with nothing to set up, on a relay built into Studio, with The Lobby, rooms, the Project hub, credits and a weekly Build Jam; the setup helper; Connectors, skills any way you want them and thinking that steps up when a job is stuck; a review of each worker run's changes; Windows notifications; Sign in with ChatGPT; My PCs, Other apps and Resources; and the new Chrome look. The lists below cover all of it.
 
-**Still in progress for 0.5:** a faster launch. Anything that isn't finished and tested when 0.5 is ready moves to 0.5.x.
+**Still being built:** a faster launch, now planned for 0.5.x.
 
 **Planned for 0.5.x:** Related folders, starting a new app from a template, saved map views, and three pieces of the 0.5 design that aren't built yet: a live Preview tab, the pinned tree strip as a panel, and Drafts in the session list.
 
@@ -147,7 +147,7 @@ From 0.5 this is Studio's only layout. The classic layout and the switch back to
 
 ## Friends and rooms
 
-> <span class="status next">Coming in 0.5</span> Friends runs on the Mefi Studio relay, a free service built into Studio, so there's nothing to set up and no PC has to stay on. Sign in with Discord once; your account needs to be in the Void Engine server.
+> <span class="status next">New in 0.5</span> Friends runs on the Mefi Studio relay, a free service built into Studio, so there's nothing to set up and no PC has to stay on. Sign in with Discord once; your account needs to be in the Void Engine server.
 
 - **Friends, a place of its own.** The rail's **Friends** opens one page: **The Lobby**, **Rooms**, **Your PCs**, **Playground**, the **Project hub** and **Events**. Search and the companion's Friends bubble open it at the right place.
 - **The Lobby.** Who is online and in which room, the week's top project, the rooms open now, what was shared this week and who moved up a rank. Everyone signed in is in the Lobby room, so there's always someone to say hi to.
@@ -160,22 +160,26 @@ From 0.5 this is Studio's only layout. The classic layout and the switch back to
 
 ## Speed and fixes
 
-- **In-app updates install.** In 0.4.4, **Update** downloads a new release but never installs it. That's fixed from 0.5 on. To get from 0.4.4 to 0.5, [update by hand](#/updates/update-from-044-by-hand) this once. The 0.5 release will say how, and the [download page](../../download.html#updates) has the steps as they stand today.
+- **In-app updates install.** In 0.4.4, **Update** downloads a new release but never installs it. That's fixed from 0.5 on. To get from 0.4.4 to 0.5, [update by hand](#/updates/update-from-044-by-hand) this once: the [download page](../../download.html#from-044) has the steps.
 - **Studio sends only what changed.** When a task changes, Studio sends the window that one card instead of the whole board, and Claude Code and Codex runs show their steps while they work.
 - **Studio's log is kept.** The logs are saved on this PC in monthly archives that are never deleted, and Trace's **Load older** reads back through them. See [Trace, logs and diagnostics](#/trace).
 - **Portable build details.** The executable carries Studio’s name, version and icon.
-- **Guided sign-in works again.** In 0.4.4, the setup window for installing or signing in to a coding tool may close at once. Until then, [sign in from a terminal](#/connections/sign-in-from-a-terminal); [Set up in 0.4.4](#/setup-helper/set-up-in-044) has the rest.
+- **Guided sign-in works again.** In 0.4.4, the setup window for installing or signing in to a coding tool could close at once; in 0.5 it stays open and runs the setup. Still on 0.4.4? [Sign in from a terminal](#/connections/sign-in-from-a-terminal).
 - **Tree brightness is lighter on the graphics card.** It takes much less work from the graphics card than before.
 - **Lighter in the tray.** While Studio's window is hidden or minimized, task lists and machine status wait until you open it.
 - **Starting up.** Studio no longer gets stuck on "Picking up where you left off" when its window is covered or in the tray.
 - **Settings that did nothing now work.** For example, saving an LM Studio or custom endpoint no longer breaks an open team draft, and **Work through the backlog** can be stopped.
 - **Running from source.** `npm ci` fetches Electron again and needs Node 24 or newer, and `npm test` finds Python 3 under any of its usual names.
 
-## Still being built for 0.5
+<span id="still-being-built-for-05"></span>
 
-> <span class="status progress">In progress for 0.5</span> **A faster launch:** Studio opening sooner, without the blank fade. Built so far: timing marks for every startup step, a settings cache and a compile cache for Studio's own code. Still to do: a shorter launch gate and fewer calls at startup. Whatever isn't finished and tested when 0.5 is ready moves to 0.5.x.
+## Still being built
 
-The rest of what was meant for 0.4.6 is built now and listed above: Studio sending only what changed, the kept logs, and The Lobby with who's online.
+> <span class="status progress">In progress for 0.5.x</span> **A faster launch:** Studio opening sooner, without the blank fade. In 0.5 so far: timing marks for every startup step, a settings cache and a compile cache for Studio's own code. Still to do: a shorter launch gate and fewer calls at startup.
+
+The rest of what was meant for 0.4.6 is in 0.5 and listed above: Studio sending only what changed, the kept logs, and The Lobby with who's online.
+
+<span class="status planned">Planned for 0.5.x</span> Related folders, starting a new app from a template, saved map views, a live Preview tab, the pinned tree strip as a panel, and Drafts in the session list.
 
 <span class="status planned">Planned</span> More for Friends: Studios on the same Wi-Fi finding each other, project rooms with friends' cursors on a shared tree, and a fair queue for shared videos. The next Fleet phases add agent lanes, missions measured from verified work, and your other PCs' and friends' fleets.
 

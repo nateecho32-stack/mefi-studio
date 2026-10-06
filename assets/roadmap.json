@@ -10,8 +10,8 @@
     "Honesty: no invented numbers or dates. Credits are earned only: never bought, never for inviting people, never tied to Discord activity. Discord is the easiest way in, never required.",
     "After editing, refresh the <noscript> copy in roadmap.html with the command at the top of assets/roadmap.js."
   ],
-  "updated": "2026-10-06",
-  "latestRelease": "0.4.4",
+  "updated": "__RELEASE_DATE__",
+  "latestRelease": "0.5.0",
   "areas": [
     "Agents & work",
     "Setup",
@@ -26,10 +26,975 @@
     {
       "id": "done",
       "title": "Done",
-      "note": "Seven releases since the first public one on 22 September 2026. The download is 0.4.4; 0.5 is next.",
+      "note": "Eight releases since the first public one on 22 September 2026. The download is 0.5.0.",
       "releasesTitle": "Releases",
       "releasesNote": "Newest first. Each one links to its release notes on GitHub.",
       "groups": [
+        {
+          "id": "new-in-0-5",
+          "title": "New in 0.5",
+          "note": "In 0.5, the latest release. It took in what was planned for 0.4.5 and 0.4.6.",
+          "items": [
+            {
+              "id": "new-layout",
+              "title": "The 0.5 layout: one frame for Social and Studio",
+              "text": "A top bar with the Social | Studio switch, a list on the left, an inspector on the right and a status bar, around every page.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Menus",
+              "details": [
+                "It is Studio’s only layout. The classic tab row, sidebar menus and toolbars are gone, about 2,600 lines of Studio’s own code, and every control they held has a place in the new one.",
+                "The rail has four places, Work, Map, Team and Friends, with Search, Settings and Help at its foot. Each place remembers where you were.",
+                "Drag the list and the inspector to resize them, or use the keys. In a small window they fold into drawers.",
+                "The top bar says where you are; the status bar shows what is working, what waits on you, usage, the machine’s load and the time left on what is playing.",
+                "Settings, Search (Ctrl K) and a three-step first run are rebuilt for it."
+              ]
+            },
+            {
+              "id": "vibe-social",
+              "title": "Social and Studio: two modes, two moods",
+              "text": "Vibe is now Social, for hanging out with friends and keeping a light eye on your agents. Build is now Studio, for in-depth building, with the social side still there.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Menus",
+              "details": [
+                "Only the names change: your saved mode, settings and links carry over.",
+                "Ctrl+M or the switch in the top bar changes mode. Every launch starts in Social unless you turn off Always start in Social in Settings; then Studio opens the mode you last used."
+              ]
+            },
+            {
+              "id": "map",
+              "title": "The Map: your agents’ tree beside your sessions",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "text": "The Command view is now the Map. Your sessions stay in the list beside it, and a small bar over the tree holds Map | Fleet | Pipelines, Running only and View.",
+              "details": [
+                "Pipelines is the Agent brain’s live work. Running only dims everything that isn’t running, and is remembered on this PC.",
+                "View holds the five layouts, labels, the camera, and a flat map or a 3D orbit that can spin.",
+                "N opens a new task and S opens Search. Fit and zoom sit bottom right, and the colours of the four states bottom left.",
+                "Pages that open over the Map show one page at a time, without the tree showing through."
+              ]
+            },
+            {
+              "id": "today-inbox",
+              "title": "Today, and one Inbox for everything waiting on you",
+              "text": "Both modes open on Today: your box to build or ask, and a board of what needs you, what runs, what to review and what is done.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Questions, permissions, approvals, reviews and stopped tasks are one list everywhere: the top bar, the status bar, the tabs and Work › Inbox.",
+                "Answer from the card, decide later, or open the task.",
+                "A Windows notification opens the task it was about, or the Inbox when it told you about several things.",
+                "A task that will fix itself, such as a check it tries again, is listed with running work as “Fixing itself”, and reaches the Inbox only if it gives up.",
+                "A question shows its choices first, with a small “Answer in my own words” link for anything else."
+              ]
+            },
+            {
+              "id": "build-sessions",
+              "title": "Studio mode: your tasks as sessions",
+              "text": "Studio mode lists the project’s tasks like a coding-agent app lists sessions, and each opens as a thread with an inspector beside it.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "The thread shows the brief, every run with its steps, notes, questions and answers, and before and after shots.",
+                "The inspector has Plan, Changes, Checks, Preview and Agent, plus Worktree for a run in its own worktree.",
+                "A box at the foot takes a Note, an Ask or a Change, with pictures and the @ # / picker."
+              ]
+            },
+            {
+              "id": "team",
+              "title": "Team: everything about your agents, in twelve places",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "text": "Agents is now Team: Overview, Providers, Seats and models and Permissions, then Rules, Skills, Connectors, Related folders and Workflows, then Health and usage, Models and Inspect.",
+              "details": [
+                "Seats and models opens on who does what in plain words, with one line per job: its model, how hard it thinks and its results on this PC.",
+                "Providers starts with “Use one provider for everything” and your subscription logins. Using one subscription for the whole studio now switches every project’s saved team too.",
+                "Longer how-to text waits behind a small “i” beside a title: click it, or rest the pointer on it.",
+                "Old links, Search and Find a setting land on the place that holds a control now."
+              ]
+            },
+            {
+              "id": "tabs",
+              "title": "Tabs you add and pin",
+              "text": "Open any page or session in a tab, pin the ones you keep, and Studio keeps the rest tidy.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Menus",
+              "details": [
+                "A preview tab for pages you only glance at, a badge when an agent needs you, at most 8 unpinned tabs (you choose), and Recently closed.",
+                "Ctrl+T, Ctrl+W, Ctrl+Tab and Ctrl+1 to 9. Each project keeps its own tabs; pinned pages follow you.",
+                "Every behaviour has its own switch."
+              ]
+            },
+            {
+              "id": "take-it-back",
+              "title": "See what changed, and take it back",
+              "text": "After a worker runs, Studio shows the files it changed and lets you accept them or revert a file or the whole attempt.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "A private before and after copy of the folder for each attempt, so a revert can be undone.",
+                "Studio runs the project’s lint and typecheck after an attempt and shows the result as advice, never as a gate.",
+                "When Studio’s own preview is running, it keeps a before and after screenshot."
+              ]
+            },
+            {
+              "id": "connectors",
+              "title": "Connectors",
+              "text": "Team › Connectors adds, approves, tests and imports MCP servers, and you choose which ones the chat, the helper agents and the builders get.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Studio shows the exact command before anything runs, and finds a server’s tools by itself.",
+                "It imports the servers Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Codex, OpenCode and Gemini CLI already use, and keeps their tokens encrypted.",
+                "Online (Streamable HTTP) servers work too.",
+                "The tool calls a model asks for in one turn run side by side, and a server stays open between calls, so a browser it opened is still there for the next click."
+              ]
+            },
+            {
+              "id": "effort-settings",
+              "title": "Thinking that steps up when a job gets stuck",
+              "text": "Claude Code, Codex and OpenCode start every job with light thinking, and think harder only when a job fails its check.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "After two misses a stronger model takes the job. Max thinking waits for your OK.",
+                "Seats and the chat on Claude Code or Codex take a thinking level of their own.",
+                "When a harder level keeps working for one kind of job, that kind of job starts there.",
+                "A report card in Team › Seats and models says what each model is good and bad at on this PC. A kind of job the usual model keeps failing can try another model for its next five jobs, and keeps it only if it did clearly better."
+              ]
+            },
+            {
+              "id": "skills-rules",
+              "title": "Skills any way you want them, and rules for your agents",
+              "text": "Team › Skills keeps the project’s skills with an editor and live checks, and Team › Rules sets what every agent should always do.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Every skill can be always on, picked by the agent when it fits, or used only when called, separately for the chat, Studio’s helper agents and the builders.",
+                "A skill that fits is loaded when it’s needed instead of being pasted into every request, and a task that says /skill-name gives its builder that skill.",
+                "Skills are written only under the project’s .agents/skills folder.",
+                "Studio’s own models can list a project’s folders and search its text when you allow it."
+              ]
+            },
+            {
+              "id": "answer-styles",
+              "title": "Answers like you’re five, or the way you pick",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "text": "Mefi explains things simply unless you pick another style: Short answers, Teach me, Brainstorm, Poke holes, Expert or plain.",
+              "details": [
+                "A chip beside the permission mode in each message box shows the style and changes it. /eli5, or any other style, in a message uses it once.",
+                "A reply shows chips for the skills and tools it used."
+              ]
+            },
+            {
+              "id": "faster-agents",
+              "title": "Agents and Studio send only what changed",
+              "text": "When a task changes, Studio sends the window that one card instead of the whole board, and Claude Code and Codex runs show their steps while they work.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "About 5 KB for a change instead of about 690 KB on a 134-card board. Nothing on screen changes.",
+                "A Claude Code or Codex run shows its to-do list, the tool it is running and its token use as it goes, as OpenCode runs already did.",
+                "Prompts put the parts that stay the same first, so providers that cache them (Zen’s GPT models, OpenRouter’s Claude and Gemini models) can bill them as cache reads.",
+                "A coding tool is stopped when Studio stops waiting for its answer, instead of running on for minutes on your subscription.",
+                "Each of these has its own off switch.",
+                "Still planned: a work journal for each task, and a retry that carries on where the agent left off."
+              ]
+            },
+            {
+              "id": "logging",
+              "title": "Studio’s log is kept",
+              "text": "Studio’s log, the assistant’s log and the window’s warnings are saved on this PC and packed into monthly archives that are never deleted.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "details": [
+                "They live in the local app-data folder, never in OneDrive.",
+                "Trace’s Load older pages back past the last few thousand lines, and Open file shows the folder.",
+                "Trace also shows one line per launch with how long each startup step took."
+              ]
+            },
+            {
+              "id": "size-density",
+              "title": "Size and density, with a live preview",
+              "text": "Make text and information bigger or smaller and see a miniature of the window change before you apply it.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Media & looks",
+              "details": [
+                "Interface scale, text size, three densities and three detail levels.",
+                "Ctrl +, Ctrl − and Ctrl 0 change the scale, and it is remembered."
+              ]
+            },
+            {
+              "id": "chrome-theme",
+              "title": "Chrome: matte black, brushed metal, an iridescent finish",
+              "text": "A new theme and the look new installs open in: matte black panels, silver type, brushed chrome on the main buttons and the side of a switch you are on, and an iridescent finish on the edges and highlights.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Media & looks",
+              "details": [
+                "Silver, ice blue, lilac and aqua on the selection bars, the open tab, the hairlines and the greeting; silver nodes on the Map; the same palette as this website.",
+                "A theme you already picked, Aurora included, stays; every other theme is still there.",
+                "The colours that mean something (working, needs you, errors, review) are unchanged."
+              ]
+            },
+            {
+              "id": "notifications",
+              "title": "Windows tells you when something needs you",
+              "text": "A question, an approval or a failed task that waits while you are away becomes a Windows notification.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "details": [
+                "The taskbar icon flashes and shows a count.",
+                "Quiet hours, shared with the Discord remote. Finished tasks are off by default."
+              ]
+            },
+            {
+              "id": "report-whats-new",
+              "title": "Report a problem, and What’s new after an update",
+              "text": "Report a problem builds a zip you can read first, with keys, names and paths taken out. Nothing is uploaded.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "details": [
+                "After Studio closes unexpectedly it offers the same report once.",
+                "After an update, a short What’s new says what changed."
+              ]
+            },
+            {
+              "id": "undo-versions",
+              "title": "Undo for deletes, versions for plans",
+              "text": "A deleted task or idea can be brought back from Recently deleted, and every edit of a plan is kept as a version you can restore.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Search (Ctrl K) starts with what you used last and can add work: type “task …” or “idea …”."
+              ]
+            },
+            {
+              "id": "pictures-picker",
+              "title": "Pictures on a message, and the @ # / picker",
+              "text": "Paste or drop a screenshot into your message, and type @, # or / to pick a file, a task or a command.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Pictures go to models that can see them; a coding tool is told where the picture is.",
+                "Each task can have its own time limit, and its evidence shows its usage."
+              ]
+            },
+            {
+              "id": "worktrees-page",
+              "title": "Work › Worktrees",
+              "text": "Every git worktree of the project, worst first, with what to do about each: merge into main, remove (keeping a copy of anything at risk) or forget a missing folder.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "details": [
+                "A run can work in its own worktree; Studio mode marks the tasks that do.",
+                "`npm run worktrees` prints the same list for a checkout."
+              ]
+            },
+            {
+              "id": "other-apps",
+              "title": "Other apps: Claude Code, Codex and your scripts can talk to Studio",
+              "text": "Settings › Other apps has a switch, off until you turn it on, that lets apps on this PC see what the agents are doing and what waits on you, message Mefi, hand Studio a task and leave you a note.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "details": [
+                "Claude Code and Codex connect with one command (an MCP server with eight tools), Cursor, Claude Desktop and VS Code with a JSON block, and scripts and hooks with a command line.",
+                "Every task an app files waits for your OK in every permission mode, and approving, answering and settings stay in Studio.",
+                "Only this PC can connect, with a key kept in your user folder, and no web page can call it.",
+                "Copy setup prompt gives Claude Code, Codex or another AI helper what it needs to walk you through setup."
+              ]
+            },
+            {
+              "id": "resources",
+              "title": "Resources: make room for your agents",
+              "text": "Team › Resources lists the other apps on this PC with their CPU and memory, and can hold them back while agents build.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "details": [
+                "Slow down, Pause, Free memory, Close and End, each undone by Put back or Restore all.",
+                "Manual does only what you press. Auto slows heavy apps you aren’t using while agents build, and puts everything back when they finish.",
+                "Calls, music, recording, remote access and terminals are left alone unless you say otherwise, and Studio, its agents and Windows are never touched.",
+                "Nothing stays paused after Studio closes, even if it crashes. Windows only for now."
+              ]
+            },
+            {
+              "id": "studio-daily",
+              "title": "The Studio Daily",
+              "text": "The launch screen is a daily paper: what changed while you were away, before you start.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Setup",
+              "details": [
+                "It replaces the old launch screen, and stays quiet when nothing changed."
+              ]
+            },
+            {
+              "id": "chatgpt-plan",
+              "title": "Use your ChatGPT plan",
+              "text": "Sign in with ChatGPT and route work through the plan you already pay for.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Setup",
+              "details": [
+                "Codex workers run over codex app-server.",
+                "GPT-6.1 Sol is the default for the heavy seats."
+              ]
+            },
+            {
+              "id": "models-facelift",
+              "title": "A face lift for Models",
+              "text": "Team › Models: the Catalog is one sortable table with four picks, and Performance leads with a leaderboard.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "What the community says about a model, and Studio’s own probes, sit beside it."
+              ]
+            },
+            {
+              "id": "model-ratings",
+              "title": "Community model ratings",
+              "text": "A #model-reviews forum in the Discord, run by the bot, with one post per model. Members rate models for each kind of task and share tips.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Community",
+              "details": [
+                "Ratings feed Studio's model picks from real use: the provider's release notes first, then comments sorted into kinds of task, then tests Studio can run when you ask.",
+                "Community evidence only nudges a pick a little.",
+                "Studio's model tracker gets a refresh too."
+              ]
+            },
+            {
+              "id": "command-tree-children",
+              "title": "Sub-agents on the Map",
+              "text": "A session’s sub-agents hang under it on the Map, pop out of their parent, and fly home into it when they’re done.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "The newest three show under each session, with \"+n sub-agents\" for the rest.",
+                "A delegated part flies home into the task that handed it out once it closes.",
+                "Your node style's finishing beat plays as work flies home."
+              ]
+            },
+            {
+              "id": "playlists",
+              "title": "Playlists in the media menu",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Media & looks",
+              "text": "Five starting lists of real videos, lists of your own, and a + to save any video.",
+              "details": [
+                "The starting points: Code & math explorers, Visualizers, Focus streams, Shaders & graphics and Simulated worlds.",
+                "Make a list from scratch or from Up next, and drag rows to reorder.",
+                "Share copies a list as text that reads well in Discord, with a link that plays it on YouTube. Paste that text back and Studio turns it into a playlist."
+              ]
+            },
+            {
+              "id": "media-player-next",
+              "title": "A smaller media player with a video feed",
+              "text": "The media menu becomes a mini player with play, pause, back, forward and volume, quick switches for the node tree, and YouTube videos to scroll through.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Media & looks",
+              "details": [
+                "Click a video to add it to Up next, or drag it into place.",
+                "A docked video no longer jitters while the menu scrolls."
+              ]
+            },
+            {
+              "id": "tree-brightness",
+              "title": "Smooth frames at high tree brightness",
+              "text": "With Tree brightness above 100%, the node tree could slow the whole window down. A fix that brightens each layer once, instead of every shape, is built.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "details": [
+                "Built on main."
+              ]
+            },
+            {
+              "id": "setup-helper",
+              "title": "The setup helper: every agent setting in one place",
+              "text": "One guided menu covers everything that decides what your agents do. Quick setup takes three steps, and Search reaches every section.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Setup",
+              "details": [
+                "Sections: Connect an AI, Team & models, Routing, How work runs, Permissions, Tools & skills, Machine & app, and Look.",
+                "It opens first on a new install, and once after you update.",
+                "Settings that used to save but do nothing now work."
+              ]
+            },
+            {
+              "id": "first-run",
+              "title": "A friendlier first run",
+              "text": "With no AI connected, Studio says so and offers Connect an AI instead of \"Waiting for you\".",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Setup",
+              "details": [
+                "With no coding tool installed, Start agents tells you to install OpenCode, Claude Code or Codex instead of failing five times.",
+                "Setup finds the login you already have. A tool that's installed but not signed in no longer counts as connected.",
+                "Only one welcome shows at a time.",
+                "Builds from Claude Code, Codex, Grok and Antigravity are checked by Studio's own checks, instead of always waiting for you to confirm them."
+              ]
+            },
+            {
+              "id": "more-logins",
+              "title": "More than one Claude Code or Codex login",
+              "text": "Add a second login, up to six in all. When one hits its usage limit, work moves to the next one straight away.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Setup",
+              "details": [
+                "Find it under Setup › Connect an AI › More than one login.",
+                "Other providers are used only once every login is topped out, and only through fallbacks you already allow.",
+                "Each login gets its own row in Usage."
+              ]
+            },
+            {
+              "id": "when-studio-opens",
+              "title": "Studio opens the way you want",
+              "text": "A new When Studio opens setting: Resume what I had, Start agents or Keep agents off.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Setup",
+              "details": [
+                "Start with Windows opens Studio in the tray when you sign in, on the project you had open. A PC you leave working keeps working after an update restart.",
+                "Find both in Settings › General › Profile & startup.",
+                "Studio no longer jumps to the Map after five quiet minutes. That's now a switch, and it's off by default.",
+                "Startup no longer sticks on \"Picking up where you left off\" when the window opens covered or in the tray."
+              ]
+            },
+            {
+              "id": "updates-that-install",
+              "title": "In-app updates that finish installing",
+              "text": "Update's install step runs after Studio closes, and the guided sign-in windows for coding tools run their steps instead of closing early.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "link": {
+                "href": "download.html#updates",
+                "text": "How to update by hand"
+              },
+              "details": [
+                "In 0.4.4 and earlier, Update can download and check a new release, but its install step may not run, so moving from 0.4.4 to 0.5 is by hand, once.",
+                "In 0.4.4, the guided install and sign-in windows can close before they run. Sign in from a terminal, then use Check connection.",
+                "The portable executable carries Studio’s name, version and icon."
+              ]
+            },
+            {
+              "id": "why-agents-wait",
+              "title": "Agents say why they're not working",
+              "text": "Today, the Map, a task’s page and the chat all give one answer about what is holding work back, with the one control that clears it.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "It names a pause, a cooldown, tasks waiting for your OK and the permission mode holding them, the free model's one-at-a-time limit, and more.",
+                "Approving a task before its references finish gathering no longer drops the approval.",
+                "Permission modes keep their meaning when an older switch or a brain map changes them.",
+                "The answer follows a project switch straight away."
+              ]
+            },
+            {
+              "id": "watch-mefi-think",
+              "title": "Watch Mefi think and your team work",
+              "text": "In Social mode, Suggest a next step and Build it show live progress instead of one still sentence.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "See the stage reached, the files read or steps planned, which model is thinking, and a clock against how long it usually takes on your PC.",
+                "A split request draws its steps as a track to the final check.",
+                "Adding one suggestion to your draft no longer locks the others."
+              ]
+            },
+            {
+              "id": "mefi-evolution",
+              "title": "Build on your app with MEFI",
+              "text": "Social mode offers Modify, Experiment, Fix and Improve, with briefs based on your project map.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Suggestions can go into a draft, or be saved as ideas without starting work.",
+                "The map shows which systems change together.",
+                "A separate Ideas tree groups ideas and tasks by system and progress."
+              ]
+            },
+            {
+              "id": "plans-one-step",
+              "title": "Plans, one step at a time",
+              "text": "Plans shows one step at a time, with a button to the step that's waiting on you and a progress track.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "The interview reads as a chat, and Mefi asks the next question on its own. You can switch that off.",
+                "Plans opens without waiting for the folder scan, and gets your project ready in the background.",
+                "A quick model answers first. If its reply misses, the deeper model gets one go, and Think harder goes straight to it.",
+                "A new idea needs no name and has starters, and Where this lives pins a plan to an area of the Project map."
+              ]
+            },
+            {
+              "id": "task-board",
+              "title": "A calmer Task board",
+              "text": "The board opens on its tools, cards are tighter, and a click anywhere on a card opens its task.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Add, then search with the state picker beside it, then the All, Open, Review and Done chips in one row.",
+                "Cards slide up into free space instead of waiting below the tallest card in their row.",
+                "← All cards closes a task at any width, and the status box sits at the top of Details."
+              ]
+            },
+            {
+              "id": "habits",
+              "title": "Habits for each agent",
+              "text": "Short rules an agent follows, such as explain changes, test, take small steps and keep a to-do list.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Each habit can be off, brief or full.",
+                "You see what an agent's habits add to every prompt, in tokens.",
+                "Find them in Team › Seats and models, on each job’s card under More settings."
+              ]
+            },
+            {
+              "id": "needs-you",
+              "title": "A cleaner Needs you list",
+              "text": "An ask you answered leaves the list straight away.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Old asks, and asks about cards that left the board while Studio was closed, are cleared when the project loads."
+              ]
+            },
+            {
+              "id": "away-without-ai",
+              "title": "\"What changed while I was away?\" without an AI",
+              "text": "The chat answers from Studio's report of work done outside it, even with no model connected.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "It says a card \"may already be done\" when it only matched on file names and commit subjects."
+              ]
+            },
+            {
+              "id": "configuration",
+              "title": "Configuration: every setting in one tree",
+              "text": "Ctrl Shift , opens every Studio setting in one searchable tree. Picking a setting opens its real control.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Menus",
+              "details": [
+                "It adds an Interface scale, from 70% to 150%.",
+                "It's also in Settings, as All settings in one place.",
+                "It also indexes every setup-helper section and pins Walk me through setup. Pick a section to open its real controls."
+              ]
+            },
+            {
+              "id": "menus-ask-twice",
+              "title": "Menus that ask the same way and speak plainly",
+              "text": "Every action that can't be undone now asks the same way: the first press asks, the second acts.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Menus",
+              "details": [
+                "Errors read as sentences.",
+                "Pages leave out values that were never recorded, instead of printing \"undefined\" or \"Invalid Date\".",
+                "Menus open, close and reorder smoothly. Reduced motion turns that off.",
+                "M+ opens Projects on the project you're in."
+              ]
+            },
+            {
+              "id": "typing-into-menus",
+              "title": "Typing goes into the open menu's box",
+              "text": "When a menu with a text box is open, what you type lands in that box instead of setting off single-letter shortcuts.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Menus",
+              "details": [
+                "Clicking out of the menu gives the keys back."
+              ]
+            },
+            {
+              "id": "media-player-reach",
+              "title": "A media player you can always reach",
+              "text": "Floating players get a move handle and Settings, minimize and close buttons. A minimized player leaves a restore bar.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Media & looks",
+              "details": [
+                "Websites get the full panel width.",
+                "The player takes keyboard focus only when you minimize it yourself."
+              ]
+            },
+            {
+              "id": "finish-beats",
+              "title": "Every node style finishes in its own way",
+              "text": "In the Agent brain, a step whose work came back, and the lead taking its agent in, play your node style's own finishing beat.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Media & looks",
+              "details": [
+                "Classic orbs' ring bursts, Soft glass ripples like a drop on water, Minimal draws a check, Halo slips its ring over the lead, Crystal glints across its facets, Singularity's disc flares, Prism shatters and fuses back, and Sigil's rune writes itself shut.",
+                "A failed check finishes in amber. With reduced motion on, the Agent brain plays no beats.",
+                "The Agent brain's pipeline list no longer cuts long titles off, and the Playbook shelf keeps its books in tight rows."
+              ]
+            },
+            {
+              "id": "companion-pet",
+              "title": "Your companion as a pet",
+              "text": "The companion menu has six bubbles, one job each: Talk, What I'm doing, Needs you, Suggest work, Friends and Personality.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Companion",
+              "details": [
+                "Pet it, and it remembers your days together.",
+                "Personality sets how it acts: Straight work, Balanced, or Friendly & expressive.",
+                "Practice playdates with Pip, a buddy that stays on your PC. Playdates with friends are part of Friends in 0.5."
+              ]
+            },
+            {
+              "id": "share-between-pcs",
+              "title": "Share between your PCs",
+              "text": "A private GitHub vault, sealed with a key only your paired PCs hold, carries what you choose between your own PCs.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Friends",
+              "details": [
+                "Model results, learned decisions, team setups, brains, recipes, memory notes, preferences, and open tasks and ideas.",
+                "Keys and setup can travel too, but only after a typed confirmation.",
+                "Each PC's line in Friends › Your PCs says what its agents are working on, what waits for you there and what finished today."
+              ]
+            },
+            {
+              "id": "share-with-friends",
+              "title": "Share with friends",
+              "text": "Save one brain, recipe, team setup, set of model results, memory note or preferences as a .mefishare file. It's scrubbed and previewed before you save it.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Friends",
+              "details": [
+                "A file you receive is reviewed before it can reach your library, and a risky one is kept out.",
+                "A friend's file can never change your permissions."
+              ]
+            },
+            {
+              "id": "set-up-a-pc",
+              "title": "Set up a new PC and keep every PC current",
+              "text": "Set up this PC is a checklist for Git, the GitHub CLI, Node.js, a GitHub sign-in and the project's packages, with a button for each gap.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Friends",
+              "details": [
+                "Get a project from GitHub clones one of your repositories.",
+                "Keep this PC up to date checks GitHub once a minute, and brings in other PCs' work when nothing on this PC is in the way.",
+                "Sync this PC now runs the project's checks before it pushes.",
+                "Closing Studio asks first when this PC holds work no other PC has."
+              ]
+            },
+            {
+              "id": "lighter-when-hidden",
+              "title": "Lighter while minimized",
+              "text": "A window in the tray or minimized keeps only the newest board and machine updates, and catches up when you open it.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "details": [
+                "Bursts of status updates are merged into one.",
+                "A closed Explorer no longer repaints on every update."
+              ]
+            },
+            {
+              "id": "fleet-view",
+              "title": "The Fleet page: your team at a glance",
+              "text": "Fleet, beside the Map (Map | Fleet | Pipelines), shows the open project’s seats in Lead, Build, Check and Keep pods, with the wires between them.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "Graph, Table, Recent, Tree and Health views show the team, handoffs, checks and what needs a look.",
+                "Each seat opens an inspector with its current work, earlier runs, Open task, a way to its node on the Map and a two-press Stop this run.",
+                "It folds its columns to the room it has, so Fit shows the whole team in a narrow window too.",
+                "Agent lanes, missions and fleets from other PCs belong to the later Fleet work."
+              ],
+              "link": {
+                "href": "wiki/#/coming-in-0-5/agents-tasks-and-plans",
+                "text": "What 0.5 adds"
+              }
+            },
+            {
+              "id": "sync-lost-work",
+              "title": "Sync catches a merge that loses work",
+              "text": "Before pushing, Sync checks whether a merge silently kept one branch’s files and dropped another PC’s changes.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Platform",
+              "details": [
+                "A loss of 200 or more lines stops the push and names the merge and files that need a look.",
+                "Friends › Your PCs also reports recent suspicious merges.",
+                "The report names the files to inspect before you try to sync again."
+              ]
+            },
+            {
+              "id": "tidy-menus",
+              "title": "Tidier Ideas cards alongside Tasks",
+              "text": "Ideas gets compact cards with a clear title, a short excerpt and its status. Short cards slide up into free space, as on the Task board.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Menus",
+              "details": [
+                "The layout adapts when the window changes size, and keeps one column in narrow spaces.",
+                "Source and date appear only when recorded, and selecting a card keeps the existing idea detail and actions.",
+                "Providers, Plans, Social mode and the Project map’s wider card cleanup stay planned for after 0.5."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "friends-in-0-5",
+          "title": "Friends in 0.5",
+          "note": "In 0.5, the latest release. Friends runs on the Mefi Studio relay, a free service on Cloudflare that is built into Studio: there is no hub to set up, and no PC has to stay on.",
+          "items": [
+            {
+              "id": "friends-relay",
+              "title": "Friends with no setup",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Friends",
+              "text": "Rooms, room chat, Listen together, companions in the Playground and cowork file claims all run through the Mefi Studio relay. You no longer enter a hub address.",
+              "details": [
+                "The relay keeps no chat. Your Studio keeps its own encrypted copy of each room’s messages for a week, and fills in what you missed from other members’ copies.",
+                "The relay signs every message, so a copy can’t be altered.",
+                "Its code is public, in Studio’s repository."
+              ],
+              "link": {
+                "href": "https://github.com/nateecho32-stack/mefi-studio/tree/main/relay",
+                "text": "The relay’s code"
+              }
+            },
+            {
+              "id": "friends-menu",
+              "title": "Friends, a place of its own",
+              "text": "The rail’s Friends opens one roomy page: The Lobby, Rooms, Your PCs, Playground, the Project hub and Events, in the list beside it.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Menus",
+              "details": [
+                "Each place says in one line what it is for, and each can be a tab.",
+                "Search and the companion’s Friends bubble open the page at the right place.",
+                "Your PCs sums up a long report in a few lines, with Show all for the whole list."
+              ]
+            },
+            {
+              "id": "friends-2",
+              "title": "The Lobby, and rooms like a chat app",
+              "text": "Friends opens on The Lobby: who is online and in which room, the week’s top project, the rooms open now, what was shared this week and who moved up a rank.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Friends",
+              "details": [
+                "Everyone signed in is in the Lobby room, so there is always someone to say hi to.",
+                "An open room fills the page: who is here, Listen together, the conversation and one message box. Enter sends, and Shift+Enter starts a new line.",
+                "Every room has a short invite code. Copy invite, and a friend types it into Join with a code to come straight in.",
+                "Who’s online lists who is in Studio right now, with Invite to a room. Untick Show me as online to hide.",
+                "Once you sign in, Studio connects by itself a few seconds after it opens."
+              ]
+            },
+            {
+              "id": "rooms",
+              "title": "Friends › Rooms",
+              "text": "Browse rooms, ask to join with a note, accept invites, let people in and chat with @names, all inside Studio.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Friends",
+              "details": [
+                "Room owners can invite people by name, make a new invite code, and lock or close their rooms.",
+                "A hangout room holds up to 25 people, and a cowork room up to 10.",
+                "Anyone a week in the Void Engine server can make an unlisted room. Showing a room in the public list takes the Flame rank.",
+                "Rooms use a linked Discord account to know who you are.",
+                "Moderators see a message only when someone reports it."
+              ]
+            },
+            {
+              "id": "listen-together",
+              "title": "Listen together",
+              "text": "Play a link for a room, and everyone who picks Listen along joins at the same point.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Media & looks",
+              "details": [
+                "Whoever put it on, or the room's owner, can pause, restart or stop it.",
+                "Share what I'm playing, off by default, lets the bot's /nowplaying show your current link or station once the Studio bot is linked to the relay. It never shows a file's name.",
+                "Studio's side has been in the app since 0.4.0."
+              ]
+            },
+            {
+              "id": "playdates",
+              "title": "Playdates with friends",
+              "text": "Companions on different PCs meet in a room for short playdates, in Friends › Playground.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Companion",
+              "details": [
+                "Nothing about you or your work is shared until you allow it. When a friend's companion shares more, Studio asks whether to share the same back.",
+                "What was sent lists everything that left your PC.",
+                "Practice with Pip works on your own PC, without signing in."
+              ]
+            },
+            {
+              "id": "cowork-claims",
+              "title": "Agents on several PCs never edit the same file",
+              "text": "Link a cowork room to a project, and Studio claims the files a builder will edit before it starts. Every PC hears about it within a second.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Agents & work",
+              "details": [
+                "A task whose files another PC holds waits and picks other work.",
+                "Without a linked room, nothing waits."
+              ]
+            },
+            {
+              "id": "my-pcs",
+              "title": "My PCs: your PCs work as one",
+              "text": "Friends › Your PCs lists every PC you sign in to Friends on, live: its CPU, free memory, battery and running tasks, and why it isn’t taking work.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Friends",
+              "details": [
+                "Pair each PC once by checking the same six numbers on both screens. Only paired PCs can send each other work.",
+                "Send work here starts a task on another PC, or moves a ready card to it.",
+                "When a PC stays busy or short of memory, or a laptop’s battery reaches 20%, its ready cards move to a paired PC with a free slot and the same project open. A card is moved, never copied.",
+                "At 10% a laptop saves its progress, parks its changes as a branch another PC can pick up, and waits for Continue.",
+                "A friend can lend you their PC: your tasks there wait for their OK unless they choose otherwise."
+              ]
+            },
+            {
+              "id": "discord-link",
+              "title": "Link your Discord account",
+              "text": "Link Discord in Friends asks Discord once, in your browser, and connects by itself. Rooms, The Lobby and the Project hub need it; the rest of Studio never does.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Community",
+              "details": [
+                "Studio reads only who you are and your membership in the Void Engine server: never your messages, your email or other servers.",
+                "If your account isn’t in the Void Engine server yet, it offers Join the Discord and checks again.",
+                "No Discord roles are needed: ranks come from credits, and moderators are named accounts."
+              ]
+            },
+            {
+              "id": "share-projects",
+              "title": "The Project hub: share what you make",
+              "text": "Share a project as a card (a public link, a title and a line about it, never a file) and play what friends make. A star map draws every shared project, and New, Top and Mine list them.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Community",
+              "details": [
+                "Sharing is free, and earns nothing by itself.",
+                "Report someone else’s project if it’s spam, a broken link, not safe to open, or someone else’s work.",
+                "The Discord’s /showcase and the Made with Studio wall on this site are still there too."
+              ]
+            },
+            {
+              "id": "credits",
+              "title": "Credits and ranks, earned by playing",
+              "text": "When you play someone else’s project for two minutes, you both earn credits: 5 for the maker and 2 for you. A star earns the maker 3.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Community",
+              "details": [
+                "Credits are earned only: never bought, never for inviting people, never for being active in the Discord.",
+                "Ranks run Spark, Ember, Flame, Comet, Star, Nova and Void. Your balance is yours alone; others see your rank.",
+                "The relay works credits out, never your Studio, and they hold up against second accounts and trading: credits start once a Discord account is 30 days old and a week in the Void Engine server, a play pays once a day per player, and one person can make another earn at most 15 credits a week."
+              ]
+            },
+            {
+              "id": "friends-events",
+              "title": "Friends › Events: a weekly Build Jam and co-work hours",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Community",
+              "text": "A Build Jam every week with a theme, co-work hours three times a day, and credits for building together.",
+              "details": [
+                "The Build Jam opens on Monday with a theme and shows next week’s. Enter one of your shared projects until Saturday, then play the others and vote for up to three until Monday, when the results are paid.",
+                "A vote counts only for an entry you played for two minutes, and votes stay hidden until the results.",
+                "Three times a day a co-work hour opens a room: join it, keep Studio open and work on anything, and everyone who stays with others earns 4 credits.",
+                "Building together in your own co-work room with a friend earns you both 4 credits a day.",
+                "Credits come from making and playing things together, never from inviting people. To bring a friend, send them your room’s join code.",
+                "Prizes and co-work rewards share a daily community pot that grows with the number of people active that week, so credits keep their worth as the community grows.",
+                "Studio shows the jam’s times in your own time zone."
+              ]
+            },
+            {
+              "id": "advertise",
+              "title": "Feature your project with credits",
+              "text": "Spend 100 credits to put a project at the top of the Project hub for a day.",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Community",
+              "details": [
+                "Featuring is once a week.",
+                "Nobody can buy a better spot: credits are earned only."
+              ]
+            },
+            {
+              "id": "moderation",
+              "title": "Moderation and reports",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Community",
+              "text": "Report a message or a project, and moderators review it in Friends › Moderation, a place only they see.",
+              "details": [
+                "It shows who looks like they are farming credits, the open reports, and a lookup by name.",
+                "A moderator can take farmed credits back, suspend someone for a day or a week, or take a project off the hub.",
+                "A reported message reaches moderators only when its relay signature checks out, so a report can’t be faked."
+              ]
+            },
+            {
+              "id": "friend-popups",
+              "title": "Pop-ups from friends, and Building now",
+              "status": "next",
+              "label": "New in 0.5",
+              "area": "Friends",
+              "text": "Studio says when someone you share a room with opens Studio, invites you, asks to join your room, or plays or stars your project.",
+              "details": [
+                "Several at once are one pop-up, and the same friend shows at most every 30 minutes. Nobody is announced while they hide from Who’s online.",
+                "Pop-ups from friends, at the foot of The Lobby, turns them off.",
+                "Share what I’m building, off until you turn it on, shows friends your open project’s name with a small live tree: a lit leaf for each task running. Never task titles or files."
+              ]
+            }
+          ]
+        },
         {
           "id": "in-the-community",
           "title": "In the community",
@@ -96,973 +1061,8 @@
     {
       "id": "working",
       "title": "Being worked on",
-      "note": "Built on main for 0.5, being built right now, or built and waiting to switch on.",
+      "note": "Being built right now, or built and waiting to switch on.",
       "groups": [
-        {
-          "id": "coming-in-0-5",
-          "title": "Coming in 0.5",
-          "note": "Built on main and shipping with 0.5, the next release. 0.4.5 and 0.4.6 were folded into it. The download is still 0.4.4, and there is no release date yet.",
-          "items": [
-            {
-              "id": "new-layout",
-              "title": "The 0.5 layout: one frame for Social and Studio",
-              "text": "A top bar with the Social | Studio switch, a list on the left, an inspector on the right and a status bar, around every page.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Menus",
-              "details": [
-                "It is Studio’s only layout. The classic tab row, sidebar menus and toolbars are gone, about 2,600 lines of Studio’s own code, and every control they held has a place in the new one.",
-                "The rail has four places, Work, Map, Team and Friends, with Search, Settings and Help at its foot. Each place remembers where you were.",
-                "Drag the list and the inspector to resize them, or use the keys. In a small window they fold into drawers.",
-                "The top bar says where you are; the status bar shows what is working, what waits on you, usage, the machine’s load and the time left on what is playing.",
-                "Settings, Search (Ctrl K) and a three-step first run are rebuilt for it."
-              ]
-            },
-            {
-              "id": "vibe-social",
-              "title": "Social and Studio: two modes, two moods",
-              "text": "Vibe is now Social, for hanging out with friends and keeping a light eye on your agents. Build is now Studio, for in-depth building, with the social side still there.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Menus",
-              "details": [
-                "Only the names change: your saved mode, settings and links carry over.",
-                "Ctrl+M or the switch in the top bar changes mode. Every launch starts in Social unless you turn off Always start in Social in Settings; then Studio opens the mode you last used."
-              ]
-            },
-            {
-              "id": "map",
-              "title": "The Map: your agents’ tree beside your sessions",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "text": "The Command view is now the Map. Your sessions stay in the list beside it, and a small bar over the tree holds Map | Fleet | Pipelines, Running only and View.",
-              "details": [
-                "Pipelines is the Agent brain’s live work. Running only dims everything that isn’t running, and is remembered on this PC.",
-                "View holds the five layouts, labels, the camera, and a flat map or a 3D orbit that can spin.",
-                "N opens a new task and S opens Search. Fit and zoom sit bottom right, and the colours of the four states bottom left.",
-                "Pages that open over the Map show one page at a time, without the tree showing through."
-              ]
-            },
-            {
-              "id": "today-inbox",
-              "title": "Today, and one Inbox for everything waiting on you",
-              "text": "Both modes open on Today: your box to build or ask, and a board of what needs you, what runs, what to review and what is done.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Questions, permissions, approvals, reviews and stopped tasks are one list everywhere: the top bar, the status bar, the tabs and Work › Inbox.",
-                "Answer from the card, decide later, or open the task.",
-                "A Windows notification opens the task it was about, or the Inbox when it told you about several things.",
-                "A task that will fix itself, such as a check it tries again, is listed with running work as “Fixing itself”, and reaches the Inbox only if it gives up.",
-                "A question shows its choices first, with a small “Answer in my own words” link for anything else."
-              ]
-            },
-            {
-              "id": "build-sessions",
-              "title": "Studio mode: your tasks as sessions",
-              "text": "Studio mode lists the project’s tasks like a coding-agent app lists sessions, and each opens as a thread with an inspector beside it.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "The thread shows the brief, every run with its steps, notes, questions and answers, and before and after shots.",
-                "The inspector has Plan, Changes, Checks, Preview and Agent, plus Worktree for a run in its own worktree.",
-                "A box at the foot takes a Note, an Ask or a Change, with pictures and the @ # / picker."
-              ]
-            },
-            {
-              "id": "team",
-              "title": "Team: everything about your agents, in twelve places",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "text": "Agents is now Team: Overview, Providers, Seats and models and Permissions, then Rules, Skills, Connectors, Related folders and Workflows, then Health and usage, Models and Inspect.",
-              "details": [
-                "Seats and models opens on who does what in plain words, with one line per job: its model, how hard it thinks and its results on this PC.",
-                "Providers starts with “Use one provider for everything” and your subscription logins. Using one subscription for the whole studio now switches every project’s saved team too.",
-                "Longer how-to text waits behind a small “i” beside a title: click it, or rest the pointer on it.",
-                "Old links, Search and Find a setting land on the place that holds a control now."
-              ]
-            },
-            {
-              "id": "tabs",
-              "title": "Tabs you add and pin",
-              "text": "Open any page or session in a tab, pin the ones you keep, and Studio keeps the rest tidy.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Menus",
-              "details": [
-                "A preview tab for pages you only glance at, a badge when an agent needs you, at most 8 unpinned tabs (you choose), and Recently closed.",
-                "Ctrl+T, Ctrl+W, Ctrl+Tab and Ctrl+1 to 9. Each project keeps its own tabs; pinned pages follow you.",
-                "Every behaviour has its own switch."
-              ]
-            },
-            {
-              "id": "take-it-back",
-              "title": "See what changed, and take it back",
-              "text": "After a worker runs, Studio shows the files it changed and lets you accept them or revert a file or the whole attempt.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "A private before and after copy of the folder for each attempt, so a revert can be undone.",
-                "Studio runs the project’s lint and typecheck after an attempt and shows the result as advice, never as a gate.",
-                "When Studio’s own preview is running, it keeps a before and after screenshot."
-              ]
-            },
-            {
-              "id": "connectors",
-              "title": "Connectors",
-              "text": "Team › Connectors adds, approves, tests and imports MCP servers, and you choose which ones the chat, the helper agents and the builders get.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Studio shows the exact command before anything runs, and finds a server’s tools by itself.",
-                "It imports the servers Claude Code, Claude Desktop, Cursor, VS Code, Windsurf, Codex, OpenCode and Gemini CLI already use, and keeps their tokens encrypted.",
-                "Online (Streamable HTTP) servers work too.",
-                "The tool calls a model asks for in one turn run side by side, and a server stays open between calls, so a browser it opened is still there for the next click."
-              ]
-            },
-            {
-              "id": "effort-settings",
-              "title": "Thinking that steps up when a job gets stuck",
-              "text": "Claude Code, Codex and OpenCode start every job with light thinking, and think harder only when a job fails its check.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "After two misses a stronger model takes the job. Max thinking waits for your OK.",
-                "Seats and the chat on Claude Code or Codex take a thinking level of their own.",
-                "When a harder level keeps working for one kind of job, that kind of job starts there.",
-                "A report card in Team › Seats and models says what each model is good and bad at on this PC. A kind of job the usual model keeps failing can try another model for its next five jobs, and keeps it only if it did clearly better."
-              ]
-            },
-            {
-              "id": "skills-rules",
-              "title": "Skills any way you want them, and rules for your agents",
-              "text": "Team › Skills keeps the project’s skills with an editor and live checks, and Team › Rules sets what every agent should always do.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Every skill can be always on, picked by the agent when it fits, or used only when called, separately for the chat, Studio’s helper agents and the builders.",
-                "A skill that fits is loaded when it’s needed instead of being pasted into every request, and a task that says /skill-name gives its builder that skill.",
-                "Skills are written only under the project’s .agents/skills folder.",
-                "Studio’s own models can list a project’s folders and search its text when you allow it."
-              ]
-            },
-            {
-              "id": "answer-styles",
-              "title": "Answers like you’re five, or the way you pick",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "text": "Mefi explains things simply unless you pick another style: Short answers, Teach me, Brainstorm, Poke holes, Expert or plain.",
-              "details": [
-                "A chip beside the permission mode in each message box shows the style and changes it. /eli5, or any other style, in a message uses it once.",
-                "A reply shows chips for the skills and tools it used."
-              ]
-            },
-            {
-              "id": "faster-agents",
-              "title": "Agents and Studio send only what changed",
-              "text": "When a task changes, Studio sends the window that one card instead of the whole board, and Claude Code and Codex runs show their steps while they work.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "About 5 KB for a change instead of about 690 KB on a 134-card board. Nothing on screen changes.",
-                "A Claude Code or Codex run shows its to-do list, the tool it is running and its token use as it goes, as OpenCode runs already did.",
-                "Prompts put the parts that stay the same first, so providers that cache them (Zen’s GPT models, OpenRouter’s Claude and Gemini models) can bill them as cache reads.",
-                "A coding tool is stopped when Studio stops waiting for its answer, instead of running on for minutes on your subscription.",
-                "Each of these has its own off switch.",
-                "Still planned: a work journal for each task, and a retry that carries on where the agent left off."
-              ]
-            },
-            {
-              "id": "logging",
-              "title": "Studio’s log is kept",
-              "text": "Studio’s log, the assistant’s log and the window’s warnings are saved on this PC and packed into monthly archives that are never deleted.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "details": [
-                "They live in the local app-data folder, never in OneDrive.",
-                "Trace’s Load older pages back past the last few thousand lines, and Open file shows the folder.",
-                "Trace also shows one line per launch with how long each startup step took."
-              ]
-            },
-            {
-              "id": "size-density",
-              "title": "Size and density, with a live preview",
-              "text": "Make text and information bigger or smaller and see a miniature of the window change before you apply it.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Media & looks",
-              "details": [
-                "Interface scale, text size, three densities and three detail levels.",
-                "Ctrl +, Ctrl − and Ctrl 0 change the scale, and it is remembered."
-              ]
-            },
-            {
-              "id": "chrome-theme",
-              "title": "Chrome: matte black, brushed metal, an iridescent finish",
-              "text": "A new theme and the look new installs open in: matte black panels, silver type, brushed chrome on the main buttons and the side of a switch you are on, and an iridescent finish on the edges and highlights.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Media & looks",
-              "details": [
-                "Silver, ice blue, lilac and aqua on the selection bars, the open tab, the hairlines and the greeting; silver nodes on the Map; the same palette as this website.",
-                "A theme you already picked, Aurora included, stays; every other theme is still there.",
-                "The colours that mean something (working, needs you, errors, review) are unchanged."
-              ]
-            },
-            {
-              "id": "notifications",
-              "title": "Windows tells you when something needs you",
-              "text": "A question, an approval or a failed task that waits while you are away becomes a Windows notification.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "details": [
-                "The taskbar icon flashes and shows a count.",
-                "Quiet hours, shared with the Discord remote. Finished tasks are off by default."
-              ]
-            },
-            {
-              "id": "report-whats-new",
-              "title": "Report a problem, and What’s new after an update",
-              "text": "Report a problem builds a zip you can read first, with keys, names and paths taken out. Nothing is uploaded.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "details": [
-                "After Studio closes unexpectedly it offers the same report once.",
-                "After an update, a short What’s new says what changed."
-              ]
-            },
-            {
-              "id": "undo-versions",
-              "title": "Undo for deletes, versions for plans",
-              "text": "A deleted task or idea can be brought back from Recently deleted, and every edit of a plan is kept as a version you can restore.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Search (Ctrl K) starts with what you used last and can add work: type “task …” or “idea …”."
-              ]
-            },
-            {
-              "id": "pictures-picker",
-              "title": "Pictures on a message, and the @ # / picker",
-              "text": "Paste or drop a screenshot into your message, and type @, # or / to pick a file, a task or a command.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Pictures go to models that can see them; a coding tool is told where the picture is.",
-                "Each task can have its own time limit, and its evidence shows its usage."
-              ]
-            },
-            {
-              "id": "worktrees-page",
-              "title": "Work › Worktrees",
-              "text": "Every git worktree of the project, worst first, with what to do about each: merge into main, remove (keeping a copy of anything at risk) or forget a missing folder.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "details": [
-                "A run can work in its own worktree; Studio mode marks the tasks that do.",
-                "`npm run worktrees` prints the same list for a checkout."
-              ]
-            },
-            {
-              "id": "other-apps",
-              "title": "Other apps: Claude Code, Codex and your scripts can talk to Studio",
-              "text": "Settings › Other apps has a switch, off until you turn it on, that lets apps on this PC see what the agents are doing and what waits on you, message Mefi, hand Studio a task and leave you a note.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "details": [
-                "Claude Code and Codex connect with one command (an MCP server with eight tools), Cursor, Claude Desktop and VS Code with a JSON block, and scripts and hooks with a command line.",
-                "Every task an app files waits for your OK in every permission mode, and approving, answering and settings stay in Studio.",
-                "Only this PC can connect, with a key kept in your user folder, and no web page can call it.",
-                "Copy setup prompt gives Claude Code, Codex or another AI helper what it needs to walk you through setup."
-              ]
-            },
-            {
-              "id": "resources",
-              "title": "Resources: make room for your agents",
-              "text": "Team › Resources lists the other apps on this PC with their CPU and memory, and can hold them back while agents build.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "details": [
-                "Slow down, Pause, Free memory, Close and End, each undone by Put back or Restore all.",
-                "Manual does only what you press. Auto slows heavy apps you aren’t using while agents build, and puts everything back when they finish.",
-                "Calls, music, recording, remote access and terminals are left alone unless you say otherwise, and Studio, its agents and Windows are never touched.",
-                "Nothing stays paused after Studio closes, even if it crashes. Windows only for now."
-              ]
-            },
-            {
-              "id": "studio-daily",
-              "title": "The Studio Daily",
-              "text": "The launch screen is a daily paper: what changed while you were away, before you start.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Setup",
-              "details": [
-                "It replaces the old launch screen, and stays quiet when nothing changed."
-              ]
-            },
-            {
-              "id": "chatgpt-plan",
-              "title": "Use your ChatGPT plan",
-              "text": "Sign in with ChatGPT and route work through the plan you already pay for.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Setup",
-              "details": [
-                "Codex workers run over codex app-server.",
-                "GPT-6.1 Sol is the default for the heavy seats."
-              ]
-            },
-            {
-              "id": "models-facelift",
-              "title": "A face lift for Models",
-              "text": "Team › Models: the Catalog is one sortable table with four picks, and Performance leads with a leaderboard.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "What the community says about a model, and Studio’s own probes, sit beside it."
-              ]
-            },
-            {
-              "id": "model-ratings",
-              "title": "Community model ratings",
-              "text": "A #model-reviews forum in the Discord, run by the bot, with one post per model. Members rate models for each kind of task and share tips.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Community",
-              "details": [
-                "Ratings feed Studio's model picks from real use: the provider's release notes first, then comments sorted into kinds of task, then tests Studio can run when you ask.",
-                "Community evidence only nudges a pick a little.",
-                "Studio's model tracker gets a refresh too."
-              ]
-            },
-            {
-              "id": "command-tree-children",
-              "title": "Sub-agents on the Map",
-              "text": "A session’s sub-agents hang under it on the Map, pop out of their parent, and fly home into it when they’re done.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "The newest three show under each session, with \"+n sub-agents\" for the rest.",
-                "A delegated part flies home into the task that handed it out once it closes.",
-                "Your node style's finishing beat plays as work flies home."
-              ]
-            },
-            {
-              "id": "playlists",
-              "title": "Playlists in the media menu",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Media & looks",
-              "text": "Five starting lists of real videos, lists of your own, and a + to save any video.",
-              "details": [
-                "The starting points: Code & math explorers, Visualizers, Focus streams, Shaders & graphics and Simulated worlds.",
-                "Make a list from scratch or from Up next, and drag rows to reorder.",
-                "Share copies a list as text that reads well in Discord, with a link that plays it on YouTube. Paste that text back and Studio turns it into a playlist."
-              ]
-            },
-            {
-              "id": "media-player-next",
-              "title": "A smaller media player with a video feed",
-              "text": "The media menu becomes a mini player with play, pause, back, forward and volume, quick switches for the node tree, and YouTube videos to scroll through.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Media & looks",
-              "details": [
-                "Click a video to add it to Up next, or drag it into place.",
-                "A docked video no longer jitters while the menu scrolls."
-              ]
-            },
-            {
-              "id": "tree-brightness",
-              "title": "Smooth frames at high tree brightness",
-              "text": "With Tree brightness above 100%, the node tree could slow the whole window down. A fix that brightens each layer once, instead of every shape, is built.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "details": [
-                "Built on main."
-              ]
-            },
-            {
-              "id": "setup-helper",
-              "title": "The setup helper: every agent setting in one place",
-              "text": "One guided menu covers everything that decides what your agents do. Quick setup takes three steps, and Search reaches every section.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Setup",
-              "details": [
-                "Sections: Connect an AI, Team & models, Routing, How work runs, Permissions, Tools & skills, Machine & app, and Look.",
-                "It opens first on a new install, and once after you update.",
-                "Settings that used to save but do nothing now work."
-              ]
-            },
-            {
-              "id": "first-run",
-              "title": "A friendlier first run",
-              "text": "With no AI connected, Studio says so and offers Connect an AI instead of \"Waiting for you\".",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Setup",
-              "details": [
-                "With no coding tool installed, Start agents tells you to install OpenCode, Claude Code or Codex instead of failing five times.",
-                "Setup finds the login you already have. A tool that's installed but not signed in no longer counts as connected.",
-                "Only one welcome shows at a time.",
-                "Builds from Claude Code, Codex, Grok and Antigravity are checked by Studio's own checks, instead of always waiting for you to confirm them."
-              ]
-            },
-            {
-              "id": "more-logins",
-              "title": "More than one Claude Code or Codex login",
-              "text": "Add a second login, up to six in all. When one hits its usage limit, work moves to the next one straight away.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Setup",
-              "details": [
-                "Find it under Setup › Connect an AI › More than one login.",
-                "Other providers are used only once every login is topped out, and only through fallbacks you already allow.",
-                "Each login gets its own row in Usage."
-              ]
-            },
-            {
-              "id": "when-studio-opens",
-              "title": "Studio opens the way you want",
-              "text": "A new When Studio opens setting: Resume what I had, Start agents or Keep agents off.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Setup",
-              "details": [
-                "Start with Windows opens Studio in the tray when you sign in, on the project you had open. A PC you leave working keeps working after an update restart.",
-                "Find both in Settings › General › Profile & startup.",
-                "Studio no longer jumps to the Map after five quiet minutes. That's now a switch, and it's off by default.",
-                "Startup no longer sticks on \"Picking up where you left off\" when the window opens covered or in the tray."
-              ]
-            },
-            {
-              "id": "updates-that-install",
-              "title": "In-app updates that finish installing",
-              "text": "Update's install step runs after Studio closes, and the guided sign-in windows for coding tools run their steps instead of closing early.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "link": {
-                "href": "download.html#updates",
-                "text": "How to update by hand"
-              },
-              "details": [
-                "In 0.4.4 and earlier, Update can download and check a new release, but its install step may not run. Update by hand this once.",
-                "In 0.4.4, the guided install and sign-in windows can close before they run. Sign in from a terminal, then use Check connection.",
-                "The portable executable carries Studio’s name, version and icon."
-              ]
-            },
-            {
-              "id": "why-agents-wait",
-              "title": "Agents say why they're not working",
-              "text": "Today, the Map, a task’s page and the chat all give one answer about what is holding work back, with the one control that clears it.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "It names a pause, a cooldown, tasks waiting for your OK and the permission mode holding them, the free model's one-at-a-time limit, and more.",
-                "Approving a task before its references finish gathering no longer drops the approval.",
-                "Permission modes keep their meaning when an older switch or a brain map changes them.",
-                "The answer follows a project switch straight away."
-              ]
-            },
-            {
-              "id": "watch-mefi-think",
-              "title": "Watch Mefi think and your team work",
-              "text": "In Social mode, Suggest a next step and Build it show live progress instead of one still sentence.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "See the stage reached, the files read or steps planned, which model is thinking, and a clock against how long it usually takes on your PC.",
-                "A split request draws its steps as a track to the final check.",
-                "Adding one suggestion to your draft no longer locks the others."
-              ]
-            },
-            {
-              "id": "mefi-evolution",
-              "title": "Build on your app with MEFI",
-              "text": "Social mode offers Modify, Experiment, Fix and Improve, with briefs based on your project map.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Suggestions can go into a draft, or be saved as ideas without starting work.",
-                "The map shows which systems change together.",
-                "A separate Ideas tree groups ideas and tasks by system and progress."
-              ]
-            },
-            {
-              "id": "plans-one-step",
-              "title": "Plans, one step at a time",
-              "text": "Plans shows one step at a time, with a button to the step that's waiting on you and a progress track.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "The interview reads as a chat, and Mefi asks the next question on its own. You can switch that off.",
-                "Plans opens without waiting for the folder scan, and gets your project ready in the background.",
-                "A quick model answers first. If its reply misses, the deeper model gets one go, and Think harder goes straight to it.",
-                "A new idea needs no name and has starters, and Where this lives pins a plan to an area of the Project map."
-              ]
-            },
-            {
-              "id": "task-board",
-              "title": "A calmer Task board",
-              "text": "The board opens on its tools, cards are tighter, and a click anywhere on a card opens its task.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Add, then search with the state picker beside it, then the All, Open, Review and Done chips in one row.",
-                "Cards slide up into free space instead of waiting below the tallest card in their row.",
-                "← All cards closes a task at any width, and the status box sits at the top of Details."
-              ]
-            },
-            {
-              "id": "habits",
-              "title": "Habits for each agent",
-              "text": "Short rules an agent follows, such as explain changes, test, take small steps and keep a to-do list.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Each habit can be off, brief or full.",
-                "You see what an agent's habits add to every prompt, in tokens.",
-                "Find them in Team › Seats and models, on each job’s card under More settings."
-              ]
-            },
-            {
-              "id": "needs-you",
-              "title": "A cleaner Needs you list",
-              "text": "An ask you answered leaves the list straight away.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Old asks, and asks about cards that left the board while Studio was closed, are cleared when the project loads."
-              ]
-            },
-            {
-              "id": "away-without-ai",
-              "title": "\"What changed while I was away?\" without an AI",
-              "text": "The chat answers from Studio's report of work done outside it, even with no model connected.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "It says a card \"may already be done\" when it only matched on file names and commit subjects."
-              ]
-            },
-            {
-              "id": "configuration",
-              "title": "Configuration: every setting in one tree",
-              "text": "Ctrl Shift , opens every Studio setting in one searchable tree. Picking a setting opens its real control.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Menus",
-              "details": [
-                "It adds an Interface scale, from 70% to 150%.",
-                "It's also in Settings, as All settings in one place.",
-                "It also indexes every setup-helper section and pins Walk me through setup. Pick a section to open its real controls."
-              ]
-            },
-            {
-              "id": "menus-ask-twice",
-              "title": "Menus that ask the same way and speak plainly",
-              "text": "Every action that can't be undone now asks the same way: the first press asks, the second acts.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Menus",
-              "details": [
-                "Errors read as sentences.",
-                "Pages leave out values that were never recorded, instead of printing \"undefined\" or \"Invalid Date\".",
-                "Menus open, close and reorder smoothly. Reduced motion turns that off.",
-                "M+ opens Projects on the project you're in."
-              ]
-            },
-            {
-              "id": "typing-into-menus",
-              "title": "Typing goes into the open menu's box",
-              "text": "When a menu with a text box is open, what you type lands in that box instead of setting off single-letter shortcuts.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Menus",
-              "details": [
-                "Clicking out of the menu gives the keys back."
-              ]
-            },
-            {
-              "id": "media-player-reach",
-              "title": "A media player you can always reach",
-              "text": "Floating players get a move handle and Settings, minimize and close buttons. A minimized player leaves a restore bar.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Media & looks",
-              "details": [
-                "Websites get the full panel width.",
-                "The player takes keyboard focus only when you minimize it yourself."
-              ]
-            },
-            {
-              "id": "finish-beats",
-              "title": "Every node style finishes in its own way",
-              "text": "In the Agent brain, a step whose work came back, and the lead taking its agent in, play your node style's own finishing beat.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Media & looks",
-              "details": [
-                "Classic orbs' ring bursts, Soft glass ripples like a drop on water, Minimal draws a check, Halo slips its ring over the lead, Crystal glints across its facets, Singularity's disc flares, Prism shatters and fuses back, and Sigil's rune writes itself shut.",
-                "A failed check finishes in amber. With reduced motion on, the Agent brain plays no beats.",
-                "The Agent brain's pipeline list no longer cuts long titles off, and the Playbook shelf keeps its books in tight rows."
-              ]
-            },
-            {
-              "id": "companion-pet",
-              "title": "Your companion as a pet",
-              "text": "The companion menu has six bubbles, one job each: Talk, What I'm doing, Needs you, Suggest work, Friends and Personality.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Companion",
-              "details": [
-                "Pet it, and it remembers your days together.",
-                "Personality sets how it acts: Straight work, Balanced, or Friendly & expressive.",
-                "Practice playdates with Pip, a buddy that stays on your PC. Playdates with friends come with Friends in 0.5."
-              ]
-            },
-            {
-              "id": "share-between-pcs",
-              "title": "Share between your PCs",
-              "text": "A private GitHub vault, sealed with a key only your paired PCs hold, carries what you choose between your own PCs.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Friends",
-              "details": [
-                "Model results, learned decisions, team setups, brains, recipes, memory notes, preferences, and open tasks and ideas.",
-                "Keys and setup can travel too, but only after a typed confirmation.",
-                "Each PC's line in Friends › Your PCs says what its agents are working on, what waits for you there and what finished today."
-              ]
-            },
-            {
-              "id": "share-with-friends",
-              "title": "Share with friends",
-              "text": "Save one brain, recipe, team setup, set of model results, memory note or preferences as a .mefishare file. It's scrubbed and previewed before you save it.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Friends",
-              "details": [
-                "A file you receive is reviewed before it can reach your library, and a risky one is kept out.",
-                "A friend's file can never change your permissions."
-              ]
-            },
-            {
-              "id": "set-up-a-pc",
-              "title": "Set up a new PC and keep every PC current",
-              "text": "Set up this PC is a checklist for Git, the GitHub CLI, Node.js, a GitHub sign-in and the project's packages, with a button for each gap.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Friends",
-              "details": [
-                "Get a project from GitHub clones one of your repositories.",
-                "Keep this PC up to date checks GitHub once a minute, and brings in other PCs' work when nothing on this PC is in the way.",
-                "Sync this PC now runs the project's checks before it pushes.",
-                "Closing Studio asks first when this PC holds work no other PC has."
-              ]
-            },
-            {
-              "id": "lighter-when-hidden",
-              "title": "Lighter while minimized",
-              "text": "A window in the tray or minimized keeps only the newest board and machine updates, and catches up when you open it.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "details": [
-                "Bursts of status updates are merged into one.",
-                "A closed Explorer no longer repaints on every update."
-              ]
-            },
-            {
-              "id": "fleet-view",
-              "title": "The Fleet page: your team at a glance",
-              "text": "Fleet, beside the Map (Map | Fleet | Pipelines), shows the open project’s seats in Lead, Build, Check and Keep pods, with the wires between them.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "Graph, Table, Recent, Tree and Health views show the team, handoffs, checks and what needs a look.",
-                "Each seat opens an inspector with its current work, earlier runs, Open task, a way to its node on the Map and a two-press Stop this run.",
-                "It folds its columns to the room it has, so Fit shows the whole team in a narrow window too.",
-                "Agent lanes, missions and fleets from other PCs belong to the later Fleet work."
-              ],
-              "link": {
-                "href": "wiki/#/coming-in-0-5/agents-tasks-and-plans",
-                "text": "What 0.5 adds"
-              }
-            },
-            {
-              "id": "sync-lost-work",
-              "title": "Sync catches a merge that loses work",
-              "text": "Before pushing, Sync checks whether a merge silently kept one branch’s files and dropped another PC’s changes.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Platform",
-              "details": [
-                "A loss of 200 or more lines stops the push and names the merge and files that need a look.",
-                "Friends › Your PCs also reports recent suspicious merges.",
-                "The report names the files to inspect before you try to sync again."
-              ]
-            },
-            {
-              "id": "tidy-menus",
-              "title": "Tidier Ideas cards alongside Tasks",
-              "text": "Ideas gets compact cards with a clear title, a short excerpt and its status. Short cards slide up into free space, as on the Task board.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Menus",
-              "details": [
-                "The layout adapts when the window changes size, and keeps one column in narrow spaces.",
-                "Source and date appear only when recorded, and selecting a card keeps the existing idea detail and actions.",
-                "Providers, Plans, Social mode and the Project map’s wider card cleanup stay planned for after 0.5."
-              ]
-            }
-          ]
-        },
-        {
-          "id": "friends-in-0-5",
-          "title": "Friends in 0.5",
-          "note": "Built on main and shipping with 0.5. Friends now runs on the Mefi Studio relay, a free service on Cloudflare that is built into Studio: there is no hub to set up, and no PC has to stay on.",
-          "items": [
-            {
-              "id": "friends-relay",
-              "title": "Friends with no setup",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Friends",
-              "text": "Rooms, room chat, Listen together, companions in the Playground and cowork file claims all run through the Mefi Studio relay. You no longer enter a hub address.",
-              "details": [
-                "The relay keeps no chat. Your Studio keeps its own encrypted copy of each room’s messages for a week, and fills in what you missed from other members’ copies.",
-                "The relay signs every message, so a copy can’t be altered.",
-                "Its code is public, in Studio’s repository."
-              ],
-              "link": {
-                "href": "https://github.com/nateecho32-stack/mefi-studio/tree/main/relay",
-                "text": "The relay’s code"
-              }
-            },
-            {
-              "id": "friends-menu",
-              "title": "Friends, a place of its own",
-              "text": "The rail’s Friends opens one roomy page: The Lobby, Rooms, Your PCs, Playground, the Project hub and Events, in the list beside it.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Menus",
-              "details": [
-                "Each place says in one line what it is for, and each can be a tab.",
-                "Search and the companion’s Friends bubble open the page at the right place.",
-                "Your PCs sums up a long report in a few lines, with Show all for the whole list."
-              ]
-            },
-            {
-              "id": "friends-2",
-              "title": "The Lobby, and rooms like a chat app",
-              "text": "Friends opens on The Lobby: who is online and in which room, the week’s top project, the rooms open now, what was shared this week and who moved up a rank.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Friends",
-              "details": [
-                "Everyone signed in is in the Lobby room, so there is always someone to say hi to.",
-                "An open room fills the page: who is here, Listen together, the conversation and one message box. Enter sends, and Shift+Enter starts a new line.",
-                "Every room has a short invite code. Copy invite, and a friend types it into Join with a code to come straight in.",
-                "Who’s online lists who is in Studio right now, with Invite to a room. Untick Show me as online to hide.",
-                "Once you sign in, Studio connects by itself a few seconds after it opens."
-              ]
-            },
-            {
-              "id": "rooms",
-              "title": "Friends › Rooms",
-              "text": "Browse rooms, ask to join with a note, accept invites, let people in and chat with @names, all inside Studio.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Friends",
-              "details": [
-                "Room owners can invite people by name, make a new invite code, and lock or close their rooms.",
-                "A hangout room holds up to 25 people, and a cowork room up to 10.",
-                "Anyone a week in the Void Engine server can make an unlisted room. Showing a room in the public list takes the Flame rank.",
-                "Rooms use a linked Discord account to know who you are.",
-                "Moderators see a message only when someone reports it."
-              ]
-            },
-            {
-              "id": "listen-together",
-              "title": "Listen together",
-              "text": "Play a link for a room, and everyone who picks Listen along joins at the same point.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Media & looks",
-              "details": [
-                "Whoever put it on, or the room's owner, can pause, restart or stop it.",
-                "Share what I'm playing, off by default, lets the bot's /nowplaying show your current link or station once the Studio bot is linked to the relay. It never shows a file's name.",
-                "Studio's side has been in the app since 0.4.0."
-              ]
-            },
-            {
-              "id": "playdates",
-              "title": "Playdates with friends",
-              "text": "Companions on different PCs meet in a room for short playdates, in Friends › Playground.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Companion",
-              "details": [
-                "Nothing about you or your work is shared until you allow it. When a friend's companion shares more, Studio asks whether to share the same back.",
-                "What was sent lists everything that left your PC.",
-                "Practice with Pip works on your own PC, without signing in."
-              ]
-            },
-            {
-              "id": "cowork-claims",
-              "title": "Agents on several PCs never edit the same file",
-              "text": "Link a cowork room to a project, and Studio claims the files a builder will edit before it starts. Every PC hears about it within a second.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Agents & work",
-              "details": [
-                "A task whose files another PC holds waits and picks other work.",
-                "Without a linked room, nothing waits."
-              ]
-            },
-            {
-              "id": "my-pcs",
-              "title": "My PCs: your PCs work as one",
-              "text": "Friends › Your PCs lists every PC you sign in to Friends on, live: its CPU, free memory, battery and running tasks, and why it isn’t taking work.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Friends",
-              "details": [
-                "Pair each PC once by checking the same six numbers on both screens. Only paired PCs can send each other work.",
-                "Send work here starts a task on another PC, or moves a ready card to it.",
-                "When a PC stays busy or short of memory, or a laptop’s battery reaches 20%, its ready cards move to a paired PC with a free slot and the same project open. A card is moved, never copied.",
-                "At 10% a laptop saves its progress, parks its changes as a branch another PC can pick up, and waits for Continue.",
-                "A friend can lend you their PC: your tasks there wait for their OK unless they choose otherwise."
-              ]
-            },
-            {
-              "id": "discord-link",
-              "title": "Link your Discord account",
-              "text": "Link Discord in Friends asks Discord once, in your browser, and connects by itself. Rooms, The Lobby and the Project hub need it; the rest of Studio never does.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Community",
-              "details": [
-                "Studio reads only who you are and your membership in the Void Engine server: never your messages, your email or other servers.",
-                "If your account isn’t in the Void Engine server yet, it offers Join the Discord and checks again.",
-                "No Discord roles are needed: ranks come from credits, and moderators are named accounts."
-              ]
-            },
-            {
-              "id": "share-projects",
-              "title": "The Project hub: share what you make",
-              "text": "Share a project as a card (a public link, a title and a line about it, never a file) and play what friends make. A star map draws every shared project, and New, Top and Mine list them.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Community",
-              "details": [
-                "Sharing is free, and earns nothing by itself.",
-                "Report someone else’s project if it’s spam, a broken link, not safe to open, or someone else’s work.",
-                "The Discord’s /showcase and the Made with Studio wall on this site are still there too."
-              ]
-            },
-            {
-              "id": "credits",
-              "title": "Credits and ranks, earned by playing",
-              "text": "When you play someone else’s project for two minutes, you both earn credits: 5 for the maker and 2 for you. A star earns the maker 3.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Community",
-              "details": [
-                "Credits are earned only: never bought, never for inviting people, never for being active in the Discord.",
-                "Ranks run Spark, Ember, Flame, Comet, Star, Nova and Void. Your balance is yours alone; others see your rank.",
-                "The relay works credits out, never your Studio, and they hold up against second accounts and trading: credits start once a Discord account is 30 days old and a week in the Void Engine server, a play pays once a day per player, and one person can make another earn at most 15 credits a week."
-              ]
-            },
-            {
-              "id": "friends-events",
-              "title": "Friends › Events: a weekly Build Jam and co-work hours",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Community",
-              "text": "A Build Jam every week with a theme, co-work hours three times a day, and credits for building together.",
-              "details": [
-                "The Build Jam opens on Monday with a theme and shows next week’s. Enter one of your shared projects until Saturday, then play the others and vote for up to three until Monday, when the results are paid.",
-                "A vote counts only for an entry you played for two minutes, and votes stay hidden until the results.",
-                "Three times a day a co-work hour opens a room: join it, keep Studio open and work on anything, and everyone who stays with others earns 4 credits.",
-                "Building together in your own co-work room with a friend earns you both 4 credits a day.",
-                "Credits come from making and playing things together, never from inviting people. To bring a friend, send them your room’s join code.",
-                "Prizes and co-work rewards share a daily community pot that grows with the number of people active that week, so credits keep their worth as the community grows.",
-                "Studio shows the jam’s times in your own time zone."
-              ]
-            },
-            {
-              "id": "advertise",
-              "title": "Feature your project with credits",
-              "text": "Spend 100 credits to put a project at the top of the Project hub for a day.",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Community",
-              "details": [
-                "Featuring is once a week.",
-                "Nobody can buy a better spot: credits are earned only."
-              ]
-            },
-            {
-              "id": "moderation",
-              "title": "Moderation and reports",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Community",
-              "text": "Report a message or a project, and moderators review it in Friends › Moderation, a place only they see.",
-              "details": [
-                "It shows who looks like they are farming credits, the open reports, and a lookup by name.",
-                "A moderator can take farmed credits back, suspend someone for a day or a week, or take a project off the hub.",
-                "A reported message reaches moderators only when its relay signature checks out, so a report can’t be faked."
-              ]
-            },
-            {
-              "id": "friend-popups",
-              "title": "Pop-ups from friends, and Building now",
-              "status": "next",
-              "label": "Coming in 0.5",
-              "area": "Friends",
-              "text": "Studio says when someone you share a room with opens Studio, invites you, asks to join your room, or plays or stars your project.",
-              "details": [
-                "Several at once are one pop-up, and the same friend shows at most every 30 minutes. Nobody is announced while they hide from Who’s online.",
-                "Pop-ups from friends, at the foot of The Lobby, turns them off.",
-                "Share what I’m building, off until you turn it on, shows friends your open project’s name with a small live tree: a lit leaf for each task running. Never task titles or files."
-              ]
-            }
-          ]
-        },
         {
           "id": "moving-to-rust",
           "title": "Moving to Rust",
@@ -1109,16 +1109,16 @@
           ]
         },
         {
-          "id": "in-progress-for-0-5",
-          "title": "In progress for 0.5",
-          "note": "Being finished for 0.5. Anything that isn’t finished and tested when 0.5 is ready moves to 0.5.x.",
+          "id": "in-progress-for-0-5-x",
+          "title": "In progress for 0.5.x",
+          "note": "Being finished for the 0.5.x updates.",
           "items": [
             {
               "id": "faster-launch",
               "title": "A faster launch",
               "text": "Studio opens sooner, without the blank fade.",
               "status": "progress",
-              "label": "In progress for 0.5",
+              "label": "In progress for 0.5.x",
               "area": "Platform",
               "details": [
                 "Built so far: timing marks for every startup step, a settings cache, and a compile cache for Studio’s own code.",
@@ -1152,7 +1152,7 @@
         {
           "id": "rolling-out",
           "title": "Rolling out",
-          "note": "Studio’s side is built and ships with 0.5. This switches on once the Studio bot’s side is live.",
+          "note": "Studio’s side is in 0.5. This switches on once the Studio bot’s side is live.",
           "items": [
             {
               "id": "reach-from-discord",
@@ -1165,7 +1165,7 @@
                 "See what needs you and what's being made, pause or resume the agents, or just message Mefi.",
                 "Work you start from Discord waits for your OK, and approving from Discord needs a PIN you set in Studio.",
                 "Only your own Discord account gets answers, and no port opens on your PC.",
-                "Studio’s side ships in 0.5, and the relay carries it. It works once the Studio bot is linked to the relay; the bot’s side is still being built."
+                "Studio’s side is in 0.5, and the relay carries it. It works once the Studio bot is linked to the relay; the bot’s side is still being built."
               ]
             }
           ]
@@ -1215,7 +1215,7 @@
               "label": "Planned",
               "area": "Agents & work",
               "details": [
-                "The first Fleet page ships in 0.5, beside the Map. These larger phases come after it.",
+                "The first Fleet page is in 0.5, beside the Map. These larger phases come after it.",
                 "Lanes you can pause, with a budget; missions with intent, evidence and task progress.",
                 "Your other PCs and friends’ fleets follow the sharing level you choose."
               ]
@@ -1268,11 +1268,11 @@
               "id": "design-leftovers",
               "title": "Three pieces of the 0.5 design",
               "status": "planned",
-              "label": "Planned for 0.5 or 0.5.x",
+              "label": "Planned for 0.5.x",
               "area": "Menus",
               "text": "A live Preview tab inside Studio, the pinned tree strip as a panel, and Drafts in the session list.",
               "details": [
-                "In the 0.5 design, not built yet. If they aren’t finished and tested when 0.5 is ready, they come in 0.5.x.",
+                "In the 0.5 design, not built yet. They come in 0.5.x.",
                 "Today the inspector’s Preview has the project’s preview controls and Before and After."
               ]
             },
@@ -1325,7 +1325,7 @@
               "label": "Planned",
               "area": "Menus",
               "details": [
-                "Task and Ideas cards ship in 0.5. This wider rollout stays outside that release.",
+                "Task and Ideas cards are in 0.5. This wider rollout comes later.",
                 "The card-layout helper is now shared, so later pages can use the same behavior."
               ]
             },
@@ -1337,7 +1337,7 @@
               "label": "Planned",
               "area": "Friends",
               "details": [
-                "The file claims that keep agents apart come in 0.5 (see Friends in 0.5)."
+                "The file claims that keep agents apart are in 0.5 (see Friends in 0.5)."
               ]
             },
             {
@@ -1356,7 +1356,7 @@
         {
           "id": "community-plan",
           "title": "The community plan",
-          "note": "The owner’s plan for sharing in Studio. Sharing projects, credits and featuring come in 0.5 (see Friends in 0.5); these parts are still open. Credits will only ever be earned: never bought, never given for inviting people, and never tied to Discord activity.",
+          "note": "The owner’s plan for sharing in Studio. Sharing projects, credits and featuring are in 0.5 (see Friends in 0.5); these parts are still open. Credits will only ever be earned: never bought, never given for inviting people, and never tied to Discord activity.",
           "items": [
             {
               "id": "cosmetics",
@@ -1419,15 +1419,56 @@
     }
   ],
   "upcoming": {
-    "version": "0.5",
+    "version": "0.5.x",
     "when": "Being built · no date yet",
-    "note": "Next up: 0.5, with the new layout (Social and Studio, the Map, Team and one Inbox), Friends on a relay that needs no setup, Connectors, changes you can take back and Windows notifications, plus everything planned for 0.4.5 and 0.4.6. Studio is also moving to Rust, in stages.",
+    "note": "Next up: 0.5.x, with Related folders, starting a new app from a template, saved map views and the pieces of the 0.5 design still to build. Studio is also moving to Rust, in stages.",
     "link": {
-      "href": "#now",
-      "text": "What’s in 0.5"
+      "href": "#working",
+      "text": "What’s being worked on"
     }
   },
   "releases": [
+    {
+      "version": "0.5.0",
+      "date": "__RELEASE_DATE__",
+      "title": "One layout for Social and Studio, Friends with no setup, and changes you can take back",
+      "href": "https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.5.0",
+      "note": "It took in what was planned for 0.4.5 and 0.4.6. On 0.4.4, update by hand once: 0.4.4 can’t install 0.5 by itself.",
+      "highlights": [
+        {
+          "area": "Menus",
+          "text": "One layout: Vibe and Build are now Social and Studio, the Command view is the Map and Agents is Team, with tabs you pin, one Inbox and a status bar around every page."
+        },
+        {
+          "area": "Friends",
+          "text": "Friends with no setup, on a relay built into Studio: The Lobby, rooms that read like a chat app, the Project hub with credits and ranks, and a weekly Build Jam."
+        },
+        {
+          "area": "Agents & work",
+          "text": "See the files a worker changed, then accept them or revert a file or the whole attempt."
+        },
+        {
+          "area": "Agents & work",
+          "text": "Team › Connectors for MCP servers, skills any way you want them, answer styles, and thinking that steps up only when a job gets stuck."
+        },
+        {
+          "area": "Setup",
+          "text": "A three-step first run, the setup helper, more than one Claude Code or Codex login, and your ChatGPT plan."
+        },
+        {
+          "area": "Platform",
+          "text": "Windows notifications, Report a problem, What’s new after an update, and in-app updates that finish installing. Other apps lets Claude Code, Codex and your scripts talk to Studio, and Team › Resources makes room for your agents."
+        },
+        {
+          "area": "Friends",
+          "text": "My PCs: your PCs share the work, and a laptop low on battery hands its tasks to another."
+        },
+        {
+          "area": "Media & looks",
+          "text": "Chrome, the new default look, Size and density with a live preview, and Playlists in the media menu."
+        }
+      ]
+    },
     {
       "version": "0.4.4",
       "date": "2026-09-27",

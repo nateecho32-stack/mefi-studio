@@ -9,7 +9,7 @@ An idea is a note about something you might build. It becomes a task only when y
 - **Feature ideas** (`I`) is the inbox. New ideas arrive unread, such as the suggestions from a project's first map, or ideas found in your chats with **Scan chats for ideas** in Search. Select one to read it, keep it or mark it done.
 - In Vibe, the **Fresh ideas** card and the **Ideas** panel show what's waiting. Each idea offers **Build it**, **Keep for later** (or **Not now**) and **Dismiss**.
 
-<span class="status next">Coming in 0.5</span> The Ideas list becomes compact cards with a title, short excerpt and status. Short cards fill the free space under taller ones, and the layout adapts to the window. Select a card to use the same detail and actions.
+<span class="status next">New in 0.5</span> The Ideas list becomes compact cards with a title, short excerpt and status. Short cards fill the free space under taller ones, and the layout adapts to the window. Select a card to use the same detail and actions.
 
 ## Plan it, or just build it?
 
@@ -64,7 +64,7 @@ Planning never starts coding workers by itself. [Tasks](workflow.md) explains wh
 
 In Vibe, the **Plans** panel and the **Plan in flight** card follow a plan while it's being built.
 
-> <span class="status next">Coming in 0.5</span> Plans show one step at a time, with an **Up next** button to the step that's waiting on you (**Show every step** lays the whole plan out again). The interview reads like a chat, and Mefi can ask the next question on its own. A new idea needs no name and offers **Idea starters**. **Where this lives** pins a plan to an area of your [project map](agent-brain.md). A split request's plan shows a timeline of which agent is on each step.
+> <span class="status next">New in 0.5</span> Plans show one step at a time, with an **Up next** button to the step that's waiting on you (**Show every step** lays the whole plan out again). The interview reads like a chat, and Mefi can ask the next question on its own. A new idea needs no name and offers **Idea starters**. **Where this lives** pins a plan to an area of your [project map](agent-brain.md). A split request's plan shows a timeline of which agent is on each step.
 
 ## Check plans against your code
 

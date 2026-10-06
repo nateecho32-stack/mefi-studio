@@ -8,7 +8,7 @@ Click your companion, or press **Esc** on a workspace page. A ring of bubbles op
 
 In 0.4.4 the bubbles are **Talk to me**, **Friends**, **Requests**, **Notifications**, **Settings** and **Quick actions**. Quick actions has shortcuts to setup, your team, audio, Appearance and the run controls.
 
-<span class="status next">Coming in 0.5</span> The menu becomes six bubbles, each with one job:
+<span class="status next">New in 0.5</span> The menu becomes six bubbles, each with one job:
 
 | Bubble | What it does |
 | --- | --- |
@@ -25,14 +25,14 @@ Ask about your project, think an idea through, or ask your companion to create a
 
 Your companion talks through the **Companion** seat. To change its model, open **Agents › Setup › Team & models**.
 
-<span class="status next">Coming in 0.5</span> Talk and Suggest work open with the cursor in their box, and the letters you type go there instead of setting off shortcuts.
+<span class="status next">New in 0.5</span> Talk and Suggest work open with the cursor in their box, and the letters you type go there instead of setting off shortcuts.
 
 ## Needs you
 
 One list holds everything that waits on you, such as questions and decisions, with their actions in place. The count shows on your companion and in the tray. In 0.4.4 this bubble is called **Requests**.
 
 - **Clear list** takes stuck items off the list. It asks once more first. Open asks close as left for review, and their cards stay on the board.
-- <span class="status next">Coming in 0.5</span> An ask you answer leaves the list at once. Asks older than two days, and asks whose card left the board, close when the project loads.
+- <span class="status next">New in 0.5</span> An ask you answer leaves the list at once. Asks older than two days, and asks whose card left the board, close when the project loads.
 
 Which asks Studio may settle for you depends on your permission mode. See [Permissions and decisions](#/permissions).
 
@@ -53,7 +53,7 @@ Everything else is in the companion menu: the **Settings** bubble in 0.4.4, and 
 - **Project reach** covers the **Current project** or **All projects**.
 - The run controls you know from elsewhere in Studio: **Allow new work**, **Run the queue** and **Proactive suggestions**.
 
-## Personality and petting <span class="status next">Coming in 0.5</span>
+## Personality and petting <span class="status next">New in 0.5</span>
 
 Under **Personality**, pick how your companion behaves:
 
@@ -69,8 +69,8 @@ To pet your companion, stroke it back and forth with the pointer. It leans in an
 
 The **Friends** bubble leads to Listen together and [Your PCs](#/your-pcs).
 
-- <span class="status next">Coming in 0.5</span> It opens Friends, a place of its own, at the right page: **The Lobby**, **Rooms**, the **Playground**, where your companion meets friends' companions, and Your PCs. **Practice with Pip** works on your own PC with nothing sent.
-- <span class="status next">Coming in 0.5</span> Rooms and playdates with friends run on the Mefi Studio relay, which is built into Studio, after you sign in with Discord once.
+- <span class="status next">New in 0.5</span> It opens Friends, a place of its own, at the right page: **The Lobby**, **Rooms**, the **Playground**, where your companion meets friends' companions, and Your PCs. **Practice with Pip** works on your own PC with nothing sent.
+- <span class="status next">New in 0.5</span> Rooms and playdates with friends run on the Mefi Studio relay, which is built into Studio, after you sign in with Discord once.
 
 [Friends, rooms and playdates](#/friends-and-rooms) covers all of it.
 

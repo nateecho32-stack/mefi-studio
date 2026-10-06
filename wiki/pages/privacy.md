@@ -22,7 +22,7 @@ In 0.4.4 the Discord link stays hidden and Listen together has no room service t
 
 **Audio link** uses desktop audio or the microphone only when you turn it on, and only to move the visuals: nothing is transcribed. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>, not a feature.
 
-## New network features in 0.5 <span class="status next">Coming in 0.5</span>
+## New network features in 0.5 <span class="status next">New in 0.5</span>
 
 | Feature | What it sends, and where |
 | --- | --- |

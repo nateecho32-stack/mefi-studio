@@ -13,14 +13,14 @@ Now and then Studio shows a small card inviting you to join. **Not now** snoozes
 ## Share your work
 
 - **In the Discord**: post it to the showcase, with a link and a short description. Ask for feedback, or find someone to build with.
-- **With a friend** <span class="status next">Coming in 0.5</span>: **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file you can send however you like. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions. It needs no sign-in. See [Your PCs](your-pcs.md).
-- **On the Project hub** <span class="status next">Coming in 0.5</span>: share a project as a card in **Friends › Project hub**, and play what other people make. See [Friends, rooms and playdates](friends-and-rooms.md#the-project-hub).
+- **With a friend** <span class="status next">New in 0.5</span>: **Share with friends** saves one brain, recipe, team setup, set of model results, memory note or your preferences to a `.mefishare` file you can send however you like. Studio cleans it and shows you what's inside first. A friend's file is reviewed before you use it, and it can't change your permissions. It needs no sign-in. See [Your PCs](your-pcs.md).
+- **On the Project hub** <span class="status next">New in 0.5</span>: share a project as a card in **Friends › Project hub**, and play what other people make. See [Friends, rooms and playdates](friends-and-rooms.md#the-project-hub).
 
 ## Friends in Studio
 
-In 0.4.4, your companion's **Friends** bubble holds **Your PCs**, and **Listen together**, which has no room service to connect to yet. [Friends, rooms and playdates](friends-and-rooms.md) has the full guide.
+In 0.4.4, your companion's **Friends** bubble held **Your PCs**, and **Listen together**, which had no room service to connect to. [Friends, rooms and playdates](friends-and-rooms.md) has the full guide.
 
-> <span class="status next">Coming in 0.5</span> Friends becomes a place of its own, with nothing to set up: rooms, room chat, Listen together, playdates and cowork claims run through the Mefi Studio relay, a free service built into Studio. Sign in with Discord once.
+> <span class="status next">New in 0.5</span> Friends is a place of its own, with nothing to set up: rooms, room chat, Listen together, playdates and cowork claims run through the Mefi Studio relay, a free service built into Studio. Sign in with Discord once.
 >
 > - **The Lobby**: who is online, the week's top project, the rooms open now and what was shared this week. Everyone signed in is in the Lobby room.
 > - **Friends › Rooms**: join with a friend's invite code, or ask to join a listed room. An open room reads like a chat app. Room chat is plain text with @names, links are never made clickable, every message can be reported, and moderators see a message only when someone reports it.
@@ -40,7 +40,7 @@ Studio has its own music and video player, and it works without Discord or a sig
 
 ## What's planned <span class="status planned">Planned</span>
 
-The owner's plan for the community has started: sharing projects, credits and ranks, and a weekly Build Jam are <span class="status next">Coming in 0.5</span>, as above. Still open:
+The owner's plan for the community has started: sharing projects, credits and ranks, and a weekly Build Jam are <span class="status next">New in 0.5</span>, as above. Still open:
 
 - Cosmetics and creator styles you can get with credits.
 - Shared mixes, with the most-played lists for people who choose to share their music taste.

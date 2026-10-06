@@ -4,7 +4,7 @@ The Void Engine is the Discord server for people who build with Studio. Share wh
 
 **[Join the Void Engine Discord](https://discord.gg/xgfKc5pVxG)**
 
-Discord is the easiest way to reach the community, but you never need it. Every theme and node style in Studio is free without it. Only features that connect you with other people, such as rooms, use your Discord account, so Studio knows who you are. They arrive with 0.5. You can also report bugs and ask for features [on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new/choose).
+Discord is the easiest way to reach the community, but you never need it. Every theme and node style in Studio is free without it. Only features that connect you with other people, such as rooms, use your Discord account, so Studio knows who you are. You can also report bugs and ask for features [on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new/choose).
 
 ## What happens there
 
@@ -31,7 +31,7 @@ Roles come from taking part: showing work, helping people and coworking.
 
 The bot never stores message text. It keeps counters and short records, such as your points, your streak and the showcase posts you submit. In the server, `/privacy` shows what it keeps, and `/forget-me` deletes your records.
 
-## Link your Discord in Studio <span class="status next">Coming in 0.5</span>
+## Link your Discord in Studio <span class="status next">New in 0.5</span>
 
 Signing in is optional. It tells Studio who you are in the Void Engine, which The Lobby, Rooms and the Project hub need. It unlocks nothing: every look is already free, and no Discord role is needed. See [Friends, rooms and playdates](#/friends-and-rooms).
 
