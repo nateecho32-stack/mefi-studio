@@ -34,6 +34,15 @@ const settingsFrom = main.indexOf("function updateSettings(mutate) {");
 const settingsBlock = main.slice(settingsFrom, main.indexOf("\nfunction send(", settingsFrom));
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const settle = async () => { for (let i = 0; i < 60; i += 1) await new Promise((done) => setImmediate(done)); };
+// A delivery between PCs includes real file reads and writes: wait for what
+// it changes (up to 5 s) instead of a fixed number of turns.
+const until = async (check, what) => {
+  const end = Date.now() + 5000;
+  while (!(await check())) {
+    if (Date.now() > end) assert.fail(`timed out waiting for ${what}`);
+    await new Promise((done) => setTimeout(done, 10));
+  }
+};
 const OWNER = "111111111111111111", FRIEND = "222222222222222222", STRANGER = "333333333333333333";
 const REPO = "https://github.com/acme/game.git";
 
@@ -211,8 +220,7 @@ test("a low battery holds new starts and moves a ready card to a paired PC, whic
     await desk.api.pcsSendState({ force: true });
     await settle();
     await laptop.api.pcsPlan();
-    await settle();
-    await settle();
+    await until(() => laptop.board.tasks.filter((task) => task.movedTo && !task.movedTo.pending).length === 2, "the desk's answer");
     const moved = laptop.board.tasks.filter((task) => task.movedTo);
     assert.deepEqual(moved.map((task) => [task.id, task.movedTo.name, Boolean(task.movedTo.pending)]), [["t1", "Desk", false], ["t2", "Desk", false]], "two cards out, the pinned one stays");
     assert.equal(backlog.workState(moved[0], Date.now()).stage, "waiting");
@@ -227,8 +235,7 @@ test("a low battery holds new starts and moves a ready card to a paired PC, whic
     desk.board.tasks[0].status = "done";
     desk.board.tasks[0].doneAt = Date.now();
     await desk.api.pcsPlan();
-    await settle();
-    await settle();
+    await until(() => laptop.board.tasks.find((task) => task.id === "t1")?.status === "done", "the done note");
     const t1 = laptop.board.tasks.find((task) => task.id === "t1");
     assert.equal(t1.status, "done");
     assert.match(t1.logs.at(-1).text, /done on Desk/);
@@ -264,22 +271,18 @@ test("work started on another PC lands on its board and its answer comes back", 
     await pair(laptop, desk);
     const started = await laptop.api.pcsStart({ pcId: "pc-desk", title: "Add a dark mode", prompt: "Dark mode for the menu" });
     assert.equal(started.ok, true, started.error);
-    await settle();
-    await settle();
+    await until(async () => (await laptop.api.pcsStatus()).sent[0]?.status === "queued", "the desk's reply");
     assert.deepEqual(desk.board.tasks.map((task) => [task.title, task.prompt, task.ownerHold ?? null]), [["Add a dark mode", "Dark mode for the menu", null]]);
     const status = await laptop.api.pcsStatus();
     assert.deepEqual(plain(status.sent.map((row) => [row.title, row.toName, row.status])), [["Add a dark mode", "Desk", "queued"]]);
     desk.board.tasks[0].status = "done";
     await desk.api.pcsPlan();
-    await settle();
-    await settle();
-    assert.equal((await laptop.api.pcsStatus()).sent[0].status, "done");
+    await until(async () => (await laptop.api.pcsStatus()).sent[0]?.status === "done", "the done note");
     // A PC that does not have the project open says so.
     desk.repo = "https://github.com/acme/other.git";
     desk.api.pcsMem().remotes.clear();
     await laptop.api.pcsStart({ pcId: "pc-desk", title: "Another", prompt: "x" });
-    await settle();
-    await settle();
+    await until(async () => (await laptop.api.pcsStatus()).sent[0]?.status === "refused", "the refusal");
     const refused = (await laptop.api.pcsStatus()).sent[0];
     assert.equal(refused.status, "refused");
     assert.match(refused.error, /not open on this PC/);
@@ -314,6 +317,16 @@ test("at the stop line the running work stops held, the PC may sleep, and Contin
     laptop.board.tasks = [card("busy_0", { status: "queued", ownerHold: { kind: "battery", level: 9, at: 1 } })];
     await laptop.api.pcsPowerLook();
     assert.deepEqual(plain(laptop.api.pcsAwakeWanted()), { always: false, release: false }, "Always holds only while plugged in");
+    // Plugged in, then unplugged above the low line: keep-awake is asked again each time.
+    laptop.battery.onBattery = false;
+    const asked = () => laptop.calls.filter(([kind]) => kind === "awake").length;
+    const before = asked();
+    await laptop.api.pcsPowerLook();
+    assert.equal(laptop.api.pcsAwakeWanted().always, true);
+    laptop.battery.onBattery = true;
+    await laptop.api.pcsPowerLook();
+    assert.equal(asked(), before + 2, "each change of power re-applies Keep this PC on");
+    assert.equal(laptop.api.pcsAwakeWanted().always, false);
     laptop.battery.level = 9;
     await laptop.api.pcsPowerLook();
     await settle();
@@ -363,8 +376,7 @@ test("a friend's lent PC: visible only while lent, and their task waits for its 
     // Sent on purpose, it waits for Sam's OK.
     const started = await laptop.api.pcsStart({ pcId: "pc-sam", title: "Render the trailer", prompt: "Render it" });
     assert.equal(started.ok, true, started.error);
-    await settle();
-    await settle();
+    await until(async () => (await laptop.api.pcsStatus()).sent[0]?.status === "held", "Sam's reply");
     const task = sams.board.tasks[0];
     assert.equal(task.ownerHold.kind, "friend");
     assert.equal(task.fromPc.friend, true);

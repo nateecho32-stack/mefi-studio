@@ -5165,7 +5165,10 @@ async function pcsPowerLook() {
   try { onBatteryPower = powerMonitor?.isOnBatteryPower?.() === true; } catch {}
   const reading = await pcPower.readBattery({ spawn: require("node:child_process").spawn, onBatteryPower, setTimer: setTimeout, clearTimer: clearTimeout });
   const kindBefore = mem.power.reading ? "laptop" : "desktop";
+  const unpluggedBefore = Boolean(mem.power.reading?.onBattery);
   if (!reading?.error) mem.power.reading = reading;
+  // Keep this PC on holds only while plugged in: a change of power says so at once.
+  if (Boolean(mem.power.reading?.onBattery) !== unpluggedBefore) applyKeepAwake();
   const was = mem.power.stage;
   const next = pcPower.nextStage({ stage: was, continuedAt: mem.power.continuedAt }, reading?.error ? (mem.power.reading ?? null) : reading, settings.lines);
   Object.assign(mem.power, { stage: next.stage, continuedAt: next.continuedAt, at: pcsNow() });
@@ -5521,6 +5524,9 @@ async function pcsTick() {
   if (mem.ticking) return;
   mem.ticking = true;
   try {
+    // A relay that came up before this PC said who it is hears it now.
+    const status = hubClient?.status?.();
+    if (status?.state === "ready" && status.pcs === true && status.pcOn !== true) await pcsHello();
     await pcsSendState();
     await pcsPlan();
     await pcsHandoffLook();
