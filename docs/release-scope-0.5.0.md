@@ -1,6 +1,6 @@
 # 0.5.0 release scope
 
-Updated on the afternoon of 6 October 2026. The published Windows download is
+Updated on the evening of 6 October 2026. The published Windows download is
 still 0.4.4. This records the scope of the next release; it does not announce a
 release date or replace the packaging and release checks. **0.4.5 and 0.4.6 are
 skipped:** what was planned for them ships in 0.5.0. The plan is
@@ -140,6 +140,26 @@ Landed on 5 and 6 October, after the layout:
   switch ([code-signing.md](code-signing.md)); test runs on one PC take turns,
   and a stage that runs past its limit is stopped with everything it started.
 
+Landed on the evening of 6 October:
+
+- **My PCs** (`feat/my-pcs`): your PCs live in Friends › Your PCs, sending work
+  between them, and a laptop that hands off on low battery
+  ([my-pcs.md](my-pcs.md)). **Other apps** (`feat/studio-api`): a setup prompt
+  and a Studio API, MCP server and skill for other apps on this PC, off until
+  turned on. **Resources** (Team › Resources): the resource manager for other
+  apps. The model-performance ledger race (`fix/model-perf-race`).
+- **The 0.5 polish pass** (`wip/polish-0.5`): a fresh-profile walk of every
+  page and menu in both modes, every theme, interface scale 80 to 150% and
+  window sizes down to 600 px. The first run in plain words that really puts
+  Studio on the tool you signed in to (or OpenCode's free models), Start a new
+  app leading a first launch, Social's rail and reach (Friends' and Team's
+  places as a row when the list column is closed, Help), one list for Friends'
+  places (Events in the rail and Search), the guided tour rewritten for the
+  0.5 layout, the Map and Team named that everywhere, and fixes: a blank menu
+  after switching modes from a page, Configuration and Friends leaving their
+  layer behind, the classic tree strip over Settings, Plans squeezed in a
+  smaller window, key tips over the first-run dialog and menus.
+
 From the DevDay branch: GPT-6.1 Sol, Codex workers over `codex app-server`,
 using a ChatGPT plan, the Studio Daily on the launch screen, the Models
 Catalog and Performance face lift, and security fixes for remote approvals,
@@ -155,17 +175,14 @@ zip only when it is started by hand with `host: tauri`.
 
 ## Still to land for 0.5.0
 
-As of the afternoon of 6 October: every branch on GitHub that `main` does not
-have yet, apart from the site's (`gh-pages`) and ones already replaced on
-`main`. Each chat lands its own after its gate. Anything not finished and
-tested at the first release candidate moves to 0.5.x instead of holding the
-release.
+As of the evening of 6 October every finished branch is on `main`. What is left
+on GitHub is parked work for 0.5.x, the site's branches (`gh-pages`) and
+branches already replaced on `main`.
 
 | Work | Branch | State |
 | --- | --- | --- |
-| Settings › Other apps: a setup prompt to copy for Claude Code, Codex or another helper, and a Studio API, MCP server and skill for other apps on this PC (off until turned on) | `feat/studio-api` | Pushed 6 October, not on `main`. Large (33 files); whether it is 0.5.0 or 0.5.x is yours to say |
-| A once-seen hosted CI failure in the model-performance ledger (two writes in one clock tick) | `fix/model-perf-race` | Pushed 6 October, not on `main` |
-| Space plays or pauses the video in Command | `wip/space-plays-video` | Unfinished since 3 October (nothing calls it yet); 0.5.x unless finished |
+| Space plays or pauses the video on the Map | `wip/space-plays-video` | Parked for 0.5.x: unfinished (nothing calls it yet), and it stops saving the Map's spin, which your toggles-survive-restarts rule keeps |
+| `scripts/agent-link.mjs`, a draft | `wip/agent-link` | Parked; Other apps' `studio-link.mjs` (on `main`) does what it sketched |
 | Not built: an embedded live Preview tab (the inspector's Preview has the project's controls and Before and After), the pinned tree strip as a panel, Drafts in the session list (the app keeps none) | — | 0.5.x. Design source: `docs/prototype/` |
 
 Replaced on `main`, safe to delete once their chats agree:
@@ -174,7 +191,10 @@ Replaced on `main`, safe to delete once their chats agree:
 `wip/land-ui-today`, `ui/social-studio-names` and
 `fix/git-fsmonitor-worker-mcp` (both landed as replayed copies),
 `wip/release-0.4.5*` and `wip/release-yml-host-switch` (folded into
-`release.yml` on 6 October).
+`release.yml` on 6 October), `feat/studio-api`, `feat/my-pcs`,
+`fix/model-perf-race` and `land/model-perf-race` (landed 6 October), and the
+local `claude/stage-2-verification-gates-1e8dc9` (its release.yml host switch
+is the one `main` has).
 
 Worktrees in Studio are implemented, including the entry in the new shell and
 the mark on Studio's task rows; the attended owner workflow checks remain (Try
