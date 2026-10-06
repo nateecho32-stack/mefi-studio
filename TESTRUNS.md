@@ -39,6 +39,29 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Your PCs and Friends reconnect by themselves; only a Studio that is really behind must update
+
+Branch `wip/auto-reconnect` (C:\wt\reconnect), landed on main as 7718e36 (rebased three times as main moved; the
+CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged). New `scripts/link-compat.cjs`
+(protocol windows for paired PCs and the relay); paired checks start again by themselves after a restart, update or
+crash and back off while the coordinator is away; Friends gets "Reconnect by itself", a retry on wake, and the relay's
+hello window. The relay change is not deployed by this landing: the live relay drops the new `oldest` field (checked
+against HEAD's protocol.mjs), so today's Studio and this one both connect until it is redeployed.
+
+`npm run check` ok, eslint on the changed files 0 problems (main.cjs keeps its 5 older warnings), `npm run audit` 0
+findings, booklet byte-identical to a fresh build. Through `npm run test:one` on the rebased tree: the affected and
+overlapping suites 135/135 (link_compat, paired_reconnect, paired_worker, paired_worker_lifecycle, paired_worker_ui,
+hub_client, hub_host, relay_core, relay_e2e, friends_front_ui, rooms_ui, project_hub_ui, playlists, friends_render);
+before the playlists rebase 177/179 across 26 suites incl. paired_worker_render, friends_render, friends_two_render
+and companion_hub_render, the 2 failures being paired_reconnect's own fixed-sleep waits under load, rewritten to wait
+for the poll, start and abort (then 6/6 on every run that got a lease turn; 3 of 5 back-to-back tries timed out
+waiting for the lease, not in the suite). paired_worker's heartbeat test now uses a 40 ms lease (it took 30 s once a
+missed heartbeat stopped aborting at once). paired_worker_render captures the Start by itself switches and "Studio
+0.4.6 (older, still connects)" fitting a 600 px window. Hosted CI (ci.yml, Windows) green on 6445219 (7 min 10 s),
+3a4c7be (7 min 23 s) and the landed 7718e36; after the last rebase 52/52 again here (hub_host,
+paired_worker_lifecycle, paired_reconnect, link_compat, hub_client), since main.cjs moved under it. Not run here: the
+full `npm test` (CI is the full gate) and a real two-PC test (owner).
+
 ## 2026-10-06 Background git leaves no fsmonitor daemons, and Claude workers start only the desk's MCP servers
 
 Branch `fix/git-fsmonitor-worker-mcp` in `C:\wt\fsmon`: the 2026-10-03 commit c575fd3 (left on one PC in `C:\wt\mem`,
@@ -471,36 +494,6 @@ module_purity, preload_fanout 114/114 together; preload_fanout 17/17 after the o
 progress delivers the board at once, untouched cards keep their objects, progress that moves no card delivers
 nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
 (no Electron in the container); judged on the Windows "Studio checks" run of this commit.
-
-## 2026-10-05 The 0.5 layout is the only layout: the classic layout's code goes, every window fixture runs the 0.5 layout
-
-Branch `ui/v2-only` (gated in `C:\wt\ui-v2only`, merged with main up to f1934aa in `C:\wt\v2m` as 8e4a501). Owner
-chose to remove the classic layout at 0.5.0. The switch and its ways back go (setLayout/setShell, ?layout=,
-MEFI_STUDIO_LAYOUT, the Settings and Search toggles); the classic code goes (nav.js's v1 paths, the classic rail,
-local navigation, dock, sheet links, tab row, footer and help button; the classic Search rows; the Agents navigation;
-the companion hub's Friends section and the Friends page's tab row and Close; Command's .cmd-top with its Ambience,
-View and Agent settings popovers, telemetry pills and corner usage panel; the CSS long tail, ~2,600 net lines of app
-code). Every Electron fixture launches the 0.5 layout; layout_contract_render and its v1 record are retired. Real bugs
-the converted fixtures found are fixed: Team seat rows at 1100, Fleet's fit at 1100, the Project map at 600x560@150%,
-Today's box, an Inbox question without options, the orb drag, the slim rail, the Settings strip, the plan page header,
-Activity over the chat box, Today's permissions popover, the inspector's Team card, the empty Map's Start button,
-hidden key tips, the Inbox keeping the focus on the need pill when its first card was a question without options so
-Escape never closed it (a47ac39), and main's new skills chip pushing Build it off Today's row at 1440x900 (aae6947).
-
-Hosted CI (Windows, the whole Node/Python/check/lint/audit chain; the 43 real-window suites skipped there): green on
-0da4dfd (37397654824), dc5264f (37398953883), 574fa9d (37399987736), 8b5eacb (37401397849) and 8e4a501
-(37402884931). Here, every Electron suite one at a time on 0da4dfd: 44 of 45 ok; shell_render timed out at "Escape
-closed the Inbox" while clean main d71e1e0 passed that step (control run), fixed in a47ac39, after which it stops
-where clean main stops on this PC ("it shrinks to leave the main area its 320", the display-scaling case). npm run
-check and npm run audit on 0da4dfd: exit 0 (audit 0 errors, 0 warnings); npm run check on 8b5eacb and 8e4a501: ok.
-After the merges with main 33c3c4e, d71e1e0, d55269f and f1934aa: friends_render, companion_hub_render,
-settings_render, size_render, skills_render, team_render, today_render, unified_studio_render, workflow_render ok on
-8b5eacb; builder_render (failed on 8b5eacb, the skills chip), today_render, workflow_render ok on aae6947;
-command_render, media_browser_render, media_window_render ok on 8e4a501; Friends, rail and Today unit suites 89/89 and
-59/59. sessions_render failed at "the keyboard starts on the open project" on 8b5eacb and on clean main f1934aa (both
-runs fast, ~45 s) and passed on main d71e1e0, b79b4bc and 0661f8c and on this branch's b632757 (154 s): the timing
-flake an older row here already saw at that step. performance_render, startup_render and renderer_recovery ok on
-b632757 (main's studio log on disk and Trace).
 
 ## Read Before Any Tests
 
