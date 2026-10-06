@@ -4,7 +4,10 @@
 // levels and sources to filter by, problems only, follow, newest first or
 // last, copy and open the file. The host keeps and reads the channels
 // (main.cjs trace:channels / trace:read, scripts/trace.cjs); this sheet asks
-// again every two seconds while Follow is on and the sheet is in view.
+// again every two seconds while Follow is on and the sheet is in view. The
+// studio log is also kept on disk (main.cjs "Log core"): Load older pages back
+// through it, above the live tail, and pauses Follow so the pages stay put; a
+// new channel or filter starts from the tail again.
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(`trace-${id}`);
@@ -12,7 +15,7 @@
   const FOLLOW_MS = 2000;
   const CHANNELS_MS = 10000;
   const LEVELS = [["all", "All"], ["error", "Errors"], ["warn", "Warnings"], ["info", "Info"]];
-  const state = { channel: "studio", channels: [], tail: 250, text: "", problems: false, level: null, sources: [], newest: true, follow: true, result: null, timer: 0, reading: null, channelsAt: 0, signature: "" };
+  const state = { channel: "studio", channels: [], tail: 250, text: "", problems: false, level: null, sources: [], newest: true, follow: true, result: null, timer: 0, reading: null, channelsAt: 0, signature: "", older: [], olderNext: null, olderDone: false, olderKey: "", loadingOlder: false };
   let initialized = false;
   const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
   const isOpen = () => Boolean($("overlay")) && !$("overlay").hidden;
@@ -46,9 +49,10 @@
     // The reset rides a chained finally, which always runs after this
     // assignment: an in-body finally ran first when traceRead threw before its
     // first await, and the settled promise then stood in for every read.
+    resetOlderOnChange();
     state.reading = (async () => {
       try {
-        const result = await api().traceRead({ channel: state.channel, tail: state.tail, text: state.text, problems: state.problems, level: state.level, sources: state.sources.length ? state.sources : null });
+        const result = await api().traceRead(query());
         if (result?.channel && result.channel !== state.channel) return;
         state.result = result;
         render();
@@ -60,6 +64,40 @@
       if (state.again) { state.again = false; void read(); }
     });
     return state.reading;
+  }
+  function query(extra = {}) {
+    return { channel: state.channel, tail: state.tail, text: state.text, problems: state.problems, level: state.level, sources: state.sources.length ? state.sources : null, ...extra };
+  }
+  // Older pages belong to one channel and one set of filters.
+  function resetOlderOnChange() {
+    const key = JSON.stringify([state.channel, state.tail, state.text, state.problems, state.level, state.sources]);
+    if (key === state.olderKey) return;
+    state.olderKey = key;
+    state.older = [];
+    state.olderNext = null;
+    state.olderDone = false;
+  }
+  async function loadOlder() {
+    if (state.loadingOlder || !api()?.traceRead) return;
+    resetOlderOnChange();
+    state.loadingOlder = true;
+    // The pages would scroll away under a live re-read: Follow pauses.
+    if (state.follow) { state.follow = false; $("follow").checked = false; schedule(); }
+    const shown = [...state.older, ...(state.result?.rows || [])];
+    const before = state.olderNext ?? (shown.length ? shown[0].at : Date.now());
+    try {
+      const result = await api().traceRead(query({ before }));
+      if (result?.ok === false) { status(result.error || "Older lines could not be read.", "bad"); return; }
+      state.older = [...(result?.rows || []), ...state.older];
+      state.olderNext = result?.next ?? null;
+      state.olderDone = result?.done !== false || !result?.next;
+      state.signature = "";
+      render();
+    } catch (error) {
+      status(window.MefiUi?.plainError ? window.MefiUi.plainError(error, "Older lines could not be read.") : "Older lines could not be read.", "bad");
+    } finally {
+      state.loadingOlder = false;
+    }
   }
   function schedule() {
     clearTimeout(state.timer);
@@ -144,11 +182,12 @@
       void read();
     }, "", name)));
     $("file").hidden = !result.file;
-    const shown = result.rows || [];
-    status(result.total ? `${shown.length} of ${result.matched} matching line${result.matched === 1 ? "" : "s"} (${result.total} in this channel${result.dropped ? `, ${result.dropped} older lines rotated out` : ""})` : "");
+    $("older").hidden = !result.older || state.olderDone;
+    const shown = [...state.older, ...(result.rows || [])];
+    status(result.total ? `${(result.rows || []).length} of ${result.matched} matching line${result.matched === 1 ? "" : "s"} (${result.total} in this channel${result.dropped ? `, ${result.dropped} older lines rotated out` : ""})${state.older.length ? `, and ${state.older.length} older from the log on disk${state.olderDone ? " (the start of the log)" : ""}` : ""}` : "");
     const failureNote = writeFailureNote(result);
     if (failureNote) status([$("status").textContent, failureNote].filter(Boolean).join(" · "), "bad");
-    const signature = JSON.stringify([state.channel, state.newest, shown.length, shown[0]?.at, shown[0]?.text, shown.at(-1)?.at, shown.at(-1)?.text]);
+    const signature = JSON.stringify([state.channel, state.newest, shown.length, shown[0]?.at, shown[0]?.text, shown.at(-1)?.at, shown.at(-1)?.text, state.older.length]);
     if (signature === state.signature) return;
     state.signature = signature;
     const lines = $("lines");
@@ -209,15 +248,16 @@
     $("follow").addEventListener("change", () => { state.follow = $("follow").checked; schedule(); });
     $("order").addEventListener("click", () => { state.newest = !state.newest; $("order").textContent = state.newest ? "Newest first" : "Oldest first"; state.signature = ""; render(); });
     $("copy").addEventListener("click", async () => {
-      const text = (state.result?.rows || []).map((row) => `${clock(row.at)} ${row.level.toUpperCase()} [${row.source}] ${row.text}`).join("\n");
+      const text = [...state.older, ...(state.result?.rows || [])].map((row) => `${clock(row.at)} ${row.level.toUpperCase()} [${row.source}] ${row.text}`).join("\n");
       const done = await api()?.shellCopy?.(text);
       window.MefiToast?.(done?.ok === false ? "The lines could not be copied." : "Copied the lines shown.", done?.ok === false ? "bad" : "good");
     });
     $("file").addEventListener("click", () => { if (state.result?.file) void api()?.shellReveal?.(state.result.file); });
+    $("older").addEventListener("click", () => { void loadOlder(); });
     document.addEventListener("visibilitychange", () => { if (!document.hidden && isOpen()) { void read(); schedule(); } });
   }
 
-  window.MefiTrace = { open, close, isOpen, read, state: () => ({ channel: state.channel, tail: state.tail, text: state.text, problems: state.problems, level: state.level, sources: [...state.sources], follow: state.follow, newest: state.newest }) };
+  window.MefiTrace = { open, close, isOpen, read, loadOlder, state: () => ({ older: state.older.length, olderDone: state.olderDone,  channel: state.channel, tail: state.tail, text: state.text, problems: state.problems, level: state.level, sources: [...state.sources], follow: state.follow, newest: state.newest }) };
   // nav.js holds Trace's record (Live, beside Activity) and calls open/close.
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();

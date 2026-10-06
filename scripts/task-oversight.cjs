@@ -1779,6 +1779,13 @@ const PACK_KEEP = new Set(["message", "did"]);
 const PACK_CHRONOLOGICAL = new Set(["thread", "events", "log", "history"]);
 const PACK_FLOOR = 2;
 const PACK_META = "_trimmed";
+// The order the kept sections are written in with `options.cacheOrder` (the
+// prompt cache on, scripts/prompt-cache.cjs), which is not their priority: the
+// context that moves least between turns first, then the conversation and the
+// news, any other facts ("*"), what the host just did and the owner's new
+// message last, so a provider that caches prompt prefixes keeps the part that
+// did not change since the last turn. Without it, priority order, as before.
+const PACK_WIRE = Object.freeze(["outside", "board", "suggestions", "focus", "needsYou", "decisionContext", "asks", "thread", "events", "ui", "*", PACK_META, "did", "message"]);
 
 // A JSON-safe copy: no functions, cycles, non-finite numbers or BigInts, and
 // bounded in depth, width and string length.
@@ -1947,8 +1954,13 @@ function packChatPayload(sections, budget = 14000, options = {}) {
     }
   }
   const body = {};
-  for (const entry of live()) body[entry.name] = entry.value;
-  if (meta.on && trimmed.length) body[PACK_META] = trimmed;
+  const written = live();
+  if (meta.on && trimmed.length) written.push({ name: PACK_META, value: trimmed });
+  if (plainObject(options)?.cacheOrder === true) {
+    const wire = (name) => (PACK_WIRE.includes(name) ? PACK_WIRE.indexOf(name) : PACK_WIRE.indexOf("*"));
+    written.sort((a, b) => wire(a.name) - wire(b.name));
+  }
+  for (const entry of written) body[entry.name] = entry.value;
   const text = JSON.stringify(body);
   return text.length <= limit ? text : "{}";
 }

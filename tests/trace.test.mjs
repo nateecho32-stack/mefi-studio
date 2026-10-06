@@ -111,7 +111,7 @@ test("the sheet lists the channels, reads one and draws its lines newest first",
 
 // The host side (main.cjs): the channels it lists and what a read returns.
 const main = await readFile(new URL("../main.cjs", import.meta.url), "utf8");
-const hostSource = main.slice(main.indexOf("const TRACE_CHANNELS = Object.freeze(["), main.indexOf("function logLine(line) {"));
+const hostSource = main.slice(main.indexOf("const TRACE_CHANNELS = Object.freeze(["), main.indexOf("function logLine("));
 function host(logWriteHealth) {
   const env = {
     logWriteHealth, trace, traceStudio: trace.ring(10), traceRenderer: trace.ring(10), assistantState: { log: [{ at: 1, kind: "error", role: "keeper", text: "prune failed" }] },
@@ -142,4 +142,47 @@ test("Trace shows session write failures", async () => {
 });
 test("host returns detached failure metadata for successful and failed reads", async () => {
  const health = require("../scripts/log-write-health.cjs").createHealth({now:()=>123}); health.failure("executor"); const env=host(health); const result=plain(await env.traceRead({channel:"studio"})); assert.deepEqual(result.logWriteFailures,health.snapshot()); result.logWriteFailures[0].count=99; assert.equal(health.snapshot()[0].count,1); env.brainLedgerTail=async()=>{throw Error("unreadable fixture");}; const failed=plain(await env.traceRead({channel:"executor"})); assert.equal(failed.ok,false); assert.deepEqual(failed.logWriteFailures,health.snapshot());
+});
+
+// The studio log is kept on disk too (main.cjs "Log core"): Load older pages
+// back through it above the live tail, pauses Follow, and a new filter starts
+// from the tail again.
+test("Load older pages the studio log from disk above the tail, pauses Follow, and resets with the filters", async () => {
+  const calls = [];
+  const tail = [{ at: 5000, level: "info", source: "autopilot", text: "newest" }];
+  const pages = { first: [{ at: 3000, level: "warn", source: "release", text: "older b" }, { at: 4000, level: "info", source: "autopilot", text: "older c" }], second: [{ at: 1000, level: "error", source: "agents", text: "oldest a" }] };
+  const api = {
+    traceChannels: async () => ({ ok: true, channels: [{ id: "studio", label: "Studio log", area: "main", size: 10, detail: "Everything" }] }),
+    traceRead: async (payload) => {
+      calls.push(plain(payload));
+      if (payload.before === 5000) return { ok: true, channel: "studio", page: true, rows: pages.first, next: "log.x.jsonl#3", done: false, older: true };
+      if (payload.before === "log.x.jsonl#3") return { ok: true, channel: "studio", page: true, rows: pages.second, next: null, done: true, older: false };
+      return { ok: true, channel: "studio", rows: tail, total: 1, matched: 1, counts: { error: 0, warn: 0, info: 1 }, sources: [["autopilot", 1]], size: 10, file: "C:/local/logs", older: true };
+    },
+  };
+  const { document, get } = createDom({ ids: templateIds((id) => id.startsWith("trace-")) });
+  get("trace-overlay").hidden = true;
+  get("trace-follow").checked = true;
+  const window = { mefiStudio: api, MefiNav: { claim() {}, release() {}, close() {} }, addEventListener() {} };
+  vm.runInContext(source, vm.createContext({ window, document, console, requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout() {}, Date }));
+  const settle = async () => { for (let turn = 0; turn < 10; turn += 1) await new Promise((resolve) => setImmediate(resolve)); };
+  window.MefiTrace.open();
+  await settle();
+  assert.equal(get("trace-older").hidden, false, "the studio log has a folder on disk");
+  get("trace-older").click();
+  await settle();
+  assert.equal(calls.at(-1).before, 5000, "the first page is what is older than the oldest line shown");
+  assert.equal(get("trace-follow").checked, false, "Follow pauses so the pages stay put");
+  assert.deepEqual(get("trace-lines").children.map((line) => line.children[3].textContent), ["newest", "older c", "older b"]);
+  get("trace-older").click();
+  await settle();
+  assert.equal(calls.at(-1).before, "log.x.jsonl#3", "the next page continues from the cursor");
+  assert.deepEqual(get("trace-lines").children.map((line) => line.children[3].textContent), ["newest", "older c", "older b", "oldest a"]);
+  assert.equal(get("trace-older").hidden, true, "the start of the log");
+  assert.match(get("trace-status").textContent, /and 3 older from the log on disk \(the start of the log\)/);
+  assert.equal(window.MefiTrace.state().older, 3);
+  get("trace-levels").children[1].click();
+  await settle();
+  assert.equal(window.MefiTrace.state().older, 0, "a new filter starts from the tail");
+  assert.equal(calls.at(-1).before, undefined);
 });

@@ -36,6 +36,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   nothing; it now opens a new task, as N does. The first-run key tips for
   the Map sit on its bar and its zoom, and Build's on the rail, instead of
   on hidden controls where they never showed.
+- **Studio's log is kept, and Trace can read back through it.** The studio
+  log, the assistant's log and the window's warnings are now saved on this PC
+  (in its local app-data folder, never in OneDrive), packed into monthly
+  archives that are never deleted. Trace's new **Load older** button pages
+  back past the last few thousand lines, and **Open file** shows the folder.
+  `MEFI_STUDIO_LOG_CORE=0` (or `logs.keep: false` in settings) keeps the log in
+  memory only, as before.
+- **Claude Code and Codex builders show their steps while they work.** A
+  task run on Claude Code or Codex now shows its todo list, the tool it is
+  running and its token use as it goes, as OpenCode runs already did, instead
+  of nothing until it finishes. `MEFI_STUDIO_LIVE_PROGRESS=0` (or
+  `executor.liveProgress: false` in settings) turns it off.
+- **Repeated prompts cost less where the provider caches them.** Builders'
+  prompts, the chat's context and research rounds now put the parts that stay
+  the same first, so Zen's GPT models and OpenRouter's Claude and Gemini
+  models can bill them as cache reads, and the usage page counts cached input
+  from every provider. `MEFI_STUDIO_PROMPT_CACHE=0` (or `ai.promptCache: false`)
+  turns it off.
 - **Test runs on one PC take turns.** When several sessions test Studio from
   their own folders at once, `npm test` and the new `npm run test:one --
   tests/x.test.mjs` now wait for their turn instead of starving each other:

@@ -773,7 +773,12 @@ settings and per-model work-kind summaries for the shared controls.
   window's warnings and errors. Each channel shows its size and problem
   count; a channel is searched, tailed (100 to 2000 lines), filtered by level
   and by source tag (`[agents]`, `[assistant]`, `[tools]`…) and followed every
-  two seconds while the sheet is in view. The rules live in
+  two seconds while the sheet is in view. The studio log, the assistant's log
+  and the window's warnings are also kept on disk in this PC's local folder
+  (never inside OneDrive; `main.cjs` "Log core", `scripts/log-core.cjs`,
+  sealed into monthly gzip archives that are never deleted), so **Load older**
+  pages the studio channel back past the ring, newest first, pausing Follow;
+  **Open file** shows that folder. The rules live in
   `scripts/trace.cjs`, the reads in `main.cjs` `trace:channels` / `trace:read`.
   In the rail layout it is a full page below the navigation bar; Back returns
   to the previous Agents view. The classic layout keeps its dialog behavior.
