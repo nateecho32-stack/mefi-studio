@@ -261,9 +261,14 @@
         meta: [who, job.startedAt ? waited(job.startedAt, now) : "", job.stopping ? "stopping" : clip(step.step, 80) || phase].filter(Boolean).join(" · "), more: [] });
     }
     // A queued task that waits on you (a permission it asked for, a question) is under Needs you only, like a run.
+    // Up next says what it really waits for: with agents off, paused or no AI connected (the gate under the box) it
+    // is not about to run, so it says so and is not counted as running.
+    const gate = d.gate?.key ?? null;
+    const stopped = gate === "held" || gate === "paused" || gate === "key";
+    const startsWhen = gate === "held" ? "starts when you start agents" : gate === "paused" ? "starts when you resume" : gate === "key" ? "starts once an AI is connected" : "waits for a free worker";
     for (const next of (Array.isArray(d.next) ? d.next : []).filter((next) => !(next?.id && waiting.has(String(next.id)))).slice(0, 2)) {
-      running.push({ key: `next:${next.id}`, group: "running", tone: "next", title: clip(next.title || "Next task", 120), taskId: next.id || null,
-        meta: next.stage === "waiting" ? "waiting for what it depends on" : next.stage === "cooling" ? "trying again soon" : "up next · waits for a free worker", more: [] });
+      running.push({ key: `next:${next.id}`, group: "running", tone: "next", title: clip(next.title || "Next task", 120), taskId: next.id || null, ...(stopped ? { stopped: true } : {}),
+        meta: next.stage === "waiting" ? "waiting for what it depends on" : next.stage === "cooling" ? "trying again soon" : `up next · ${startsWhen}`, more: [] });
     }
     // Review: results ready for you first, then what is being checked, then plans waiting on you.
     const review = cards.filter((card) => card.group === "review");
@@ -941,7 +946,7 @@
       if (!key || !current.board[key]) continue;
       const cards = current.board[key];
       const count = group.querySelector(".today-count");
-      const open = cards.filter((card) => !card.decided).length;
+      const open = cards.filter((card) => !card.decided && !card.stopped).length;
       if (count && count.textContent !== String(open)) count.textContent = String(open);
       const list = group.querySelector(".today-cards");
       reconcile(list, cards.map((card) => ({ key: card.key, sig: cardSignature(card, detail), build: () => renderCard(card, detail) })));

@@ -24,7 +24,8 @@
   // Each tip: where it applies, the control it points at (the first visible
   // match), which side it sits on, and its keys with what they do.
   const TIPS = [
-    { id: "vibe-box", when: onVibe, target: "#vibe-compose", side: "right", parts: [["/", "jump into the box"], ["Enter", "talk it over"], ["Ctrl+Enter", "build it"]] },
+    // Under Build it, not beside the box: the box runs the page's width, so beside it the tip landed on Build it itself.
+    { id: "vibe-box", when: onVibe, target: "#vibe-build", side: "bottom", parts: [["/", "jump into the box"], ["Enter", "talk it over"], ["Ctrl+Enter", "build it"]] },
     { id: "vibe-dock", when: onVibe, target: "#vibe-dock", side: "right", parts: [["D", "watch the tree"], ["T", "tasks"], ["M", "team"]] },
     { id: "vibe-pulse", when: onVibe, target: "#vibe-pulse", side: "bottom", parts: [["N", "what needs you"], ["C", "the conversation"]] },
     { id: "vibe-search", when: onVibe, target: "#vibe-layer .vibe-top-actions [data-nav='palette']", side: "bottom", parts: [["Ctrl+K", "find anything"], ["?", "every shortcut"]] },
@@ -48,11 +49,13 @@
   function busy() {
     const nav = window.MefiNav?.state;
     if (nav?.sheet || nav?.transient) return true;
-    if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
-    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer"]) {
+    if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiSetupHelper?.welcomeOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
+    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer", "setup-welcome", "shell-menu", "today-inbox", "app-help-menu", "music-dropdown"]) {
       const node = document.getElementById(id);
       if (node && !node.hidden && node.getClientRects?.().length) return true;
     }
+    // The tab strip's pop-ups (its menus, "+", Tab behaviour): a tip never sits over an open menu.
+    for (const node of document.querySelectorAll?.("[id^='mefi-tabs-pop-']") ?? []) if (!node.hidden && node.getClientRects?.().length) return true;
     return document.hidden === true;
   }
   function targetOf(tip) {

@@ -1247,7 +1247,8 @@
     const home = { group: "Home", route: { id: "workspace", params: {} }, title: homeTitle(), glyph: "g-home", terms: "home today vibe front door" };
     // In the 0.5 layout Today is Work's first page (nav.js placeOf), so it leads Work's rows instead of a group of its own.
     const pages = destinations();
-    const lead = v2() ? [{ ...home, group: "Work" }, ...pages.filter((row) => row.group === "Work")] : [home];
+    // Today is that first row once: the Today sheet's own record would be a second "Today" under it.
+    const lead = v2() ? [{ ...home, group: "Work" }, ...pages.filter((row) => row.group === "Work" && row.route?.id !== "today")] : [home];
     const rest = v2() ? pages.filter((row) => row.group !== "Work") : pages;
     const rows = [...closed, ...[...lead, ...sessionRows(query), ...rest].filter(match)];
     const have = new Map(order().map((rec) => [keyOf(rec.route), rec]));

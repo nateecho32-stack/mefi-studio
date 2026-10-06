@@ -1366,7 +1366,11 @@
   const WELCOME_STEPS = 3;
   const MARKS = { claude: "CC", codex: "CX", opencode: "OC", grok: "GK", antigravity: "AG" };
   const COUNT = ["no", "one", "two", "three", "four", "five", "six"];
-  const welcome = { open: false, step: 0, els: null, clis: null, projects: null, text: "", busy: false, then: null, previous: null, serial: 0 };
+  const welcome = { open: false, step: 0, els: null, clis: null, projects: null, text: "", busy: false, then: null, previous: null, serial: 0, connected: null };
+  // What each tool uses, in a beginner's words: the account they may already pay for, or OpenCode's free models.
+  const ACCOUNT = { claude: "Uses your Claude subscription", codex: "Uses your ChatGPT plan", grok: "Uses your Grok account", antigravity: "Uses your Google account", opencode: "Free models to start with" };
+  // The first task's examples: small, plain, and each one a whole thought.
+  const FIRST_TASKS = ["A page that says hello, with a big button that changes the color", "A to-do list where I can add and tick off things", "A countdown timer with start and stop buttons"];
   const layoutV2 = () => document.documentElement?.dataset?.layout === "v2";
   function buildWelcome() {
     if (welcome.els) return welcome.els;
@@ -1382,7 +1386,7 @@
     const foot = node("footer", "setup-welcome-foot");
     const back = button("Back", () => void showWelcome(welcome.step - 1), "ghost"); back.id = "setup-welcome-back";
     const skip = button("Skip", () => closeWelcome(), "ghost"); skip.id = "setup-welcome-skip";
-    skip.title = "Close the welcome. The setup helper waits in Help and Search (Esc)";
+    skip.title = "Close this. The Setup guide waits under Help (Esc)";
     const next = button("Continue", () => void welcomeNext(), "primary"); next.id = "setup-welcome-next";
     foot.append(back, node("span", "setup-welcome-gap"), skip, next);
     card.append(steps, title, lead, body, status, foot);
@@ -1416,18 +1420,19 @@
     return row;
   }
   const chip = (text, ready = false) => node("span", `setup-welcome-chip${ready ? " is-ready" : ""}`, ready ? `✓ ${text}` : text);
-  // Step 1: the coding tools on this PC, with their own sign-in.
+  // Step 1: the AI that builds, in plain words: the coding tools on this PC with their own sign-in, and OpenCode's free
+  // models for anyone starting with no subscription.
   async function paintConnect(serial) {
     const { title, lead, body } = welcome.els;
-    title.textContent = "Connect the AI you already use";
+    title.textContent = "Pick the AI that builds for you";
     if (!welcome.clis) { try { welcome.clis = await api()?.cliSetupStatus?.() ?? null; } catch { welcome.clis = null; } }
     if (serial !== welcome.serial) return;
     const clis = welcome.clis?.ok ? (welcome.clis.clis || []) : [];
     const found = clis.filter((cli) => cli.installed);
     lead.textContent = found.length
-      ? `Studio found ${COUNT[found.length] ?? found.length} coding tool${found.length === 1 ? "" : "s"} on this PC. One sign-in can serve chat, planning and building.`
-      : welcome.clis?.ok ? "Studio found no coding tool on this PC yet. Install one and sign in with your own account, or use a key or a model on this PC."
-        : "Studio looks for your coding tools in the desktop app.";
+      ? `Studio found ${COUNT[found.length] ?? found.length} AI tool${found.length === 1 ? "" : "s"} on this PC. Sign in to one and Studio uses it for everything: chatting, planning and building.`
+      : welcome.clis?.ok ? "Studio doesn't come with its own AI: it works through one you sign in to, with your own account. Pick the one you already pay for, or start free with OpenCode."
+        : "Studio looks for your AI tools in the desktop app.";
     const act = (cli, action) => async (event) => {
       const control = event?.currentTarget;
       if (control) control.disabled = true;
@@ -1439,16 +1444,21 @@
         setTimeout(async () => { try { welcome.clis = await api()?.cliSetupStatus?.() ?? welcome.clis; } catch { /* keep the last read */ } if (welcome.open && welcome.step === 0) void showWelcome(0, { focus: false }); }, 1500);
       } catch (error) { welcomeSay(plain(error, "That did not open."), true); if (control) control.disabled = false; }
     };
+    const shown = found.length ? found : clis.filter((item) => item.subscription);
+    // OpenCode stays on offer when it is not installed: the way in without a subscription.
+    const opencode = clis.find((cli) => cli.id === "opencode");
+    if (opencode && !shown.includes(opencode)) shown.push(opencode);
     const rows = [];
-    for (const cli of found.length ? found : clis.filter((item) => item.subscription)) {
+    for (const cli of shown) {
+      const account = ACCOUNT[cli.id] || "Uses your own account";
       let small, end;
-      if (!cli.installed) { small = "Not installed"; end = button("Install and sign in", act(cli, "install"), "ghost mini"); }
-      else if (!cli.subscription) { small = "Installed · uses your keys or free models"; end = chip("Optional"); }
-      else if (cli.signedIn === true) { small = "Signed in · subscription detected"; end = chip("Ready", true); }
-      else { small = cli.signedIn === false ? "Installed · not signed in" : "Installed"; end = button("Sign in", act(cli, "login"), "ghost mini"); }
-      rows.push(welcomeRow({ mark: MARKS[cli.id] || cli.name.slice(0, 2).toUpperCase(), name: cli.name, small, end, on: cli.installed && cli.signedIn === true, key: cli.id }));
+      if (!cli.installed) { small = `${account} · not installed yet`; end = button(cli.subscription ? "Install and sign in" : "Install", act(cli, "install"), "ghost mini"); }
+      else if (!cli.subscription) { small = "Installed · free models to start with"; end = chip("Free"); }
+      else if (cli.signedIn === true) { small = `${account} · signed in`; end = chip("Ready", true); }
+      else { small = cli.signedIn === false ? `${account} · sign in to use it` : `${account} · installed`; end = button("Sign in", act(cli, "login"), "ghost mini"); }
+      rows.push(welcomeRow({ mark: MARKS[cli.id] || cli.name.slice(0, 2).toUpperCase(), name: cli.name, small, end, on: cli.installed && (cli.signedIn === true || !cli.subscription), key: cli.id }));
     }
-    const more = button("Other ways to connect", () => {
+    const more = button("Other ways: an API key, a ChatGPT plan or a local model", () => {
       // Keys, local models and the ChatGPT plan live in the sheet; it hands on when it closes, as the welcome would have.
       const then = welcome.then; welcome.then = null;
       hideWelcome();
@@ -1458,11 +1468,38 @@
     more.id = "setup-welcome-more";
     body.replaceChildren(...rows, more);
   }
+  // Leaving the first step puts Studio on what is ready, so the first task runs on it: a signed-in subscription for the
+  // whole studio (setup:cli-use, the sheet's Use for the whole studio), else OpenCode's free models (the first scan's
+  // setup, setup:first-scan and -apply). With nothing ready nothing changes, and Today's line says what is missing.
+  async function useConnected() {
+    const clis = welcome.clis?.ok ? (welcome.clis.clis || []) : [];
+    const ready = ["claude", "codex", "grok", "antigravity"].map((id) => clis.find((cli) => cli.id === id && cli.installed && cli.signedIn === true)).find(Boolean);
+    if (ready) {
+      if (welcome.connected === ready.id || typeof api()?.cliSetupUse !== "function") return;
+      welcomeSay(`Setting Studio up to use ${ready.name}…`);
+      const result = await api().cliSetupUse(ready.id);
+      if (result?.ok === false) { welcomeSay(`${result.error || `${ready.name} was not set up.`} You can do it later in Team › Providers.`, true); return; }
+      welcome.connected = ready.id;
+      welcomeSay(`Studio will use ${ready.name} for chatting, planning and building. Change it any time in Team › Providers.`);
+      return;
+    }
+    const free = clis.find((cli) => cli.id === "opencode" && cli.installed);
+    if (!free || welcome.connected === "opencode" || typeof api()?.firstScan !== "function" || typeof api()?.firstScanApply !== "function") return;
+    welcomeSay("Setting up OpenCode's free models (about ten seconds)…");
+    try {
+      const scan = await api().firstScan({});
+      if (scan?.ok === false) throw new Error(scan.error || "OpenCode did not answer.");
+      const applied = await api().firstScanApply({});
+      if (applied?.ok === false) throw new Error(applied.error || "The free setup was not saved.");
+      welcome.connected = "opencode";
+      welcomeSay("Studio will build with OpenCode's free models. Free work runs one task at a time.");
+    } catch (error) { welcomeSay(`${plain(error, "OpenCode's free models were not set up.")} You can do it later in Help › Setup guide.`, true); }
+  }
   // Step 2: the project, as the workspace has it.
   async function paintProjects(serial) {
     const { title, lead, body } = welcome.els;
     title.textContent = "Choose a project";
-    lead.textContent = "Studio reads the folder on this PC. Tasks, plans and conversations stay with the project.";
+    lead.textContent = "Studio builds inside a folder on your PC. Your tasks, plans and chats stay with it.";
     try { welcome.projects = await api()?.projectsList?.() ?? null; } catch { welcome.projects = null; }
     if (serial !== welcome.serial) return;
     const list = Array.isArray(welcome.projects?.projects) ? welcome.projects.projects : [];
@@ -1477,22 +1514,36 @@
         else welcomeSay("Choose it from the project list once this closes.", true);
       } });
     });
+    // A new app first: the beginner's way in, a folder Studio makes for you.
+    if (typeof window.MefiVibe?.openPanel === "function") rows.push(welcomeRow({ mark: "✦", name: "Start a new app…", small: "Studio makes the folder for you", key: "new-app", onClick: () => { closeWelcome(); window.MefiVibe.openPanel("newapp"); } }));
     const add = document.getElementById?.("workspace-add-project");
-    if (add || typeof api()?.projectsAdd === "function") rows.push(welcomeRow({ mark: "+", name: "Open a folder…", small: "Any folder with code in it", key: "open-folder", onClick: () => { if (add && !add.disabled) add.click(); else void api().projectsAdd?.(); } }));
-    if (typeof window.MefiVibe?.openPanel === "function") rows.push(welcomeRow({ mark: "✦", name: "Start a new app…", small: "A new folder, with its first build", key: "new-app", onClick: () => { closeWelcome(); window.MefiVibe.openPanel("newapp"); } }));
-    if (!list.length) lead.textContent = "Studio works in a folder on this PC. Open one with code in it, or start a new app.";
+    if (add || typeof api()?.projectsAdd === "function") rows.push(welcomeRow({ mark: "+", name: "Open a folder…", small: "A folder you already have", key: "open-folder", onClick: () => { if (add && !add.disabled) add.click(); else void api().projectsAdd?.(); } }));
+    if (!list.length) lead.textContent = "Studio builds inside a folder on your PC. Start a new app and Studio makes one for you, or open a folder you already have.";
     body.replaceChildren(...rows);
   }
-  // Step 3: the first task.
+  // Step 3: the first task, in plain words, with examples a tap fills in. No project open: it says so instead.
+  const welcomeProject = () => {
+    const id = welcome.projects?.activeId ?? window.MefiWorkspace?.activeProjectId?.() ?? null;
+    return id && id !== "project_none" ? id : null;
+  };
   function paintTask() {
     const { title, lead, body } = welcome.els;
-    title.textContent = "Give it a first task";
-    lead.textContent = "Describe something small. Studio plans it, builds it, and checks it before it says done.";
+    title.textContent = "What should Studio make first?";
+    if (!welcomeProject()) {
+      lead.textContent = "Open or start a project first (step 2), then come back here: Studio needs a folder to build in.";
+      body.replaceChildren();
+      return;
+    }
+    lead.textContent = "Describe something small, in plain words, like you'd tell a friend. Studio plans it, builds it, and checks it works before it says done.";
     const input = node("input", "setup-welcome-input"); input.id = "setup-welcome-task"; input.type = "text"; input.maxLength = 4000;
     input.placeholder = "Describe something small"; input.value = welcome.text; input.setAttribute("aria-label", "First task"); input.autocomplete = "off";
-    input.addEventListener("input", () => { welcome.text = input.value; welcome.els.next.disabled = welcome.busy || !input.value.trim(); });
+    const sync = () => { welcome.text = input.value; welcome.els.next.disabled = welcome.busy || !input.value.trim(); };
+    input.addEventListener("input", sync);
     input.addEventListener("keydown", (event) => { if (event.key === "Enter" && input.value.trim()) { event.preventDefault?.(); void welcomeNext(); } });
-    body.replaceChildren(input);
+    const examples = node("div", "setup-welcome-examples"); examples.setAttribute("role", "group"); examples.setAttribute("aria-label", "Examples");
+    examples.append(node("span", "setup-welcome-examples-label", "Or try one:"));
+    for (const text of FIRST_TASKS) examples.append(button(text, () => { input.value = text; sync(); input.focus?.({ preventScroll: true }); }, "ghost mini setup-welcome-example"));
+    body.replaceChildren(input, examples);
   }
   async function showWelcome(step, { focus = true } = {}) {
     const els = buildWelcome();
@@ -1503,8 +1554,8 @@
     els.steps.setAttribute("aria-valuenow", String(welcome.step + 1));
     els.steps.setAttribute("aria-valuetext", `Step ${welcome.step + 1} of ${WELCOME_STEPS}`);
     els.back.hidden = welcome.step === 0;
-    els.next.textContent = welcome.step === WELCOME_STEPS - 1 ? "Start the task" : "Continue";
-    els.next.disabled = welcome.busy || (welcome.step === WELCOME_STEPS - 1 && !welcome.text.trim());
+    els.next.textContent = welcome.step === WELCOME_STEPS - 1 ? "Build it" : "Continue";
+    els.next.disabled = welcome.busy || (welcome.step === WELCOME_STEPS - 1 && (!welcome.text.trim() || !welcomeProject()));
     welcomeSay("");
     if (welcome.step === 0) await paintConnect(serial);
     else if (welcome.step === 1) await paintProjects(serial);
@@ -1513,15 +1564,30 @@
     if (focus) (welcome.step === WELCOME_STEPS - 1 ? els.body.querySelector?.("input") : els.title)?.focus?.({ preventScroll: true });
   }
   async function welcomeNext() {
-    if (welcome.step < WELCOME_STEPS - 1) { await showWelcome(welcome.step + 1); return; }
+    if (welcome.busy) return;
+    if (welcome.step < WELCOME_STEPS - 1) {
+      let said = "", bad = false;
+      if (welcome.step === 0) {
+        welcome.busy = true; welcome.els.next.disabled = true;
+        try { await useConnected(); } catch (error) { welcomeSay(plain(error, "The AI was not set up."), true); }
+        finally { welcome.busy = false; }
+        said = welcome.els.status?.textContent || "";
+        bad = Boolean(welcome.els.status?.classList?.contains?.("bad-text"));
+      }
+      await showWelcome(welcome.step + 1);
+      // What the setup did stays on the next step's line until something else is said there.
+      if (said && !welcome.els.status?.textContent) welcomeSay(said, bad);
+      return;
+    }
     const text = welcome.text.trim();
-    if (!text || welcome.busy) return;
+    if (!text) return;
+    const projectId = welcomeProject();
+    if (!projectId) { welcomeSay("Open or start a project first: Studio needs a folder to build in.", true); return; }
     welcome.busy = true; welcome.els.next.disabled = true;
     welcomeSay("Adding your first task…");
     try {
-      const projectId = welcome.projects?.activeId ?? window.MefiWorkspace?.activeProjectId?.() ?? null;
       if (typeof api()?.tasksCreate !== "function") throw new Error("Tasks are added in the desktop app.");
-      const result = await api().tasksCreate({ title: text.split("\n")[0].slice(0, 180), prompt: text, ...(projectId ? { projectId } : {}) });
+      const result = await api().tasksCreate({ title: text.split("\n")[0].slice(0, 180), prompt: text, projectId });
       if (!result || result.ok === false) throw new Error(result?.error || "The task was not added.");
       welcome.text = "";
       closeWelcome();
@@ -1532,7 +1598,7 @@
         if (typeof window.MefiWorkspace?.startTask === "function") void Promise.resolve(window.MefiWorkspace.startTask(task)).catch(() => {});
       }
     } catch (error) { welcomeSay(plain(error, "The task was not added."), true); }
-    finally { welcome.busy = false; if (welcome.open && welcome.els) welcome.els.next.disabled = !welcome.text.trim(); }
+    finally { welcome.busy = false; if (welcome.open && welcome.els) welcome.els.next.disabled = !welcome.text.trim() || !welcomeProject(); }
   }
   function openWelcome({ then = null } = {}) {
     const els = buildWelcome();

@@ -104,7 +104,7 @@ async function drive() {
   await run(`document.querySelector('.fleet-seat[data-seat=' + JSON.stringify(${seat}) + ']').click();`);
   await until(`document.getElementById('fleet-inspector').textContent.includes(${JSON.stringify(snap.first.split("@")[0])})`, "the inspector names the seat");
   const buttons = await run(`return [...document.getElementById('fleet-inspector').querySelectorAll('button')].map((button) => button.textContent.trim());`);
-  check("the inspector opens for a seat with Open in Command", buttons.includes("Open in Command"), buttons);
+  check("the inspector opens for a seat with Open in Map", buttons.includes("Open in Map"), buttons);
   const detail = await run(`const reply = await window.mefiStudio.fleetSeat(${seat}); return { ok: reply?.ok, seat: reply?.seat?.id ?? null };`);
   check("fleet:seat returns the seat", detail.ok === true && detail.seat === snap.first, detail);
   const actions = await run(`const act = (seatId, action) => window.mefiStudio.fleetAction({ seatId, action }); return { stop: await act(${seat}, "stop"), openTask: await act(${seat}, "open-task"), unknown: await act(${seat}, "nope"), missing: await act("nobody@nowhere", "stop") };`);

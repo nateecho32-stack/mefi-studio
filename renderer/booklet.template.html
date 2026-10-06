@@ -126,7 +126,7 @@
     <div class="sidebar-heading"><a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>PROJECTS & WORKSPACE</small></span></a><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close the project menu" title="Close menu (Esc)">×</button></div>
     <nav class="ws-nav" aria-label="Go to">
       <button class="ws-home" data-nav="workspace" title="Your workspace (H)"><svg class="glyph" aria-hidden="true"><use href="#g-home"/></svg><span class="label">Your workspace</span><kbd>H</kbd></button>
-      <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view: the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span class="label">Command view</span><kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
+      <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open the Map: the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span class="label">Map</span><kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
       <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span class="label">Task board</span><kbd>T</kbd><span class="count" data-badge="tasks" hidden></span></button>
       <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span class="label">Plans</span><kbd>P</kbd></button>
       <button class="ws-home ws-shortcut" data-nav="brains" title="Brain maps: the pipeline as a graph you can rewire (B)"><svg class="glyph" aria-hidden="true"><use href="#g-route"/></svg><span class="label">Brain maps</span><kbd>B</kbd></button>
@@ -162,7 +162,7 @@
         <section id="workspace-progress" class="ws-progress" aria-label="Current task progress" hidden>
           <div class="ws-progress-heading"><div><strong id="workspace-progress-title"></strong><span id="workspace-progress-state" role="status"></span></div><button id="workspace-progress-open" class="ghost mini" type="button" title="Show this task's details in the Activity panel">Details</button></div>
           <p id="workspace-progress-facts"></p><p id="workspace-progress-reason"></p>
-        <div class="ws-focus-actions"><button id="workspace-result-open" class="primary mini" type="button" hidden>Open app</button><button id="workspace-focus-primary" class="primary mini" type="button">View task</button><button id="workspace-focus-check" class="ghost mini" type="button">View checks</button><button id="workspace-focus-live" class="ghost mini" type="button" title="Follow this task in Live (Command view)">Watch live</button><button id="workspace-focus-change" class="ghost mini" type="button">Request a change</button></div>
+        <div class="ws-focus-actions"><button id="workspace-result-open" class="primary mini" type="button" hidden>Open app</button><button id="workspace-focus-primary" class="primary mini" type="button">View task</button><button id="workspace-focus-check" class="ghost mini" type="button">View checks</button><button id="workspace-focus-live" class="ghost mini" type="button" title="Follow this task on the Map">Watch live</button><button id="workspace-focus-change" class="ghost mini" type="button">Request a change</button></div>
         </section>
         <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div></div>
 
@@ -196,12 +196,12 @@
         <p id="workspace-work-summary" class="ws-work-summary-line" role="status" aria-live="polite"></p>
         <div id="workspace-work-list" class="ws-work-list"></div>
         <button id="workspace-show-more" class="ghost mini ws-show-more" type="button" hidden>Show more</button>
-        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Agents › Setup › Providers.">Jev · checking connection</div>
+        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Team › Providers.">Jev · checking connection</div>
       </aside>
       </details>
       <details id="workspace-studio-details" class="ws-home-disclosure"><summary>Studio status</summary>
         <section id="workspace-dashboard" class="ws-dashboard" aria-label="Studio at a glance">
-      <button class="ws-dash-tile" id="workspace-dash-workers" data-nav="command" data-tone="idle" type="button" title="Open Command view · live work (D)"><span class="ws-dash-kicker">WORKERS</span><strong class="ws-dash-value" id="workspace-dash-workers-value">0 running</strong><span class="ws-dash-note" id="workspace-dash-workers-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-workers" data-nav="command" data-tone="idle" type="button" title="Open the Map · live work (D)"><span class="ws-dash-kicker">WORKERS</span><strong class="ws-dash-value" id="workspace-dash-workers-value">0 running</strong><span class="ws-dash-note" id="workspace-dash-workers-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-attention" data-tone="idle" data-target="review" type="button" title="Questions waiting for you and work to review"><span class="ws-dash-kicker">NEEDS YOU</span><strong class="ws-dash-value" id="workspace-dash-attention-value">Nothing waiting</strong><span class="ws-dash-note" id="workspace-dash-attention-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-next" data-tone="idle" type="button" title="Show the queue"><span class="ws-dash-kicker">UP NEXT</span><strong class="ws-dash-value" id="workspace-dash-next-value">Queue is empty</strong><span class="ws-dash-note" id="workspace-dash-next-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-machine" data-nav="explorer" data-tone="idle" type="button" title="Machine status (opens the Explorer)"><span class="ws-dash-kicker">MACHINE</span><strong class="ws-dash-value" id="workspace-dash-machine-value">Checking…</strong><span class="ws-dash-note" id="workspace-dash-machine-note"></span></button>
@@ -210,7 +210,7 @@
 
       </details>
       <details id="workspace-help-details" class="ws-home-disclosure"><summary>Getting started &amp; community</summary>
-        <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">Set up your project</strong><p>Connect your tools, add a project, and create your first task.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start here</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk me through it</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays at the foot of the menu">Not now</button></div></section>
+        <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">Set up your project</strong><p>Connect your AI, open a project, and make your first task.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start here</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it shows you around">Walk me through it</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this card. The tour waits under Help › Start here">Not now</button></div></section>
     <section class="walkthrough-invitation community-invitation" id="community-invitation" aria-labelledby="community-invite-title" hidden><span class="community-emblem" id="community-invite-swatches" aria-hidden="true" hidden></span><div class="community-invite-copy"><strong id="community-invite-title">Build with others in the Void Engine Discord</strong><p class="community-pitch">Share what you're making, swap model setups, and hang out with other builders.</p><p class="community-note" id="community-invite-note" hidden></p></div><div class="walkthrough-invite-actions community-invite-actions"><button id="community-invite-join" class="primary" type="button" title="Open the Void Engine invite in your browser">Join the Discord</button><button id="community-invite-link" class="ghost" type="button" title="Sign in with Discord in your browser to link your account">Link my Discord</button><button id="community-invite-copy" class="ghost mini" type="button" title="Copy a prompt that unlocks the collection in your own fork" hidden>Copy agent prompt</button><span class="community-invite-dismiss"><button id="community-invite-later" class="ghost mini community-quiet" type="button" title="Hide this for a week">Not now</button><button id="community-invite-never" class="ghost mini community-quiet" type="button" title="Settings › Community keeps the link">Don't show again</button></span></div></section>
 
       </details>
@@ -335,7 +335,7 @@
   <!-- Watch, Plans and Ideas step in only while they have something to show. -->
   <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
     <span class="vibe-dock-mark" aria-hidden="true"></span>
-    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the live node tree, even before anything has started (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="D">D</kbd></button>
+    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="The Map: your agents at work, live, even before anything has started (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span>Map</span><span class="count warn" data-badge="questions" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="D">D</kbd></button>
     <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="T">T</kbd></button>
     <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress (P)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span><kbd class="key vibe-stop-key" aria-hidden="true" title="P">P</kbd></button>
     <button id="vibe-stop-ideas" type="button" data-vibe-panel="ideas" data-vibe-stop="ideas" title="Ideas the agents noticed (I)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="I">I</kbd></button>
@@ -351,7 +351,7 @@
   <aside id="vibe-ask" data-type-scope class="vibe-chat vibe-ask" aria-labelledby="vibe-ask-title" hidden>
     <header class="vibe-chat-head"><div><small id="vibe-ask-kicker">Needs you</small><h2 id="vibe-ask-title">A decision</h2></div><button id="vibe-ask-close" class="vibe-icon" type="button" aria-label="Close the decision" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
     <div id="vibe-ask-body" class="vibe-ask-body"></div>
-    <footer class="vibe-ask-foot"><span id="vibe-ask-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-ask-watch" class="vibe-ask-link" type="button">Open in Watch</button></footer>
+    <footer class="vibe-ask-foot"><span id="vibe-ask-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-ask-watch" class="vibe-ask-link" type="button">Open on the Map</button></footer>
   </aside>
   <!-- Vibe's menus: Tasks, Plans, Ideas, Team and Settings as compact panels
        beside the front door (renderer/vibe-panels.js). Full view opens the
@@ -368,18 +368,19 @@
      spark at the top goes back to Vibe and only the switch at the foot leaves
      the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
 <nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Social (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Today (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Today</span></button>
   <div class="vibe-rail-items">
-    <button type="button" data-nav="command" data-vibe-section="agents" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button type="button" data-nav="tasks" data-vibe-section="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+    <button type="button" data-nav="friends" data-vibe-place="friends" title="Friends: the Lobby, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
+    <button type="button" data-nav="command" data-vibe-place="map" title="The Map: your agents at work, live (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span>Map</span><span class="count warn" data-badge="questions" hidden></span></button>
+    <button type="button" data-nav="tasks" data-vibe-place="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
     <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
     <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
-    <button type="button" data-nav="friends" title="Rooms, your PCs and companion playdates"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Friends</span></button>
+    <button type="button" data-nav="agents" data-vibe-place="team" title="Team: who builds, which AI it uses and how much it may decide"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span>Team</span></button>
     <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
   </div>
-  <div class="vibe-rail-foot">
-    <button type="button" data-nav="studio" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+  <div class="vibe-rail-foot" id="vibe-rail-foot">
+    <button type="button" data-nav="studio" data-vibe-place="settings" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+    <button type="button" data-nav="help" data-vibe-place="help" title="Help: start here, the setup guide and every shortcut (?)"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg><span>Help</span></button>
     <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
   </div>
 </nav>
@@ -440,7 +441,7 @@
     <p id="vibe-notes-lede" class="vibe-notes-lede">Mefi Studio opens in <b>Social</b>: friends, and a light eye on your agents. In-depth building lives in <b>Studio</b>, one click away.</p>
     <div class="vibe-notes-modes">
       <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Social</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
-      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Studio</b><span>In-depth building: Command, boards, models and every setting.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Studio</b><span>In-depth building: the Map, boards, models and every setting.</span></figcaption></figure>
     </div>
     <ul class="vibe-notes-list">
       <li>Switch any time with the <b>Social / Studio</b> switch at the top, or from the menu and Search.</li>
@@ -469,7 +470,7 @@
     <div class="monogram" aria-hidden="true">M+</div>
     <div class="page-heading">
       <div class="eyebrow">Mefi's Studio AI+</div>
-      <div class="page-title-row"><h1 id="page-title">Model catalog</h1><button id="page-return" class="ghost mini" type="button" data-nav="command" aria-keyshortcuts="d" title="Back to Command view (D)" hidden><span aria-hidden="true">←</span> Command view <kbd class="key">D</kbd></button></div>
+      <div class="page-title-row"><h1 id="page-title">Model catalog</h1><button id="page-return" class="ghost mini" type="button" data-nav="command" aria-keyshortcuts="d" title="Back to Map (D)" hidden><span aria-hidden="true">←</span> Map <kbd class="key">D</kbd></button></div>
       <p class="sub" id="status">Loading catalog…</p>
     </div>
   </div>
@@ -708,14 +709,14 @@
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
-            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social mode</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
-            <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
+            <label class="switch" title="On: after five minutes without input, Studio switches to the Map. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show the Map after 5 quiet minutes</span></label>
           </div>
           <p class="muted" id="idle-home-hint" data-info-anchor="idle-home-label">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
-          <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
+          <label class="field"><span class="field-label">Agents when Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
           <div class="settings-you-switches" id="launch-daily-news-row">
             <label class="switch" title="On: the launch screen is a front page with the day's biggest AI and developer-tool news beside your projects, fetched once a day. Off: only the project chooser, and Studio fetches no news."><input type="checkbox" id="launch-daily-news" checked><span class="track"></span><span>Daily news on the launch screen</span></label>
@@ -724,7 +725,7 @@
           <div class="settings-you-switches" id="open-at-login-row" hidden>
             <label class="switch" title="Studio opens in the tray when you sign in to Windows, on the project you had open."><input type="checkbox" id="open-at-login"><span class="track"></span><span>Start with Windows</span></label>
           </div>
-          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.</p>
+          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow Agents when Studio opens. A PC you leave working keeps working after an update restart.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
             <span class="settings-mode-text"><b>Mode</b><span id="settings-mode-hint">Social is for friends and a light eye on your agents. Studio is for in-depth building.</span></span>
@@ -1211,7 +1212,7 @@
   <div class="rail-head">
     <span class="rail-title">Node tree</span>
     <div class="rail-actions">
-      <button id="idle-open" class="ghost mini" data-nav="command" title="Command view (D)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg><span class="label">Command</span></button>
+      <button id="idle-open" class="ghost mini" data-nav="command" title="Open the Map (D)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg><span class="label">Map</span></button>
       <button id="tree-explore" class="ghost mini" title="Open the session explorer (E)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-explorer"/></svg><span class="label">Explorer</span></button>
       <button id="tree-pin" class="ghost mini" aria-pressed="false" title="Pin the rail open (G)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-pin"/></svg><span class="label">Pin</span></button>
     </div>
@@ -1220,7 +1221,7 @@
   <div class="rail-stats" id="tree-stats">no session yet</div>
 </aside>
 <canvas id="idle-layer-far" aria-hidden="true" hidden></canvas>
-<canvas id="idle-layer" tabindex="0" role="application" aria-label="Command view" hidden></canvas>
+<canvas id="idle-layer" tabindex="0" role="application" aria-label="Map" hidden></canvas>
 <div id="idle-hud" hidden>
   <!-- The Map of the 0.5 layout (html[data-frame], docs/unified-studio.md "The Map"): the place's three pages, Running only and
        View ▾ over the node tree, as the prototype draws them. idle.js owns them; the pages are plain data-nav links. -->
@@ -1412,7 +1413,7 @@
     <ul id="cmd-legend-list" class="legend-list" hidden></ul>
   </div>
   <div id="cmd-empty" class="cmd-empty" data-variant="desktop-only" role="status" hidden>
-    <div class="eyebrow">Command</div>
+    <div class="eyebrow">Map</div>
     <h3 id="cmd-empty-title">No live constellation</h3>
     <p class="muted" id="cmd-empty-copy">Sessions, todos and tasks are read from the OpenCode store, which is only reachable from the desktop app. Run <code>npm start</code> inside mefi-studio.</p>
     <div class="row cmd-empty-actions">
@@ -1451,7 +1452,7 @@
 <div class="overlay explorer" id="tasks-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="tasks-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="tasks" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="tasks" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Work</div>
         <h2 id="tasks-heading">Task board</h2>
@@ -1513,7 +1514,7 @@
 <div class="overlay explorer" id="ideas-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="ideas-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="ideas" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="ideas" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Work</div>
         <h2 id="ideas-heading">Feature ideas</h2>
@@ -1552,7 +1553,7 @@
 <div class="overlay explorer" id="overhead-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="overhead-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="overhead" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="overhead" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Live</div>
         <h2 id="overhead-heading">Overhead</h2>
@@ -1578,7 +1579,7 @@
 <div class="overlay brains-overlay" id="brains-overlay" hidden>
   <div class="brains-sheet" role="dialog" aria-modal="true" aria-labelledby="brains-heading" tabindex="-1">
     <header class="brains-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="brains" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="brains" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Work</div>
         <h2 id="brains-heading">Brain maps</h2>
@@ -1836,7 +1837,7 @@
 <div class="overlay explorer" id="trace-overlay" hidden>
   <div class="explorer-sheet trace-sheet" role="dialog" aria-modal="true" aria-labelledby="trace-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="trace" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="trace" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Live</div>
         <h2 id="trace-heading">Trace</h2>
@@ -2002,7 +2003,7 @@
 <div class="overlay explorer" id="fleet-overlay" hidden>
   <div class="explorer-sheet fleet-sheet" role="dialog" aria-modal="true" aria-labelledby="fleet-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="fleet" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="fleet" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Live</div>
         <h2 id="fleet-heading" tabindex="-1">Fleet</h2>
@@ -2037,7 +2038,7 @@
 <div class="overlay explorer" id="analyzer-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="analyzer-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="analyzer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="analyzer" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Work</div>
         <h2 id="analyzer-heading">Analyzer</h2>
@@ -2093,7 +2094,7 @@
 <div class="overlay explorer" id="explorer-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="explorer-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="explorer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="explorer" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Live</div>
         <h2 id="explorer-heading">Session explorer</h2>
@@ -2204,15 +2205,15 @@
       <div id="walkthrough-build-mode" class="build-mode-control">
         <label class="switch" for="walkthrough-auto-build"><input type="checkbox" id="walkthrough-auto-build" checked disabled aria-describedby="walkthrough-build-mode-note"><span class="track"></span><span>Auto build</span></label>
         <strong id="walkthrough-build-mode-label">Loading preference…</strong>
-        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this in Agents › Setup › Run behavior at any time.</p>
+        <p id="walkthrough-build-mode-note">Choose how building starts. You can change this any time in Team › Overview.</p>
         <p id="walkthrough-build-mode-feedback" role="status"></p>
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
       <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
         <h3 id="walkthrough-cli-heading">Use the account you already have</h3>
-        <p>One supported subscription can handle chat, mapping, planning and coding. Choose your tool, sign in with its own window, then check the connection. Your account's model access and usage limits apply.</p>
-        <label for="walkthrough-cli-choice">Your coding tool</label>
-        <select id="walkthrough-cli-choice"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="grok">Grok</option><option value="antigravity">Antigravity</option><option value="opencode">OpenCode (free models or linked providers)</option></select>
+        <p>One subscription can do it all: chatting, mapping, planning and building. Pick your tool, sign in in its own window, then check the connection. Your plan's own limits still apply.</p>
+        <label for="walkthrough-cli-choice">Your AI tool</label>
+        <select id="walkthrough-cli-choice"><option value="codex">Codex · ChatGPT plan</option><option value="claude">Claude Code · Claude subscription</option><option value="grok">Grok · Grok account</option><option value="antigravity">Antigravity · Google account</option><option value="opencode">OpenCode · free models, or accounts you link</option></select>
         <p id="walkthrough-cli-detail" class="muted"></p>
         <div class="walkthrough-panel-actions">
           <button class="ghost" id="walkthrough-cli-install" type="button">Install and sign in</button>
@@ -2222,27 +2223,27 @@
           <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
           <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
         </div>
-        <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window that downloads the tool, and Node.js too if the tool needs it. Studio looks for the tool again when that window closes. Check connection sends one small test, which counts toward your plan. Your password stays in the company's own sign-in window.</p>
         <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-cli-keys" type="button">I have an API key or a local model server</button></div>
-        <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription? Paste a key from z.ai, OpenRouter, OpenCode Go or Zen, use your own server, or pick LM Studio in Team › Providers. The guide takes you there, then scans again so Use this setup can map your project with it.</p>
         <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
       </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
-        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their free tier may use prompts to improve the model)</span></label></div>
-        <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, linked provider names, models and agents. It sends no prompt and saves nothing until you choose Use this setup.</p>
+        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their makers may use what you send to improve them)</span></label></div>
+        <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, the accounts linked to it and its models. It only reads, and saves nothing until you choose Use this setup.</p>
         <ul id="walkthrough-scan-facts" class="walkthrough-facts"></ul>
         <ul id="walkthrough-scan-notes" class="walkthrough-notes"></ul>
       </div>
       <div id="walkthrough-map" class="walkthrough-panel" hidden>
         <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-map-run" type="button">Map this project</button><button class="ghost" id="walkthrough-map-cancel" type="button" hidden>Cancel</button></div>
-        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. Your selected provider uses a read-only project scan to map the folder and suggest first tasks. Suggestions are saved as ideas for you to review. Nothing is built.</p>
+        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. Your AI reads the project and suggests a few small first jobs. They are saved in Ideas for you to look at. Nothing is built, and nothing in your project changes.</p>
         <ul id="walkthrough-map-steps" class="walkthrough-notes"></ul>
         <pre id="walkthrough-map-tail" class="walkthrough-textTail" hidden></pre>
         <ul id="walkthrough-map-facts" class="walkthrough-facts"></ul>
       </div>
       <div id="walkthrough-assist" class="walkthrough-panel" hidden>
-        <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-assist-run" type="button">Ask my assistant what to do next</button><button class="ghost" id="walkthrough-assist-task" type="button" hidden>Put the suggested task in the task box</button></div>
-        <p id="walkthrough-assist-status" class="muted" role="status">After the scan, the AI you linked plans the rest of this setup from what it found.</p>
+        <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-assist-run" type="button">Ask my assistant what to do next</button><button class="ghost" id="walkthrough-assist-task" type="button" hidden>Put the suggested task in the box</button></div>
+        <p id="walkthrough-assist-status" class="muted" role="status">Once your AI is connected, it can suggest what to do at each of the steps that are left, from what it found.</p>
         <ul id="walkthrough-assist-list" class="walkthrough-facts walkthrough-assist-list"></ul>
       </div>
       <div class="walkthrough-destinations"><button class="primary" id="walkthrough-action" type="button"></button><button class="ghost" id="walkthrough-secondary" type="button" hidden></button></div><p id="walkthrough-note" class="muted"></p></div>
@@ -2251,7 +2252,7 @@
 </div>
 <aside class="walkthrough-coach" id="walkthrough-coach" role="region" aria-label="Walkthrough coach" hidden>
   <header class="walkthrough-coach-head"><span class="eyebrow" id="walkthrough-coach-progress" role="status">Step 1 of 7</span><div class="walkthrough-coach-tools"><button class="ghost mini" id="walkthrough-coach-back" type="button">Back</button><button class="ghost mini" id="walkthrough-coach-guide" type="button">Full guide</button><button class="ghost mini" id="walkthrough-coach-end" type="button" title="End the guided walk (Esc)">End tour</button></div></header>
-  <strong id="walkthrough-coach-title">Your workspace</strong>
+  <strong id="walkthrough-coach-title">Your project</strong>
   <p id="walkthrough-coach-copy" aria-live="polite"></p>
   <p class="walkthrough-coach-hint" id="walkthrough-coach-hint"></p>
   <div class="walkthrough-coach-actions"><button id="walkthrough-coach-next" class="primary mini" type="button">Done — next stop</button></div>
@@ -2268,6 +2269,7 @@
       </div>
     </header>
     <p class="help-start">New to Studio? <button class="ghost mini" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-flag"/></svg>Start here</button></p>
+    <p class="help-links" id="help-links" role="group" aria-label="More help"></p>
     <div class="shortcut-grid" id="help-grid"></div>
   </div>
 </div>

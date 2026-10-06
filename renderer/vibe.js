@@ -73,38 +73,51 @@
   function paintSettings(current) {
     const vibe = current === "vibe";
     const label = document.getElementById("idle-home-label");
-    if (label) label.textContent = vibe ? "Open Social on launch" : "Open Home on launch";
+    if (label) label.textContent = vibe ? "Open Today on launch" : "Open Home on launch";
     const hint = document.getElementById("idle-home-hint");
     if (hint) hint.textContent = vibe ? "When disabled, Studio reopens the last page you used after the project chooser." : "When disabled, Studio reopens the last tab page you used after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Social. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Today. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
     if (modeHint) modeHint.textContent = vibe ? "Social: friends, and a light eye on your agents, and every page opens in Social's rail." : "Studio: in-depth building, with Home, the menu and every tool.";
   }
   // Switching remembers the choice and lands on that mode's home. Vibe keeps
   // the rail shell on (nav.js asks mode()); Build gets the saved shell back.
-  function setMode(next, { go = true } = {}) {
+  function setMode(next, { go = true, swap = true } = {}) {
     next = next === "build" ? "build" : "vibe";
     const was = mode();
     write(MODE_KEY, next);
     paintMode();
     if (was !== next) { window.MefiNav?.applyShell?.(); window.MefiNav?.paintCurrent?.(); }
     if (go) window.MefiNav?.go?.(next === "vibe" ? "vibe" : "workspace");
+    else if (swap && was !== next) swapUnderlay(next);
     return next;
   }
+  // A switch that keeps the page (Settings' Mode, the top bar from a page that is not Home) still changes what is
+  // under it: the new mode's Home quietly takes the old one's place, so Social's flag cannot leave Studio's rail
+  // hidden (vibe.css) and closing the page lands on the right Home. Focus stays where it was.
+  function swapUnderlay(next) {
+    const held = document.activeElement;
+    if (next === "build" && active()) { exit(); window.MefiWorkspace?.enter?.(); }
+    else if (next === "vibe" && window.MefiWorkspace?.isActive?.()) { window.MefiWorkspace.exit?.(); enter(); }
+    else return;
+    if (held && held !== document.body && held.isConnected && document.activeElement !== held) held.focus?.({ preventScroll: true });
+  }
 
-  // ---- the Vibe rail --------------------------------------------------------
-  // Marks where you are: the page itself, or the stop that owns its section
-  // (Analyzer lights Tasks, the model pages and Evidence light Agents).
+  // ---- the Social rail ------------------------------------------------------
+  // Marks where you are: the page itself, or the stop for its place, as Studio's rail files it (MefiNav.placeOf):
+  // Analyzer lights Tasks, Fleet and Pipelines light the Map, Skills and the model pages light Team, every Friends
+  // place lights Friends.
   function paintRail() {
     const rail = $("rail");
     if (!rail || rail.hidden) return;
     const nav = window.MefiNav;
     const id = nav?.current?.() ?? null;
     const buttons = [...rail.querySelectorAll("button[data-nav]")];
-    const section = nav?.railSection?.(nav?.get?.(id));
-    const match = buttons.find((button) => button.dataset.nav === id)
-      ?? buttons.find((button) => (section === "work" && button.dataset.nav === "tasks") || (section === "agents" && button.dataset.nav === "agents"));
+    let place = null;
+    try { place = nav?.placeOf?.(id) ?? null; } catch { place = null; }
+    const match = buttons.find((button) => button.dataset.nav === id || (id === "friends-page" && button.dataset.nav === "friends"))
+      ?? buttons.find((button) => place && button.dataset.vibePlace === place);
     for (const button of buttons) {
       if (button === match) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
@@ -1049,7 +1062,7 @@
         const what = steps ? `Split into ${steps} steps, then a final check.` : "Added to the queue.";
         feedback(gate === "held" ? `${what} Select Start agents below and it begins.` : gate === "paused" ? `${what} New work is paused; Resume below to start it.` : gate === "key" ? `${what} Connect an AI below so it can be built.`
           : state.status.autoBuild === false ? `${steps ? what : "Added."} ${steps ? "They wait" : "It waits"} for your go-ahead under Needs you.`
-          : steps ? `${what} Follow it on the plan card.` : "Added. It shows under Building now as soon as an agent picks it up.", gate && gate !== "waiting" ? "warn" : "good");
+          : steps ? `${what} Its steps show under Running as they start.` : "Added. It shows under Running as soon as an agent picks it up.", gate && gate !== "waiting" ? "warn" : "good");
         scheduleBacklog();
         window.dispatchEvent(new CustomEvent("mefi:task-created", { detail: { taskId: result.task?.id, projectId: id } }));
       } else feedback("");
@@ -1200,7 +1213,7 @@
     watch.hidden = false;
     if (need.kind === "question") {
       $("ask-kicker").textContent = `Decision${position}`;
-      watch.textContent = "Open in Watch";
+      watch.textContent = "Open on the Map";
       watch.onclick = () => { closeAsk({ quiet: true }); go("command", { rail: "ask" }); };
       renderQuestion(body, need.question);
       return;
@@ -1441,7 +1454,7 @@
     if (text) body.append(text);
     const retryable = row.canRetry !== false && !["verifying", "awaiting_verification"].includes(task?.status);
     body.append(actions([
-      { label: HOLD_VERBS[hold] || "Try again", primary: true, disabled: !retryable, title: "Put it back in the queue; it continues from its saved progress", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Back in the queue. It shows under Building now when a worker picks it up.") },
+      { label: HOLD_VERBS[hold] || "Try again", primary: true, disabled: !retryable, title: "Put it back in the queue; it continues from its saved progress", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Back in the queue. It shows under Running when a worker picks it up.") },
       markDone(need),
       { label: "Drop it", confirm: "Drop this task?", title: "Close it without finishing; it is not marked done", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being finished.") },
     ]));
@@ -1524,7 +1537,7 @@
   function active() { return !layer.hidden; }
   function enter() {
     init();
-    if (mode() !== "vibe") setMode("vibe", { go: false });
+    if (mode() !== "vibe") setMode("vibe", { go: false, swap: false });
     window.MefiWorkspace?.exit?.();
     window.MefiIdle?.exit?.();
     layer.hidden = false;
@@ -1783,15 +1796,16 @@
   });
   window.MefiNav?.register?.({
     id: "build-mode", label: "Switch to Studio", short: "Studio", kind: "action", layer: null, section: "home", group: "surfaces",
-    glyph: "g-wrench", badge: null, desc: "In-depth building: Home, Command, boards, models and every setting",
+    glyph: "g-wrench", badge: null, desc: "In-depth building: Home, the Map, boards, models and every setting",
     searchTerms: "studio build mode in depth full advanced switch",
-    showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
+    // Search lists the frame's own switch (shell.js shell-do-mode, Ctrl M) once; this record stays for the routes that name it.
+    showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false },
     hidden: () => mode() === "build",
     run: () => setMode("build"),
   });
   window.MefiNav?.register?.({
-    id: "whats-new", label: "What's new", short: "What's new", kind: "action", layer: null, section: "help", group: "system",
-    glyph: "g-spark", badge: null, desc: "The Social and Studio modes, and a link to the full changelog",
+    id: "whats-new", label: "What are Social and Studio?", short: "Social and Studio", kind: "action", layer: null, section: "help", group: "system",
+    glyph: "g-spark", badge: null, desc: "The two modes in plain words, and a link to the full changelog",
     searchTerms: "whats new changelog release notes patch notes update",
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
     run: () => showNotes({ force: true }),

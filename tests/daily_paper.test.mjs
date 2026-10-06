@@ -415,6 +415,7 @@ test("the band says so when nothing is new, and a first visit shows the last two
   const band = env.news().querySelector(".paper-away");
   assert.ok(band, "drawn even while the news is still loading");
   assert.ok(env.news().querySelector(".paper-skeleton"), "above the placeholders");
+  assert.equal(band.querySelector(".paper-away-title").textContent, "Welcome to Studio", "the very first launch has nothing to come back to");
   assert.match(band.querySelector(".paper-away-projects").querySelector(".paper-away-empty").textContent, /^Open a folder/);
   assert.equal(band.querySelector(".paper-away-models").querySelector(".paper-section-title").textContent, "Recent models");
   assert.match(band.querySelector(".paper-away-models").textContent, /Released in the last two weeks/);

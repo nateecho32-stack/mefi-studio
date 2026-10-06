@@ -104,6 +104,13 @@ test("the four groups: running, what is being checked, what finished today, and 
   assert.equal(groups.running[0].meta, "5 min · building", "for how long, and what it is doing (the prototype's \"builder-2 · 40 min · step 4/5\"; this run names no worker)");
   assert.equal(groups.running[2].meta, "up next · waits for a free worker");
   assert.equal(groups.running[3].meta, "waiting for what it depends on");
+  // Agents off, paused or no AI: up next says what it waits for, and is not counted as running.
+  for (const [key, words] of [["held", "starts when you start agents"], ["paused", "starts when you resume"], ["key", "starts once an AI is connected"]]) {
+    const held = build({ ...data, gate: { key, title: "", text: "", label: null } }, { now: noon }).board;
+    assert.equal(held.running[2].meta, `up next · ${words}`, key);
+    assert.equal(held.running[2].stopped, true, key);
+    assert.equal(held.running[0].stopped, undefined, "a run that is running stays counted");
+  }
   assert.deepEqual(groups.review.map((card) => card.key), ["check:t7"]);
   assert.equal(groups.review[0].meta, "Checking its work");
   assert.deepEqual(groups.done.map((card) => card.key), ["done:d1", "done:d2"], "since midnight or the last twelve hours, newest first; a drop is not finished work");

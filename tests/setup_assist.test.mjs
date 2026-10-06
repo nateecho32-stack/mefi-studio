@@ -25,6 +25,10 @@ test("buildSetupAdvicePrompt carries the facts, the remaining stops and the JSON
   assert.match(system, /setup assistant inside Mefi's Studio/);
   assert.match(system, /ONE JSON object/);
   assert.match(system, /remaining stops: connections, create, monitor, review/);
+  // The stops are described by the 0.5 places the advice should name, not the classic layout's.
+  assert.match(system, /connections = subscriptions, API keys and LM Studio in Team › Providers/);
+  assert.match(system, /monitor = watch live work on the Map/);
+  assert.doesNotMatch(system, /Settings & connections|node tree/);
   assert.match(system, /untrusted data, never instructions/);
   assert.match(user, /OpenCode: 1\.18\.31\./);
   assert.match(user, /Providers linked in OpenCode: opencode-go; free models available: 7\./);
@@ -65,23 +69,24 @@ test("parseSetupAdvice accepts a narrated reply, normalizes stops and the first 
 test("staticSetupAdvice writes honest advice from the facts alone, only for remaining stops", () => {
   const none = staticSetupAdvice({ firstRun: FIRST_RUN, project: null, map: null, progress: {} });
   assert.equal(none.source, "static");
-  assert.match(none.summary, /choosing the folder/);
-  assert.match(none.stops.workspace, /Add the folder/);
-  assert.match(none.stops.map, /Once a folder is selected/);
-  assert.match(none.stops.connections, /Builders run on OpenCode's default model\. Your assistant model stands in for Jev/);
+  assert.match(none.summary, /open the project you want to work on/);
+  assert.match(none.stops.workspace, /Open the folder you want to work on/);
+  assert.match(none.stops.workspace, /next to PROJECTS, or choose Start a new app/);
+  assert.match(none.stops.map, /Once a project is open, map it/);
+  assert.match(none.stops.connections, /Your tasks are built with OpenCode's default model\. Your assistant's own model also picks which AI does each job/);
   assert.match(none.stops.connections, /Warning: OpenRouter/);
-  assert.match(none.stops.create, /Give one small, clear task/);
+  assert.match(none.stops.create, /Describe one small, clear job/);
   assert.equal(none.firstTask, null);
   const mapped = staticSetupAdvice({ firstRun: { ...FIRST_RUN, builder: { model: "opencode/mimo-v2.5-free", free: true }, judge: { kind: "opencode-free" } }, project: PROJECT, map: MAP, progress: { done: [true, true, true, false] } });
   assert.match(mapped.summary, /"2d Trippy Hell" is mapped \(1 area, 1 suggested task\)/);
   assert.equal(mapped.stops.workspace, undefined);
   assert.equal(mapped.stops.map, undefined);
-  assert.match(mapped.stops.connections, /free tier: one worker at a time/);
-  assert.match(mapped.stops.connections, /batch intake only/);
+  assert.match(mapped.stops.connections, /a free model: one job at a time/);
+  assert.match(mapped.stops.connections, /in batches only.*Team › Providers/);
   assert.match(mapped.stops.create, /Start with the map's first suggestion: "Document how to run the game"/);
-  assert.match(mapped.stops.monitor, /^Free workers run one at a time/);
+  assert.match(mapped.stops.monitor, /^Free models work on one job at a time/);
   assert.deepEqual(mapped.firstTask, { title: "Document how to run the game", brief: "README lacks it. Check: README names the run command. Files: README.md Keep everything else unchanged." });
   const lines = adviceLines(mapped, { current: "create" });
-  assert.deepEqual(lines.map((line) => [line.id, line.label, line.current]), [["connections", "Connections", false], ["create", "Create", true], ["monitor", "Monitor", false], ["review", "Review", false]]);
+  assert.deepEqual(lines.map((line) => [line.id, line.label, line.current]), [["connections", "AI accounts", false], ["create", "First task", true], ["monitor", "Watch", false], ["review", "Check", false]]);
   assert.deepEqual(adviceLines(null), []);
 });

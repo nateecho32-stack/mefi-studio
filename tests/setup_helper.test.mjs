@@ -490,9 +490,9 @@ test("with the 0.5 layout a fresh profile meets the three-step welcome instead o
   assert.equal(env.overlay(), undefined, "the sheet is not even built");
   assert.equal(env.welcome().hidden, false);
   const first = welcomeText(env);
-  assert.equal(first.title, "Connect the AI you already use");
-  assert.equal(first.lead, "Studio found one coding tool on this PC. One sign-in can serve chat, planning and building.");
-  assert.deepEqual(first.rows, ["Codex"], "only the tools found on this PC");
+  assert.equal(first.title, "Pick the AI that builds for you");
+  assert.equal(first.lead, "Studio found one AI tool on this PC. Sign in to one and Studio uses it for everything: chatting, planning and building.");
+  assert.deepEqual(first.rows, ["Codex", "OpenCode"], "the tools found on this PC, and OpenCode's free models as the way in without a subscription");
   assert.equal(first.next, "Continue");
   assert.equal(env.welcome().querySelector("#setup-welcome-back").hidden, true, "no Back on the first step");
   assert.ok(env.welcome().querySelector("#setup-welcome-more"), "the sheet's other ways to connect are one press away");
@@ -505,11 +505,11 @@ test("each tool says where it stands, and Sign in or Install is the tool's own",
   await settle();
   const rows = env.welcome().querySelectorAll(".setup-welcome-opt");
   assert.deepEqual(rows.map((row) => [row.querySelector("b").textContent, row.querySelector("small").textContent, row.querySelector(".setup-welcome-chip, button")?.textContent]), [
-    ["Claude Code", "Signed in · subscription detected", "✓ Ready"],
-    ["Codex", "Installed · not signed in", "Sign in"],
-    ["OpenCode", "Installed · uses your keys or free models", "Optional"],
+    ["Claude Code", "Uses your Claude subscription · signed in", "✓ Ready"],
+    ["Codex", "Uses your ChatGPT plan · sign in to use it", "Sign in"],
+    ["OpenCode", "Installed · free models to start with", "Free"],
   ]);
-  assert.equal(welcomeText(env).lead, "Studio found three coding tools on this PC. One sign-in can serve chat, planning and building.");
+  assert.equal(welcomeText(env).lead, "Studio found three AI tools on this PC. Sign in to one and Studio uses it for everything: chatting, planning and building.");
   await rows[1].querySelector("button").click();
   await settle();
   assert.deepEqual(env.calls.filter((row) => row[0] === "cliSetupAction"), [["cliSetupAction", { id: "codex", action: "login" }]]);
@@ -518,10 +518,15 @@ test("each tool says where it stands, and Sign in or Install is the tool's own",
   welcomeBridge(empty, { clis: [{ id: "claude", name: "Claude Code", installed: false, subscription: true }, { id: "opencode", name: "OpenCode", installed: false, subscription: false }] });
   empty.helper.welcome();
   await settle();
-  assert.deepEqual(welcomeText(empty).rows, ["Claude Code"]);
-  await empty.welcome().querySelector(".setup-welcome-opt button").click();
+  assert.deepEqual(welcomeText(empty).rows, ["Claude Code", "OpenCode"]);
+  assert.equal(welcomeText(empty).lead, "Studio doesn't come with its own AI: it works through one you sign in to, with your own account. Pick the one you already pay for, or start free with OpenCode.");
+  const offers = empty.welcome().querySelectorAll(".setup-welcome-opt");
+  assert.deepEqual(offers.map((row) => [row.querySelector("small").textContent, row.querySelector("button")?.textContent]), [["Uses your Claude subscription · not installed yet", "Install and sign in"], ["Free models to start with · not installed yet", "Install"]]);
+  await offers[0].querySelector("button").click();
   await settle();
-  assert.deepEqual(empty.calls.filter((row) => row[0] === "cliSetupAction"), [["cliSetupAction", { id: "claude", action: "install" }]]);
+  await offers[1].querySelector("button").click();
+  await settle();
+  assert.deepEqual(empty.calls.filter((row) => row[0] === "cliSetupAction"), [["cliSetupAction", { id: "claude", action: "install" }], ["cliSetupAction", { id: "opencode", action: "install" }]]);
 });
 
 test("Continue walks to the project and the first task; Start the task adds it through tasks:create and starts it as the workspace does", async () => {
@@ -541,12 +546,12 @@ test("Continue walks to the project and the first task; Start the task adds it t
   assert.equal(env.welcome().querySelector("#setup-welcome-back").hidden, false);
   await env.welcome().querySelector("#setup-welcome-back").click();
   await settle();
-  assert.equal(welcomeText(env).title, "Connect the AI you already use");
+  assert.equal(welcomeText(env).title, "Pick the AI that builds for you");
   await env.welcome().querySelector("#setup-welcome-next").click(); await settle();
   await env.welcome().querySelector("#setup-welcome-next").click(); await settle();
-  assert.equal(welcomeText(env).title, "Give it a first task");
+  assert.equal(welcomeText(env).title, "What should Studio make first?");
   const next = env.welcome().querySelector("#setup-welcome-next");
-  assert.equal(next.textContent, "Start the task");
+  assert.equal(next.textContent, "Build it");
   assert.equal(next.disabled, true, "nothing to start yet");
   const input = env.welcome().querySelector("#setup-welcome-task");
   input.value = BRIEF;
@@ -561,6 +566,67 @@ test("Continue walks to the project and the first task; Start the task adds it t
   assert.equal(env.saved.get("mefiStudio.setupHelper.seen"), env.helper.REVISION);
   assert.deepEqual(handed, [{ tour: false }], "the hand-off runs once, as the sheet's close runs it");
   assert.equal(env.helper.startup(), false, "a seen revision never opens again by itself");
+});
+
+test("Continue from the first step puts Studio on what is ready: a signed-in subscription for everything, else OpenCode's free models", async () => {
+  const env = load({ layout: "v2" });
+  welcomeBridge(env, { clis: [{ id: "codex", name: "Codex", installed: true, signedIn: true, subscription: true }, { id: "claude", name: "Claude Code", installed: true, signedIn: true, subscription: true }, { id: "opencode", name: "OpenCode", installed: true, subscription: false }] });
+  env.helper.welcome();
+  await settle();
+  await env.welcome().querySelector("#setup-welcome-next").click();
+  await settle();
+  assert.deepEqual(env.calls.filter((row) => row[0] === "cliSetupUse"), [["cliSetupUse", "claude"]], "one call, the way the sheet's Use for the whole studio does it, Claude Code first as auto setup ranks them");
+  assert.equal(welcomeText(env).title, "Choose a project");
+  assert.match(env.welcome().querySelector("#setup-welcome-status").textContent, /Studio will use Claude Code for chatting, planning and building/);
+  await env.welcome().querySelector("#setup-welcome-back").click(); await settle();
+  await env.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  assert.equal(env.calls.filter((row) => row[0] === "cliSetupUse").length, 1, "Back and Continue again sets nothing twice");
+  // OpenCode alone: its free models, through the first scan's setup.
+  const free = load({ layout: "v2" });
+  welcomeBridge(free, { clis: [{ id: "claude", name: "Claude Code", installed: false, subscription: true }, { id: "opencode", name: "OpenCode", installed: true, subscription: false }] });
+  free.window.mefiStudio.firstScan = async () => { free.calls.push(["firstScan"]); return { ok: true }; };
+  free.window.mefiStudio.firstScanApply = async () => { free.calls.push(["firstScanApply"]); return { ok: true }; };
+  free.helper.welcome();
+  await settle();
+  await free.welcome().querySelector("#setup-welcome-next").click();
+  await settle();
+  assert.deepEqual(free.calls.filter((row) => /^first|^cliSetupUse/.test(row[0])).map((row) => row[0]), ["firstScan", "firstScanApply"]);
+  assert.match(free.welcome().querySelector("#setup-welcome-status").textContent, /OpenCode's free models/);
+  // Nothing ready: nothing is changed.
+  const none = load({ layout: "v2" });
+  welcomeBridge(none, { clis: [{ id: "claude", name: "Claude Code", installed: false, subscription: true }, { id: "opencode", name: "OpenCode", installed: false, subscription: false }] });
+  none.helper.welcome();
+  await settle();
+  await none.welcome().querySelector("#setup-welcome-next").click();
+  await settle();
+  assert.deepEqual(none.calls.filter((row) => /^first|^cliSetupUse/.test(row[0])), []);
+  assert.equal(welcomeText(none).title, "Choose a project");
+});
+
+test("the first task needs a project: with none open the last step says so and Build it waits; an example fills the box", async () => {
+  const env = load({ layout: "v2" });
+  welcomeBridge(env, { projects: { ok: true, activeId: null, projects: [] } });
+  env.window.MefiWorkspace = { activeProjectId: () => null };
+  env.helper.welcome();
+  await settle();
+  await env.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  await env.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  assert.match(welcomeText(env).lead, /Open or start a project first/);
+  assert.equal(env.welcome().querySelector("#setup-welcome-task"), null, "no box to fill for nowhere");
+  assert.equal(env.welcome().querySelector("#setup-welcome-next").disabled, true);
+  assert.deepEqual(env.calls.filter((row) => row[0] === "tasksCreate"), []);
+  // With a project, an example fills the box and Build it is ready.
+  const ready = load({ layout: "v2" });
+  welcomeBridge(ready);
+  ready.helper.welcome();
+  await settle();
+  await ready.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  await ready.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  const example = ready.welcome().querySelectorAll(".setup-welcome-example")[0];
+  assert.ok(example, "examples to start from");
+  await example.click();
+  assert.equal(ready.welcome().querySelector("#setup-welcome-task").value, example.textContent);
+  assert.equal(ready.welcome().querySelector("#setup-welcome-next").disabled, false);
 });
 
 test("Skip and Escape close the welcome, mark the revision seen and hand on", async () => {

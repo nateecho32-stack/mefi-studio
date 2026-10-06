@@ -82,7 +82,7 @@
   }
   function snapshot() {
     return { schemaVersion: 1, renderer: core.snapshot(), host: host ? JSON.parse(JSON.stringify(host)) : null,
-      coverage: { longTasksSupported, hostStatus: hostState || "available", frameCadence: "Visible renderer requestAnimationFrame intervals; not GPU time or Command draw FPS.",
+      coverage: { longTasksSupported, hostStatus: hostState || "available", frameCadence: "Visible renderer requestAnimationFrame intervals; not GPU time or the Map's draw FPS.",
         scopes: "Synchronous self time excludes nested measured scopes. Async and IPC timings include waiting; they are not CPU time.",
         retention: "Frame statistics cover the latest 900 intervals; scope p95 covers the latest 180 calls. Scope counts, means, self time and maxima cover this capture. Host limits are included separately.",
         privacy: "Static operation names and numeric measurements only; no task text, request payloads, file paths or credentials." } };
@@ -169,10 +169,10 @@
     for (const [label, value, tone] of metrics) { const card = document.createElement("div"), title = document.createElement("span"), metric = document.createElement("strong"); card.className = tone ? `profiler-metric ${tone}` : "profiler-metric"; title.textContent = label; metric.textContent = value; card.append(title, metric); fragment.append(card); }
     $("metrics").replaceChildren(fragment);
     text("frames-note", stats.count
-      ? `${stats.count} recent UI ${stats.count === 1 ? "interval" : "intervals"} · ${stats.overBudget} over budget (+10% tolerance). Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.`
-      : "Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.");
+      ? `${stats.count} recent UI ${stats.count === 1 ? "interval" : "intervals"} · ${stats.overBudget} over budget (+10% tolerance). The Map intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.`
+      : "The Map intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.");
     chart(data);
-    table("spans", data.spans, (row) => [row.name, row.count, ms(row.selfMs), ms(row.selfMeanMs), ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs)], "No measured rendering work yet. Start recording, close this panel and use Command or the node tree.", 7);
+    table("spans", data.spans, (row) => [row.name, row.count, ms(row.selfMs), ms(row.selfMeanMs), ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs)], "No measured rendering work yet. Start recording, close this panel and use the Map or the node tree.", 7);
     table("ipc", [...(host?.spans || [])].sort((a, b) => b.totalMs - a.totalMs), (row) => [row.name, row.count, ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs), row.errors], "Host requests appear during a desktop capture.", 6);
     table("processes", latest?.processes || [], (row) => [row.type, finite(row.cpuPercent) ? `${number(row.cpuPercent)}%` : "—", finite(row.memoryMB) ? `${number(row.memoryMB, 0)} MB` : "—"], data.startedAt ? "Waiting for process measurements." : "Process CPU and memory appear during a desktop capture.", 3);
     const events = [...data.incidents.map((row) => ({ ...row, source: "Renderer" })), ...(host?.incidents || []).map((row) => ({ ...row, source: "Host" }))].sort((a, b) => b.at - a.at).slice(0, 20);

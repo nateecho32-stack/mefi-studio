@@ -27,6 +27,7 @@ function load({ delayed = false } = {}) {
   const orb = document.createElement("button"), panel = document.createElement("div");
   document.body.append(origin, orb, panel); document.activeElement = origin;
   const asked = [];
+  const released = [];
   const card = (kind, id) => {
     made.push(kind);
     const root = document.createElement("section"), heading = document.createElement("h4");
@@ -37,7 +38,7 @@ function load({ delayed = false } = {}) {
   const window = {
     addEventListener: (type, fn) => { (listeners[type] ??= []).push(fn); },
     MefiNav: {
-      noMotion: () => true, typeScope() {}, claim() {}, paintCurrent() {},
+      noMotion: () => true, typeScope() {}, claim() {}, release: (id) => released.push(id), paintCurrent() {},
       go: (id, params) => { goes.push([id, params]); if (id === "friends-page") window.MefiCompanionHub.openPlace(params); },
       closeAll: () => window.MefiCompanionHub.closePlace(),
     },
@@ -63,7 +64,7 @@ function load({ delayed = false } = {}) {
   vm.runInContext(source, context);
   window.MefiCompanionHub.attach({ orb, panel, toggle() {}, refresh() {} });
   return {
-    hub: window.MefiCompanionHub, document, window, origin, made, disposed, goes, asked,
+    hub: window.MefiCompanionHub, document, window, origin, made, disposed, goes, asked, released,
     page: () => document.querySelector("#friends-overlay"),
     layer: () => document.querySelector("#agent-hub"),
     flush: () => { for (const paint of paints.splice(0)) paint(); for (const frame of frames.splice(0)) frame(); },
@@ -99,9 +100,11 @@ test("another place swaps the card and lets the last one go; closing releases th
   assert.equal(loaded.page().dataset.place, "pcs");
   assert.deepEqual(loaded.made, ["rooms", "pcs"]);
   assert.deepEqual(loaded.disposed, ["rooms"], "Rooms let go of its open room");
+  assert.deepEqual(loaded.released, [], "moving between places keeps the page's layer");
   loaded.window.MefiNav.closeAll();
   assert.equal(loaded.page().hidden, true);
   assert.deepEqual(loaded.disposed, ["rooms", "pcs"]);
+  assert.deepEqual(loaded.released, ["friends-page"], "closing gives the sheet layer back, so the next page owns the breadcrumb, tab and list");
 });
 
 test("a target nobody knows lands on The Lobby, Friends' front page", () => {

@@ -868,11 +868,11 @@
   function buildTree() {
     const host = $("nodes");
     const tools = el("div", "fleet-tree-tools");
-    const command = el("button", "ghost mini fleet-tree-command", "Open in Command");
+    const command = el("button", "ghost mini fleet-tree-command", "Open in Map");
     command.type = "button";
     command.title = "The live node tree, with the selected seat in focus";
     command.addEventListener("click", () => openInCommand(state.view && state.selected ? seatOf(state.view, state.selected) : null));
-    tools.append(el("p", "fleet-tree-note", "The team as a tree. Command shows the same work as the live node tree."), command);
+    tools.append(el("p", "fleet-tree-note", "The team as a tree. The Map shows the same work as the live node tree."), command);
     const scroll = el("div", "fleet-tree-scroll");
     const stage = el("div", "fleet-tree-stage");
     stage.append(svg("svg", { class: "fleet-tree-links", "aria-hidden": "true" }), el("div", "fleet-tree-nodes"));
@@ -1116,7 +1116,7 @@
       open.addEventListener("click", () => openTask(taskId));
       bar.append(open);
     }
-    const command = el("button", "ghost mini", "Open in Command");
+    const command = el("button", "ghost mini", "Open in Map");
     command.type = "button";
     command.addEventListener("click", () => openInCommand(seat));
     bar.append(command);

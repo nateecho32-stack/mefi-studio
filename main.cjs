@@ -6775,7 +6775,7 @@ function planAutoSetup({ settings = {}, keys = {}, clis = [], local = {} } = {})
   else notes.push("No key saved: the saved custom endpoint answers for the assistant.");
   // Its own line after the route's: at the head of the chain above it sent
   // every keyed route and signed-in CLI to the custom-endpoint note (6a5c7be).
-  if (subscription && signedIn(provider) === false) notes.push(`${{ grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" }[provider]} is installed but not signed in yet: sign in under Agents › Setup › Connect an AI before it can answer.`);
+  if (subscription && signedIn(provider) === false) notes.push(`${{ grok: "Grok", claude: "Claude Code", codex: "Codex", antigravity: "Antigravity" }[provider]} is installed but not signed in yet: sign in under Team › Providers before it can answer.`);
   const jevVia = changes.jevRoute ? ` Jev rides your ${{ typesafe: "TypeSafe Jev", zen: "OpenCode Zen", openrouter: "OpenRouter" }[changes.jevRoute]} key.` : "";
   // Jev chooses among the z.ai GLM and OpenCode Go rosters only (see
   // applyModelRouting); on any other route it is connected but picks nothing.
@@ -7026,7 +7026,7 @@ async function resolveAutoRoute(role, settings, { allowCli, zaiKey, goKey, zenKe
       const rescue = await resolve(id);
       if (rescue) return { ok: true, ...rescue, rescued: true, fallback: null, fallbacks: [] };
     }
-    return { ok: false, error: `no usable provider in the auto order (${order.map((id) => AUTO_PROVIDER_NAMES[id]).join(" > ")}) - save a key, install a CLI or change the order in Agents > Setup > Connections` };
+    return { ok: false, error: `no usable provider in the auto order (${order.map((id) => AUTO_PROVIDER_NAMES[id]).join(" > ")}) - save a key or install a CLI in Team > Providers, or change the order in Team > Seats and models` };
   }
   const [primary, ...rest] = candidates;
   // A CLI route is never a silent retry target: it can prompt or hang, so the
@@ -7122,7 +7122,7 @@ async function resolveAiRoute(role = "routine", { allowCli = true } = {}) {
   }
   if (provider === "chatgpt") {
     const candidate = typeof chatgptPlanCandidate === "function" ? await chatgptPlanCandidate(role, settings) : null;
-    if (!candidate) return degrade("chatgpt", "the ChatGPT plan is not signed in, not granted or at its usage limit - use Continue with ChatGPT under Setup > Connect an AI");
+    if (!candidate) return degrade("chatgpt", "the ChatGPT plan is not signed in, not granted or at its usage limit - use Continue with ChatGPT in Help > Setup guide > Connect an AI");
     return withFallbacks({ ok: true, ...candidate });
   }
   if (provider === "zai") {
@@ -8611,7 +8611,7 @@ async function executorRunEnv({ cliOverride = null } = {}) {
   // The opencode half: the default runner, with the mefi-zai provider when a
   // z.ai key is saved. Computed once and reused as the CLI fallback route.
   const opencodeRoute = async () => {
-    if (singleAccount && chosenCli !== "opencode") return { error: `Reconnect ${chosenCli} in Agents setup. This team uses that account only; no other provider was started.` };
+    if (singleAccount && chosenCli !== "opencode") return { error: `Reconnect ${chosenCli} in Team › Providers. This team uses that account only; no other provider was started.` };
     const provider = AI_PROVIDERS.includes(settings.aiProvider) ? settings.aiProvider : "auto";
     // A coding tier other than Auto pins the model for every OpenCode run:
     // Free rides the free model one worker at a time and never a billed
@@ -9137,7 +9137,7 @@ async function aiRouteReady(settings) {
 // where to connect one - never a list of the maintainer's own providers.
 function aiRouteMissing(what, route = null) {
   const reason = typeof route?.error === "string" && route.error.trim() ? ` (${route.error.trim().slice(0, 240)})` : "";
-  return `${what} needs a connected AI provider${reason}. Connect one in Agents > Setup > Connections: an API key, a signed-in coding CLI (Claude Code, Codex, Grok, Antigravity) or a local server (LM Studio, Ollama).`;
+  return `${what} needs a connected AI provider${reason}. Connect one in Team > Providers: an API key, a signed-in coding CLI (Claude Code, Codex, Grok, Antigravity) or a local server (LM Studio, Ollama).`;
 }
 
 async function runAssistant(mode = "brief", sessionId = null, payload = null) {
@@ -13955,7 +13955,7 @@ function assistantTaskStarted(job) {
   // Every run is a board task's (dispatch is task-only).
   const taskId = String(job.taskId ?? task.id ?? "") || `run:${job.id ?? ""}`;
   const entry = assistantTaskNotice({ taskId, title: job.title, kind: "started", at: Date.now(),
-    text: `Started: ${assistantClip(job.title, 80)}. Follow its progress in Agents / Live.${job.agentConfiguration?.configuration?.agentReporting === "detailed" ? ` Team: ${job.agentConfiguration.name}. ${job.mode === "cluster" ? "The lead coordinates this task." : "Workers follow the queue."}` : ""}` });
+    text: `Started: ${assistantClip(job.title, 80)}. Follow its progress on the Map.${job.agentConfiguration?.configuration?.agentReporting === "detailed" ? ` Team: ${job.agentConfiguration.name}. ${job.mode === "cluster" ? "The lead coordinates this task." : "Workers follow the queue."}` : ""}` });
   assistantEmit({ kind: "notice", taskId, id: entry?.id ?? null });
   saveAssistant({ force: true }).catch(() => {});
   return entry;
@@ -14477,7 +14477,7 @@ async function assistantRespond(user, entry = null) {
       const title = assistantClip(text.replace(/\s+/g, " ").trim(), 60);
       const ai = assistantState?.ai ?? {};
       local = { ...local, actions: [], text: ai.keyPresent === false
-        ? `No AI is connected yet, so I can't talk this through. Connect one under Agents › Setup › Connect an AI. To build it anyway, press Build it, or say yes and I'll put "${title}" on the task board.`
+        ? `No AI is connected yet, so I can't talk this through. Connect one under Team › Providers. To build it anyway, press Build it, or say yes and I'll put "${title}" on the task board.`
         : `The AI isn't answering right now${ai.lastError ? ` (${assistantClip(ai.lastError, 60)})` : ""}, so I can't talk this through yet. Try again in a minute, or say yes and I'll put "${title}" on the task board.` };
       offers = [{ title }];
     }
@@ -15464,7 +15464,7 @@ async function assistantDispatchNamedTask(start) {
       prerequisites: "This task is waiting for its prerequisites to finish successfully.",
       review: "Review the task's failure or hold, then choose Retry if another attempt is appropriate.",
       deferred: "This task's files are owned by another worker or await verification. Resolve that hold before starting it.",
-      route: `Worker connection unavailable: ${autopilot.lastError || "configure a builder in Settings > Connections"}`,
+      route: `Worker connection unavailable: ${autopilot.lastError || "configure a builder in Team > Providers"}`,
       resources: `${autopilot.capacity?.reason || "Machine capacity is unavailable"}. Try Start when capacity is available.`,
       busy: "The machine is reserved by another operation. Wait for it to finish, then try Start.",
       cluster: "Cluster is focused on another task. Let that work finish or change Agent mode before starting this task.",
@@ -17726,7 +17726,7 @@ function planningService() {
         // heavy seat for a spec, a "think harder" turn, or a retry.
         const role = seat === "heavy" || seat === "routine" ? seat : kind === "spec" ? "heavy" : "routine";
         const route = await resolveAiRoute(role, { allowCli: DATA_ONLY_CLIS });
-        if (!route.ok) return { ok: false, error: "Connect and check your provider in Agents setup. Codex, Claude Code, Grok or Antigravity can handle planning through their own login. You can create questions, record decisions, and write the specification manually." };
+        if (!route.ok) return { ok: false, error: "Connect and check your provider in Team › Providers. Codex, Claude Code, Grok or Antigravity can handle planning through their own login. You can create questions, record decisions, and write the specification manually." };
         // Vibe's planner names who is thinking (renderer/vibe-flow.js).
         if (typeof progress === "function") progress({ seat: role, provider: route.provider || null, model: route.model || null, cli: Boolean(route.cli) });
         return (route.cli ? cliAssistantCall : httpAssistantCall)(route, system, user, kind === "spec" ? 7000 : 2500, { taskType: `planning-${kind}`, source: "planning", role });
@@ -20229,7 +20229,7 @@ async function spawnNextJob(options) {
   // the card parked after five tries. Refuse before the claim instead, as a
   // route fault the loop status and the log name once.
   if (runRoute.cli === "opencode" && typeof opencodeCliAvailable === "function" && !(await opencodeCliAvailable())) {
-    const reason = "No coding tool is installed. Install OpenCode, Claude Code or Codex under Agents › Setup.";
+    const reason = "No coding tool is installed. Install OpenCode, Claude Code or Codex under Team › Providers.";
     autopilot.lastError = reason;
     if (autopilot.routeFaultLogged !== reason) {
       logLine(`[autopilot] executor route failed: ${reason}`);
@@ -25567,6 +25567,9 @@ function registerIpc() {
   });
 
   ipcMain.handle("studio:smoke", () => launcherBusy() ?? runGameScript("smoke", "Run Dev Tool (LOVE2D).cmd", ["--smoke"]));
+  // Whether the optional game project (Ruins Runner, MEFI_STUDIO_GAME_ROOT) is on this PC: Settings › System shows its
+  // launcher card only then, so nobody else sees buttons that can only fail.
+  ipcMain.handle("studio:game-status", () => ({ ok: true, available: Boolean(GAME_ROOT) }));
 
   // ---- Coding CLIs ---------------------------------------------------------
   // OpenCode, Grok, Codex, Claude Code and Antigravity are the owner's

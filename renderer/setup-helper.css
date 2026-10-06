@@ -196,6 +196,10 @@ button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40
 .setup-welcome-more { justify-self: start; margin-top: 4px; font-size: max(12px, calc(13px * var(--text-scale, 1))); }
 .setup-welcome-input { width: 100%; min-height: 46px; padding: 0 14px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--bg) 55%, transparent); color: var(--ivory); font-size: max(12px, calc(15px * var(--text-scale, 1))); }
 .setup-welcome-input:focus { border-color: var(--gold-dim); box-shadow: var(--ring); outline: none; }
+/* The first task's examples: a tap fills the box. */
+.setup-welcome-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.setup-welcome-examples-label { color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); }
+.setup-welcome-example { min-height: 30px; padding: 4px 12px; border-radius: var(--r-pill, 999px); white-space: normal; text-align: left; font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.35; }
 .setup-welcome-status { min-height: 1.4em; margin: 12px 0 0; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.45; }
 .setup-welcome-status.bad-text { color: var(--bad); }
 .setup-welcome-status:empty { min-height: 0; margin: 0; }

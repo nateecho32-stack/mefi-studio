@@ -8,7 +8,7 @@
   "use strict";
 
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const ESC_HELP = "Close the top-most layer: palette → help → sheet → Command (clear selection, then leave)";
+  const ESC_HELP = "Close the top-most layer: palette → help → sheet → Map (clear selection, then leave)";
   const BADGE_THROTTLE_MS = 2000;
   // Pushes keep the counts live; this backstop only catches a missed push.
   const BADGE_POLL_MS = 120000;
@@ -133,7 +133,7 @@
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -207,6 +207,7 @@
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
       ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
+      ["friends-events", "Events", "g-bolt", "This week's Build Jam, co-work hours and building together", "events"],
     ].map(([id, label, glyph, desc, target]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
       searchTerms: `friends ${label} ${desc}`,
@@ -410,7 +411,7 @@
       keyMatch: (event) => settingsChord(event) || defaultKeyMatch("4")(event),
       glyph: "g-sliders",
       badge: null,
-      desc: "Your name, appearance, audio, updates and diagnostics; agent setup lives under Agents",
+      desc: "Your name, appearance, audio, updates and diagnostics; agent setup lives under Team",
       searchTerms: "settings connections api key login setup provider workers preferences you theme motion animations launch updates diagnostics",
       showIn: showIn({ dock: true, palette: true, help: true }),
       // A section param opens one card: go("studio", { section: "settings-updates" }).
@@ -717,7 +718,7 @@
     {
       id: "onboarding", label: "Start here", short: "Start here", kind: "overlay", layer: "transient", section: "help",
       group: "system", key: null, glyph: "g-flag", badge: null,
-      desc: "The guided walkthrough: link an AI, add a project, connect providers, then create, follow and review work",
+      desc: "The guided tour: connect your AI, open a project, then make, watch and check your first task",
       searchTerms: "start here walkthrough tour getting started guide tutorial help welcome onboarding",
       showIn: showIn({ dock: true, tools: true, palette: true }),
       element: "walkthrough-overlay", focus: "#walkthrough-title",
@@ -736,7 +737,7 @@
       keyMatch: (event) => event.key === "?",
       glyph: "g-help",
       badge: null,
-      desc: "Keyboard shortcuts for pages, tools and Command view",
+      desc: "Keyboard shortcuts for pages, tools and the Map",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       element: "help-overlay",
       focus: "#help-overlay .sheet",
@@ -1060,7 +1061,7 @@
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Social" : "Command";
+      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Social" : "Map";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -1181,7 +1182,7 @@
     else if (id === "map") id = "command";
     // Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The Lobby and each
     // way in at its own place. (Spelled out here, not shared: suites run go() on its own.)
-    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
+    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub", "friends-events": "events" };
     if (Object.hasOwn(friendsPages, id)) {
       params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
@@ -1233,7 +1234,7 @@
         window.MefiIdle?.exit?.();
         state.returnTo = "command";
         // Only a deep link needs explaining; a plain tab click speaks for itself.
-        if (params && Object.keys(params).length) window.MefiToast?.("D returns to Command", "info");
+        if (params && Object.keys(params).length) window.MefiToast?.("D returns to the Map", "info");
       }
       dest.open?.(params);
       if (id === "eyes") {
@@ -1562,7 +1563,7 @@
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events"]) { const dest = get(id); if (dest) children.append(navButton(dest, "app-rail-item", { key: false })); }
         group.append(children);
       }
       sections.append(group);
@@ -1707,12 +1708,18 @@
   // A pinned rail takes its open width from the page. Below this window width
   // it yields and behaves unpinned, opening over the page on hover or focus;
   // the saved choice stays, and the pin comes back when the window widens.
+  // With no saved choice the menu starts open only in a wide window: at the
+  // default 1460 px window the compact rail leaves the page and the list
+  // column their room (open, the menu and the list left Plans about 900 px).
   const RAIL_PIN_MIN_WIDTH = 1100;
+  const RAIL_PIN_DEFAULT_WIDTH = 1600;
   let railPinWanted = false;
-  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < RAIL_PIN_MIN_WIDTH);
+  let railPinChosen = false;
+  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < (railPinChosen ? RAIL_PIN_MIN_WIDTH : RAIL_PIN_DEFAULT_WIDTH));
 
-  function setRailPinned(pinned, { save = true } = {}) {
+  function setRailPinned(pinned, { save = true, chosen = true } = {}) {
     railPinWanted = Boolean(pinned);
+    railPinChosen = Boolean(chosen);
     document.getElementById("app-rail-pin")?.setAttribute("aria-pressed", String(railPinWanted));
     if (save) {
       try { localStorage.setItem(RAIL_PIN_KEY, pinned ? "1" : "0"); } catch { /* the pin is a convenience */ }
@@ -1738,9 +1745,9 @@
     if (!rail) return false;
     document.documentElement.dataset.shell = "rail";
     rail.hidden = false;
-    let pinned = true;
-    try { pinned = localStorage.getItem(RAIL_PIN_KEY) !== "0"; } catch { /* use the wide-window default */ }
-    setRailPinned(pinned, { save: false });
+    let saved = null;
+    try { saved = localStorage.getItem(RAIL_PIN_KEY); } catch { /* use the wide-window default */ }
+    setRailPinned(saved !== "0", { save: false, chosen: saved === "0" || saved === "1" });
     renderRail();
     window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: true } }));
     return true;
@@ -2037,7 +2044,28 @@
     const element = target ?? document.getElementById("help-grid");
     if (!element) return;
     element.textContent = "";
-    const rows = list({ showIn: "help" }).filter((dest) => dest.key);
+    // The sheet's own row of help: the Help menu's rows (HELP_MENU_V2, one list for both), past Start here and the sheet itself.
+    const links = target ? null : document.getElementById("help-links");
+    if (links) {
+      links.textContent = "";
+      let count = 0;
+      for (const [id, words] of HELP_MENU_V2) {
+        const dest = get(id);
+        if (!dest || id === "onboarding" || id === "help" || dest.hidden?.()) continue;
+        const link = document.createElement("button");
+        link.type = "button";
+        link.className = "ghost mini";
+        link.dataset.helpLink = id;
+        link.textContent = words;
+        // The sheet steps aside first: a page (the setup guide) opens under the transient layer, not behind it.
+        link.addEventListener("click", () => { close("help"); go(id); });
+        links.append(link);
+        count += 1;
+      }
+      links.hidden = count === 0;
+    }
+    // A shortcut kept only as a chord (Ctrl J for the Inbox) is a shortcut too.
+    const rows = list({ showIn: "help" }).filter((dest) => dest.key || dest.chord);
     HELP_SECTIONS.forEach(([title, sections], index) => {
       const items = rows.filter((dest) => sections.includes(sectionOf(dest)));
       if (!items.length && title !== "Help") return;
@@ -2052,7 +2080,7 @@
       group.setAttribute("aria-labelledby", heading.id);
       group.append(heading);
       for (const dest of items) {
-        group.append(helpRow(dest.key, dest.label));
+        if (dest.key) group.append(helpRow(dest.key, dest.label));
         if (dest.chord) group.append(helpRow(dest.chord, dest.label));
       }
       if (title === "Help") group.append(helpRow("Esc", ESC_HELP));
@@ -2354,6 +2382,8 @@
         const title = head.querySelector?.(".sheet-title");
         if (typeof title?.after === "function") title.after(group); else head.append?.(group);
       }
+      // The Agent brain's Playbook and Project map are Team › Workflows: the Map's switch does not belong over them.
+      group.hidden = Boolean(head.closest?.("#agent-brain-overlay")) && Boolean(tab) && tab !== "live";
       for (const button of Array.from(group.children ?? [])) {
         const on = button.dataset.nav === id && (id !== "agent-brain" || tab === "live");
         if (on) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
@@ -3182,8 +3212,8 @@
       const wait = booting() ? 1500 : busy ? 5000 : KEY_HINT_QUIET_MS - (now - quietSince);
       if (wait > 0 && tries++ < 120) { setTimeout(attempt, wait); return; }
       try { localStorage.setItem(KEY_HINT_STORE, "1"); } catch { /* the tip may show again next launch */ }
-      const home = vibeMode() ? "Social" : "workspace";
-      window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D Command view, T task board. Press ? for the full list.`, "info", {
+      const home = vibeMode() ? "Social" : "Home";
+      window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D the Map, T task board. Press ? for the full list.`, "info", {
         duration: 12000,
         action: { label: "Show keys", run: () => go("help") },
       });

@@ -287,7 +287,8 @@
     const section = node("section", "paper-away");
     section.setAttribute("aria-labelledby", "paper-away-title");
     const head = node("div", "paper-away-head");
-    const title = node("h2", "paper-away-title", "Since you were away");
+    // The very first launch has nothing to come back to: it is a welcome.
+    const title = node("h2", "paper-away-title", away?.models?.firstVisit ? "Welcome to Studio" : "Since you were away");
     title.id = "paper-away-title";
     head.append(node("p", "paper-kicker", "Your studio"), title);
     const grid = node("div", "paper-away-grid");

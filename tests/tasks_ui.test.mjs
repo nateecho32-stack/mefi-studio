@@ -327,6 +327,10 @@ test("workflow summary uses the current project's exact worker and recorded chec
   const ready = env.api.workflowSummary({ id: "ready", projectId: "p", status: "open" }, { status: { projectId: "p", held: true, running: [] } });
   assert.match(ready.nextAction, /Task ready; agents paused/);
   assert.equal(ready.checks, "No completion checks recorded");
+  // The loop's own hold (agents off at launch) is what is in the way: its action is the next step, not "Resolve the blocker".
+  const held = env.api.workflowSummary({ id: "ready", projectId: "p", status: "open" }, { status: { projectId: "p", running: [], loop: { state: "held", headline: "Agents are off", reason: "Studio opened with agents off.", action: { id: "start", label: "Start agents" } } } });
+  assert.equal(held.blocker, "Studio opened with agents off.");
+  assert.equal(held.nextAction, "Start agents to continue.");
 });
 
 test("a saved worker assignment without current status is uncertain, and failed checks never look ready", () => {

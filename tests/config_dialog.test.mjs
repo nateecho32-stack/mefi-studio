@@ -12,7 +12,7 @@ import { createDom, templateIds } from "./fixtures/renderer-dom.mjs";
 const source = await readFile(new URL("../renderer/config-dialog.js", import.meta.url), "utf8");
 const settle = async () => { for (let turn = 0; turn < 8; turn += 1) await new Promise((resolve) => setImmediate(resolve)); };
 
-function load({ zoom = true, helper = false } = {}) {
+function load({ zoom = true, helper = false, nav = {} } = {}) {
   const ran = [];
   const zoomed = [];
   const record = (id, label, desc = "") => ({ id, label, desc, kind: "action", run: () => ran.push(id) });
@@ -50,7 +50,7 @@ function load({ zoom = true, helper = false } = {}) {
   const toasts = [];
   const timers = [];
   const api = zoom ? { uiZoom: async ({ factor }) => { zoomed.push(factor); return { ok: true, factor }; }, uiZoomGet: async () => ({ ok: true, factor: 1.1 }), onUiZoom: (callback) => { pushed = callback; } } : {};
-  const window = { mefiStudio: api, MefiNav: { list: () => records }, MefiToast: (text) => toasts.push(text), ...(helper ? { MefiSetupHelper: { open: (id) => opened.push(id) } } : {}) };
+  const window = { mefiStudio: api, MefiNav: { list: () => records, ...nav }, MefiToast: (text) => toasts.push(text), ...(helper ? { MefiSetupHelper: { open: (id) => opened.push(id) } } : {}) };
   const setTimeout = (run) => { timers.push(run); return timers.length; };
   const clearTimeout = (id) => { if (id) timers[id - 1] = null; };
   vm.runInContext(source, vm.createContext({ window, document, console, requestAnimationFrame: () => 0, setTimeout, clearTimeout }));
@@ -203,4 +203,17 @@ test("a scale changed from the keyboard moves an open slider and says the result
   push({ factor: "x" });
   flush();
   assert.equal(toasts.length, 1, "a push with no scale in it says nothing");
+});
+
+test("Configuration holds the transient layer while it shows, so Escape from anywhere, closeAll and a second pop-up find it", async () => {
+  const layers = [];
+  const { config, get } = load({ nav: { claim: (id) => layers.push(["claim", id]), release: (id) => layers.push(["release", id]) } });
+  await config.open({ category: "ui" });
+  assert.deepEqual(layers, [["claim", "config"]], "opening claims the layer before the dialog shows");
+  assert.equal(get("config-overlay").hidden, false);
+  config.close();
+  assert.equal(get("config-overlay").hidden, true);
+  assert.deepEqual(layers, [["claim", "config"], ["release", "config"]], "closing gives it back");
+  config.close();
+  assert.equal(layers.length, 2, "a second close is a no-op");
 });

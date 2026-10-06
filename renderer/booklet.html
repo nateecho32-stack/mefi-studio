@@ -3858,6 +3858,8 @@ body.command-active .walkthrough-coach { right: calc(392px + var(--shell-x1)); }
   50% { outline-color: transparent; }
 }
 .help-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.help-links { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: -4px; }
+.help-links[hidden] { display: none; }
 /* Settings: seven compact category panes and direct control search. */
 .settings-panel { container: settings / inline-size; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
 .settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: var(--s4); }
@@ -6652,6 +6654,35 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
   .planning-field-head { gap: 6px; }
   .planning-field-title { gap: 6px; font-size: 12px; }
 }
+/* The same steps by the room the page really has. In the 0.5 frame the rail and the list column stand beside the
+   page, so at a 1024 px window Plans had about 680 px while every query above still read the window as wide: the
+   editor squeezed to a strip between the plan list and the planning partner. The sheet is the container. */
+.planning-sheet { container: plans-sheet / inline-size; }
+@container plans-sheet (max-width: 1200px) {
+  .planning-body { grid-template-columns: 165px minmax(0, 1fr); }
+  .planning-detail { padding: 16px; }
+  .planning-canvas { gap: 14px; grid-template-columns: minmax(0, 1fr) 300px; }
+  .planning-flow-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .planning-flow-rail li:nth-child(4)::after { display: none; }
+}
+@container plans-sheet (max-width: 1000px) {
+  .planning-detail { display: block; overflow: auto; }
+  .planning-workflow { max-height: none; overflow: visible; }
+  .planning-canvas { grid-template-columns: minmax(0, 1fr); }
+  .planning-editor { overflow: visible; }
+  .planning-copilot { min-height: 340px; }
+  .planning-copilot-body { flex: auto; max-height: 460px; }
+}
+@container plans-sheet (max-width: 780px) {
+  .planning-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .planning-sidebar { padding: 10px 16px; border-right: 0; border-bottom: 1px solid var(--hairline); max-height: 160px; }
+  .planning-sidebar > button { width: auto; margin: 0 8px 6px 0; }
+  .planning-list { display: flex; overflow: auto; gap: 8px; margin-top: 4px; }
+  .planning-list button { flex: 0 0 180px; padding: 8px 11px; }
+  .planning-library-label { display: none; }
+  .planning-library-empty { display: none; }
+  .planning-destination-actions { align-items: stretch; flex-direction: column; }
+}
 @media (prefers-reduced-motion: reduce) {
   .planning-field, .planning-field :is(input, textarea, select), .planning-flow-stage { transition: none !important; animation: none !important; }
   .planning-section-chevron { transition: none; }
@@ -8147,6 +8178,8 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .agents-head p { display: none; margin: 0; }
 .agents-head > div:first-child { min-width: 0; }
 .agents-head .muted { font-size: var(--fs-sm); }
+/* Team's places as a row under the title (renderer/shell.js placeBar). */
+#agents-overlay .agents-head .shell-place-bar { margin: 10px 0 2px; }
 .agents-head-actions { display: flex; align-items: center; justify-content: end; flex-wrap: wrap; gap: 8px; }
 .agents-eyebrow { font-size: var(--fs-2xs); letter-spacing: .12em; color: var(--gold-bright); }
 /* Team in the 0.5 layout (renderer/agents.js openTeam): the prototype's page head, a title with the line that says what
@@ -9782,7 +9815,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 #friends-overlay[hidden] { display: none; }
 /* The page's fill is the theme's glass (--studio-page-fill, mostly clear in Chrome), so what it stands over must not read
    through: the content under it steps aside while it shows, as under a workspace page (studio-ui.css). The frame stays. */
-body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
+body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #vibe-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
 #friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
 #friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
@@ -10610,17 +10643,18 @@ html[data-ui-mode="vibe"] :is(#app-rail, #workspace-sidebar-toggle) { display: n
   font-family: var(--font-ui);
   animation: vibe-rail-in var(--motion-slow) var(--ease-out) both;
 }
-.vibe-rail[hidden], body.vibe-active:not(:has(.workspace-page:not([hidden]))) .vibe-rail { display: none; }
+/* Off on Today itself (its own home), on every page over it, Friends included. */
+.vibe-rail[hidden], body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) .vibe-rail { display: none; }
 html[data-no-blur] .vibe-rail { backdrop-filter: none; background: color-mix(in srgb, var(--panel-solid) 96%, transparent); }
 @keyframes vibe-rail-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 .vibe-rail-items, .vibe-rail-foot { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 .vibe-rail-items { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
-.vibe-rail-foot { padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--ivory) 8%, transparent); }
+.vibe-rail-foot { position: relative; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--ivory) 8%, transparent); }
 .vibe-rail button {
   position: relative; display: grid; justify-items: center; align-content: center; gap: 4px;
   width: 100%; min-height: 54px; margin: 0; padding: 6px 2px; box-sizing: border-box;
   border: 0; border-radius: 16px; background: none; box-shadow: none; color: var(--muted);
-  font: 550 10.5px/1.2 var(--font-ui); text-align: center; cursor: pointer; transform: none;
+  font: 550 max(12px, calc(12px * var(--text-scale, 1)))/1.2 var(--font-ui); text-align: center; cursor: pointer; transform: none;
   transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
 }
 .vibe-rail button .glyph { width: 19px; height: 19px; transition: transform var(--motion-base) var(--ease-spring); }
@@ -10665,8 +10699,8 @@ html[data-ui-mode="vibe"] {
 
 /* On Vibe's own page there is no rail, so sheets and the project panel use
    the whole window instead of leaving a strip where the rail would be. */
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: var(--shell-list-w); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #toast-host { left: calc(var(--shell-list-w) + 24px); bottom: calc(104px + var(--shell-y1)); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: var(--shell-list-w); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #toast-host { left: calc(var(--shell-list-w) + 24px); bottom: calc(104px + var(--shell-y1)); }
 
 /* Search */
 html[data-ui-mode="vibe"] #palette-overlay { padding-top: 11vh; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); }
@@ -10693,7 +10727,7 @@ html[data-ui-mode="vibe"] .overlay:not(.workspace-page) .sheet-close { border-ra
    project button on the Vibe page. */
 html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: calc(10px + var(--shell-y1)); left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
 html[data-ui-mode="vibe"] #workspace-sidebar[data-open="true"] #workspace-sidebar-panel { transform: none; opacity: 1; box-shadow: var(--studio-float-shadow); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project { border-radius: 14px; font-size: 13px; }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project.selected { color: var(--ivory); background: var(--v-menu-pick); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }
@@ -11548,6 +11582,10 @@ button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40
 .setup-welcome-more { justify-self: start; margin-top: 4px; font-size: max(12px, calc(13px * var(--text-scale, 1))); }
 .setup-welcome-input { width: 100%; min-height: 46px; padding: 0 14px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--bg) 55%, transparent); color: var(--ivory); font-size: max(12px, calc(15px * var(--text-scale, 1))); }
 .setup-welcome-input:focus { border-color: var(--gold-dim); box-shadow: var(--ring); outline: none; }
+/* The first task's examples: a tap fills the box. */
+.setup-welcome-examples { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.setup-welcome-examples-label { color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); }
+.setup-welcome-example { min-height: 30px; padding: 4px 12px; border-radius: var(--r-pill, 999px); white-space: normal; text-align: left; font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.35; }
 .setup-welcome-status { min-height: 1.4em; margin: 12px 0 0; color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); line-height: 1.45; }
 .setup-welcome-status.bad-text { color: var(--bad); }
 .setup-welcome-status:empty { min-height: 0; margin: 0; }
@@ -12835,8 +12873,13 @@ html[data-frame] .shell-region {
   font: 450 var(--frame-fs)/1.35 var(--font-ui);
   color: var(--ivory);
 }
+/* The classic node-tree strip on the window's right edge is not part of the 0.5 frame (the Map is the tree now): on the
+   tab pages (Settings, the model pages, Activity) it covered the page's right edge and the top bar. tree3d.js stops
+   drawing while it has no size, and a pin saved by the old layout reserves no room. */
+html[data-frame] #tree-rail { display: none !important; }
+html[data-frame] body, html[data-frame] body:has(#tree-rail.pinned) { padding-right: calc(var(--gutter) + var(--shell-x1)); }
 /* Vibe's own Home has no rail on screen: the list starts at the window's edge there. */
-html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
+html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
 
 /* Vibe's own layer starts under the bar; its header keeps the project, new app, update, conversation
    and settings buttons and drops the mode switch, the pulse and the search the bar carries now. */
@@ -12940,6 +12983,12 @@ html[data-frame] .shell-need[data-tone="clear"] .shell-pill-n, html[data-frame] 
 
 /* The queries below repeat the html[data-frame] prefix: a container query adds no specificity, so a bare
    class would lose to the base rules above. */
+/* A bar without room for the whole trail keeps where you are, whole: the project and the place are already named in
+   the rail's head and the list column's title, so the earlier crumbs go before any word is cut to three letters. */
+@container shell-top (max-width: 1080px) {
+  html[data-frame] .shell-trail > .shell-crumb:not(.is-current), html[data-frame] .shell-trail > .shell-sep { display: none; }
+  html[data-frame] .shell-trail > .shell-crumb.is-current { flex-shrink: 1; }
+}
 /* a narrow bar gives up its words before its controls */
 @container shell-top (max-width: 780px) {
   html[data-frame] .shell-search { flex: 0 1 auto; width: auto; min-width: 0; }
@@ -13034,6 +13083,21 @@ html[data-frame] .shell-page[aria-current="page"] .glyph { color: var(--gold-bri
 html[data-frame] .shell-page .count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 9px; background: var(--tint-gold-2, color-mix(in srgb, var(--gold) 10%, transparent)); color: var(--ivory); font: 650 var(--frame-fs-s)/18px var(--font-ui); text-align: center; }
 html[data-frame] .shell-page .count.warn { color: var(--warn); }
 html[data-frame] .shell-page .count[hidden] { display: none; }
+/* The place bar (renderer/shell.js placeBar): the same pages as one wrapping row at the top of a place's page, for when
+   the list column is not showing them (Social keeps it closed; a small window folds it). While the docked column lists
+   them (html[data-frame-pages]) the bar steps aside, so a place never shows its pages twice. */
+html[data-frame] .shell-place-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 14px; }
+html[data-frame] .shell-place-bar[hidden], html[data-frame][data-frame-pages] .shell-place-bar { display: none; }
+html[data-frame] .shell-place-chip {
+  display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--hairline-strong); background: color-mix(in srgb, var(--ivory) 3%, transparent);
+  color: var(--muted); font: 500 var(--frame-fs)/1 var(--font-ui); cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out);
+}
+html[data-frame] .shell-place-chip:hover { color: var(--ivory); border-color: color-mix(in srgb, var(--gold) 45%, var(--hairline-strong)); }
+html[data-frame] .shell-place-chip:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+html[data-frame] .shell-place-chip[aria-current="page"] { color: var(--ivory); font-weight: 600; background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+html[data-frame] .shell-place-group { margin: 0 2px 0 8px; color: var(--dim); font-size: var(--frame-fs); white-space: nowrap; }
 html[data-frame] .shell-pages-group { margin: 10px 0 2px; padding: 0 10px; color: var(--muted); font: 650 var(--frame-fs-s)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
 html[data-frame] .shell-pages-group.is-current { color: var(--ivory); }
 /* A place whose page is the current row reads as open; the way to every setting in one tree sits apart at the end. */
@@ -14396,7 +14460,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     <div class="sidebar-heading"><a class="ws-brand" href="#" data-nav="workspace"><span class="ws-brand-mark">m<span>+</span></span><span>Mefi's Studio<small>PROJECTS & WORKSPACE</small></span></a><button id="workspace-sidebar-close" class="ghost mini" type="button" aria-label="Close the project menu" title="Close menu (Esc)">×</button></div>
     <nav class="ws-nav" aria-label="Go to">
       <button class="ws-home" data-nav="workspace" title="Your workspace (H)"><svg class="glyph" aria-hidden="true"><use href="#g-home"/></svg><span class="label">Your workspace</span><kbd>H</kbd></button>
-      <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open Command view: the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span class="label">Command view</span><kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
+      <button id="workspace-node-tree" class="ws-home ws-node-tree" data-nav="command" title="Open the Map: the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span class="label">Map</span><kbd>D</kbd><span class="count warn" data-badge="questions" hidden></span></button>
       <button class="ws-home ws-shortcut" data-nav="tasks" title="Open your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span class="label">Task board</span><kbd>T</kbd><span class="count" data-badge="tasks" hidden></span></button>
       <button class="ws-home ws-shortcut" data-nav="plans" title="Explore an idea and review its plan (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span class="label">Plans</span><kbd>P</kbd></button>
       <button class="ws-home ws-shortcut" data-nav="brains" title="Brain maps: the pipeline as a graph you can rewire (B)"><svg class="glyph" aria-hidden="true"><use href="#g-route"/></svg><span class="label">Brain maps</span><kbd>B</kbd></button>
@@ -14432,7 +14496,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         <section id="workspace-progress" class="ws-progress" aria-label="Current task progress" hidden>
           <div class="ws-progress-heading"><div><strong id="workspace-progress-title"></strong><span id="workspace-progress-state" role="status"></span></div><button id="workspace-progress-open" class="ghost mini" type="button" title="Show this task's details in the Activity panel">Details</button></div>
           <p id="workspace-progress-facts"></p><p id="workspace-progress-reason"></p>
-        <div class="ws-focus-actions"><button id="workspace-result-open" class="primary mini" type="button" hidden>Open app</button><button id="workspace-focus-primary" class="primary mini" type="button">View task</button><button id="workspace-focus-check" class="ghost mini" type="button">View checks</button><button id="workspace-focus-live" class="ghost mini" type="button" title="Follow this task in Live (Command view)">Watch live</button><button id="workspace-focus-change" class="ghost mini" type="button">Request a change</button></div>
+        <div class="ws-focus-actions"><button id="workspace-result-open" class="primary mini" type="button" hidden>Open app</button><button id="workspace-focus-primary" class="primary mini" type="button">View task</button><button id="workspace-focus-check" class="ghost mini" type="button">View checks</button><button id="workspace-focus-live" class="ghost mini" type="button" title="Follow this task on the Map">Watch live</button><button id="workspace-focus-change" class="ghost mini" type="button">Request a change</button></div>
         </section>
         <div class="ws-companion-bar"><div class="ws-companion-track" id="workspace-companion-track" data-station="listen" aria-hidden="true"><div class="ws-track-line"></div><span class="ws-track-dot first"></span><span class="ws-track-dot middle"></span><span class="ws-track-dot last"></span><div class="ws-buddy"><div class="ws-buddy-orbit"></div><div class="ws-buddy-face"><i></i><i></i></div><span class="ws-buddy-spark">✦</span></div><div class="ws-track-labels"><span>Listen</span><span>Make</span><span>Review</span></div></div><div class="ws-companion-copy"><strong id="workspace-companion-name">Mefi is here</strong><p id="workspace-narration" role="status">Tell me what you have in mind.</p></div></div>
 
@@ -14466,12 +14530,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         <p id="workspace-work-summary" class="ws-work-summary-line" role="status" aria-live="polite"></p>
         <div id="workspace-work-list" class="ws-work-list"></div>
         <button id="workspace-show-more" class="ghost mini ws-show-more" type="button" hidden>Show more</button>
-        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Agents › Setup › Providers.">Jev · checking connection</div>
+        <div class="ws-jeV" id="workspace-jev" title="Jev is the optional model-selection service: with a key it picks a model per task; without one, fixed defaults apply. Set it up under Team › Providers.">Jev · checking connection</div>
       </aside>
       </details>
       <details id="workspace-studio-details" class="ws-home-disclosure"><summary>Studio status</summary>
         <section id="workspace-dashboard" class="ws-dashboard" aria-label="Studio at a glance">
-      <button class="ws-dash-tile" id="workspace-dash-workers" data-nav="command" data-tone="idle" type="button" title="Open Command view · live work (D)"><span class="ws-dash-kicker">WORKERS</span><strong class="ws-dash-value" id="workspace-dash-workers-value">0 running</strong><span class="ws-dash-note" id="workspace-dash-workers-note"></span></button>
+      <button class="ws-dash-tile" id="workspace-dash-workers" data-nav="command" data-tone="idle" type="button" title="Open the Map · live work (D)"><span class="ws-dash-kicker">WORKERS</span><strong class="ws-dash-value" id="workspace-dash-workers-value">0 running</strong><span class="ws-dash-note" id="workspace-dash-workers-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-attention" data-tone="idle" data-target="review" type="button" title="Questions waiting for you and work to review"><span class="ws-dash-kicker">NEEDS YOU</span><strong class="ws-dash-value" id="workspace-dash-attention-value">Nothing waiting</strong><span class="ws-dash-note" id="workspace-dash-attention-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-next" data-tone="idle" type="button" title="Show the queue"><span class="ws-dash-kicker">UP NEXT</span><strong class="ws-dash-value" id="workspace-dash-next-value">Queue is empty</strong><span class="ws-dash-note" id="workspace-dash-next-note"></span></button>
       <button class="ws-dash-tile" id="workspace-dash-machine" data-nav="explorer" data-tone="idle" type="button" title="Machine status (opens the Explorer)"><span class="ws-dash-kicker">MACHINE</span><strong class="ws-dash-value" id="workspace-dash-machine-value">Checking…</strong><span class="ws-dash-note" id="workspace-dash-machine-note"></span></button>
@@ -14480,7 +14544,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 
       </details>
       <details id="workspace-help-details" class="ws-home-disclosure"><summary>Getting started &amp; community</summary>
-        <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">Set up your project</strong><p>Connect your tools, add a project, and create your first task.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start here</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk me through it</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays at the foot of the menu">Not now</button></div></section>
+        <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">Set up your project</strong><p>Connect your AI, open a project, and make your first task.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start here</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it shows you around">Walk me through it</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this card. The tour waits under Help › Start here">Not now</button></div></section>
     <section class="walkthrough-invitation community-invitation" id="community-invitation" aria-labelledby="community-invite-title" hidden><span class="community-emblem" id="community-invite-swatches" aria-hidden="true" hidden></span><div class="community-invite-copy"><strong id="community-invite-title">Build with others in the Void Engine Discord</strong><p class="community-pitch">Share what you're making, swap model setups, and hang out with other builders.</p><p class="community-note" id="community-invite-note" hidden></p></div><div class="walkthrough-invite-actions community-invite-actions"><button id="community-invite-join" class="primary" type="button" title="Open the Void Engine invite in your browser">Join the Discord</button><button id="community-invite-link" class="ghost" type="button" title="Sign in with Discord in your browser to link your account">Link my Discord</button><button id="community-invite-copy" class="ghost mini" type="button" title="Copy a prompt that unlocks the collection in your own fork" hidden>Copy agent prompt</button><span class="community-invite-dismiss"><button id="community-invite-later" class="ghost mini community-quiet" type="button" title="Hide this for a week">Not now</button><button id="community-invite-never" class="ghost mini community-quiet" type="button" title="Settings › Community keeps the link">Don't show again</button></span></div></section>
 
       </details>
@@ -14605,7 +14669,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   <!-- Watch, Plans and Ideas step in only while they have something to show. -->
   <nav id="vibe-dock" class="vibe-dock" aria-label="Go to">
     <span class="vibe-dock-mark" aria-hidden="true"></span>
-    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="Watch the live node tree, even before anything has started (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="D">D</kbd></button>
+    <button id="vibe-stop-watch" type="button" data-nav="command" data-vibe-stop="watch" title="The Map: your agents at work, live, even before anything has started (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span>Map</span><span class="count warn" data-badge="questions" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="D">D</kbd></button>
     <button id="vibe-stop-tasks" type="button" data-vibe-panel="tasks" data-vibe-stop="tasks" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="T">T</kbd></button>
     <button id="vibe-stop-plans" type="button" data-vibe-panel="plans" data-vibe-stop="plans" title="Plans in progress (P)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span><kbd class="key vibe-stop-key" aria-hidden="true" title="P">P</kbd></button>
     <button id="vibe-stop-ideas" type="button" data-vibe-panel="ideas" data-vibe-stop="ideas" title="Ideas the agents noticed (I)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span><kbd class="key vibe-stop-key" aria-hidden="true" title="I">I</kbd></button>
@@ -14621,7 +14685,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   <aside id="vibe-ask" data-type-scope class="vibe-chat vibe-ask" aria-labelledby="vibe-ask-title" hidden>
     <header class="vibe-chat-head"><div><small id="vibe-ask-kicker">Needs you</small><h2 id="vibe-ask-title">A decision</h2></div><button id="vibe-ask-close" class="vibe-icon" type="button" aria-label="Close the decision" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
     <div id="vibe-ask-body" class="vibe-ask-body"></div>
-    <footer class="vibe-ask-foot"><span id="vibe-ask-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-ask-watch" class="vibe-ask-link" type="button">Open in Watch</button></footer>
+    <footer class="vibe-ask-foot"><span id="vibe-ask-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-ask-watch" class="vibe-ask-link" type="button">Open on the Map</button></footer>
   </aside>
   <!-- Vibe's menus: Tasks, Plans, Ideas, Team and Settings as compact panels
        beside the front door (renderer/vibe-panels.js). Full view opens the
@@ -14638,18 +14702,19 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
      spark at the top goes back to Vibe and only the switch at the foot leaves
      the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
 <nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Social (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Today (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Today</span></button>
   <div class="vibe-rail-items">
-    <button type="button" data-nav="command" data-vibe-section="agents" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button type="button" data-nav="tasks" data-vibe-section="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+    <button type="button" data-nav="friends" data-vibe-place="friends" title="Friends: the Lobby, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
+    <button type="button" data-nav="command" data-vibe-place="map" title="The Map: your agents at work, live (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span>Map</span><span class="count warn" data-badge="questions" hidden></span></button>
+    <button type="button" data-nav="tasks" data-vibe-place="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
     <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
     <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
-    <button type="button" data-nav="friends" title="Rooms, your PCs and companion playdates"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Friends</span></button>
+    <button type="button" data-nav="agents" data-vibe-place="team" title="Team: who builds, which AI it uses and how much it may decide"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span>Team</span></button>
     <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
   </div>
-  <div class="vibe-rail-foot">
-    <button type="button" data-nav="studio" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+  <div class="vibe-rail-foot" id="vibe-rail-foot">
+    <button type="button" data-nav="studio" data-vibe-place="settings" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+    <button type="button" data-nav="help" data-vibe-place="help" title="Help: start here, the setup guide and every shortcut (?)"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg><span>Help</span></button>
     <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
   </div>
 </nav>
@@ -14710,7 +14775,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     <p id="vibe-notes-lede" class="vibe-notes-lede">Mefi Studio opens in <b>Social</b>: friends, and a light eye on your agents. In-depth building lives in <b>Studio</b>, one click away.</p>
     <div class="vibe-notes-modes">
       <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Social</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
-      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Studio</b><span>In-depth building: Command, boards, models and every setting.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Studio</b><span>In-depth building: the Map, boards, models and every setting.</span></figcaption></figure>
     </div>
     <ul class="vibe-notes-list">
       <li>Switch any time with the <b>Social / Studio</b> switch at the top, or from the menu and Search.</li>
@@ -14739,7 +14804,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     <div class="monogram" aria-hidden="true">M+</div>
     <div class="page-heading">
       <div class="eyebrow">Mefi's Studio AI+</div>
-      <div class="page-title-row"><h1 id="page-title">Model catalog</h1><button id="page-return" class="ghost mini" type="button" data-nav="command" aria-keyshortcuts="d" title="Back to Command view (D)" hidden><span aria-hidden="true">←</span> Command view <kbd class="key">D</kbd></button></div>
+      <div class="page-title-row"><h1 id="page-title">Model catalog</h1><button id="page-return" class="ghost mini" type="button" data-nav="command" aria-keyshortcuts="d" title="Back to Map (D)" hidden><span aria-hidden="true">←</span> Map <kbd class="key">D</kbd></button></div>
       <p class="sub" id="status">Loading catalog…</p>
     </div>
   </div>
@@ -14978,14 +15043,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
-            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social mode</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
-            <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
+            <label class="switch" title="On: after five minutes without input, Studio switches to the Map. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show the Map after 5 quiet minutes</span></label>
           </div>
           <p class="muted" id="idle-home-hint" data-info-anchor="idle-home-label">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
-          <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
+          <label class="field"><span class="field-label">Agents when Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
           <div class="settings-you-switches" id="launch-daily-news-row">
             <label class="switch" title="On: the launch screen is a front page with the day's biggest AI and developer-tool news beside your projects, fetched once a day. Off: only the project chooser, and Studio fetches no news."><input type="checkbox" id="launch-daily-news" checked><span class="track"></span><span>Daily news on the launch screen</span></label>
@@ -14994,7 +15059,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <div class="settings-you-switches" id="open-at-login-row" hidden>
             <label class="switch" title="Studio opens in the tray when you sign in to Windows, on the project you had open."><input type="checkbox" id="open-at-login"><span class="track"></span><span>Start with Windows</span></label>
           </div>
-          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.</p>
+          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow Agents when Studio opens. A PC you leave working keeps working after an update restart.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
             <span class="settings-mode-text"><b>Mode</b><span id="settings-mode-hint">Social is for friends and a light eye on your agents. Studio is for in-depth building.</span></span>
@@ -15481,7 +15546,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   <div class="rail-head">
     <span class="rail-title">Node tree</span>
     <div class="rail-actions">
-      <button id="idle-open" class="ghost mini" data-nav="command" title="Command view (D)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg><span class="label">Command</span></button>
+      <button id="idle-open" class="ghost mini" data-nav="command" title="Open the Map (D)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-orbit"/></svg><span class="label">Map</span></button>
       <button id="tree-explore" class="ghost mini" title="Open the session explorer (E)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-explorer"/></svg><span class="label">Explorer</span></button>
       <button id="tree-pin" class="ghost mini" aria-pressed="false" title="Pin the rail open (G)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-pin"/></svg><span class="label">Pin</span></button>
     </div>
@@ -15490,7 +15555,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   <div class="rail-stats" id="tree-stats">no session yet</div>
 </aside>
 <canvas id="idle-layer-far" aria-hidden="true" hidden></canvas>
-<canvas id="idle-layer" tabindex="0" role="application" aria-label="Command view" hidden></canvas>
+<canvas id="idle-layer" tabindex="0" role="application" aria-label="Map" hidden></canvas>
 <div id="idle-hud" hidden>
   <!-- The Map of the 0.5 layout (html[data-frame], docs/unified-studio.md "The Map"): the place's three pages, Running only and
        View ▾ over the node tree, as the prototype draws them. idle.js owns them; the pages are plain data-nav links. -->
@@ -15682,7 +15747,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     <ul id="cmd-legend-list" class="legend-list" hidden></ul>
   </div>
   <div id="cmd-empty" class="cmd-empty" data-variant="desktop-only" role="status" hidden>
-    <div class="eyebrow">Command</div>
+    <div class="eyebrow">Map</div>
     <h3 id="cmd-empty-title">No live constellation</h3>
     <p class="muted" id="cmd-empty-copy">Sessions, todos and tasks are read from the OpenCode store, which is only reachable from the desktop app. Run <code>npm start</code> inside mefi-studio.</p>
     <div class="row cmd-empty-actions">
@@ -15721,7 +15786,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 <div class="overlay explorer" id="tasks-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="tasks-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="tasks" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="tasks" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Work</div>
         <h2 id="tasks-heading">Task board</h2>
@@ -15783,7 +15848,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 <div class="overlay explorer" id="ideas-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="ideas-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="ideas" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="ideas" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Work</div>
         <h2 id="ideas-heading">Feature ideas</h2>
@@ -15822,7 +15887,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 <div class="overlay explorer" id="overhead-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="overhead-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="overhead" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="overhead" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Live</div>
         <h2 id="overhead-heading">Overhead</h2>
@@ -15848,7 +15913,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 <div class="overlay brains-overlay" id="brains-overlay" hidden>
   <div class="brains-sheet" role="dialog" aria-modal="true" aria-labelledby="brains-heading" tabindex="-1">
     <header class="brains-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="brains" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="brains" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Work</div>
         <h2 id="brains-heading">Brain maps</h2>
@@ -16106,7 +16171,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 <div class="overlay explorer" id="trace-overlay" hidden>
   <div class="explorer-sheet trace-sheet" role="dialog" aria-modal="true" aria-labelledby="trace-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="trace" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="trace" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Live</div>
         <h2 id="trace-heading">Trace</h2>
@@ -16272,7 +16337,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 <div class="overlay explorer" id="fleet-overlay" hidden>
   <div class="explorer-sheet fleet-sheet" role="dialog" aria-modal="true" aria-labelledby="fleet-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="fleet" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="fleet" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Live</div>
         <h2 id="fleet-heading" tabindex="-1">Fleet</h2>
@@ -16307,7 +16372,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 <div class="overlay explorer" id="analyzer-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="analyzer-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="analyzer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="analyzer" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Work</div>
         <h2 id="analyzer-heading">Analyzer</h2>
@@ -16363,7 +16428,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 <div class="overlay explorer" id="explorer-overlay" hidden>
   <div class="explorer-sheet" role="dialog" aria-modal="true" aria-labelledby="explorer-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
-      <button class="sheet-back ghost mini" data-nav-close="explorer" title="Back to Command (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Command</span></button>
+      <button class="sheet-back ghost mini" data-nav-close="explorer" title="Back to Map (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Map</span></button>
       <div class="sheet-title">
         <div class="eyebrow">Live</div>
         <h2 id="explorer-heading">Session explorer</h2>
@@ -16474,15 +16539,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       <div id="walkthrough-build-mode" class="build-mode-control">
         <label class="switch" for="walkthrough-auto-build"><input type="checkbox" id="walkthrough-auto-build" checked disabled aria-describedby="walkthrough-build-mode-note"><span class="track"></span><span>Auto build</span></label>
         <strong id="walkthrough-build-mode-label">Loading preference…</strong>
-        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this in Agents › Setup › Run behavior at any time.</p>
+        <p id="walkthrough-build-mode-note">Choose how building starts. You can change this any time in Team › Overview.</p>
         <p id="walkthrough-build-mode-feedback" role="status"></p>
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
       <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
         <h3 id="walkthrough-cli-heading">Use the account you already have</h3>
-        <p>One supported subscription can handle chat, mapping, planning and coding. Choose your tool, sign in with its own window, then check the connection. Your account's model access and usage limits apply.</p>
-        <label for="walkthrough-cli-choice">Your coding tool</label>
-        <select id="walkthrough-cli-choice"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="grok">Grok</option><option value="antigravity">Antigravity</option><option value="opencode">OpenCode (free models or linked providers)</option></select>
+        <p>One subscription can do it all: chatting, mapping, planning and building. Pick your tool, sign in in its own window, then check the connection. Your plan's own limits still apply.</p>
+        <label for="walkthrough-cli-choice">Your AI tool</label>
+        <select id="walkthrough-cli-choice"><option value="codex">Codex · ChatGPT plan</option><option value="claude">Claude Code · Claude subscription</option><option value="grok">Grok · Grok account</option><option value="antigravity">Antigravity · Google account</option><option value="opencode">OpenCode · free models, or accounts you link</option></select>
         <p id="walkthrough-cli-detail" class="muted"></p>
         <div class="walkthrough-panel-actions">
           <button class="ghost" id="walkthrough-cli-install" type="button">Install and sign in</button>
@@ -16492,27 +16557,27 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
           <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
         </div>
-        <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window that downloads the tool, and Node.js too if the tool needs it. Studio looks for the tool again when that window closes. Check connection sends one small test, which counts toward your plan. Your password stays in the company's own sign-in window.</p>
         <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-cli-keys" type="button">I have an API key or a local model server</button></div>
-        <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription? Paste a key from z.ai, OpenRouter, OpenCode Go or Zen, use your own server, or pick LM Studio in Team › Providers. The guide takes you there, then scans again so Use this setup can map your project with it.</p>
         <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
       </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
-        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their free tier may use prompts to improve the model)</span></label></div>
-        <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, linked provider names, models and agents. It sends no prompt and saves nothing until you choose Use this setup.</p>
+        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their makers may use what you send to improve them)</span></label></div>
+        <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, the accounts linked to it and its models. It only reads, and saves nothing until you choose Use this setup.</p>
         <ul id="walkthrough-scan-facts" class="walkthrough-facts"></ul>
         <ul id="walkthrough-scan-notes" class="walkthrough-notes"></ul>
       </div>
       <div id="walkthrough-map" class="walkthrough-panel" hidden>
         <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-map-run" type="button">Map this project</button><button class="ghost" id="walkthrough-map-cancel" type="button" hidden>Cancel</button></div>
-        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. Your selected provider uses a read-only project scan to map the folder and suggest first tasks. Suggestions are saved as ideas for you to review. Nothing is built.</p>
+        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. Your AI reads the project and suggests a few small first jobs. They are saved in Ideas for you to look at. Nothing is built, and nothing in your project changes.</p>
         <ul id="walkthrough-map-steps" class="walkthrough-notes"></ul>
         <pre id="walkthrough-map-tail" class="walkthrough-textTail" hidden></pre>
         <ul id="walkthrough-map-facts" class="walkthrough-facts"></ul>
       </div>
       <div id="walkthrough-assist" class="walkthrough-panel" hidden>
-        <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-assist-run" type="button">Ask my assistant what to do next</button><button class="ghost" id="walkthrough-assist-task" type="button" hidden>Put the suggested task in the task box</button></div>
-        <p id="walkthrough-assist-status" class="muted" role="status">After the scan, the AI you linked plans the rest of this setup from what it found.</p>
+        <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-assist-run" type="button">Ask my assistant what to do next</button><button class="ghost" id="walkthrough-assist-task" type="button" hidden>Put the suggested task in the box</button></div>
+        <p id="walkthrough-assist-status" class="muted" role="status">Once your AI is connected, it can suggest what to do at each of the steps that are left, from what it found.</p>
         <ul id="walkthrough-assist-list" class="walkthrough-facts walkthrough-assist-list"></ul>
       </div>
       <div class="walkthrough-destinations"><button class="primary" id="walkthrough-action" type="button"></button><button class="ghost" id="walkthrough-secondary" type="button" hidden></button></div><p id="walkthrough-note" class="muted"></p></div>
@@ -16521,7 +16586,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 </div>
 <aside class="walkthrough-coach" id="walkthrough-coach" role="region" aria-label="Walkthrough coach" hidden>
   <header class="walkthrough-coach-head"><span class="eyebrow" id="walkthrough-coach-progress" role="status">Step 1 of 7</span><div class="walkthrough-coach-tools"><button class="ghost mini" id="walkthrough-coach-back" type="button">Back</button><button class="ghost mini" id="walkthrough-coach-guide" type="button">Full guide</button><button class="ghost mini" id="walkthrough-coach-end" type="button" title="End the guided walk (Esc)">End tour</button></div></header>
-  <strong id="walkthrough-coach-title">Your workspace</strong>
+  <strong id="walkthrough-coach-title">Your project</strong>
   <p id="walkthrough-coach-copy" aria-live="polite"></p>
   <p class="walkthrough-coach-hint" id="walkthrough-coach-hint"></p>
   <div class="walkthrough-coach-actions"><button id="walkthrough-coach-next" class="primary mini" type="button">Done — next stop</button></div>
@@ -16538,6 +16603,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       </div>
     </header>
     <p class="help-start">New to Studio? <button class="ghost mini" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-flag"/></svg>Start here</button></p>
+    <p class="help-links" id="help-links" role="group" aria-label="More help"></p>
     <div class="shortcut-grid" id="help-grid"></div>
   </div>
 </div>
@@ -22495,7 +22561,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   function snapshot() {
     return { schemaVersion: 1, renderer: core.snapshot(), host: host ? JSON.parse(JSON.stringify(host)) : null,
-      coverage: { longTasksSupported, hostStatus: hostState || "available", frameCadence: "Visible renderer requestAnimationFrame intervals; not GPU time or Command draw FPS.",
+      coverage: { longTasksSupported, hostStatus: hostState || "available", frameCadence: "Visible renderer requestAnimationFrame intervals; not GPU time or the Map's draw FPS.",
         scopes: "Synchronous self time excludes nested measured scopes. Async and IPC timings include waiting; they are not CPU time.",
         retention: "Frame statistics cover the latest 900 intervals; scope p95 covers the latest 180 calls. Scope counts, means, self time and maxima cover this capture. Host limits are included separately.",
         privacy: "Static operation names and numeric measurements only; no task text, request payloads, file paths or credentials." } };
@@ -22582,10 +22648,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     for (const [label, value, tone] of metrics) { const card = document.createElement("div"), title = document.createElement("span"), metric = document.createElement("strong"); card.className = tone ? `profiler-metric ${tone}` : "profiler-metric"; title.textContent = label; metric.textContent = value; card.append(title, metric); fragment.append(card); }
     $("metrics").replaceChildren(fragment);
     text("frames-note", stats.count
-      ? `${stats.count} recent UI ${stats.count === 1 ? "interval" : "intervals"} · ${stats.overBudget} over budget (+10% tolerance). Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.`
-      : "Command intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.");
+      ? `${stats.count} recent UI ${stats.count === 1 ? "interval" : "intervals"} · ${stats.overBudget} over budget (+10% tolerance). The Map intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.`
+      : "The Map intentionally draws at about 30 fps; UI cadence measures browser callbacks, not GPU rendering.");
     chart(data);
-    table("spans", data.spans, (row) => [row.name, row.count, ms(row.selfMs), ms(row.selfMeanMs), ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs)], "No measured rendering work yet. Start recording, close this panel and use Command or the node tree.", 7);
+    table("spans", data.spans, (row) => [row.name, row.count, ms(row.selfMs), ms(row.selfMeanMs), ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs)], "No measured rendering work yet. Start recording, close this panel and use the Map or the node tree.", 7);
     table("ipc", [...(host?.spans || [])].sort((a, b) => b.totalMs - a.totalMs), (row) => [row.name, row.count, ms(row.meanMs), ms(row.p95Ms), ms(row.maxMs), row.errors], "Host requests appear during a desktop capture.", 6);
     table("processes", latest?.processes || [], (row) => [row.type, finite(row.cpuPercent) ? `${number(row.cpuPercent)}%` : "—", finite(row.memoryMB) ? `${number(row.memoryMB, 0)} MB` : "—"], data.startedAt ? "Waiting for process measurements." : "Process CPU and memory appear during a desktop capture.", 3);
     const events = [...data.incidents.map((row) => ({ ...row, source: "Renderer" })), ...(host?.incidents || []).map((row) => ({ ...row, source: "Host" }))].sort((a, b) => b.at - a.at).slice(0, 20);
@@ -24182,7 +24248,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   "use strict";
 
   const SVG_NS = "http://www.w3.org/2000/svg";
-  const ESC_HELP = "Close the top-most layer: palette → help → sheet → Command (clear selection, then leave)";
+  const ESC_HELP = "Close the top-most layer: palette → help → sheet → Map (clear selection, then leave)";
   const BADGE_THROTTLE_MS = 2000;
   // Pushes keep the counts live; this backstop only catches a missed push.
   const BADGE_POLL_MS = 120000;
@@ -24307,7 +24373,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -24381,6 +24447,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
       ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
+      ["friends-events", "Events", "g-bolt", "This week's Build Jam, co-work hours and building together", "events"],
     ].map(([id, label, glyph, desc, target]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
       searchTerms: `friends ${label} ${desc}`,
@@ -24584,7 +24651,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       keyMatch: (event) => settingsChord(event) || defaultKeyMatch("4")(event),
       glyph: "g-sliders",
       badge: null,
-      desc: "Your name, appearance, audio, updates and diagnostics; agent setup lives under Agents",
+      desc: "Your name, appearance, audio, updates and diagnostics; agent setup lives under Team",
       searchTerms: "settings connections api key login setup provider workers preferences you theme motion animations launch updates diagnostics",
       showIn: showIn({ dock: true, palette: true, help: true }),
       // A section param opens one card: go("studio", { section: "settings-updates" }).
@@ -24891,7 +24958,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     {
       id: "onboarding", label: "Start here", short: "Start here", kind: "overlay", layer: "transient", section: "help",
       group: "system", key: null, glyph: "g-flag", badge: null,
-      desc: "The guided walkthrough: link an AI, add a project, connect providers, then create, follow and review work",
+      desc: "The guided tour: connect your AI, open a project, then make, watch and check your first task",
       searchTerms: "start here walkthrough tour getting started guide tutorial help welcome onboarding",
       showIn: showIn({ dock: true, tools: true, palette: true }),
       element: "walkthrough-overlay", focus: "#walkthrough-title",
@@ -24910,7 +24977,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       keyMatch: (event) => event.key === "?",
       glyph: "g-help",
       badge: null,
-      desc: "Keyboard shortcuts for pages, tools and Command view",
+      desc: "Keyboard shortcuts for pages, tools and the Map",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       element: "help-overlay",
       focus: "#help-overlay .sheet",
@@ -25234,7 +25301,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Social" : "Command";
+      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Social" : "Map";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -25355,7 +25422,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     else if (id === "map") id = "command";
     // Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The Lobby and each
     // way in at its own place. (Spelled out here, not shared: suites run go() on its own.)
-    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
+    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub", "friends-events": "events" };
     if (Object.hasOwn(friendsPages, id)) {
       params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
@@ -25407,7 +25474,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         window.MefiIdle?.exit?.();
         state.returnTo = "command";
         // Only a deep link needs explaining; a plain tab click speaks for itself.
-        if (params && Object.keys(params).length) window.MefiToast?.("D returns to Command", "info");
+        if (params && Object.keys(params).length) window.MefiToast?.("D returns to the Map", "info");
       }
       dest.open?.(params);
       if (id === "eyes") {
@@ -25736,7 +25803,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events"]) { const dest = get(id); if (dest) children.append(navButton(dest, "app-rail-item", { key: false })); }
         group.append(children);
       }
       sections.append(group);
@@ -25881,12 +25948,18 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // A pinned rail takes its open width from the page. Below this window width
   // it yields and behaves unpinned, opening over the page on hover or focus;
   // the saved choice stays, and the pin comes back when the window widens.
+  // With no saved choice the menu starts open only in a wide window: at the
+  // default 1460 px window the compact rail leaves the page and the list
+  // column their room (open, the menu and the list left Plans about 900 px).
   const RAIL_PIN_MIN_WIDTH = 1100;
+  const RAIL_PIN_DEFAULT_WIDTH = 1600;
   let railPinWanted = false;
-  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < RAIL_PIN_MIN_WIDTH);
+  let railPinChosen = false;
+  const railPinFits = () => !(Number.isFinite(window.innerWidth) && window.innerWidth < (railPinChosen ? RAIL_PIN_MIN_WIDTH : RAIL_PIN_DEFAULT_WIDTH));
 
-  function setRailPinned(pinned, { save = true } = {}) {
+  function setRailPinned(pinned, { save = true, chosen = true } = {}) {
     railPinWanted = Boolean(pinned);
+    railPinChosen = Boolean(chosen);
     document.getElementById("app-rail-pin")?.setAttribute("aria-pressed", String(railPinWanted));
     if (save) {
       try { localStorage.setItem(RAIL_PIN_KEY, pinned ? "1" : "0"); } catch { /* the pin is a convenience */ }
@@ -25912,9 +25985,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!rail) return false;
     document.documentElement.dataset.shell = "rail";
     rail.hidden = false;
-    let pinned = true;
-    try { pinned = localStorage.getItem(RAIL_PIN_KEY) !== "0"; } catch { /* use the wide-window default */ }
-    setRailPinned(pinned, { save: false });
+    let saved = null;
+    try { saved = localStorage.getItem(RAIL_PIN_KEY); } catch { /* use the wide-window default */ }
+    setRailPinned(saved !== "0", { save: false, chosen: saved === "0" || saved === "1" });
     renderRail();
     window.dispatchEvent(new CustomEvent("mefi:shell", { detail: { rail: true } }));
     return true;
@@ -26211,7 +26284,28 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const element = target ?? document.getElementById("help-grid");
     if (!element) return;
     element.textContent = "";
-    const rows = list({ showIn: "help" }).filter((dest) => dest.key);
+    // The sheet's own row of help: the Help menu's rows (HELP_MENU_V2, one list for both), past Start here and the sheet itself.
+    const links = target ? null : document.getElementById("help-links");
+    if (links) {
+      links.textContent = "";
+      let count = 0;
+      for (const [id, words] of HELP_MENU_V2) {
+        const dest = get(id);
+        if (!dest || id === "onboarding" || id === "help" || dest.hidden?.()) continue;
+        const link = document.createElement("button");
+        link.type = "button";
+        link.className = "ghost mini";
+        link.dataset.helpLink = id;
+        link.textContent = words;
+        // The sheet steps aside first: a page (the setup guide) opens under the transient layer, not behind it.
+        link.addEventListener("click", () => { close("help"); go(id); });
+        links.append(link);
+        count += 1;
+      }
+      links.hidden = count === 0;
+    }
+    // A shortcut kept only as a chord (Ctrl J for the Inbox) is a shortcut too.
+    const rows = list({ showIn: "help" }).filter((dest) => dest.key || dest.chord);
     HELP_SECTIONS.forEach(([title, sections], index) => {
       const items = rows.filter((dest) => sections.includes(sectionOf(dest)));
       if (!items.length && title !== "Help") return;
@@ -26226,7 +26320,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       group.setAttribute("aria-labelledby", heading.id);
       group.append(heading);
       for (const dest of items) {
-        group.append(helpRow(dest.key, dest.label));
+        if (dest.key) group.append(helpRow(dest.key, dest.label));
         if (dest.chord) group.append(helpRow(dest.chord, dest.label));
       }
       if (title === "Help") group.append(helpRow("Esc", ESC_HELP));
@@ -26528,6 +26622,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const title = head.querySelector?.(".sheet-title");
         if (typeof title?.after === "function") title.after(group); else head.append?.(group);
       }
+      // The Agent brain's Playbook and Project map are Team › Workflows: the Map's switch does not belong over them.
+      group.hidden = Boolean(head.closest?.("#agent-brain-overlay")) && Boolean(tab) && tab !== "live";
       for (const button of Array.from(group.children ?? [])) {
         const on = button.dataset.nav === id && (id !== "agent-brain" || tab === "live");
         if (on) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
@@ -27356,8 +27452,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const wait = booting() ? 1500 : busy ? 5000 : KEY_HINT_QUIET_MS - (now - quietSince);
       if (wait > 0 && tries++ < 120) { setTimeout(attempt, wait); return; }
       try { localStorage.setItem(KEY_HINT_STORE, "1"); } catch { /* the tip may show again next launch */ }
-      const home = vibeMode() ? "Social" : "workspace";
-      window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D Command view, T task board. Press ? for the full list.`, "info", {
+      const home = vibeMode() ? "Social" : "Home";
+      window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D the Map, T task board. Press ? for the full list.`, "info", {
         duration: 12000,
         action: { label: "Show keys", run: () => go("help") },
       });
@@ -49485,7 +49581,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const taskId = typeof params?.taskId === "string" || typeof params?.taskId === "number" ? String(params.taskId).trim() : "";
     if (taskId && (!selectedId || selectedId === `task:${taskId}`)) {
       if (selectTaskNode(taskId)) applied = true;
-      else window.MefiToast?.("That task is not on the Command board right now", "info");
+      else window.MefiToast?.("That task is not on the Map right now", "info");
     } else if (selectedId) {
       const workId = /^(builder|task):/.test(selectedId) ? selectedId.slice(selectedId.indexOf(":") + 1) : "";
       if (select(selectedId) || (workId && selectTaskNode(workId))) applied = true;
@@ -50571,7 +50667,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       state.idleEnter = el.idleCommand.checked;
       state.lastInput = Date.now();
       window.mefiStudio?.prefsSet?.({ idleCommand: state.idleEnter });
-      window.MefiToast?.(state.idleEnter ? "Command view opens after 5 quiet minutes" : "Command view opens only when you choose it", "info");
+      window.MefiToast?.(state.idleEnter ? "The Map opens after 5 quiet minutes" : "The Map opens only when you choose it", "info");
     });
   }
 
@@ -53432,7 +53528,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     link("Filter A-Eyes feed", "Show only this session's changes in the A-Eyes feed (3)", () =>
       window.MefiNav?.go?.("eyes", { sessionId: session.id })
     );
-    link("Open in Command", "Select this session in the Command view (D)", () =>
+    link("Open in Map", "Select this session on the Map (D)", () =>
       window.MefiNav?.go?.("command", { sessionId: session.id })
     );
     const owner = sessionTask(session.id);
@@ -53920,7 +54016,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const hint = document.createElement("p");
       hint.className = "muted";
       hint.textContent = state.assistant?.ai?.keyPresent === false
-        ? "No briefing yet. Connect an AI provider in Agents › Setup › Connections, then press Brief me."
+        ? "No briefing yet. Connect an AI provider in Team › Providers, then press Brief me."
         : "No briefing yet. Press Brief me.";
       els.brief.append(hint);
     } else {
@@ -55380,7 +55476,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const loop = live.loop && typeof live.loop === "object" && typeof live.loop.state === "string" ? live.loop : null;
     const loopHold = !finished && !job && stage === "ready" && loop && !["idle", "starting"].includes(loop.state) && !(loop.state === "running" && !loop.reason) ? loop : null;
     const blocker = question?.question || question?.title || (!finished && ["blocked", "approval", "waiting", "cooling", "deferred"].includes(scheduled?.stage) ? scheduled.reason : "") || (handedOn && task.handoffState?.state === "blocked" ? task.handoffState.reason : "") || (!finished && task?.verification?.state === "failed" ? task.verification.reason : "") || (loopHold ? loopHold.reason || loopHold.headline : "") || "";
-    const nextAction = finished ? "Open the app, view checks, or request a change." : missingWorker ? "Inspect Live or refresh task status before starting another attempt." : checking ? "Wait for completion checks, or view their evidence." : handedOn ? "Review its follow-up cards; this one settles by itself when they do." : job ? "Watch this worker in Live; stop it to save progress." : failedCheck ? "View checks, then resolve the failure before retrying." : scheduled?.stage === "cooling" ? "Wait for the scheduled retry, or choose Retry now." : scheduled?.blockedBy === "owner" ? "Resume this task from its saved progress." : blocker ? scheduled?.stage === "approval" ? "Review the brief and approve this build." : "Resolve the blocker before starting this task." : loopHold ? loopHold.action ? `${loopHold.action.label} to continue.` : "It starts on its own once this clears." : paused ? "Task ready; agents paused. Start this task to continue." : "Start this task when you are ready.";
+    // When the only thing in the way is the loop's hold (agents off, paused, a full machine), the next step is the hold's own
+    // action ("Start agents to continue"), not "Resolve the blocker".
+    const holdOnly = Boolean(loopHold) && blocker === (loopHold.reason || loopHold.headline || "");
+    const nextAction = finished ? "Open the app, view checks, or request a change." : missingWorker ? "Inspect the Map or refresh task status before starting another attempt." : checking ? "Wait for completion checks, or view their evidence." : handedOn ? "Review its follow-up cards; this one settles by itself when they do." : job ? "Watch this worker on the Map; stop it to save progress." : failedCheck ? "View checks, then resolve the failure before retrying." : scheduled?.stage === "cooling" ? "Wait for the scheduled retry, or choose Retry now." : scheduled?.blockedBy === "owner" ? "Resume this task from its saved progress." : blocker && !holdOnly ? scheduled?.stage === "approval" ? "Review the brief and approve this build." : "Resolve the blocker before starting this task." : loopHold ? loopHold.action ? `${loopHold.action.label} to continue.` : "It starts on its own once this clears." : paused ? "Task ready; agents paused. Start this task to continue." : "Start this task when you are ready.";
     return { stage, label, worker: job?.route || job?.cli || (job ? "Coding worker" : missingWorker ? "Current worker status unavailable" : "No worker running"), action, activityAge, checks, blocker, nextAction };
   }
   const relTime = (ts) => {
@@ -57011,7 +57110,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       control.type = "button"; control.dataset.taskAction = action;
       control.addEventListener("click", run); actions.append(control); return control;
     };
-    button("View in Live", "live", () => window.MefiNav?.go?.("command", { taskId: task.id, projectId: task.projectId || state.projectId, selected: `task:${task.id}` }));
+    button("View in Map", "live", () => window.MefiNav?.go?.("command", { taskId: task.id, projectId: task.projectId || state.projectId, selected: `task:${task.id}` }));
     button("View checks", "view-checks", () => showDetailView("evidence", true), isDone(task));
     const scheduled = scheduledTask(task);
     const mayStart = !task.runId && task.status === "open" && (scheduled?.stage === "ready" || scheduled?.blockedBy === "owner");
@@ -63752,6 +63851,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // the sheet's own entrance carries both.
     state.painted = null;
     if (state.mark?.dataset) state.mark.dataset.on = "false";
+    // The transient layer is Configuration's while it shows: Escape from anywhere and closeAll() find it, and a
+    // second pop-up (Search, Shortcuts) takes its place instead of stacking over a dialog nobody can close by key.
+    window.MefiNav?.claim?.("config");
     $("overlay").hidden = false;
     render();
     requestAnimationFrame(() => $("search")?.focus?.({ preventScroll: true }));
@@ -63762,9 +63864,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function close() {
     if (!isOpen()) return;
     $("overlay").hidden = true;
+    window.MefiNav?.release?.("config");
+    // MefiNav hands focus back first; this only steps in when nothing usable took it.
     const back = state.previous;
     state.previous = null;
-    if (back && document.contains?.(back)) back.focus?.({ preventScroll: true });
+    const current = document.activeElement;
+    const stranded = !current || current === document.body || $("overlay").contains?.(current);
+    if (stranded && back && document.contains?.(back)) back.focus?.({ preventScroll: true });
   }
   // Up and Down walk the categories from the tree.
   function step(delta) {
@@ -66552,11 +66658,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function buildTree() {
     const host = $("nodes");
     const tools = el("div", "fleet-tree-tools");
-    const command = el("button", "ghost mini fleet-tree-command", "Open in Command");
+    const command = el("button", "ghost mini fleet-tree-command", "Open in Map");
     command.type = "button";
     command.title = "The live node tree, with the selected seat in focus";
     command.addEventListener("click", () => openInCommand(state.view && state.selected ? seatOf(state.view, state.selected) : null));
-    tools.append(el("p", "fleet-tree-note", "The team as a tree. Command shows the same work as the live node tree."), command);
+    tools.append(el("p", "fleet-tree-note", "The team as a tree. The Map shows the same work as the live node tree."), command);
     const scroll = el("div", "fleet-tree-scroll");
     const stage = el("div", "fleet-tree-stage");
     stage.append(svg("svg", { class: "fleet-tree-links", "aria-hidden": "true" }), el("div", "fleet-tree-nodes"));
@@ -66800,7 +66906,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       open.addEventListener("click", () => openTask(taskId));
       bar.append(open);
     }
-    const command = el("button", "ghost mini", "Open in Command");
+    const command = el("button", "ghost mini", "Open in Map");
     command.type = "button";
     command.addEventListener("click", () => openInCommand(seat));
     bar.append(command);
@@ -67440,7 +67546,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   const agentsOn = () => Boolean(state.selectedId) && (state.agents ?? startsAgents());
   function why() {
-    if (!state.selectedId) return "You can add a folder later from the M+ menu.";
+    if (!state.selectedId) return "You can open a folder any time from the M+ project button, top left.";
     if (!agentsOn()) return "Agents stay off until you start them.";
     if (state.agents === null && state.launch?.choice !== "start") return "Agents were running here when you left, so they start again.";
     return "Agents start when the studio opens. Change this in Settings › General.";
@@ -67540,7 +67646,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const empty = !state.projects.length;
     state.rows = new Map();
     list.replaceChildren();
-    if (empty) list.append(node("p", "boot-projects-empty", "No project is open yet. Open a folder and Studio will start there, or continue without one."));
+    if (empty) list.append(node("p", "boot-projects-empty", "New here? Start a new app and Studio makes the folder for you. Already have a project folder? Open it."));
     for (const project of state.projects) list.append(row(project));
     const none = node("p", "boot-projects-empty", "No project matches that.");
     none.hidden = true;
@@ -67549,13 +67655,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if ($("choose")) $("choose").dataset.empty = String(empty);
     // Under the title: a line for a list, nothing for the first launch.
     if ($("detail")) $("detail").textContent = empty ? "" : "Pick a project to work on, or add one below.";
-    // First launch: the way in leads and sits beside the quiet continue; a list
-    // has the switch and Open in that place, and the folder verb joins the others.
-    // Moving nodes drops focus, so they move only when the card changes shape.
+    // First launch: a new app leads (the beginner's way in: Studio makes the folder), the folder you already have
+    // sits beside it, and GitHub and the quiet continue follow; a list has the switch and Open in that place, and the
+    // folder verb joins the others. Moving nodes drops focus, so they move only when the card changes shape.
     if (state.shape !== empty) {
       state.shape = empty;
-      if (ui.go) ui.go.replaceChildren(...(empty ? [ui.add, ui.open] : [ui.sw, ui.open]).filter(Boolean));
-      if (ui.verbs) ui.verbs.replaceChildren(...(empty ? [ui.newApp, ui.github] : [ui.add, ui.newApp, ui.github]).filter(Boolean));
+      if (ui.go) ui.go.replaceChildren(...(empty ? [ui.newApp, ui.add] : [ui.sw, ui.open]).filter(Boolean));
+      if (ui.verbs) ui.verbs.replaceChildren(...(empty ? [ui.github, ui.open] : [ui.add, ui.newApp, ui.github]).filter(Boolean));
     }
     applyFilter();
     paintControls();
@@ -67577,9 +67683,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function paintControls() {
     const empty = !state.projects.length, chosen = selected();
     if (ui.sw) { ui.sw.setAttribute("aria-checked", String(agentsOn())); ui.sw.hidden = !state.selectedId; }
-    if (ui.add) { ui.add.className = empty ? "primary boot-add" : "boot-verb"; face(ui.add, "Open a folder…", "folder"); }
+    if (ui.add) { ui.add.className = empty ? "ghost boot-add" : "boot-verb"; face(ui.add, "Open a folder…", "folder"); }
+    if (ui.newApp) { ui.newApp.className = empty ? "primary boot-add" : "boot-verb"; face(ui.newApp, "Start a new app", "plus"); }
     if (!ui.open) return;
-    ui.open.className = state.selectedId ? "primary" : "ghost";
+    ui.open.className = state.selectedId ? "primary" : empty ? "boot-verb" : "ghost";
     // A pick the filter hides (nothing matches) is not opened blind.
     ui.open.disabled = state.busy || missing(chosen) || Boolean(chosen && !matches(chosen));
     if (!state.busy) { ui.open.textContent = state.selectedId ? "Open" : "Continue without a project"; delete ui.open.dataset.busy; }
@@ -67617,7 +67724,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function focusSelected() {
     const entry = state.rows.get(state.selectedId);
     if (entry) { entry.wrap.scrollIntoView?.({ block: "nearest" }); entry.button.focus?.({ preventScroll: true }); return; }
-    (!state.projects.length ? ui.add : ui.open)?.focus?.({ preventScroll: true });
+    (!state.projects.length ? ui.newApp ?? ui.add : ui.open)?.focus?.({ preventScroll: true });
   }
   // A control that locks while the host works drops the keyboard to the page;
   // when the action ends and the screen stays up, focus goes back to where the
@@ -68347,7 +68454,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const section = node("section", "paper-away");
     section.setAttribute("aria-labelledby", "paper-away-title");
     const head = node("div", "paper-away-head");
-    const title = node("h2", "paper-away-title", "Since you were away");
+    // The very first launch has nothing to come back to: it is a welcome.
+    const title = node("h2", "paper-away-title", away?.models?.firstVisit ? "Welcome to Studio" : "Since you were away");
     title.id = "paper-away-title";
     head.append(node("p", "paper-kicker", "Your studio"), title);
     const grid = node("div", "paper-away-grid");
@@ -70008,7 +70116,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       label = status.enabled === false ? "paused in Settings" : !status.configured ? "connect in Settings" : status.accountingPending ? "waiting for usage accounting" : status.lastError ? "needs attention in Settings" : status.phase === "running" ? "reviewing task intake" : status.lastSuccessAt ? "task intake ready" : "configured · awaiting first intake";
     }
     $("jev").textContent = `Jev · ${label}`;
-    $("jev").title = status?.lastError || "Jev is Studio's optional model-selection service: with a key it picks a model per task and advises on related tasks; without one, fixed defaults apply. Your work stays on the board. Set it up under Agents › Setup › Providers.";
+    $("jev").title = status?.lastError || "Jev is Studio's optional model-selection service: with a key it picks a model per task and advises on related tasks; without one, fixed defaults apply. Your work stays on the board. Set it up under Team › Providers.";
   }
   function setMode(mode) {
     if (state.pending || state.switching) return;
@@ -77416,7 +77524,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (card?.open && holds()) void load();
     api().onReportCrashed?.(() => whenVisible(() => whenBooted(crashed)));
     window.MefiNav?.register?.({
-      id: "settings:report", label: "Settings › System › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system",
+      id: "settings:report", label: "Settings › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system",
       glyph: "g-gauge", badge: null, desc: "Build a report you can read before you save it. Nothing is uploaded",
       searchTerms: "report a problem bug crash closed unexpectedly diagnostics zip support save log",
       showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
@@ -82226,68 +82334,108 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // Subscription CLIs that sign in with their own account (cli-setup.cjs).
   const SUBSCRIPTIONS = ["codex", "claude", "grok", "antigravity"];
   const $ = (id) => document.getElementById(`walkthrough-${id}`);
+  // The seven stops, in plain words for someone who has never built anything with an AI. The places they name are the
+  // 0.5 layout's: Social and Studio, Today, the Map, Team › Providers, the Inbox, Help › Start here and Help › Setup guide.
   const lessons = [
     {
-      title: "Link an AI and scan this computer", short: "Scan", glyph: "g-ambience", panel: "scan",
-      copy: "Start with the account you already use. Codex, Claude Code, Grok or Antigravity can power your studio through its own login. Install a missing tool here, use an API key (z.ai, OpenRouter, OpenCode Go or Zen, or your own endpoint) or a local model server such as LM Studio, or scan for OpenCode's linked and free models.",
-      points: ["The scan asks OpenCode for its version, its linked provider names, its model list and its agents. It never opens the credential store, never sends a prompt and never changes OpenCode's own configuration.", "Free models cost nothing and are used first for exploring; paid plans you have linked are kept for building. Free-tier models may use prompts to improve the model, so keep confidential work on a paid model.", "Nothing is saved until you choose Use this setup and continue. From there the guide maps your selected folder and asks the linked AI to plan the remaining stops. You can run this scan again from Start here, or Auto setup from Agents setup, after linking a provider."],
-      action: null, note: "Run the first scan reads OpenCode's own answers. Use this setup and continue saves the choices shown (no key), maps the selected folder, and asks the linked AI what to do next.",
-      done: "Setup saved",
+      title: "Pick the AI that builds for you", short: "Your AI", glyph: "g-ambience", panel: "scan",
+      copy: "Studio needs an AI to do the work. Already pay for Claude, ChatGPT, Grok or Google's AI? Pick its tool below and sign in. No subscription? Use an API key, an AI that runs on this PC, or OpenCode's free models.",
+      points: [
+        "Install and sign in opens a setup window. It downloads the tool, then you sign in with your own account. Check connection sends one small test. Then Use for the whole studio puts that AI on every job.",
+        "OpenCode is optional. Run the first scan asks it what it has: its version, the accounts linked to it and its models. The scan only reads. It sends no prompt and changes no settings.",
+        "Free models cost nothing, but their makers may use what you send to improve them. Keep private work on a paid AI.",
+        "No choice is saved until you press Use this setup or Use for the whole studio. Then the tour maps your project as soon as one is open, and asks your AI what to do next.",
+        "Later on, Team › Providers holds every connection and Run auto setup, and Help › Setup guide goes through every setting, step by step.",
+      ],
+      action: null, note: "Run the first scan only reads. Use this setup saves the choices shown (never a key), maps your project and asks your AI what to do next.",
+      done: "AI connected",
     },
     {
-      title: "Welcome to Mefi's Studio", short: "Your workspace", glyph: "g-explorer",
-      copy: "Turn an idea into a checked result: talk it through, create a task or plan, follow the work, then review what changed. This guide shows you where to do each step, and can walk the menus with you.",
-      points: ["Start with Projects: the M+ at the top of the menu on the left. Use + to add an existing folder, then select it. Check the project name above the conversation before adding work.", "Choose how builds start below. Auto build is on by default. Turn it off for Verify first: inspect each task, then approve the ones you want built.", "Each project keeps its own tasks, plans, conversation and results. Your project files stay in their folder; Studio keeps its history separately."],
+      title: "Open your project", short: "Your project", glyph: "g-explorer",
+      copy: "Studio builds inside a project: a folder on your PC that holds your app. Open one, and this tour shows you the rest: say what you want, watch your AI build it, then check the result.",
+      points: [
+        "The project you are in is named at the top. Press its name to switch to another one.",
+        "The + next to PROJECTS opens a folder you already have. Starting from nothing? Choose Start a new app, and Studio makes the folder for you. In Social it is the + beside the project name; in Studio it is in the project menu.",
+        "Each project keeps its own tasks, plans and chat. Your files stay in their folder. Studio keeps its own history of them separately.",
+        "Below, choose how building starts. Auto build is on at first: a new task starts building by itself. Turn it off for Verify first, and each new task waits for your OK.",
+      ],
       action: "Walk me to my projects", route: "project",
-      station: "I opened the project menu with you and highlighted +. Add an existing folder, then select it. I tick this off the moment you are in a project.",
-      note: "This opens the workspace and the project menu with you. It does not change your selected project. With a setup saved, selecting a folder here starts its map.",
-      target: "#workspace-add-project", menu: true, waitFor: "mefi:project-changed", done: "Project selected",
+      station: "I opened your project list and lit up the + next to PROJECTS. Press it to open a folder you already have, or pick a project from the list. I tick this off as soon as a project is open.",
+      note: "This only opens your project list. It does not change your project.",
+      target: "#workspace-add-project", menu: true, waitFor: "mefi:project-changed", done: "Project open",
     },
     {
-      title: "Map the folder", short: "First map", glyph: "g-explorer", panel: "map",
-      copy: "Let a read-only explorer lay out the node tree for the selected folder: what the project is, where its parts live, how it is checked, and what small work could start first.",
-      points: ["Your selected provider maps a bounded local inventory and project excerpts without native editing tools. OpenCode's built-in plan explorer is also available when its scan has selected a model.", "Suggested first tasks are saved as ideas in Your work. OpenCode sessions also show a live todo list in the tree.", "Mapping uses your selected account's allowance. It can take a few minutes. Cancel at any point; a cancelled map saves nothing."],
-      action: null, note: "Map this project starts one explorer session in the selected folder. Ideas can be promoted to tasks later, one by one.",
-      waitFor: "mefi:first-map", done: "Folder mapped",
+      title: "Let your AI map your project", short: "First map", glyph: "g-explorer", panel: "map",
+      copy: "Your AI reads your project and writes a short map of it: what the app is, where its parts are, how to check that it works, and a few small first jobs. It only reads. Nothing in your project changes.",
+      points: [
+        "The first jobs it suggests are saved in Ideas. Nothing is built until you turn an idea into a task.",
+        "When OpenCode makes the map, you can watch its checklist on the Map while it works.",
+        "Mapping counts toward your AI plan and can take a few minutes. Cancel stops it, and a cancelled map saves nothing.",
+      ],
+      action: null, note: "Map this project makes one read-only pass over your project. You can turn its ideas into tasks later, one at a time.",
+      waitFor: "mefi:first-map", done: "Project mapped",
     },
     {
-      title: "Connect the assistant and coding workers", short: "Connections", glyph: "g-ambience",
-      copy: "The assistant helps you think and organize. Coding workers carry out tasks in your project. Their provider settings are separate, and the scan's choices are shown at the top of Agents setup.",
-      points: ["In Agents › Setup › Connections › Providers, save the key for the assistant provider you want, choose Grok, Claude Code, Codex or Antigravity with their own CLI logins, or point the custom route at your own OpenAI-compatible endpoint.", "LM Studio needs no key: keep its local server running and pick it as the provider.", "Models are saved per provider: set the model you have for each option and switching never mixes them.", "Coding workers run through the builder CLI your setup chose: the subscription tool you connected, or OpenCode on your linked plan or the free model the scan found. Agents › Setup › Team shows which one. The coding tier decides what each build may cost — Free, Fast or Heavy — while Auto lets Studio pick per task. Saving an assistant key alone does not prove a worker is ready.", "Manual planning works without an AI key. Jev is optional; without it the assistant's own model, or a free model, stands in for the small routing decisions."],
-      action: "Walk me to connections", route: "studio", params: { section: "settings-assistant" },
-      station: "We are in Agents › Setup › Providers. Save the key you want, then open Agents › Setup › Team & models to confirm the CLI and pick a coding tier. Nothing is sent until you choose to test it.",
-      note: "Connection tests and AI requests may use your provider allowance when you explicitly run them.",
-      target: "#settings-assistant-heading", done: "Connections checked",
+      title: "See your AI accounts", short: "AI accounts", glyph: "g-ambience",
+      copy: "Team › Providers is where Studio gets its AI. Here you can see what is connected, sign in to another tool, paste an API key, or use an AI that runs on this PC.",
+      points: [
+        "At the top, Use one provider for everything puts one subscription in charge of chatting, planning and building.",
+        "An API key is a secret code from an AI company such as z.ai, OpenRouter or OpenCode. Paste it into that company's tile under Providers and press Save. Keys are kept encrypted on this PC.",
+        "LM Studio needs no key. Keep its local server running, then choose LM Studio.",
+        "Studio decides which AI does each job. You can change that later, in Team.",
+      ],
+      action: "Walk me to Team › Providers", route: "agents", params: { place: "providers" },
+      station: "This is Team › Providers. At the top, one subscription can do everything. Lower down, the highlighted Providers card takes API keys and LM Studio. Nothing is sent to an AI until you choose to test it.",
+      note: "Tests and AI requests use your plan's allowance, and only when you run them.",
+      target: "#settings-assistant-heading", done: "Accounts checked",
     },
     {
-      title: "Give a clear task, or explore a plan", short: "Create", glyph: "g-tasks",
-      copy: "Use Create task when the outcome is clear. Use Plan an idea when you need to settle questions before anything is built. The map's ideas, and the assistant's suggested first task, are good places to start.",
-      points: ["Chat is for questions and discussion. Create task saves work in the selected project, and Use a task outline helps you describe the result and its checks.", "Start small: for example, ‘Add a Create note button to the empty notes list; check that it opens a new note.’ Say what should stay unchanged, too.", "Plan an idea collects questions and decisions. Review and approve the specification, then explicitly create its tasks.", "With Verify first, View task lets you inspect the brief and Approve build, or leave it waiting. New work also follows your Pause and worker settings."],
-      action: "Walk me to the task box", route: "task", secondary: "Explore a plan", secondaryRoute: "plans",
-      station: "This is the task box for the selected project. Describe the result and how you will check it, or open Use a task outline for a guided shape. I do not send anything from here.",
-      // Vibe (the default) hides Build's workspace, so the walk uses its box.
-      vibeStation: "This is Social's box for the selected project. Describe the result and how you will check it, then choose Build it to save it as a task, or Talk it over to discuss it first. I do not send anything from here.",
-      note: "These buttons open the editor and the plan sheet. They do not submit a task or start a planning request.",
-      target: "#workspace-input", vibeTarget: "#vibe-input", done: "Task box found",
+      title: "Tell Studio what to make", short: "First task", glyph: "g-tasks",
+      copy: "Type what you want into the box on Today, in your own words. Build it turns your words into a task for your AI. Talk it over chats about it first. Not sure yet? Plans helps you think it through before anything is built.",
+      points: [
+        "Start small, and say how you will know it works. For example: ‘Add a button that makes a new note. When I press it, an empty note opens.’ Say what should stay the same, too.",
+        "Build it (Ctrl+Enter) makes a task, and your AI starts on it. Talk it over (Enter) chats about it first.",
+        "Plans collects your questions and choices. Once you approve a plan, you choose when to make its tasks.",
+        "The ideas from your first map, and the task your AI suggested, are good places to start.",
+        "With Verify first on, each new task waits for your OK before it is built.",
+      ],
+      action: "Walk me to the box", route: "task", secondary: "Plan it first", secondaryRoute: "plans",
+      station: "This is the box on Today, in Studio. Type what you want and how you will check it. Build it makes a task; Talk it over chats about it first. I don't send anything from here.",
+      // In Social, Home is Social's own Today with its own box (reachWorkspace).
+      vibeStation: "This is the box on Today, in Social. Type what you want and how you will check it. Build it makes a task; Talk it over chats about it first. I don't send anything from here.",
+      note: "These buttons only take you to the box or to Plans. They never send a task or start a plan.",
+      target: "#workspace-input", vibeTarget: "#vibe-input", done: "Box found",
     },
     {
-      title: "Follow the queue and current work", short: "Monitor", glyph: "g-command",
-      copy: "Your work is the everyday queue. Command's node tree shows live workers, their current step and what is waiting to run.",
-      points: ["Your work separates the queue, saved ideas, Review and Done. Open any task for its brief, prerequisites, history and result.", "In Command view, Live work shows running workers and their reported steps. Click Ready, Waiting or Needs attention to see the matching tasks and their reasons.", "Work through backlog starts existing work and admits saved ideas gradually. Pause stops new scheduling while current workers finish; let them finish before switching projects.", "Free workers run one at a time and take longer than a paid model. A prerequisite must finish before dependent work starts. Read connection, retry and file-conflict messages before adding more work."],
-      action: "Walk me to Live work", route: "command", secondary: "Open task board", secondaryRoute: "tasks",
-      station: "We are in Command. Live work on the right follows running workers and their reported steps; the node tree behind it follows your selection. Open a reason like Ready, Waiting or Needs attention to see the matching tasks.",
-      note: "Follow in Command tracks active work. You can pan or select a task to take control of the view.",
-      target: "#idle-feed", done: "Live work found",
+      title: "Watch your AI work", short: "Watch", glyph: "g-command",
+      copy: "The Map is a live picture of your AI at work: your project, its helpers and their tasks. Live work, on its right, lists what is running now and what waits its turn.",
+      points: [
+        "Live work shows each running job and the step it is on. Press Ready, Waiting or Attention to see those tasks and why they are there.",
+        "When something needs your answer or your OK, the top bar says how many need you. Press it to open the Inbox (Ctrl+J).",
+        "The pause button at the top holds new work. Jobs that are already running still finish.",
+        "Free models do one job at a time, and more slowly. A job that depends on another waits for it. If a job is stuck, read its reason before you add more work.",
+      ],
+      // rail: "work" puts Live work in front: the rail remembers its last tab, and a selected task would show its own panel.
+      action: "Walk me to the Map", route: "command", params: { rail: "work" }, secondary: "Open the task board", secondaryRoute: "tasks",
+      station: "This is the Map. Live work, on the right, lists what is running and the step it is on. Press Ready, Waiting or Attention to see those tasks and why. Click anything on the Map to see more.",
+      note: "Looking around the Map changes nothing in your project.",
+      target: "#idle-feed", done: "Map found",
     },
     {
-      title: "Review results and recover deliberately", short: "Review", glyph: "g-eyes",
-      copy: "A worker finishing is a result to inspect. Done should mean there is verification evidence, or you have explicitly confirmed the result yourself.",
-      points: ["Open Review in Your work to read the result, evidence and next actions. Inspect the project changes and run any remaining acceptance checks.", "If work needs attention, read its reason first. Correct the connection, brief or prerequisite, then use its retry control when you are ready.", "Keep failed work available for diagnosis. Task history can recover an earlier brief; it does not roll back your project files."],
+      title: "Check what your AI made", short: "Check", glyph: "g-eyes",
+      copy: "When your AI says it is done, take a look before you trust it. Open the finished task, see what changed, and try it yourself.",
+      points: [
+        "Finished work waits under Review: a column on Today in Social, a group in the session list in Studio, and a filter on the task board.",
+        "Open a task to see what changed, which checks passed and what your AI said. In Studio, the Changes and Checks tabs show this.",
+        "Something went wrong? Read the reason first. Fix what it names, such as a sign-in or an unclear description, then try again.",
+        "Keep failed work for now: it shows what went wrong. Task history can bring back an earlier description, but it does not undo changes to your files.",
+      ],
+      // Studio's Today has no Review column, so Studio's walk opens the task board on Review (reachWorkspace).
       action: "Walk me to Review", route: "review",
-      station: "This is Review in Your work. Open a finished task to read the result and evidence, then run any remaining acceptance checks. Tasks that need attention keep their reason and retry controls here.",
-      vibeStation: "This is Tasks in Social. Open a task under Done to read the result and evidence, then run any remaining acceptance checks. Work that needs attention waits under Needs you with its reason.",
-      note: "You can reopen this guide from Start here at the foot of the menu, or from Settings or Shortcuts. Completing the guide does not mark any task done.",
-      target: "#workspace-review", vibeTarget: "#vibe-panel", done: "Review found",
+      station: "This is the task board, on Review: finished work that waits for you to check, and tasks that need help. Open one to see what changed and run its checks.",
+      vibeStation: "This is Today. The Review column holds finished work that waits for you. Press a card to open it and see what changed. Anything stuck waits under Needs you, with its reason.",
+      note: "You can take this tour again any time from Help › Start here. Finishing the tour does not mark any task done.",
+      target: "#task-filter-review", vibeTarget: '#today-board [data-group="review"]', done: "Review found",
     },
   ];
   const blankDone = () => lessons.map(() => false);
@@ -82380,8 +82528,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!label || label === "Workspace") return false;
     return !/^(Your workspace|Opening your project|Loading|Desktop app)/.test(label);
   }
-  // Vibe (the default mode) hides Build's workspace: go("workspace") lands
-  // on Vibe, so the Create and Review stops point at Vibe's own controls.
+  // Social (stored as vibe, the default mode) hides Studio's workspace:
+  // go("workspace") lands on Social's Today, so the box and review stops
+  // point at Social's own controls there (vibeTarget, vibeStation).
   const vibeMode = () => { try { return window.MefiVibe?.mode?.() === "vibe"; } catch { return false; } };
   const targetOf = (lesson) => (vibeMode() && lesson.vibeTarget) || lesson.target;
   const stationOf = (lesson) => (vibeMode() && lesson.vibeStation) || lesson.station || lesson.copy;
@@ -82420,7 +82569,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!card) return;
     const active = state.status === "reading";
     card.hidden = state.status === "dismissed" || state.status === "complete";
-    $("invite-title").textContent = active ? "Your place is saved. Pick the setup back up any time." : "Set up your first project together.";
+    $("invite-title").textContent = active ? "Your place is saved. Pick up where you left off any time." : "Set up your first project together.";
     $("invite-open").textContent = active ? `Open the guide · ${doneCount()} of ${lessons.length} done` : "Start here";
     const walk = $("invite-walk");
     if (walk) walk.textContent = active ? `Walk with me · ${lessons[state.step].short}` : "Walk me through it";
@@ -82471,10 +82620,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!$("auto-build")) return;
     $("auto-build").checked = mode?.autoBuild !== false;
     $("auto-build").disabled = !mode?.loaded || mode.saving;
-    $("build-mode-label").textContent = mode?.saving ? "Saving…" : !mode?.loaded ? "Available in the desktop workspace" : mode.autoBuild ? "Automatic" : "Verify first";
+    $("build-mode-label").textContent = mode?.saving ? "Saving…" : !mode?.loaded ? "Available in the desktop app" : mode.autoBuild ? "Automatic" : "Verify first";
+    // Team › Overview holds the same choice as Build approval (settings-automation, moved there by agents.js).
     $("build-mode-note").textContent = mode?.autoBuild === false
-      ? "Unapproved work waits in Review. Open a task to review its scope and approve its build. This choice is saved for all projects."
-      : "Queued work can start automatically. Turn off to choose which tasks get built. You can change this in Agents › Setup › Run behavior at any time.";
+      ? "Each new task waits for your OK under Needs you, and in the Inbox. Open it, read it, then approve the build. This choice applies to every project."
+      : "New tasks start building by themselves. Turn this off to approve each one first. You can change it any time in Team › Overview, under Build approval.";
   }
   // ---- the scan stop ----------------------------------------------------------------
   function setPanelStatus(id, text, error = false) {
@@ -82499,7 +82649,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if ($("cli-login")) $("cli-login").disabled = busy || !cli?.installed;
     if ($("cli-check")) { $("cli-check").disabled = busy || !cli?.installed; $("cli-check").textContent = id === "opencode" ? "Scan OpenCode" : "Check connection"; }
     if ($("cli-use")) { $("cli-use").textContent = id === "opencode" ? "Use scanned setup" : "Use for the whole studio"; $("cli-use").disabled = busy || !cli?.installed || (id === "opencode" ? !scanResult?.plan?.ok : !checkedClis.has(id)); }
-    if ($("cli-detail")) $("cli-detail").textContent = !cli ? "Checking installed tools…" : id === "opencode" ? `${cli.installed ? "Installed." : "Not installed yet."} After sign-in, choose Scan OpenCode to discover its models, then Use scanned setup.` : checkedClis.has(id) ? `${cli.name} answered the connection check. Ready to use.` : `${cli.installed ? "Installed" : "Not installed yet"}. ${cli.installed ? "Sign in if needed, then choose Check connection." : "Choose Install and sign in to get started."}`;
+    if ($("cli-detail")) $("cli-detail").textContent = !cli ? "Checking installed tools…" : id === "opencode" ? `${cli.installed ? "Installed." : "Not installed yet."} After you sign in, choose Scan OpenCode to find its models, then Use scanned setup.` : checkedClis.has(id) ? `${cli.name} answered the connection check. Ready to use.` : `${cli.installed ? "Installed" : "Not installed yet"}. ${cli.installed ? "Sign in if needed, then choose Check connection." : "Choose Install and sign in to get started."}`;
   }
   // Callers arriving while a detection runs share it instead of starting a
   // second host read.
@@ -82531,7 +82681,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!cli) return;
     setPanelStatus("cli-status", cli.installed
       ? `${cli.name} is installed. Choose ${cli.id === "opencode" ? "Scan OpenCode" : "Check connection"} next.`
-      : `${cli.name} is not detected yet. If its setup finished, choose Refresh installed tools; otherwise run Install and sign in again.`);
+      : `Studio cannot find ${cli.name} yet. If its setup finished, choose Refresh installed tools. If not, choose Install and sign in again.`);
   }
   async function cliSetupAction(action) {
     if (cliSetupBusy || mapBusy || scanBusy) return;
@@ -82577,13 +82727,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     facts.push(`Judge: ${plan.judge?.kind || "fixed"} — ${plan.judge?.reason || ""}`.trim());
     // Auto setup's plan rides along with the scan: the assistant route and
     // builder CLI this machine's keys, CLIs and local servers already allow.
-    if (auto?.ok) facts.push(`Auto setup: ${auto.summary || "a working route was found."}`);
+    if (auto?.ok) facts.push(`Auto setup: ${auto.summary || "a working setup was found."}`);
     else if (auto?.error) facts.push(`Auto setup: ${auto.error}`);
     return facts;
   }
   function scanNotes(plan, auto = null) {
     if (!plan) return [];
-    if (SUBSCRIPTIONS.includes(auto?.active?.provider)) return ["Every agent can use models available to this account. Choose provider defaults or save models per role in Agents setup."];
+    if (SUBSCRIPTIONS.includes(auto?.active?.provider)) return ["Every job can use the models this account has. You can pick a model for each job later, in Team › Seats and models."];
     return [
       ...(plan.warnings || []).map((text) => `Warning: ${text}`),
       ...(plan.nextSteps || []).map((text) => `Next: ${text}`),
@@ -82618,7 +82768,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         return;
       }
       if (!state.done[SCAN]) { state.done[SCAN] = true; save(); }
-      if (!scanResult) setPanelStatus("scan-status", status.firstRun.explorer?.transport === "assistant" ? `Setup saved: ${status.firstRun.explorer.provider} handles your map, assistant and builders. You can use the map step now.` : `Setup saved${status.firstRun.appliedAt ? ` on ${new Date(status.firstRun.appliedAt).toLocaleDateString()}` : ""}: explorer ${status.firstRun.explorer?.model || "selected provider"}, builder ${status.firstRun.builder?.model || "selected provider"}, judge ${status.firstRun.judge?.kind || "fixed"}.`);
+      if (!scanResult) setPanelStatus("scan-status", status.firstRun.explorer?.transport === "assistant" ? `Setup saved: ${status.firstRun.explorer.provider} does it all: the map, the chat and the building. You can use the First map step now.` : `Setup saved${status.firstRun.appliedAt ? ` on ${new Date(status.firstRun.appliedAt).toLocaleDateString()}` : ""}: explorer ${status.firstRun.explorer?.model || "selected provider"}, builder ${status.firstRun.builder?.model || "selected provider"}, judge ${status.firstRun.judge?.kind || "fixed"}.`);
       render();
     }).catch(() => {});
   }
@@ -82633,14 +82783,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (scanBusy) return;
     scanBusy = true; scanStarted = true; scanResult = null; renderScan(); renderCliSetup();
     setActivity(true, { label: "Scanning · asking OpenCode what it has (about ten seconds)", fraction: 0 });
-    setPanelStatus("scan-status", "Scanning… asking OpenCode for its version, linked providers, models and agents.");
+    setPanelStatus("scan-status", "Scanning… asking OpenCode for its version, its linked accounts and its models.");
     try {
       const result = await fn({ prefs: { allowFreeTraining: allowFree() } });
       scanResult = result;
       if (!result?.ok) setPanelStatus("scan-status", result?.error || "The scan did not finish.", true);
-      else if (result.plan?.ok) setPanelStatus("scan-status", "Scan complete. Review the facts below, then choose Use this setup and continue: it saves these choices (no key), maps your selected folder and asks the linked AI what to do next.");
-      else if (result.autoSetup?.ok && SUBSCRIPTIONS.includes(result.autoSetup.active?.provider)) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose your installed tool above to use that subscription throughout the studio, including your first map.`);
-      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose Use this setup and continue: it saves this route, maps your selected folder and asks the linked AI what to do next.`);
+      else if (result.plan?.ok) setPanelStatus("scan-status", "Scan complete. Read what it found below, then choose Use this setup and continue: it saves these choices (never a key), maps your project and asks your AI what to do next.");
+      else if (result.autoSetup?.ok && SUBSCRIPTIONS.includes(result.autoSetup.active?.provider)) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose your installed tool above to use that subscription for everything, including your first map.`);
+      else if (result.autoSetup?.ok) setPanelStatus("scan-status", `Scan complete. ${result.autoSetup.summary} Choose Use this setup and continue: it saves this choice, maps your project and asks your AI what to do next.`);
       else setPanelStatus("scan-status", "Let's connect your first AI. Choose a tool above and Install and sign in, or choose I have an API key or a local model server. You can also continue the tour and connect it later.");
     } catch (error) {
       setPanelStatus("scan-status", error?.message || "The scan failed.", true);
@@ -82680,11 +82830,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const showSteps = mapBusy || (mapResult && !mapResult.ok);
     $("map-steps")?.replaceChildren(...(showSteps ? mapSteps.slice(-12).map((text) => node("li", "", text)) : []));
     const tail = $("map-tail");
-    if (tail) { const text = !mapBusy && mapResult && !mapResult.ok && mapResult.textTail ? String(mapResult.textTail).trim() : ""; tail.hidden = !text; tail.textContent = text ? `What the explorer wrote instead: ${text}` : ""; }
+    if (tail) { const text = !mapBusy && mapResult && !mapResult.ok && mapResult.textTail ? String(mapResult.textTail).trim() : ""; tail.hidden = !text; tail.textContent = text ? `What your AI wrote instead: ${text}` : ""; }
     const facts = [];
     if (mapResult?.ok) {
       facts.push(mapResult.summary || "Map saved.");
-      if (mapResult.ideas) facts.push(`${mapResult.ideas.added} new idea${mapResult.ideas.added === 1 ? "" : "s"} saved to Your work${mapResult.ideas.updated ? `, ${mapResult.ideas.updated} updated` : ""}.`);
+      if (mapResult.ideas) facts.push(`${mapResult.ideas.added} new idea${mapResult.ideas.added === 1 ? "" : "s"} saved in Ideas${mapResult.ideas.updated ? `, ${mapResult.ideas.updated} updated` : ""}.`);
       if (mapResult.map?.summary) facts.push(mapResult.map.summary);
       for (const area of (mapResult.map?.areas || []).slice(0, 6)) facts.push(`${area.name}${area.path ? ` (${area.path})` : ""}: ${area.what || ""}`.trim());
     }
@@ -82692,27 +82842,27 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   function mapAdvice(result) {
     const reason = result?.reason;
-    if (reason === "free-tier-refused") return `${result.error} Choose a paid model in Settings, then map again.`;
-    if (reason === "no-scan" || reason === "no-explorer" || reason === "no-opencode") return "Connect an AI right here to make your first map: choose a subscription tool and Install and sign in above, or choose I have an API key or a local model server. You can continue the tour while you set it up.";
+    if (reason === "free-tier-refused") return `${result.error} Connect a paid AI in Team › Providers, then map again.`;
+    if (reason === "no-scan" || reason === "no-explorer" || reason === "no-opencode") return "Connect an AI right here first: pick your tool above and choose Install and sign in, or choose I have an API key or a local model server. You can keep going with the tour while you set it up.";
     if (reason === "timeout") return `${result.error}`;
-    if (reason === "unparsable") return `${result.error} Map again; a second pass usually answers in the requested shape.`;
+    if (reason === "unparsable") return `${result.error} Map again: a second try usually works.`;
     if (reason === "busy") return result.error;
     return result?.error || "The map did not finish.";
   }
   async function runMap({ automatic = false } = {}) {
-    if (!projectReady()) { setPanelStatus("map-status", "Select a project first (the Your workspace stop), then map it.", true); return; }
+    if (!projectReady()) { setPanelStatus("map-status", "Open a project first (step 2, Your project), then map it.", true); return; }
     const fn = hostApi("firstMap");
     if (!fn) { if (!automatic) setPanelStatus("map-status", "The first map runs in the desktop app. In this preview nothing is read.", true); return; }
     if (mapBusy) return;
     mapBusy = true; mapResult = null; mapSteps.length = 0; mapStartedAt = Date.now(); renderMap();
-    setActivity(true, { label: automatic ? "Mapping the folder you selected · the explorer is reading it" : "Mapping · the explorer is reading the folder" });
-    setPanelStatus("map-status", `${automatic ? "The linked AI is mapping the folder you selected. " : ""}Your provider is preparing the map from the project scan. Suggestions will appear below.`);
+    setActivity(true, { label: automatic ? "Mapping your project · your AI is reading it" : "Mapping · your AI is reading the project" });
+    setPanelStatus("map-status", `${automatic ? "Your AI is mapping the project you opened. " : ""}It reads the project and writes down what it finds. Its suggestions will appear below.`);
     try {
       const result = await fn({});
       mapResult = result;
       if (result?.ok) {
         state.done[MAP] = true; save();
-        setPanelStatus("map-status", `Folder mapped: ${result.summary || "map saved"}. Open Your work to review the ideas, or continue to Connections.`);
+        setPanelStatus("map-status", `Project mapped: ${result.summary || "map saved"}. Its ideas wait in Ideas. Go on to the next step when you are ready.`);
         try { if (typeof CustomEvent === "function") window.dispatchEvent(new CustomEvent("mefi:first-map", { detail: result })); } catch {}
       } else setPanelStatus("map-status", mapAdvice(result), true);
     } catch (error) {
@@ -82726,7 +82876,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function cancelMap() {
     const fn = hostApi("firstMapCancel");
     if (!fn || !mapBusy) return;
-    setPanelStatus("map-status", "Cancelling the explorer…");
+    setPanelStatus("map-status", "Cancelling the map…");
     Promise.resolve().then(() => fn()).catch(() => {});
   }
   function hostProgress(data) {
@@ -82735,7 +82885,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (data.kind !== "map") return;
     if (data.step && mapSteps[mapSteps.length - 1] !== data.step) mapSteps.push(data.step);
     if (mapSteps.length > 40) mapSteps.splice(0, mapSteps.length - 40);
-    if (mapBusy) setActivity(true, { label: `Mapping · ${data.step || "reading the folder"}${data.tools ? ` · ${data.tools} read${data.tools === 1 ? "" : "s"}` : ""} · ${clock(Number(data.elapsedMs) || Date.now() - mapStartedAt)}` });
+    if (mapBusy) setActivity(true, { label: `Mapping · ${data.step || "reading the project"}${data.tools ? ` · ${data.tools} read${data.tools === 1 ? "" : "s"}` : ""} · ${clock(Number(data.elapsedMs) || Date.now() - mapStartedAt)}` });
     if (state.step === MAP) renderMap();
   }
   // ---- the assistant --------------------------------------------------------------------
@@ -82757,7 +82907,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   function assistSource(result) {
     if (result?.via === "assistant") return `your assistant${result.model ? ` (${result.model})` : ""}`;
-    if (result?.via === "opencode-free") return result.model || "the free explorer";
+    if (result?.via === "opencode-free") return result.model || "the free model";
     return "the built-in guide";
   }
   async function runAssist({ automatic = false } = {}) {
@@ -82765,13 +82915,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!fn) { if (!automatic) setPanelStatus("assist-status", "The setup assistant runs in the desktop app.", true); return; }
     if (assistBusy) return;
     assistBusy = true; renderAssist();
-    setActivity(true, { label: "Asking the linked AI to plan the rest of the setup" });
-    setPanelStatus("assist-status", "Asking the linked AI what to do next…");
+    setActivity(true, { label: "Asking your AI to plan the rest of the tour" });
+    setPanelStatus("assist-status", "Asking your AI what to do next…");
     try {
       const result = await fn({ progress: { done: state.done.slice(), step: state.step } });
       assistResult = result;
       if (!result?.ok) setPanelStatus("assist-status", result?.error || "The assistant did not answer.", true);
-      else setPanelStatus("assist-status", `${result.advice?.summary || "Here is the plan for the remaining stops."} (From ${assistSource(result)}.)${result.warnings?.length ? ` ${result.warnings.join(" ")}` : ""}`);
+      else setPanelStatus("assist-status", `${result.advice?.summary || "Here is a plan for the steps that are left."} (From ${assistSource(result)}.)${result.warnings?.length ? ` ${result.warnings.join(" ")}` : ""}`);
     } catch (error) {
       assistResult = null;
       setPanelStatus("assist-status", error?.message || "The assistant did not answer.", true);
@@ -82779,11 +82929,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       assistBusy = false; setActivity(false); render();
     }
   }
-  // Places the suggested brief in the task box and takes the user there. It
-  // never submits: sending stays a deliberate click in the workspace.
-  // The box is filled after the visit: switching Build's composer to Create
-  // task swaps in that mode's draft, and in Vibe the box is Vibe's own. The
-  // input event lets the owning surface save the draft and size the box.
+  // Places the suggested brief in the box and takes the user there. It never
+  // submits: Build it stays a deliberate click. The box is filled after the
+  // visit: the classic Home's switch to Create task swaps in that purpose's
+  // draft first, while Today's box (Studio's, or Social's own) is filled as
+  // it stands. The input event lets the owning surface save the draft and
+  // size the box.
   function placeSuggestedTask() {
     const task = assistResult?.advice?.firstTask;
     if (!task) return;
@@ -82804,7 +82955,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     $("coach-copy").textContent = stationOf(lesson);
     const returning = keyReturn && state.step === CONNECT;
     $("coach-hint").textContent = returning
-      ? "Save your key here, or start LM Studio's server and choose LM Studio as the provider. A saved key brings you back to the scan; otherwise choose Back to the scan."
+      ? "Paste your key into its tile and press Save, or start LM Studio's server and choose LM Studio. A saved key takes you back to the scan. Nothing to save? Choose Back to the scan."
       : done
         ? `${lesson.done} ✓ — press the button when you are ready for the next stop.`
         : lesson.waitFor
@@ -82866,43 +83017,47 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     overlay.hidden = true;
     if (coachEl) coachEl.hidden = true;
     clearHighlight();
-    // Closing the guide ends a detour to Connections: a later save must not
-    // pull the guide back open.
+    // Closing the guide ends a detour to Team › Providers: a later save must
+    // not pull the guide back open.
     keyReturn = false;
     state = { ...state, mode: "idle" };
     save(); releaseLayer(); renderInvitation();
   }
-  // Opens Home and reaches the task box or the review list, returning the
-  // control it landed on. In Vibe mode Home is Vibe (Build's workspace stays
-  // hidden), so the box is Vibe's own and review is Vibe's Tasks panel.
+  // Reaches the box, or the place to review finished work, returning the
+  // control it landed on. Home is the mode's own Today: in Social it is
+  // Social's (Studio's workspace stays hidden), with Social's box; in Studio
+  // it borrows Home's box and has its own Talk it over and Build it. Review is
+  // Today's Review column in Social. Studio's Today has none (Home's old Review
+  // filter is hidden there), so Studio's review is the task board on Review.
   function reachWorkspace(route) {
-    window.MefiNav?.go?.("workspace");
     const vibe = vibeMode();
+    if (route === "review" && !vibe) {
+      window.MefiNav?.go?.("tasks", { filter: "review" });
+      const chip = document.getElementById("task-filter-review") ?? null;
+      chip?.focus?.();
+      return chip;
+    }
+    window.MefiNav?.go?.("workspace");
     if (route === "task") {
-      if (!vibe) document.getElementById("workspace-mode-work")?.click();
+      // Only the classic Home's box is switched to Create task: Today's keeps
+      // its words and its purpose, as workspace.js composeTask does.
+      if (!vibe && !window.MefiToday?.hostsComposer?.()) document.getElementById("workspace-mode-work")?.click();
       const input = document.getElementById(vibe ? "vibe-input" : "workspace-input") ?? null;
       input?.focus?.();
       return input;
     }
-    if (route === "review") {
-      if (vibe) {
-        // The panel focuses its own first control once it has drawn.
-        window.MefiVibe?.openPanel?.("tasks", { fold: "done" });
-        return document.getElementById("vibe-panel") ?? null;
-      }
-      const review = document.getElementById("workspace-review") ?? null;
-      review?.click(); review?.focus?.();
-      return review;
-    }
+    // Social's review is Today's own Review column, on the page just opened.
     return null;
   }
   // Safe destinations: navigation and highlighting only. Nothing is submitted,
   // approved or started from a lesson.
   // Returns the real control it focused, if any, so the coach knows whether it
   // still needs to hand focus to its own primary button.
-  // The walk stays in the mode you are in. In Vibe the project stop opens the
-  // same project menu (Vibe's project button), the task stop is Vibe's box
-  // and the review stop is Vibe's Tasks panel (targetOf / reachWorkspace).
+  // The walk stays in the mode you are in. Both modes share the project list
+  // (Social's project button and Studio's All projects open the same one);
+  // the box stop is each mode's own box on Today, and the review stop is
+  // Today's Review column in Social and the task board in Studio (targetOf /
+  // reachWorkspace).
   function routeTo(lesson) {
     const route = lesson.route;
     let focused = null;
@@ -82960,8 +83115,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (state.step >= lessons.length - 1) { state.status = "complete"; close(); return; }
     coach(state.step + 1);
   }
-  // Keys and local model servers live in Connections, not in this panel: the
-  // coach walks there, and a usable saved connection (or Back to the scan)
+  // Keys and local model servers live in Team › Providers, not in this panel:
+  // the coach walks there, and a usable saved connection (or Back to the scan)
   // returns to the Scan stop and scans again, so auto setup can offer the
   // route that key or server allows before the first map.
   function keyPath() {
@@ -84900,12 +85055,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     window.MefiNav?.typeScope?.(panel, talkBox);
     window.MefiNav?.typeScope?.(orb, talkBox);
     const places = node("div", "companion-places");
-    for (const [label, route, options] of [["Tasks", "tasks"], ["Agents", "agents"], ["Live", "command"], ["Project map", "agent-brain", { tab: "map" }], ["Settings", "studio"]]) places.append(button(label, () => { host.toggle(false); window.MefiNav?.go(route, options); }));
+    for (const [label, route, options] of [["Tasks", "tasks"], ["Map", "command"], ["Team", "agents"], ["Project map", "agent-brain", { tab: "map" }], ["Settings", "studio"]]) places.append(button(label, () => { host.toggle(false); window.MefiNav?.go(route, options); }));
     const location = node("p", "ab-quiet"); location.dataset.companionLocation = "true";
     panes.ask.append(location, places);
     const nowLive = node("div", "companion-now-live"); nowLive.setAttribute("aria-live", "polite");
     const nowActivity = node("div", "companion-now-activity");
-    panes.now.append(nowLive, node("h3", "", "Recently"), nowActivity, button("Open live agent work", () => { host.toggle(false); window.MefiNav?.go("agents", { section: "live" }); }));
+    panes.now.append(nowLive, node("h3", "", "Recently"), nowActivity, button("Open the Map", () => { host.toggle(false); window.MefiNav?.go("command"); }));
     // Replies that land later, and the notices the team posts, appear while
     // the Ask tab is open instead of on its next visit.
     window.mefiStudio?.onAssistant?.(() => {
@@ -85646,6 +85801,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const title = node("h1", "", "Friends"); title.id = "friends-place-title"; title.tabIndex = -1;
     const about = node("p", "muted friends-place-about");
     head.append(title, about);
+    // The places as a row under the title, for when the list column is not showing them (Social, a small window).
+    window.MefiShell?.placeBar?.(head, "friends");
     // Moderation's row joins the list column once the relay says this member is a moderator.
     window.MefiFriendsMod?.subscribe?.(() => window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: friendsPage.place } })));
     const body = node("div", "friends-place-body"); body.id = "friends-place-body";
@@ -85682,6 +85839,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // A room asked for by name (The Lobby's rooms and people) opens in Rooms, even when Rooms is already up.
     friendsPage.room = place.id === "rooms" && typeof params.room === "string" ? params.room : null;
     friendsPage.root.hidden = false;
+    // The frame measures again now the page shows: Social's rail stands beside Friends (vibe.css), and the claim above
+    // was announced while the page was still hidden.
+    window.MefiShell?.sync?.("friends");
     friendsPage.root.dataset.place = place.id;
     friendsPage.title.textContent = place.label;
     friendsPage.about.textContent = place.about;
@@ -85700,6 +85860,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     friendsPage.body.replaceChildren();
     friendsPage.root.hidden = true;
     friendsPage.place = null;
+    // The sheet layer goes back with the page: otherwise the next place keeps Friends' breadcrumb, tab title and list.
+    window.MefiNav?.release?.("friends-page");
   }
   // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether it shows and the way there.
   function friendsPlaces() {
@@ -89725,6 +89887,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     { id: "folders", label: "Related folders", glyph: "g-explorer", group: "Context for agents", panes: ["folders"], about: "Extra folders agents may read but never change." },
     { id: "flows", label: "Workflows", glyph: "g-route", group: "Context for agents", views: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]] },
     { id: "health", label: "Health and usage", glyph: "g-gauge", group: "Monitor", views: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]] },
+    // The resource manager (renderer/resources.js): other apps slowed, paused or closed so the agents get this PC.
+    { id: "resources", label: "Resources", glyph: "g-gauge", group: "Monitor", views: [["Resources", "resources"]] },
     { id: "models", label: "Models", glyph: "g-graph", group: "Monitor", views: [["Catalog", "booklet"], ["Performance", "graph"]] },
     { id: "inspect", label: "Inspect", glyph: "g-eyes", group: "Monitor", views: [["Sessions", "explorer"], ["Activity and evidence", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"], ["Performance profiler", "profiler"], ["Machine status", "explorer", { panel: "diagnostics" }], ["Connection log", "agents", { place: "providers", target: "settings-log" }]] },
   ]);
@@ -89807,12 +89971,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     mounted = true;
     window.MefiBooklet?.initStudio?.();
     const overlay = node("div", "overlay agents-overlay"); overlay.id = "agents-overlay"; overlay.hidden = true;
-    const sheet = node("section", "sheet agents-sheet"); sheet.tabIndex = -1; sheet.setAttribute("role", "region"); sheet.setAttribute("aria-label", "Agents workspace");
+    const sheet = node("section", "sheet agents-sheet"); sheet.tabIndex = -1; sheet.setAttribute("role", "region"); sheet.setAttribute("aria-label", "Team");
     const head = node("header", "agents-head");
-    const title = node("div"); title.append(node("p", "agents-eyebrow", "YOUR STUDIO / AGENTS")); const h = node("h1", "", "Agents"); h.id = "agents-title"; title.append(h, node("p", "muted", "One team, one place to set it up and follow its work."));
+    const title = node("div"); title.append(node("p", "agents-eyebrow", "YOUR STUDIO / TEAM")); const h = node("h1", "", "Team"); h.id = "agents-title"; title.append(h, node("p", "muted", "One team, one place to set it up and follow its work."));
     const settings = button("Studio appearance", () => go("studio", { category: "appearance" }), "ghost mini");
     const headActions = node("div", "agents-head-actions"); headActions.append(button("Reload saved settings", discard, "ghost mini"), settings);
     head.append(title, headActions); sheet.append(head);
+    // Team's places as a row under the title, for when the list column is not showing them (Social, a small window).
+    window.MefiShell?.placeBar?.(title, "team");
     const body = node("div", "agents-body"); body.id = "agents-body";
     for (const name of ["overview", "connections", "team", "routing", "behavior"]) { const pane = node("div", "agents-pane"); pane.id = `agents-${name}`; pane.dataset.agentsPane = name; pane.hidden = true; body.append(pane); }
     sheet.append(body);
@@ -89835,7 +90001,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const help = (el.closest("label")?.querySelector("small") || el.querySelector("summary small, summary .settings-summary-text > span"))?.textContent?.trim() || "";
       // In the 0.5 layout Search names the control by the Team place that holds it now (read when Search reads it).
       const words = label?.trim().slice(0, 100);
-      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", get label() { const place = teamPlaceOfElement(el); return place ? `Team › ${place.label} › ${words}` : `Agents › ${words}`; }, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
+      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", get label() { const place = teamPlaceOfElement(el); return place ? `Team › ${place.label} › ${words}` : `Team › ${words}`; }, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
     }
     $("agents-team").append(buildRules());
     buildSetupHeader(); buildOverview(); buildRoles(); buildBehavior();
@@ -91997,7 +92163,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const WELCOME_STEPS = 3;
   const MARKS = { claude: "CC", codex: "CX", opencode: "OC", grok: "GK", antigravity: "AG" };
   const COUNT = ["no", "one", "two", "three", "four", "five", "six"];
-  const welcome = { open: false, step: 0, els: null, clis: null, projects: null, text: "", busy: false, then: null, previous: null, serial: 0 };
+  const welcome = { open: false, step: 0, els: null, clis: null, projects: null, text: "", busy: false, then: null, previous: null, serial: 0, connected: null };
+  // What each tool uses, in a beginner's words: the account they may already pay for, or OpenCode's free models.
+  const ACCOUNT = { claude: "Uses your Claude subscription", codex: "Uses your ChatGPT plan", grok: "Uses your Grok account", antigravity: "Uses your Google account", opencode: "Free models to start with" };
+  // The first task's examples: small, plain, and each one a whole thought.
+  const FIRST_TASKS = ["A page that says hello, with a big button that changes the color", "A to-do list where I can add and tick off things", "A countdown timer with start and stop buttons"];
   const layoutV2 = () => document.documentElement?.dataset?.layout === "v2";
   function buildWelcome() {
     if (welcome.els) return welcome.els;
@@ -92013,7 +92183,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const foot = node("footer", "setup-welcome-foot");
     const back = button("Back", () => void showWelcome(welcome.step - 1), "ghost"); back.id = "setup-welcome-back";
     const skip = button("Skip", () => closeWelcome(), "ghost"); skip.id = "setup-welcome-skip";
-    skip.title = "Close the welcome. The setup helper waits in Help and Search (Esc)";
+    skip.title = "Close this. The Setup guide waits under Help (Esc)";
     const next = button("Continue", () => void welcomeNext(), "primary"); next.id = "setup-welcome-next";
     foot.append(back, node("span", "setup-welcome-gap"), skip, next);
     card.append(steps, title, lead, body, status, foot);
@@ -92047,18 +92217,19 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return row;
   }
   const chip = (text, ready = false) => node("span", `setup-welcome-chip${ready ? " is-ready" : ""}`, ready ? `✓ ${text}` : text);
-  // Step 1: the coding tools on this PC, with their own sign-in.
+  // Step 1: the AI that builds, in plain words: the coding tools on this PC with their own sign-in, and OpenCode's free
+  // models for anyone starting with no subscription.
   async function paintConnect(serial) {
     const { title, lead, body } = welcome.els;
-    title.textContent = "Connect the AI you already use";
+    title.textContent = "Pick the AI that builds for you";
     if (!welcome.clis) { try { welcome.clis = await api()?.cliSetupStatus?.() ?? null; } catch { welcome.clis = null; } }
     if (serial !== welcome.serial) return;
     const clis = welcome.clis?.ok ? (welcome.clis.clis || []) : [];
     const found = clis.filter((cli) => cli.installed);
     lead.textContent = found.length
-      ? `Studio found ${COUNT[found.length] ?? found.length} coding tool${found.length === 1 ? "" : "s"} on this PC. One sign-in can serve chat, planning and building.`
-      : welcome.clis?.ok ? "Studio found no coding tool on this PC yet. Install one and sign in with your own account, or use a key or a model on this PC."
-        : "Studio looks for your coding tools in the desktop app.";
+      ? `Studio found ${COUNT[found.length] ?? found.length} AI tool${found.length === 1 ? "" : "s"} on this PC. Sign in to one and Studio uses it for everything: chatting, planning and building.`
+      : welcome.clis?.ok ? "Studio doesn't come with its own AI: it works through one you sign in to, with your own account. Pick the one you already pay for, or start free with OpenCode."
+        : "Studio looks for your AI tools in the desktop app.";
     const act = (cli, action) => async (event) => {
       const control = event?.currentTarget;
       if (control) control.disabled = true;
@@ -92070,16 +92241,21 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         setTimeout(async () => { try { welcome.clis = await api()?.cliSetupStatus?.() ?? welcome.clis; } catch { /* keep the last read */ } if (welcome.open && welcome.step === 0) void showWelcome(0, { focus: false }); }, 1500);
       } catch (error) { welcomeSay(plain(error, "That did not open."), true); if (control) control.disabled = false; }
     };
+    const shown = found.length ? found : clis.filter((item) => item.subscription);
+    // OpenCode stays on offer when it is not installed: the way in without a subscription.
+    const opencode = clis.find((cli) => cli.id === "opencode");
+    if (opencode && !shown.includes(opencode)) shown.push(opencode);
     const rows = [];
-    for (const cli of found.length ? found : clis.filter((item) => item.subscription)) {
+    for (const cli of shown) {
+      const account = ACCOUNT[cli.id] || "Uses your own account";
       let small, end;
-      if (!cli.installed) { small = "Not installed"; end = button("Install and sign in", act(cli, "install"), "ghost mini"); }
-      else if (!cli.subscription) { small = "Installed · uses your keys or free models"; end = chip("Optional"); }
-      else if (cli.signedIn === true) { small = "Signed in · subscription detected"; end = chip("Ready", true); }
-      else { small = cli.signedIn === false ? "Installed · not signed in" : "Installed"; end = button("Sign in", act(cli, "login"), "ghost mini"); }
-      rows.push(welcomeRow({ mark: MARKS[cli.id] || cli.name.slice(0, 2).toUpperCase(), name: cli.name, small, end, on: cli.installed && cli.signedIn === true, key: cli.id }));
+      if (!cli.installed) { small = `${account} · not installed yet`; end = button(cli.subscription ? "Install and sign in" : "Install", act(cli, "install"), "ghost mini"); }
+      else if (!cli.subscription) { small = "Installed · free models to start with"; end = chip("Free"); }
+      else if (cli.signedIn === true) { small = `${account} · signed in`; end = chip("Ready", true); }
+      else { small = cli.signedIn === false ? `${account} · sign in to use it` : `${account} · installed`; end = button("Sign in", act(cli, "login"), "ghost mini"); }
+      rows.push(welcomeRow({ mark: MARKS[cli.id] || cli.name.slice(0, 2).toUpperCase(), name: cli.name, small, end, on: cli.installed && (cli.signedIn === true || !cli.subscription), key: cli.id }));
     }
-    const more = button("Other ways to connect", () => {
+    const more = button("Other ways: an API key, a ChatGPT plan or a local model", () => {
       // Keys, local models and the ChatGPT plan live in the sheet; it hands on when it closes, as the welcome would have.
       const then = welcome.then; welcome.then = null;
       hideWelcome();
@@ -92089,11 +92265,38 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     more.id = "setup-welcome-more";
     body.replaceChildren(...rows, more);
   }
+  // Leaving the first step puts Studio on what is ready, so the first task runs on it: a signed-in subscription for the
+  // whole studio (setup:cli-use, the sheet's Use for the whole studio), else OpenCode's free models (the first scan's
+  // setup, setup:first-scan and -apply). With nothing ready nothing changes, and Today's line says what is missing.
+  async function useConnected() {
+    const clis = welcome.clis?.ok ? (welcome.clis.clis || []) : [];
+    const ready = ["claude", "codex", "grok", "antigravity"].map((id) => clis.find((cli) => cli.id === id && cli.installed && cli.signedIn === true)).find(Boolean);
+    if (ready) {
+      if (welcome.connected === ready.id || typeof api()?.cliSetupUse !== "function") return;
+      welcomeSay(`Setting Studio up to use ${ready.name}…`);
+      const result = await api().cliSetupUse(ready.id);
+      if (result?.ok === false) { welcomeSay(`${result.error || `${ready.name} was not set up.`} You can do it later in Team › Providers.`, true); return; }
+      welcome.connected = ready.id;
+      welcomeSay(`Studio will use ${ready.name} for chatting, planning and building. Change it any time in Team › Providers.`);
+      return;
+    }
+    const free = clis.find((cli) => cli.id === "opencode" && cli.installed);
+    if (!free || welcome.connected === "opencode" || typeof api()?.firstScan !== "function" || typeof api()?.firstScanApply !== "function") return;
+    welcomeSay("Setting up OpenCode's free models (about ten seconds)…");
+    try {
+      const scan = await api().firstScan({});
+      if (scan?.ok === false) throw new Error(scan.error || "OpenCode did not answer.");
+      const applied = await api().firstScanApply({});
+      if (applied?.ok === false) throw new Error(applied.error || "The free setup was not saved.");
+      welcome.connected = "opencode";
+      welcomeSay("Studio will build with OpenCode's free models. Free work runs one task at a time.");
+    } catch (error) { welcomeSay(`${plain(error, "OpenCode's free models were not set up.")} You can do it later in Help › Setup guide.`, true); }
+  }
   // Step 2: the project, as the workspace has it.
   async function paintProjects(serial) {
     const { title, lead, body } = welcome.els;
     title.textContent = "Choose a project";
-    lead.textContent = "Studio reads the folder on this PC. Tasks, plans and conversations stay with the project.";
+    lead.textContent = "Studio builds inside a folder on your PC. Your tasks, plans and chats stay with it.";
     try { welcome.projects = await api()?.projectsList?.() ?? null; } catch { welcome.projects = null; }
     if (serial !== welcome.serial) return;
     const list = Array.isArray(welcome.projects?.projects) ? welcome.projects.projects : [];
@@ -92108,22 +92311,36 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         else welcomeSay("Choose it from the project list once this closes.", true);
       } });
     });
+    // A new app first: the beginner's way in, a folder Studio makes for you.
+    if (typeof window.MefiVibe?.openPanel === "function") rows.push(welcomeRow({ mark: "✦", name: "Start a new app…", small: "Studio makes the folder for you", key: "new-app", onClick: () => { closeWelcome(); window.MefiVibe.openPanel("newapp"); } }));
     const add = document.getElementById?.("workspace-add-project");
-    if (add || typeof api()?.projectsAdd === "function") rows.push(welcomeRow({ mark: "+", name: "Open a folder…", small: "Any folder with code in it", key: "open-folder", onClick: () => { if (add && !add.disabled) add.click(); else void api().projectsAdd?.(); } }));
-    if (typeof window.MefiVibe?.openPanel === "function") rows.push(welcomeRow({ mark: "✦", name: "Start a new app…", small: "A new folder, with its first build", key: "new-app", onClick: () => { closeWelcome(); window.MefiVibe.openPanel("newapp"); } }));
-    if (!list.length) lead.textContent = "Studio works in a folder on this PC. Open one with code in it, or start a new app.";
+    if (add || typeof api()?.projectsAdd === "function") rows.push(welcomeRow({ mark: "+", name: "Open a folder…", small: "A folder you already have", key: "open-folder", onClick: () => { if (add && !add.disabled) add.click(); else void api().projectsAdd?.(); } }));
+    if (!list.length) lead.textContent = "Studio builds inside a folder on your PC. Start a new app and Studio makes one for you, or open a folder you already have.";
     body.replaceChildren(...rows);
   }
-  // Step 3: the first task.
+  // Step 3: the first task, in plain words, with examples a tap fills in. No project open: it says so instead.
+  const welcomeProject = () => {
+    const id = welcome.projects?.activeId ?? window.MefiWorkspace?.activeProjectId?.() ?? null;
+    return id && id !== "project_none" ? id : null;
+  };
   function paintTask() {
     const { title, lead, body } = welcome.els;
-    title.textContent = "Give it a first task";
-    lead.textContent = "Describe something small. Studio plans it, builds it, and checks it before it says done.";
+    title.textContent = "What should Studio make first?";
+    if (!welcomeProject()) {
+      lead.textContent = "Open or start a project first (step 2), then come back here: Studio needs a folder to build in.";
+      body.replaceChildren();
+      return;
+    }
+    lead.textContent = "Describe something small, in plain words, like you'd tell a friend. Studio plans it, builds it, and checks it works before it says done.";
     const input = node("input", "setup-welcome-input"); input.id = "setup-welcome-task"; input.type = "text"; input.maxLength = 4000;
     input.placeholder = "Describe something small"; input.value = welcome.text; input.setAttribute("aria-label", "First task"); input.autocomplete = "off";
-    input.addEventListener("input", () => { welcome.text = input.value; welcome.els.next.disabled = welcome.busy || !input.value.trim(); });
+    const sync = () => { welcome.text = input.value; welcome.els.next.disabled = welcome.busy || !input.value.trim(); };
+    input.addEventListener("input", sync);
     input.addEventListener("keydown", (event) => { if (event.key === "Enter" && input.value.trim()) { event.preventDefault?.(); void welcomeNext(); } });
-    body.replaceChildren(input);
+    const examples = node("div", "setup-welcome-examples"); examples.setAttribute("role", "group"); examples.setAttribute("aria-label", "Examples");
+    examples.append(node("span", "setup-welcome-examples-label", "Or try one:"));
+    for (const text of FIRST_TASKS) examples.append(button(text, () => { input.value = text; sync(); input.focus?.({ preventScroll: true }); }, "ghost mini setup-welcome-example"));
+    body.replaceChildren(input, examples);
   }
   async function showWelcome(step, { focus = true } = {}) {
     const els = buildWelcome();
@@ -92134,8 +92351,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     els.steps.setAttribute("aria-valuenow", String(welcome.step + 1));
     els.steps.setAttribute("aria-valuetext", `Step ${welcome.step + 1} of ${WELCOME_STEPS}`);
     els.back.hidden = welcome.step === 0;
-    els.next.textContent = welcome.step === WELCOME_STEPS - 1 ? "Start the task" : "Continue";
-    els.next.disabled = welcome.busy || (welcome.step === WELCOME_STEPS - 1 && !welcome.text.trim());
+    els.next.textContent = welcome.step === WELCOME_STEPS - 1 ? "Build it" : "Continue";
+    els.next.disabled = welcome.busy || (welcome.step === WELCOME_STEPS - 1 && (!welcome.text.trim() || !welcomeProject()));
     welcomeSay("");
     if (welcome.step === 0) await paintConnect(serial);
     else if (welcome.step === 1) await paintProjects(serial);
@@ -92144,15 +92361,30 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (focus) (welcome.step === WELCOME_STEPS - 1 ? els.body.querySelector?.("input") : els.title)?.focus?.({ preventScroll: true });
   }
   async function welcomeNext() {
-    if (welcome.step < WELCOME_STEPS - 1) { await showWelcome(welcome.step + 1); return; }
+    if (welcome.busy) return;
+    if (welcome.step < WELCOME_STEPS - 1) {
+      let said = "", bad = false;
+      if (welcome.step === 0) {
+        welcome.busy = true; welcome.els.next.disabled = true;
+        try { await useConnected(); } catch (error) { welcomeSay(plain(error, "The AI was not set up."), true); }
+        finally { welcome.busy = false; }
+        said = welcome.els.status?.textContent || "";
+        bad = Boolean(welcome.els.status?.classList?.contains?.("bad-text"));
+      }
+      await showWelcome(welcome.step + 1);
+      // What the setup did stays on the next step's line until something else is said there.
+      if (said && !welcome.els.status?.textContent) welcomeSay(said, bad);
+      return;
+    }
     const text = welcome.text.trim();
-    if (!text || welcome.busy) return;
+    if (!text) return;
+    const projectId = welcomeProject();
+    if (!projectId) { welcomeSay("Open or start a project first: Studio needs a folder to build in.", true); return; }
     welcome.busy = true; welcome.els.next.disabled = true;
     welcomeSay("Adding your first task…");
     try {
-      const projectId = welcome.projects?.activeId ?? window.MefiWorkspace?.activeProjectId?.() ?? null;
       if (typeof api()?.tasksCreate !== "function") throw new Error("Tasks are added in the desktop app.");
-      const result = await api().tasksCreate({ title: text.split("\n")[0].slice(0, 180), prompt: text, ...(projectId ? { projectId } : {}) });
+      const result = await api().tasksCreate({ title: text.split("\n")[0].slice(0, 180), prompt: text, projectId });
       if (!result || result.ok === false) throw new Error(result?.error || "The task was not added.");
       welcome.text = "";
       closeWelcome();
@@ -92163,7 +92395,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (typeof window.MefiWorkspace?.startTask === "function") void Promise.resolve(window.MefiWorkspace.startTask(task)).catch(() => {});
       }
     } catch (error) { welcomeSay(plain(error, "The task was not added."), true); }
-    finally { welcome.busy = false; if (welcome.open && welcome.els) welcome.els.next.disabled = !welcome.text.trim(); }
+    finally { welcome.busy = false; if (welcome.open && welcome.els) welcome.els.next.disabled = !welcome.text.trim() || !welcomeProject(); }
   }
   function openWelcome({ then = null } = {}) {
     const els = buildWelcome();
@@ -93286,7 +93518,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
       note(startBox.checked ? "Every launch starts in Social." : "Each launch opens the mode you last used.", "good");
     });
-    start.append(el("span", "vibe-set-label", "Always start in Social"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
+    start.append(el("span", "vibe-set-label", "Always start in Social mode"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
     body.append(start);
 
     // Key tips (renderer/key-tips.js): the small pop-ups naming each button's key.
@@ -93873,38 +94105,51 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function paintSettings(current) {
     const vibe = current === "vibe";
     const label = document.getElementById("idle-home-label");
-    if (label) label.textContent = vibe ? "Open Social on launch" : "Open Home on launch";
+    if (label) label.textContent = vibe ? "Open Today on launch" : "Open Home on launch";
     const hint = document.getElementById("idle-home-hint");
     if (hint) hint.textContent = vibe ? "When disabled, Studio reopens the last page you used after the project chooser." : "When disabled, Studio reopens the last tab page you used after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Social. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Today. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
     if (modeHint) modeHint.textContent = vibe ? "Social: friends, and a light eye on your agents, and every page opens in Social's rail." : "Studio: in-depth building, with Home, the menu and every tool.";
   }
   // Switching remembers the choice and lands on that mode's home. Vibe keeps
   // the rail shell on (nav.js asks mode()); Build gets the saved shell back.
-  function setMode(next, { go = true } = {}) {
+  function setMode(next, { go = true, swap = true } = {}) {
     next = next === "build" ? "build" : "vibe";
     const was = mode();
     write(MODE_KEY, next);
     paintMode();
     if (was !== next) { window.MefiNav?.applyShell?.(); window.MefiNav?.paintCurrent?.(); }
     if (go) window.MefiNav?.go?.(next === "vibe" ? "vibe" : "workspace");
+    else if (swap && was !== next) swapUnderlay(next);
     return next;
   }
+  // A switch that keeps the page (Settings' Mode, the top bar from a page that is not Home) still changes what is
+  // under it: the new mode's Home quietly takes the old one's place, so Social's flag cannot leave Studio's rail
+  // hidden (vibe.css) and closing the page lands on the right Home. Focus stays where it was.
+  function swapUnderlay(next) {
+    const held = document.activeElement;
+    if (next === "build" && active()) { exit(); window.MefiWorkspace?.enter?.(); }
+    else if (next === "vibe" && window.MefiWorkspace?.isActive?.()) { window.MefiWorkspace.exit?.(); enter(); }
+    else return;
+    if (held && held !== document.body && held.isConnected && document.activeElement !== held) held.focus?.({ preventScroll: true });
+  }
 
-  // ---- the Vibe rail --------------------------------------------------------
-  // Marks where you are: the page itself, or the stop that owns its section
-  // (Analyzer lights Tasks, the model pages and Evidence light Agents).
+  // ---- the Social rail ------------------------------------------------------
+  // Marks where you are: the page itself, or the stop for its place, as Studio's rail files it (MefiNav.placeOf):
+  // Analyzer lights Tasks, Fleet and Pipelines light the Map, Skills and the model pages light Team, every Friends
+  // place lights Friends.
   function paintRail() {
     const rail = $("rail");
     if (!rail || rail.hidden) return;
     const nav = window.MefiNav;
     const id = nav?.current?.() ?? null;
     const buttons = [...rail.querySelectorAll("button[data-nav]")];
-    const section = nav?.railSection?.(nav?.get?.(id));
-    const match = buttons.find((button) => button.dataset.nav === id)
-      ?? buttons.find((button) => (section === "work" && button.dataset.nav === "tasks") || (section === "agents" && button.dataset.nav === "agents"));
+    let place = null;
+    try { place = nav?.placeOf?.(id) ?? null; } catch { place = null; }
+    const match = buttons.find((button) => button.dataset.nav === id || (id === "friends-page" && button.dataset.nav === "friends"))
+      ?? buttons.find((button) => place && button.dataset.vibePlace === place);
     for (const button of buttons) {
       if (button === match) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
@@ -94849,7 +95094,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         const what = steps ? `Split into ${steps} steps, then a final check.` : "Added to the queue.";
         feedback(gate === "held" ? `${what} Select Start agents below and it begins.` : gate === "paused" ? `${what} New work is paused; Resume below to start it.` : gate === "key" ? `${what} Connect an AI below so it can be built.`
           : state.status.autoBuild === false ? `${steps ? what : "Added."} ${steps ? "They wait" : "It waits"} for your go-ahead under Needs you.`
-          : steps ? `${what} Follow it on the plan card.` : "Added. It shows under Building now as soon as an agent picks it up.", gate && gate !== "waiting" ? "warn" : "good");
+          : steps ? `${what} Its steps show under Running as they start.` : "Added. It shows under Running as soon as an agent picks it up.", gate && gate !== "waiting" ? "warn" : "good");
         scheduleBacklog();
         window.dispatchEvent(new CustomEvent("mefi:task-created", { detail: { taskId: result.task?.id, projectId: id } }));
       } else feedback("");
@@ -95000,7 +95245,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     watch.hidden = false;
     if (need.kind === "question") {
       $("ask-kicker").textContent = `Decision${position}`;
-      watch.textContent = "Open in Watch";
+      watch.textContent = "Open on the Map";
       watch.onclick = () => { closeAsk({ quiet: true }); go("command", { rail: "ask" }); };
       renderQuestion(body, need.question);
       return;
@@ -95241,7 +95486,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (text) body.append(text);
     const retryable = row.canRetry !== false && !["verifying", "awaiting_verification"].includes(task?.status);
     body.append(actions([
-      { label: HOLD_VERBS[hold] || "Try again", primary: true, disabled: !retryable, title: "Put it back in the queue; it continues from its saved progress", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Back in the queue. It shows under Building now when a worker picks it up.") },
+      { label: HOLD_VERBS[hold] || "Try again", primary: true, disabled: !retryable, title: "Put it back in the queue; it continues from its saved progress", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "retry" }), "Back in the queue. It shows under Running when a worker picks it up.") },
       markDone(need),
       { label: "Drop it", confirm: "Drop this task?", title: "Close it without finishing; it is not marked done", run: () => act(need, () => api().tasksAction({ taskId: need.id, projectId: projectId(), action: "drop" }), "Dropped. It's closed without being finished.") },
     ]));
@@ -95324,7 +95569,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function active() { return !layer.hidden; }
   function enter() {
     init();
-    if (mode() !== "vibe") setMode("vibe", { go: false });
+    if (mode() !== "vibe") setMode("vibe", { go: false, swap: false });
     window.MefiWorkspace?.exit?.();
     window.MefiIdle?.exit?.();
     layer.hidden = false;
@@ -95583,15 +95828,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   });
   window.MefiNav?.register?.({
     id: "build-mode", label: "Switch to Studio", short: "Studio", kind: "action", layer: null, section: "home", group: "surfaces",
-    glyph: "g-wrench", badge: null, desc: "In-depth building: Home, Command, boards, models and every setting",
+    glyph: "g-wrench", badge: null, desc: "In-depth building: Home, the Map, boards, models and every setting",
     searchTerms: "studio build mode in depth full advanced switch",
-    showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
+    // Search lists the frame's own switch (shell.js shell-do-mode, Ctrl M) once; this record stays for the routes that name it.
+    showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false },
     hidden: () => mode() === "build",
     run: () => setMode("build"),
   });
   window.MefiNav?.register?.({
-    id: "whats-new", label: "What's new", short: "What's new", kind: "action", layer: null, section: "help", group: "system",
-    glyph: "g-spark", badge: null, desc: "The Social and Studio modes, and a link to the full changelog",
+    id: "whats-new", label: "What are Social and Studio?", short: "Social and Studio", kind: "action", layer: null, section: "help", group: "system",
+    glyph: "g-spark", badge: null, desc: "The two modes in plain words, and a link to the full changelog",
     searchTerms: "whats new changelog release notes patch notes update",
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
     run: () => showNotes({ force: true }),
@@ -95929,9 +96175,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         meta: [who, job.startedAt ? waited(job.startedAt, now) : "", job.stopping ? "stopping" : clip(step.step, 80) || phase].filter(Boolean).join(" · "), more: [] });
     }
     // A queued task that waits on you (a permission it asked for, a question) is under Needs you only, like a run.
+    // Up next says what it really waits for: with agents off, paused or no AI connected (the gate under the box) it
+    // is not about to run, so it says so and is not counted as running.
+    const gate = d.gate?.key ?? null;
+    const stopped = gate === "held" || gate === "paused" || gate === "key";
+    const startsWhen = gate === "held" ? "starts when you start agents" : gate === "paused" ? "starts when you resume" : gate === "key" ? "starts once an AI is connected" : "waits for a free worker";
     for (const next of (Array.isArray(d.next) ? d.next : []).filter((next) => !(next?.id && waiting.has(String(next.id)))).slice(0, 2)) {
-      running.push({ key: `next:${next.id}`, group: "running", tone: "next", title: clip(next.title || "Next task", 120), taskId: next.id || null,
-        meta: next.stage === "waiting" ? "waiting for what it depends on" : next.stage === "cooling" ? "trying again soon" : "up next · waits for a free worker", more: [] });
+      running.push({ key: `next:${next.id}`, group: "running", tone: "next", title: clip(next.title || "Next task", 120), taskId: next.id || null, ...(stopped ? { stopped: true } : {}),
+        meta: next.stage === "waiting" ? "waiting for what it depends on" : next.stage === "cooling" ? "trying again soon" : `up next · ${startsWhen}`, more: [] });
     }
     // Review: results ready for you first, then what is being checked, then plans waiting on you.
     const review = cards.filter((card) => card.group === "review");
@@ -96609,7 +96860,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (!key || !current.board[key]) continue;
       const cards = current.board[key];
       const count = group.querySelector(".today-count");
-      const open = cards.filter((card) => !card.decided).length;
+      const open = cards.filter((card) => !card.decided && !card.stopped).length;
       if (count && count.textContent !== String(open)) count.textContent = String(open);
       const list = group.querySelector(".today-cards");
       reconcile(list, cards.map((card) => ({ key: card.key, sig: cardSignature(card, detail), build: () => renderCard(card, detail) })));
@@ -97393,7 +97644,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // Each tip: where it applies, the control it points at (the first visible
   // match), which side it sits on, and its keys with what they do.
   const TIPS = [
-    { id: "vibe-box", when: onVibe, target: "#vibe-compose", side: "right", parts: [["/", "jump into the box"], ["Enter", "talk it over"], ["Ctrl+Enter", "build it"]] },
+    // Under Build it, not beside the box: the box runs the page's width, so beside it the tip landed on Build it itself.
+    { id: "vibe-box", when: onVibe, target: "#vibe-build", side: "bottom", parts: [["/", "jump into the box"], ["Enter", "talk it over"], ["Ctrl+Enter", "build it"]] },
     { id: "vibe-dock", when: onVibe, target: "#vibe-dock", side: "right", parts: [["D", "watch the tree"], ["T", "tasks"], ["M", "team"]] },
     { id: "vibe-pulse", when: onVibe, target: "#vibe-pulse", side: "bottom", parts: [["N", "what needs you"], ["C", "the conversation"]] },
     { id: "vibe-search", when: onVibe, target: "#vibe-layer .vibe-top-actions [data-nav='palette']", side: "bottom", parts: [["Ctrl+K", "find anything"], ["?", "every shortcut"]] },
@@ -97417,11 +97669,13 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function busy() {
     const nav = window.MefiNav?.state;
     if (nav?.sheet || nav?.transient) return true;
-    if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
-    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer"]) {
+    if (window.MefiBoot?.isActive?.() || window.MefiSetupHelper?.isOpen?.() || window.MefiSetupHelper?.welcomeOpen?.() || window.MefiCompanionHub?.isOpen?.() || window.MefiSidebar?.isOpen?.()) return true;
+    for (const id of ["walkthrough-overlay", "walkthrough-coach", "vibe-notes", "whats-new-sheet", "boot-layer", "setup-welcome", "shell-menu", "today-inbox", "app-help-menu", "music-dropdown"]) {
       const node = document.getElementById(id);
       if (node && !node.hidden && node.getClientRects?.().length) return true;
     }
+    // The tab strip's pop-ups (its menus, "+", Tab behaviour): a tip never sits over an open menu.
+    for (const node of document.querySelectorAll?.("[id^='mefi-tabs-pop-']") ?? []) if (!node.hidden && node.getClientRects?.().length) return true;
     return document.hidden === true;
   }
   function targetOf(tip) {
@@ -101924,8 +102178,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
 //
 // window.MefiShell: active, enable, disable, region, mode, setMode, size,
 // resize, info, open, close, toggle, isOpen, mount, onChange, openInbox,
-// resetLayout, layout, status, sync, pages, onInbox (a hook), plan, and the
-// constants LIMITS, DEFAULTS, REGIONS, MODES and PRESETS. It emits
+// resetLayout, layout, status, sync, pages, placeBar (a place's pages as a row
+// in its page, for when the list column is not showing them), onInbox (a hook),
+// plan, and the constants LIMITS, DEFAULTS, REGIONS, MODES and PRESETS. It emits
 // `mefi:shell-layout` on window when a region opens, closes, is resized or
 // becomes a drawer, when the mode changes, when the page list comes or goes
 // and when the frame comes or goes.
@@ -102856,6 +103111,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     // The Git chip rides with the page list (renderer/git-sync.js keeps one popover for every chip); mounting again is harmless.
     if (model) { try { window.MefiGitSync?.mount?.(pages.git, { variant: "list" }); } catch { /* no chip in this build */ } }
+    paintPlaceBars(model);
     const shown = Boolean(model);
     if (pages.shown !== shown || pages.section !== (model?.section ?? null)) {
       pages.shown = shown;
@@ -102882,6 +103138,43 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : Math.max(0, Math.min(items.length - 1, at + (event.key === "ArrowDown" ? 1 : -1)));
     event.preventDefault?.();
     items[next]?.focus?.({ preventScroll: true });
+  }
+
+  // ---- the place bar: a place's pages as one row at the top of its page ----------------------------------
+  // The same model the list column draws (pageModel: Team's, Friends' and the rest), for when the column is not showing it:
+  // Social keeps the column closed, and a small window folds it into a drawer. Friends and Team mount one in their heads
+  // (placeBar(host, section)); html[data-frame-pages] hides it while the docked column lists the same pages (shell.css).
+  const placeBars = new Set();
+  function placeBar(host, section) {
+    if (!host || typeof host.append !== "function" || typeof section !== "string") return null;
+    const bar = el("nav", "shell-place-bar", { "aria-label": `${section.charAt(0).toUpperCase()}${section.slice(1)} places`, "data-section": section });
+    bar.hidden = true;
+    host.append(bar);
+    placeBars.add(bar);
+    paintPlaceBars(state.on ? pageModel() : null);
+    return bar;
+  }
+  function paintPlaceBars(model) {
+    if (!placeBars.size) return;
+    const n = nav();
+    const rows = !model ? [] : model.rows ? model.rows : (model.pages || []).map((page) => ({ kind: "row", key: page.id, label: page.label, current: page.current, run: () => n?.go?.(page.id) }));
+    const key = JSON.stringify([model?.section ?? null, rows.map((row) => [row.kind, row.key ?? null, row.label, Boolean(row.current), Boolean(row.open), Boolean(row.sub)])]);
+    for (const bar of placeBars) {
+      if (bar.dataset.key === key) continue;
+      bar.dataset.key = key;
+      if (!model || model.section !== bar.dataset.section) { bar.hidden = true; bar.replaceChildren(); continue; }
+      const items = [];
+      for (const row of rows) {
+        if (row.sub) continue;
+        if (row.kind === "heading") { items.push(text("span", "shell-place-group", row.label)); continue; }
+        const chip = button(`shell-place-chip${row.current || row.open ? " is-current" : ""}`, null, (event) => row.run?.(event), { "data-page": row.key ?? row.label });
+        chip.textContent = row.label;
+        if (row.current || row.open) chip.setAttribute("aria-current", "page");
+        items.push(chip);
+      }
+      bar.replaceChildren(...items);
+      bar.hidden = items.length === 0;
+    }
   }
 
   // ---- the feed: what the bars say -------------------------------------------------------------
@@ -103051,7 +103344,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     items.usage = el("span", "shell-usage");
     // The prototype's second rule: between what waits on you and the usage meters, there only while the meters are.
     items.usageSep = el("span", "shell-sep-v shell-usage-sep", { "aria-hidden": "true" });
-    item("player", "shell-player", () => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(); else nav()?.go?.("audio"); }, "Music and video");
+    // The media menu opens from this button: it places itself here and says so on this button (aria-expanded), not on
+    // Settings' own way in.
+    item("player", "shell-player", (event) => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(event?.currentTarget ?? items.player ?? null); else nav()?.go?.("audio"); }, "Music and video");
+    items.player.setAttribute("aria-haspopup", "dialog");
+    items.player.setAttribute("aria-expanded", "false");
     items.player.setAttribute("aria-haspopup", "true");
     items.player.append(icon("audio"), text("span", "shell-player-title", ""), text("span", "shell-player-time", ""));
     // The machine's load opens Team › Resources (renderer/resources.js), where its apps can be held back for the agents;
@@ -103146,7 +103443,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       working.dataset.tone = run;
       working.children[1].textContent = word;
       working.setAttribute("aria-label", word);
-      working.setAttribute("title", "What is running. Open Command.");
+      working.setAttribute("title", "What is running. Open the Map.");
     }
     const needs = live.needs || 0;
     waiting.hidden = needs <= 0;
@@ -103571,6 +103868,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     status: () => (state.on ? { ...(state.live ?? readLive()) } : null),
     // Whether the list column shows the section's page list now (the column's panels make way while it does), and for which section.
     pages: () => (state.on && state.pages ? { shown: state.pages.shown, section: state.pages.section } : { shown: false, section: null }),
+    // A place's pages as a row at the top of its page, for when the list column is not showing them (Social, small windows).
+    placeBar,
     layout: () => clone(state.prefs),
     onInbox: null,
     LIMITS, DEFAULTS, REGIONS, MODES, PRESETS,
@@ -104831,7 +105130,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const home = { group: "Home", route: { id: "workspace", params: {} }, title: homeTitle(), glyph: "g-home", terms: "home today vibe front door" };
     // In the 0.5 layout Today is Work's first page (nav.js placeOf), so it leads Work's rows instead of a group of its own.
     const pages = destinations();
-    const lead = v2() ? [{ ...home, group: "Work" }, ...pages.filter((row) => row.group === "Work")] : [home];
+    // Today is that first row once: the Today sheet's own record would be a second "Today" under it.
+    const lead = v2() ? [{ ...home, group: "Work" }, ...pages.filter((row) => row.group === "Work" && row.route?.id !== "today")] : [home];
     const rest = v2() ? pages.filter((row) => row.group !== "Work") : pages;
     const rows = [...closed, ...[...lead, ...sessionRows(query), ...rest].filter(match)];
     const have = new Map(order().map((rec) => [keyOf(rec.route), rec]));
@@ -106760,7 +107060,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     cli.addEventListener("change", () => void B.chips.saveRouting({ executorCli: cli.value }, `${B.chips.CLI_NAMES[cli.value] || cli.value} builds your tasks now.`));
     tier.addEventListener("change", () => void B.chips.saveRouting({ executorTier: tier.value }, `${(B.chips.TIERS.find(([id]) => id === tier.value) || ["", tier.value])[1]} saved.`));
     worker.append(cli, tier);
-    section("Coding worker", el("small", "sx-runnote", "Builds this project's tasks. Agents › Setup has the rest.")).append(worker);
+    section("Coding worker", el("small", "sx-runnote", "Builds this project's tasks. Team › Seats and models has the rest.")).append(worker);
     const folder = el("span", "sx-folder"); folder.id = "sessions-folder";
     const folderRow = section("Folder", el("small", "sx-runnote", "Where the next run works."));
     folderRow.append(folder); folderRow.id = "sessions-run-folder";
@@ -107007,7 +107307,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const projectTabs = el("div", "sx-ptabs");
     const here = el("span", "sx-ptab on", "Project"); here.setAttribute("aria-current", "true");
     projectTabs.append(here,
-      button("Team", "sx-ptab", () => window.MefiNav?.go?.("agents", { section: "overview" }), { title: "Open Agents: the team, its seats and models" }),
+      button("Team", "sx-ptab", () => window.MefiNav?.go?.("agents", { section: "overview" }), { title: "Open Team: who does the work, its seats and models" }),
       button("Usage", "sx-ptab", () => window.MefiNav?.go?.("usage"), { title: "Open Usage: recorded calls and provider accounts" }));
     const projectBody = el("div", "sx-ibody"); projectBody.id = "sessions-project-scroll";
     const projectOwn = el("div", "sx-own");
@@ -108774,6 +109074,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       return;
     }
     hint.textContent = "Uses the separate game project's cached LÖVE runtime and documented smoke-test script when available.";
+    // The game launcher is the owner's optional Ruins Runner project: without one on this PC the card stays out of
+    // Settings (as Server Styler's does below), rather than offering buttons that can only fail.
+    if (typeof window.mefiStudio.gameStatus === "function") {
+      void Promise.resolve(window.mefiStudio.gameStatus()).then((status) => {
+        const card = document.getElementById("settings-integrations");
+        if (card && status?.ok !== false) card.hidden = status?.available !== true;
+      }).catch(() => {});
+    }
     window.mefiStudio.onStudioLog((line) => studioLog(line));
     document.getElementById("settings-log")?.addEventListener("toggle", () => { if (studioLogStale) paintStudioLog(); });
 
@@ -110053,7 +110361,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       // any other close leaves it waiting in Start here, with one toast to start it.
       const afterHelper = ({ tour = false } = {}) => {
         if (tour) { walkthrough(); return; }
-        if (window.MefiOnboarding?.invite?.()) window.MefiToast?.("The guided tour waits in Start here whenever you want it.", "info", { action: { label: "Start the tour", run: () => window.MefiOnboarding?.open?.() } });
+        if (window.MefiOnboarding?.invite?.()) window.MefiToast?.("The guided tour waits under Help › Start here whenever you want it.", "info", { action: { label: "Start the tour", run: () => window.MefiOnboarding?.open?.() } });
       };
       if (!window.MefiSetupHelper?.startup?.({ then: afterHelper })) walkthrough();
       // The one-time "what's new" card for a returning profile (renderer/vibe.js).

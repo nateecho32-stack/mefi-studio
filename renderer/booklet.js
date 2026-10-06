@@ -1138,6 +1138,14 @@
       return;
     }
     hint.textContent = "Uses the separate game project's cached LÖVE runtime and documented smoke-test script when available.";
+    // The game launcher is the owner's optional Ruins Runner project: without one on this PC the card stays out of
+    // Settings (as Server Styler's does below), rather than offering buttons that can only fail.
+    if (typeof window.mefiStudio.gameStatus === "function") {
+      void Promise.resolve(window.mefiStudio.gameStatus()).then((status) => {
+        const card = document.getElementById("settings-integrations");
+        if (card && status?.ok !== false) card.hidden = status?.available !== true;
+      }).catch(() => {});
+    }
     window.mefiStudio.onStudioLog((line) => studioLog(line));
     document.getElementById("settings-log")?.addEventListener("toggle", () => { if (studioLogStale) paintStudioLog(); });
 
@@ -2417,7 +2425,7 @@
       // any other close leaves it waiting in Start here, with one toast to start it.
       const afterHelper = ({ tour = false } = {}) => {
         if (tour) { walkthrough(); return; }
-        if (window.MefiOnboarding?.invite?.()) window.MefiToast?.("The guided tour waits in Start here whenever you want it.", "info", { action: { label: "Start the tour", run: () => window.MefiOnboarding?.open?.() } });
+        if (window.MefiOnboarding?.invite?.()) window.MefiToast?.("The guided tour waits under Help › Start here whenever you want it.", "info", { action: { label: "Start the tour", run: () => window.MefiOnboarding?.open?.() } });
       };
       if (!window.MefiSetupHelper?.startup?.({ then: afterHelper })) walkthrough();
       // The one-time "what's new" card for a returning profile (renderer/vibe.js).

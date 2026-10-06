@@ -7,6 +7,30 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **0.5 polish: an easier first run, and menus that behave.** A new
+  install now starts with **Start a new app** (Studio makes the folder) beside
+  **Open a folder…**, and the Studio Daily says *Welcome to Studio*. The first
+  run asks **Pick the AI that builds for you** in plain words (which account
+  each tool uses), offers OpenCode's free models when you have no
+  subscription, and now really switches Studio to the tool you signed in to
+  when you press Continue (before, it kept the default). Its last step, **What
+  should Studio make first?**, has examples to tap and never adds a task with
+  no project open. Social's rail uses Studio's names (Friends, Map, Team) and
+  gains Help; Friends and Team show their places as a row of chips when the
+  side list is closed, so Rooms, Events, Your PCs and every Team page are
+  reachable from Social; Events is in Studio's menu and in Search. Fixed:
+  switching Social to Studio while a page was open left the menu blank;
+  Configuration and Friends could stay open or leave their name in the
+  breadcrumb and tab after you left them; Search listed "Switch to Studio"
+  twice and the + menu listed Today twice; a key tip covered Build it and the
+  first-run dialog; the old node-tree strip covered the right edge of
+  Settings; the Ruins Runner launcher showed without the game; the status
+  bar's player opened the media menu in the wrong place; Plans squeezed its
+  editor in a smaller window; the breadcrumb cut every crumb to a few letters.
+  The wide menu opens by itself only on screens 1600 px wide or more (your
+  pin still holds), Team lists Resources, and the startup settings read
+  *Open Today on launch*, *Always start in Social mode* and *Agents when
+  Studio opens*.
 - **My PCs: your PCs work as one.** Friends › Your PCs now lists every PC
   you sign in to Friends on, live: its CPU, free memory, battery and how
   many tasks it runs, and why it is not taking work. Pair each PC once by
@@ -488,6 +512,29 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   shows as "Settings › Connections". Settings lists its places in the same
   column. Team's pages read at 12 px or more and fit a narrow window without
   scrolling sideways. The classic layout is unchanged.
+- **The Map and Team are called that everywhere.** Buttons, tooltips, toasts
+  and messages that still said Command view, Live or Agents › Setup now say
+  the Map and Team, and point where things are now: Team › Providers to
+  connect an AI or install a coding tool, Team › Seats and models for coding
+  models and the provider order, Help › Setup guide for Continue with
+  ChatGPT, and Settings › Report a problem in Search. "Open in Command" and
+  "View in Live" read "Open in Map" and "View in Map", and the companion's
+  "Open the Map" (it was "Open live agent work") opens the Map instead of
+  Team's Overview.
+- **Start here speaks plainly and walks to the 0.5 places.** The guided
+  tour's seven stops are rewritten for someone new to building with AI: Pick
+  the AI that builds for you, Open your project, Let your AI map your
+  project, See your AI accounts, Tell Studio what to make, Watch your AI work
+  and Check what your AI made. They name places as they are now (Today,
+  Ideas, the Map, the Inbox, Team › Providers, Help › Start here and Help ›
+  Setup guide), and every Walk me to… button lands on something you can see:
+  Team › Providers, the Map with Live work in front, the box on Today in
+  either mode, and for review Today's Review column in Social or the task
+  board's Review in Studio (it pointed at Home's old Review filter, which 0.5
+  hides). In Studio the walk to the box no longer switches it to Create task,
+  so what you typed stays in view. Your AI's advice in the tour uses the same
+  words, and the toast after the welcome says the tour waits under Help ›
+  Start here.
 - **Vibe's board lists a waiting task once.** A queued task that has asked
   you something (a permission, a question) is under Needs you only, not also
   "up next" under Running.

@@ -389,6 +389,32 @@ test("Team in the list column: agents.js's places under the prototype's headings
   assert.deepEqual(plain(page.window.MefiShell.pages()), { shown: true, section: "team" });
 });
 
+test("a place bar draws the same places as the list column, as one row, for the page that mounts it", async () => {
+  const page = withPlaces("booklet");
+  const ran = [];
+  const view = (label, current = false) => ({ label, current, run: () => ran.push(label) });
+  const place = (id, label, group = null, views = [], current = false) => ({ id, label, glyph: "g-agents", group, current, views, run: () => ran.push(id) });
+  page.window.MefiAgents = {
+    teamPlaces: () => [place("overview", "Overview"), place("rules", "Rules", "Context for agents"), place("models", "Models", "Monitor", [view("Catalog", true), view("Performance")], true)],
+    teamPlace: () => ({ id: "models", label: "Models" }),
+  };
+  const host = page.document.createElement("header");
+  page.document.body.append(host);
+  const bar = page.window.MefiShell.placeBar(host, "team");
+  assert.ok(bar, "Team's head gets a bar");
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  const chips = () => bar.children.map((node) => `${node.className.includes("shell-place-group") ? "# " : ""}${node.textContent}${node.getAttribute?.("aria-current") ? " *" : ""}`);
+  assert.equal(bar.hidden, false);
+  assert.deepEqual(chips(), ["Overview", "# Context for agents", "Rules", "# Monitor", "Models *"], "one row: the places under their headings, the one you are in marked, its own pages left to the page");
+  await bar.children.find((node) => node.textContent === "Rules").click();
+  assert.deepEqual(ran, ["rules"], "a chip runs what the list column's row runs");
+  // A bar for another place stays empty while Team shows.
+  const other = page.window.MefiShell.placeBar(page.document.createElement("div"), "friends");
+  page.window.dispatchEvent({ type: "mefi:nav" });
+  assert.equal(other.hidden, true);
+  assert.equal(page.window.MefiShell.placeBar(null, "team"), null, "no host, no bar");
+});
+
 test("the Map's pages keep the session list in the list column, as the prototype does, and the breadcrumb names them", async () => {
   const page = withPlaces("fleet");
   page.window.MefiAgentBrain = { tab: () => "live" };

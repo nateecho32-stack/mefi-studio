@@ -133,7 +133,10 @@ test("the Vibe rail in the template points only at registered destinations, and 
   // agents.js registers Agents itself; the rest come from nav.js and vibe.js.
   const known = new Set([...loaded.nav.list({}).map((dest) => dest.id), "agents"]);
   const targets = [...rail.matchAll(/data-nav="([^"]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(targets, ["vibe", "command", "tasks", "plans", "ideas", "agents", "friends", "palette", "studio"]);
+  // Social's rail names the places as Studio's does: Friends first (Social is for friends), the Map, Work's boards, Team,
+  // Search; Settings and Help at the foot.
+  assert.deepEqual(targets, ["vibe", "friends", "command", "tasks", "plans", "ideas", "agents", "palette", "studio", "help"]);
+  assert.deepEqual([...rail.matchAll(/<span>([^<]+)<\/span>/g)].map((match) => match[1]), ["Today", "Friends", "Map", "Tasks", "Plans", "Ideas", "Team", "Search", "Settings", "Help", "Studio"], "the words Studio's rail uses: Map, not Watch; Team, not Agents");
   for (const id of targets) assert.ok(known.has(id), `${id} is a registered destination`);
   assert.deepEqual([...rail.matchAll(/data-ui-mode="([^"]+)"/g)].map((match) => match[1]), ["build"]);
 });

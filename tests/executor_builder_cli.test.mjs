@@ -153,7 +153,7 @@ test("with no coding tool installed the OpenCode route refuses before the claim 
     assert.deepEqual(seen, [], "nothing was started");
     assert.equal(h.board().tasks[0].status, "open", "the card was never claimed");
     assert.equal(h.board().tasks[0].runFailures ?? 0, 0, "and no attempt was charged");
-    assert.match(h.autopilot.lastError, /^No coding tool is installed\. Install OpenCode, Claude Code or Codex under Agents › Setup\.$/);
+    assert.match(h.autopilot.lastError, /^No coding tool is installed\. Install OpenCode, Claude Code or Codex under Team › Providers\.$/);
   }
 });
 

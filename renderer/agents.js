@@ -103,6 +103,8 @@
     { id: "folders", label: "Related folders", glyph: "g-explorer", group: "Context for agents", panes: ["folders"], about: "Extra folders agents may read but never change." },
     { id: "flows", label: "Workflows", glyph: "g-route", group: "Context for agents", views: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]] },
     { id: "health", label: "Health and usage", glyph: "g-gauge", group: "Monitor", views: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]] },
+    // The resource manager (renderer/resources.js): other apps slowed, paused or closed so the agents get this PC.
+    { id: "resources", label: "Resources", glyph: "g-gauge", group: "Monitor", views: [["Resources", "resources"]] },
     { id: "models", label: "Models", glyph: "g-graph", group: "Monitor", views: [["Catalog", "booklet"], ["Performance", "graph"]] },
     { id: "inspect", label: "Inspect", glyph: "g-eyes", group: "Monitor", views: [["Sessions", "explorer"], ["Activity and evidence", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"], ["Performance profiler", "profiler"], ["Machine status", "explorer", { panel: "diagnostics" }], ["Connection log", "agents", { place: "providers", target: "settings-log" }]] },
   ]);
@@ -185,12 +187,14 @@
     mounted = true;
     window.MefiBooklet?.initStudio?.();
     const overlay = node("div", "overlay agents-overlay"); overlay.id = "agents-overlay"; overlay.hidden = true;
-    const sheet = node("section", "sheet agents-sheet"); sheet.tabIndex = -1; sheet.setAttribute("role", "region"); sheet.setAttribute("aria-label", "Agents workspace");
+    const sheet = node("section", "sheet agents-sheet"); sheet.tabIndex = -1; sheet.setAttribute("role", "region"); sheet.setAttribute("aria-label", "Team");
     const head = node("header", "agents-head");
-    const title = node("div"); title.append(node("p", "agents-eyebrow", "YOUR STUDIO / AGENTS")); const h = node("h1", "", "Agents"); h.id = "agents-title"; title.append(h, node("p", "muted", "One team, one place to set it up and follow its work."));
+    const title = node("div"); title.append(node("p", "agents-eyebrow", "YOUR STUDIO / TEAM")); const h = node("h1", "", "Team"); h.id = "agents-title"; title.append(h, node("p", "muted", "One team, one place to set it up and follow its work."));
     const settings = button("Studio appearance", () => go("studio", { category: "appearance" }), "ghost mini");
     const headActions = node("div", "agents-head-actions"); headActions.append(button("Reload saved settings", discard, "ghost mini"), settings);
     head.append(title, headActions); sheet.append(head);
+    // Team's places as a row under the title, for when the list column is not showing them (Social, a small window).
+    window.MefiShell?.placeBar?.(title, "team");
     const body = node("div", "agents-body"); body.id = "agents-body";
     for (const name of ["overview", "connections", "team", "routing", "behavior"]) { const pane = node("div", "agents-pane"); pane.id = `agents-${name}`; pane.dataset.agentsPane = name; pane.hidden = true; body.append(pane); }
     sheet.append(body);
@@ -213,7 +217,7 @@
       const help = (el.closest("label")?.querySelector("small") || el.querySelector("summary small, summary .settings-summary-text > span"))?.textContent?.trim() || "";
       // In the 0.5 layout Search names the control by the Team place that holds it now (read when Search reads it).
       const words = label?.trim().slice(0, 100);
-      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", get label() { const place = teamPlaceOfElement(el); return place ? `Team › ${place.label} › ${words}` : `Agents › ${words}`; }, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
+      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", get label() { const place = teamPlaceOfElement(el); return place ? `Team › ${place.label} › ${words}` : `Team › ${words}`; }, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
     }
     $("agents-team").append(buildRules());
     buildSetupHeader(); buildOverview(); buildRoles(); buildBehavior();

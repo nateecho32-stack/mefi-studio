@@ -261,6 +261,9 @@
     // the sheet's own entrance carries both.
     state.painted = null;
     if (state.mark?.dataset) state.mark.dataset.on = "false";
+    // The transient layer is Configuration's while it shows: Escape from anywhere and closeAll() find it, and a
+    // second pop-up (Search, Shortcuts) takes its place instead of stacking over a dialog nobody can close by key.
+    window.MefiNav?.claim?.("config");
     $("overlay").hidden = false;
     render();
     requestAnimationFrame(() => $("search")?.focus?.({ preventScroll: true }));
@@ -271,9 +274,13 @@
   function close() {
     if (!isOpen()) return;
     $("overlay").hidden = true;
+    window.MefiNav?.release?.("config");
+    // MefiNav hands focus back first; this only steps in when nothing usable took it.
     const back = state.previous;
     state.previous = null;
-    if (back && document.contains?.(back)) back.focus?.({ preventScroll: true });
+    const current = document.activeElement;
+    const stranded = !current || current === document.body || $("overlay").contains?.(current);
+    if (stranded && back && document.contains?.(back)) back.focus?.({ preventScroll: true });
   }
   // Up and Down walk the categories from the tree.
   function step(delta) {

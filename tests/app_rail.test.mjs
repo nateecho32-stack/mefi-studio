@@ -203,7 +203,7 @@ test("sectionLabel names every record by its place, the palette's result kinds",
   assert.equal(nav.sectionLabel({ id: "assistantTidy", kind: "action", group: "assistant" }), "Assistant");
   assert.equal(nav.sectionLabel({ id: "settings:settings-updates", kind: "action", group: "settings" }), "Settings", "the Settings cards booklet.js files");
   assert.equal(nav.sectionLabel(null), null);
-  assert.deepEqual({ ...nav.RAIL_SLOTS }, { community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
+  assert.deepEqual({ ...nav.RAIL_SLOTS }, { community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends" });
   assert.ok(Object.isFrozen(nav.RAIL_SLOTS), "only nav places destinations in the rail");
   const ranks = ["workspace", "tasks", "command", "booklet", "friends-page", "studio", "help"].map((id) => nav.sectionRank(nav.get(id)));
   assert.deepEqual(ranks, [0, 0, 1, 2, 3, 4, 5], "ranks follow the rail from top to bottom: Work, Map, Team, Friends, then Settings and Help at the foot");
@@ -253,7 +253,15 @@ test("the default pin yields in narrow windows and honours an explicit collapsed
   assert.equal(narrow.store.has("mefiStudio.railPinned"), false, "responsive layout does not write a preference");
   narrow.window.innerWidth = 1280;
   narrow.fire("resize");
+  assert.equal(narrow.document.documentElement.dataset.railPinned, undefined, "with no saved choice the menu opens by itself only in a wide window");
+  narrow.window.innerWidth = 1680;
+  narrow.fire("resize");
   assert.equal(narrow.document.documentElement.dataset.railPinned, "");
+  assert.equal(narrow.store.has("mefiStudio.railPinned"), false, "still no preference written");
+  const laptop = load({ init: true, width: 1460 });
+  assert.equal(laptop.document.documentElement.dataset.railPinned, undefined, "the default 1460 px window starts with the compact rail, so the page and the list column keep their room");
+  const chosen = load({ init: true, width: 1460, stored: { "mefiStudio.railPinned": "1" } });
+  assert.equal(chosen.document.documentElement.dataset.railPinned, "", "a saved pin still holds down to 1100 px");
   const collapsed = load({ init: true, width: 1280, stored: { "mefiStudio.railPinned": "0" } });
   assert.equal(collapsed.document.documentElement.dataset.railPinned, undefined);
   assert.equal(collapsed.get("app-rail-pin").getAttribute("aria-pressed"), "false");
@@ -392,6 +400,19 @@ test("the shortcut sheet groups every key by the rail's places, with Esc under H
   assert.equal(title(grid.children.at(-1)), "Map");
 });
 
+test("the shortcut sheet carries the Help menu's rows as links, and lists a shortcut kept only as a chord", async () => {
+  const { nav, get } = load({ ids: ["help-grid", "help-links"] });
+  nav.register(COMMUNITY); nav.register(SETUP_HELPER); nav.register(RELEASE_NOTES); nav.register(REPORT);
+  nav.register({ id: "chord-only", kind: "action", section: "work", label: "Open the Inbox", chord: "Ctrl J", showIn: { help: true } });
+  await settle();
+  nav.renderHelp();
+  const links = get("help-links");
+  assert.equal(links.hidden, false);
+  assert.deepEqual(links.children.map((link) => link.dataset.helpLink), ["setup-helper", "release-notes", "settings:report", "community"], "the Help menu's rows past Start here (it has its own line) and the sheet itself, in the menu's order");
+  const keys = get("help-grid").querySelectorAll("kbd").map((cap) => cap.textContent);
+  assert.ok(keys.includes("Ctrl J"), "Ctrl J for the Inbox is on the sheet");
+});
+
 test("the tab pages' header names the page and offers the way back to Command", async () => {
   const loaded = load({ view: "command", ids: ["page-title", "page-return"] });
   loaded.get("page-return").hidden = true;
@@ -450,7 +471,7 @@ test("the update pill and toasts point at Settings › Updates and open that car
 const v2Rail = (options = {}) => { const loaded = load({ search: "?shell=rail", layout: "v2", ...options }); loaded.nav.applyShell(); return loaded; };
 const SETUP_HELPER = { id: "setup-helper", label: "Setup helper", short: "Setup", kind: "overlay", layer: "sheet", section: "agents", group: "tools", glyph: "g-agents", showIn: { palette: true, help: true, tools: true }, open() {}, close() {}, isOpen: () => false };
 const RELEASE_NOTES = { id: "release-notes", label: "What's new in this version", short: "Release notes", kind: "action", layer: null, section: "help", group: "system", glyph: "g-spark", showIn: { palette: true }, run() {} };
-const REPORT = { id: "settings:report", label: "Settings › System › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system", glyph: "g-gauge", showIn: { palette: true }, run() {} };
+const REPORT = { id: "settings:report", label: "Settings › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system", glyph: "g-gauge", showIn: { palette: true }, run() {} };
 
 test("in the 0.5 layout the rail is the prototype's: Work, Map, Team and Friends, then Search, Settings and Help at its foot", async () => {
   const { nav, rail, document } = v2Rail();
@@ -469,7 +490,7 @@ test("in the 0.5 layout the rail is the prototype's: Work, Map, Team and Friends
   assert.equal(document.getElementById("app-rail-compose"), null, "New task is the session list's (Ctrl N), not the rail's");
   assert.equal(document.getElementById("app-rail-recent-list"), null, "the session list holds the tasks");
   assert.equal(rail().querySelector(".app-rail-vibe"), null, "the mode switch is the top bar's (Ctrl M)");
-  assert.deepEqual(rail().querySelectorAll('.app-rail-section[data-section="friends"] .app-rail-children [data-nav]').map((button) => button.dataset.nav), ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"], "Friends keeps The Lobby, its three pages and the Project hub");
+  assert.deepEqual(rail().querySelectorAll('.app-rail-section[data-section="friends"] .app-rail-children [data-nav]').map((button) => button.dataset.nav), ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events"], "Friends keeps The Lobby, its three pages, the Project hub and Events, so every place Friends lists is one click from the rail and in Search");
   // The Help menu: the prototype's six, each the record it always was, in its order; a late arrival redraws the foot.
   nav.register(COMMUNITY); nav.register(SETUP_HELPER); nav.register(RELEASE_NOTES); nav.register(REPORT);
   await settle();
