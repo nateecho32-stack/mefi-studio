@@ -39,6 +39,38 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Test runs take turns on one PC, size to free memory and start the slowest suites first
+
+Branch `wip/test-lease` (C:\wt\coop) off 00d32ca: `scripts/test-lease.mjs` (a machine-wide lease board in
+%LOCALAPPDATA%\MefiStudio\test-lease: one Electron lane, two parallel stages, first come first served),
+`scripts/test-timings.mjs` (a node:test reporter recording each suite's wall time), and run-node-tests taking a
+turn per stage, sizing the parallel width to free memory and ordering every stage longest first. Merged with main
+d55269f before landing (712818c): only CHANGELOG.md conflicted (main's file plus this branch's entry).
+
+Full `npm test` on the gated commit f18d18c, on the 16 GB laptop with other sessions working (0.4 to 1.4 GB free):
+34 min 10 s in all; full gates here took 45 min to 2 h 14 min before. Parallel stage at 4 suites at a time (561 MB
+free when it started; Node's default is 15 here): 7105 tests, 7089 pass, 14 skipped, 2 fail, both Rust parity
+suites under load: rust_parity_git "the actions answer like the JavaScript on real folders" (the Rust side's git
+call hit its time limit, 298 s) and rust_parity_snapshots "the same attempt on two identical repositories" (a
+different start commit; the known under-load timeout). Both pass alone after the gate: 7/7 in 2 min 41 s through `npm run test:one` (the actions test 137 s, the snapshot host test 27 s). Electron lane at 2 windows (1129 MB free):
+100 tests, 97 pass, 1 skipped, 2 fail: layout_contract_render and shell_render, the two display-scaling failures
+this PC shows on clean main (fx/scaling fixes them; layout_contract_render retires on ui/v2-only). Exclusive
+command_render, eyes_toggle_electron and occlusion_probe pass. Python contracts 83 s OK; normalized-path lock OK.
+`npm run audit` 0 findings, `npm run check` ok, eslint on the changed files 0 problems. Hosted CI (ci.yml,
+Windows) green on f18d18c in 8 min 56 s. After the merge with main: `npm run check` ok, and run_all_tests,
+run_node_tests_fast, test_lease, test_timings, check_targets and spec_collisions 44/44 through `npm run test:one`.
+
+The lease worked live during the gate: a Friends render run started from C:\wt\econ waited in line ("waiting for
+the Electron lane, held by C:\wt\coop (npm test: Electron fixtures, running 12 min)") and ran when the lane
+freed; a waiter that was killed had its file cleared at the next read.
+
+The first timing record (wall times under this run's load): the 503 Node suites sum to 3179 s, and the top 10 are
+69% of it: rust_parity_repo 401 s (its sync test alone 281 s), sync 377, rust_parity_git 331, git_actions 218,
+rust_parity_snapshots 186, attempt_snapshots_host 177, worktree_actions 151, attempt_review_host 126, pc_vault 122,
+pc_vault_turns 89; the median suite is 0.37 s. The 48 Electron suites sum to 2017 s (layout_contract_render 193,
+tabs_render 173, unified_studio_render 149, shell_render 139, sessions_render 128). From the next run each stage
+starts its slowest suites first. `npm run test:lease -- --slowest` prints the record.
+
 ## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
 
 Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
@@ -504,32 +536,6 @@ same way on clean main on this PC; command_render and planning_render pass;
 Python 248 OK (1 skipped); path lock ok. Captures at 1920x1080 in
 `C:\wt\gap\after-work\` with prototype-left side-by-sides in
 `C:\wt\gap\after-work\compare\`.
-## 2026-10-04 Rust stage 2: five more modules move into Rust
-
-Branch `rust/stage2-ports` in `C:\wt\rust2` (pushed as wip/rust-stage2-ports):
-the Skills page's files (55281f0), a message's pictures (cd8cc2c), attempt
-snapshots (0ff6869), settings + keys + projects (1435ae9), and the Git chip's
-host layer with git-link's describe and chip (c5a1e03), each behind a
-Rust-backed factory in scripts/rust-modules.cjs, each with its parity test
-(rust_parity_skills, rust_parity_images, rust_parity_snapshots: twin repos
-with a fixed clock give the same commit ids; rust_parity_settings: main.cjs's
-own settings code from its text against Rust on twin userData folders;
-rust_parity_git: describe on about 830 sets of facts and 28 host steps on
-two boxes with the fake gh). `mefi-core repo-batch` now answers a
-{ $mefi: "fn" } argument with null and lists its calls.
-
-Full `npm test` on c5a1e03: Node 6899 tests, 6885 pass, 14 skipped, 0 fail;
-Electron lane 75: 70 pass, 1 skipped, 4 fail: layout_contract_render and
-shell_render (viewport 1921x1081, as on clean main on this PC),
-evidence_capture ("UnknownVizError") and task_overview_render ("No fixture
-report"), both while another worktree's full run shared the Electron stage:
-each passes alone (1/1, 1/1). Python 248 OK; path lock ok; `npm run audit` 0
-findings; `npm run check` ok (271 targets). An earlier run on 1435ae9 had the
-same picture apart from attempt_review_host "a shot that is slow" (28/28
-alone). A first run was stopped and its children kept running into a second
-one: overlapping runs failed to start processes (0xC0000142) and wrote one
-log; neither is counted here. `cargo test --lib` 26 pass.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
