@@ -71,6 +71,23 @@ pc_vault_turns 89; the median suite is 0.37 s. The 48 Electron suites sum to 201
 tabs_render 173, unified_studio_render 149, shell_render 139, sessions_render 128). From the next run each stage
 starts its slowest suites first. `npm run test:lease -- --slowest` prints the record.
 
+## 2026-10-06 Playlists in the media menu land on main
+
+Branch `feat/playlists` in `C:\wt\playlists` (9064526: renderer/playlists.js, the music.js hooks, music.css, docs),
+rebased onto main d55269f with the CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged.
+
+Windows CI (`Studio checks`: build-booklet and its diff, check, the full `npm test` with the Python contracts, audit)
+green on the first push of the branch (run 37398280329, 7 min 19 s). On this PC, after each rebase: `npm run check`
+ok (285 targets, every selector used), eslint on the touched files clean, `npm run audit` no findings; music 123/123,
+playlists 12/12 (new), booklet_build, together_ui: 150 pass. Electron, run alone while another session's suites came
+and went: media_window_render 1/1 (69 s) and media_browser_render 1/1 (17 s), the two fixtures that open the media
+menu. command_render only opens it for the Tree reactions this does not change, and was not run here.
+
+Seen in a browser preview of the real renderer files with a stub bridge: the five starting points with thumbnails,
+Make it yours, Share's text round trip (multi-line, one line, the YouTube link alone), Browse's box handing a shared
+list to Playlists, Save to a playlist from a Browse card (and Escape closing only it), Play putting 11 videos at the
+front of Up next with the playing row marked; no console errors.
+
 ## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
 
 Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
@@ -504,38 +521,6 @@ sessions_render with captures passes (1/1); 1920x1080 captures in
 `C:\wt\shots\land-ui\`, the Work view beside the prototype in
 `C:\wt\gap\after-work\compare\`.
 
-## 2026-10-04 The v2 Work view closer to the 0.5 prototype: breadcrumb, list head, run menu, inspector
-
-Branch `wip/ui-work-view` (worktree off main 39d98e3, node_modules junctioned),
-five commits: af36359 top bar (the prototype's breadcrumb; a section's pages
-as a page list in the list column with Back, Forward and the Git chip's new
-"list" look), 7cba1f0 session list head (project menu, Git chip, N worktrees,
-plan drafts in Backlog), 30076fc thread and box (head chips, one run menu,
-Attach for every purpose), 8520670 inspector (Worktree tab, More, Steps from
-runProgress.todos and Acceptance checks, the project's inspector on Home, a
-vacant inspector folds away), a4ecc88 a 1920x1080 gallery in sessions_render.
-
-`npm run check` ok (271 targets), lint 0 errors (42 warnings, all
-pre-existing), `npm run audit` 0 findings. `npm run test:fast` 6899 tests:
-6883 pass, 14 skipped, attempt_review_host "a shot that is slow" and
-run_node_tests_fast "--list ... slow reader" (timeout) failed under load and
-pass alone (28/28, 2/2). Electron fixtures one by one: sessions_render pass
-(project menu, Git chip, run menu at 1920/1440/1100 with nothing under
-12 px, Worktree tab, project inspector, the column folding on Work pages),
-composer_render pass, today_render pass, worktrees_render pass;
-shell_render passes every size config, the walk and the Tab walk (now 28
-steps: Home's inspector has the project's controls) and stops at the known
-1 px check at 1100 px ("373 !== 372", same as clean main here).
-
-Full `npm test` at a4ecc88: Node 6899 tests, 6882 pass, 14 skipped, 3 fail
-(advisory_checks EPERM removing its temp folder, attempt_review_host,
-update_rehearsal "Roll back restores...": 26/26, 28/28 and 7/7 alone);
-Electron lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render
-(viewport 1921x1081) and shell_render (the 1 px check), both failing the
-same way on clean main on this PC; command_render and planning_render pass;
-Python 248 OK (1 skipped); path lock ok. Captures at 1920x1080 in
-`C:\wt\gap\after-work\` with prototype-left side-by-sides in
-`C:\wt\gap\after-work\compare\`.
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.

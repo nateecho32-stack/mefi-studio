@@ -75,6 +75,7 @@ export const BOOKLET_INPUTS = {
     "media-browser.js",
     "music.js",
     "together.js",
+    "playlists.js",
     "pc-sync.js",
     "pc-vault.js",
     "whats-new.js",

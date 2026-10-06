@@ -16,6 +16,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   suites run as many at once as free memory allows, and every run starts its
   slowest suites first, from timings each run records. `MEFI_TEST_LEASE=off`
   turns the turns off.
+- **Playlists in the media menu.** A new Playlists section (under every
+  source) starts you off with five lists of real videos: Code & math
+  explorers (Sebastian Lague, 2swap, 3Blue1Brown, Emergent Garden),
+  Visualizers, Focus streams, Shaders & graphics and Simulated worlds. Make
+  your own from scratch or from Up next, save any video with the new **+** on
+  Browse cards and the playing video, and drag rows to reorder. **Share**
+  copies a list as text that reads well in Discord, with a link that plays it
+  on YouTube; paste that text into **Add a shared playlist** or the Browse box
+  and Studio turns it back into a playlist.
 - **Moderation in Studio, and Report on projects.** Moderators get a
   Friends › Moderation place (nobody else sees it): who looks like they are
   farming credits (most of their credits from one person, or two people
