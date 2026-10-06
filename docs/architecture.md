@@ -274,6 +274,9 @@ settings and per-model work-kind summaries for the shared controls.
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
 | **Void collection** | Four two-tone themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil), free for everyone like every other look. Settings › Appearance lists them under their own small heading, and a choice saves like any other. A theme with a second hue sets `data-studio-theme-tier="duo"`, which the stylesheets paint with. |
+| **Light themes / tone** | Daylight (cool neutral) and Paper (warm) are light themes: every ink holds 4.5:1 on their pages and panels. `renderer/music.js` sets `html[data-studio-theme-tone]` from the reading background (Custom palettes and packs included); a light tone switches `color-scheme` to light, deepens the status hues and softens shadows and the scrim (`styles.css`, section 2). |
+| **Look** | Light, Dark or Stylized: a set of themes plus a material (a `MefiAppearance` preset) and a heading face (`html[data-studio-font]`: Studio, Display, Serif or Mono, system faces only). `MefiMusic.looks()` lists them and `applyLook(lookId, themeKey)` puts one on and keeps it; Light and Dark put the plain material and each theme's own headings back, Stylized opens the glass and sets the display face. Settings › Appearance has the heading faces under **Headings**. |
+| **Style pack** | A small data-only look from the Shop: a palette (with an optional second hue), and optionally a node style, material and heading face. `MefiMusic.applyPack` paints it as the theme `pack` the way Custom is painted and keeps it for the next launch; `previewPack` and `endPreview` are the Shop's Try, which saves nothing and puts back exactly what was there. |
 | **Community link** | An optional Discord login (Settings › Community, which **Community** at the menu foot opens) for Listen together and the rooms hub; it unlocks nothing. It lets Studio read your membership and roles in the Void Engine server: when you link, then every seven days (after a failed check, in an hour, six hours, then daily) and whenever you press **Check now**. The data is kept in `settings.community`, and the refresh token is encrypted in `community-auth.json`. |
 
 ## Highlights
@@ -1680,7 +1683,8 @@ failed process stays an error and cannot produce briefing requests.
   records from the executor ledger. The absorb is the tree's: a finished node collapses
   into its host and its brief stays readable on that card under
   **Absorbed work**.
-- **Appearance** (`U`) groups colour themes, the Void collection, node style,
+- **Appearance** (`U`) groups colour themes (the light Daylight and Paper under
+  their own heading), the Void collection, the heading faces, node style,
   layout and effects. **Chrome** is listed first and is what a new install
   opens in: matte black panels, brushed-metal primary buttons and chosen
   segments, and a thin chrome edge on what is selected, with a sparing

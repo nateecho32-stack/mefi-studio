@@ -84,6 +84,19 @@ body.music-preview-active #toast-host { left: calc(var(--shell-x0) + var(--music
    The 1.2px blend at the seam is the anti-aliasing a hard stop lacks. */
 .music-theme-duo::before, .void-swatch { box-sizing: border-box; flex: none; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(135deg, var(--swatch) calc(50% - .6px), var(--swatch-2) calc(50% + .6px)); box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 0 0 3px color-mix(in srgb, var(--swatch-2) 14%, transparent); }
 .music-theme-duo[aria-pressed="true"]::before { box-shadow: 0 0 0 1px rgba(255, 255, 255, .34), 0 0 8px color-mix(in srgb, var(--swatch-2) 65%, transparent); }
+/* A light theme's swatch: its page (--swatch-2) and its accent (--swatch) split on the diagonal like the
+   two-tone ones, inside a ring of the label's own ink, so the pale half reads on a light panel and a dark one. */
+.music-theme-light::before { box-sizing: border-box; flex: none; background: linear-gradient(135deg, var(--swatch-2) calc(50% - .6px), var(--swatch) calc(50% + .6px)); box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent); }
+.music-theme-light[aria-pressed="true"]::before { box-shadow: 0 0 0 1px currentColor, 0 0 0 3px color-mix(in srgb, var(--swatch) 18%, transparent); }
+/* The heading faces (FONTS in music.js): each says its name beside a sample in its own face. */
+.music-fonts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.music-font { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 10px; border: 1px solid transparent; border-radius: 9px; background: none; color: var(--muted); text-align: left; white-space: normal; font-size: 12px; }
+.music-font-sample { flex: none; width: 28px; color: var(--ivory); font: 600 18px/1 var(--font-ui); text-align: center; }
+.music-font-copy { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.music-font-copy strong { color: inherit; font: 600 12px/1.35 var(--font-ui); }
+.music-font-copy small { color: var(--muted); font: 12px/1.35 var(--font-ui); }
+.music-font:hover { color: var(--ivory); background: var(--tint-gold-1); }
+.music-font[aria-pressed="true"] { border-color: var(--hairline-strong); color: var(--ivory); background: var(--tint-gold-2); }
 .music-theme-locked:hover { background: rgba(var(--void-a), .07); }
 /* The buttons are ghost mini; the sheet's smaller type keeps all three on one line. */
 /* A member sees one quiet line where the fork path would be. */

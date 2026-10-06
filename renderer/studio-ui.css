@@ -148,6 +148,9 @@ span.catalog-expand { width: 16px; height: 16px; }
 :root[data-studio-theme=violet] { --studio-secondary: #de9cb7; --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 145deg; }
 :root[data-studio-theme=ember] { --studio-secondary: #d2ba7b; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; --studio-gradient-angle: 115deg; }
 :root[data-studio-theme=rose] { --studio-secondary: #bba2de; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; }
+/* The light themes: Daylight's sky blue drifts toward teal; Paper sets its headings like a printed page. */
+:root[data-studio-theme=daylight] { --studio-secondary: #3f9bc2; --studio-gradient-angle: 150deg; }
+:root[data-studio-theme=paper] { --studio-secondary: #b08a3e; --font-display: "Georgia", serif; --studio-title-tracking: -.02em; --studio-gradient-angle: 125deg; }
 :root[data-studio-theme-tier=duo] { --studio-secondary: var(--accent-2); }
 :root[data-studio-theme=eclipse] { --font-display: "Georgia", serif; --studio-gradient-angle: 110deg; }
 :root[data-studio-theme=dusk] { --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 160deg; }

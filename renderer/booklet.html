@@ -196,11 +196,27 @@ body {
   --hairline: var(--theme-hairline);
   --hairline-strong: var(--theme-hairline-strong);
 }
-/* music.js sets the tone from the theme's background. */
+/* music.js sets the tone from the theme's background. A light tone takes the
+   light native controls (checkboxes, pickers, the search field's clear button,
+   autofill), shadows that shade instead of blacken, a lighter scrim, and status
+   hues deep enough to read as text on a light page: the dark themes' pale ones
+   wash out there. Each holds 4.5:1 on the light themes' pages and panels, and
+   on its own 14% tint (a chip, a well). */
 :root[data-studio-theme-tone="light"] {
+  color-scheme: light;
   --on-ivory: var(--panel-solid);
-  /* The dark theme's pale red washes out on a light page (Delete, errors). */
   --bad: #b42318;
+  --warn: #7f4c00;
+  --good: #15673a;
+  --live: #0a6a35;
+  --live-dim: rgba(10, 106, 53, 0.14);
+  --info: #2b52b4;
+  --idea: #64489c;
+  --shadow-1: 0 6px 16px rgba(20, 28, 40, 0.1);
+  --shadow-2: 0 18px 40px rgba(20, 28, 40, 0.14);
+  --shadow-3: 0 30px 70px rgba(20, 28, 40, 0.18);
+  --scrim: rgba(28, 34, 44, 0.34);
+  --frost-lift: 0 18px 44px -24px rgba(20, 28, 40, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 h1 { font: 600 var(--fs-2xl)/var(--lh-tight) var(--font-display); letter-spacing: 0.01em; margin: 2px 0; }
@@ -5339,6 +5355,19 @@ body.music-preview-active #toast-host { left: calc(var(--shell-x0) + var(--music
    The 1.2px blend at the seam is the anti-aliasing a hard stop lacks. */
 .music-theme-duo::before, .void-swatch { box-sizing: border-box; flex: none; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(135deg, var(--swatch) calc(50% - .6px), var(--swatch-2) calc(50% + .6px)); box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 0 0 3px color-mix(in srgb, var(--swatch-2) 14%, transparent); }
 .music-theme-duo[aria-pressed="true"]::before { box-shadow: 0 0 0 1px rgba(255, 255, 255, .34), 0 0 8px color-mix(in srgb, var(--swatch-2) 65%, transparent); }
+/* A light theme's swatch: its page (--swatch-2) and its accent (--swatch) split on the diagonal like the
+   two-tone ones, inside a ring of the label's own ink, so the pale half reads on a light panel and a dark one. */
+.music-theme-light::before { box-sizing: border-box; flex: none; background: linear-gradient(135deg, var(--swatch-2) calc(50% - .6px), var(--swatch) calc(50% + .6px)); box-shadow: 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent); }
+.music-theme-light[aria-pressed="true"]::before { box-shadow: 0 0 0 1px currentColor, 0 0 0 3px color-mix(in srgb, var(--swatch) 18%, transparent); }
+/* The heading faces (FONTS in music.js): each says its name beside a sample in its own face. */
+.music-fonts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.music-font { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 10px; border: 1px solid transparent; border-radius: 9px; background: none; color: var(--muted); text-align: left; white-space: normal; font-size: 12px; }
+.music-font-sample { flex: none; width: 28px; color: var(--ivory); font: 600 18px/1 var(--font-ui); text-align: center; }
+.music-font-copy { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.music-font-copy strong { color: inherit; font: 600 12px/1.35 var(--font-ui); }
+.music-font-copy small { color: var(--muted); font: 12px/1.35 var(--font-ui); }
+.music-font:hover { color: var(--ivory); background: var(--tint-gold-1); }
+.music-font[aria-pressed="true"] { border-color: var(--hairline-strong); color: var(--ivory); background: var(--tint-gold-2); }
 .music-theme-locked:hover { background: rgba(var(--void-a), .07); }
 /* The buttons are ghost mini; the sheet's smaller type keeps all three on one line. */
 /* A member sees one quiet line where the fork path would be. */
@@ -8805,6 +8834,9 @@ span.catalog-expand { width: 16px; height: 16px; }
 :root[data-studio-theme=violet] { --studio-secondary: #de9cb7; --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 145deg; }
 :root[data-studio-theme=ember] { --studio-secondary: #d2ba7b; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; --studio-gradient-angle: 115deg; }
 :root[data-studio-theme=rose] { --studio-secondary: #bba2de; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; }
+/* The light themes: Daylight's sky blue drifts toward teal; Paper sets its headings like a printed page. */
+:root[data-studio-theme=daylight] { --studio-secondary: #3f9bc2; --studio-gradient-angle: 150deg; }
+:root[data-studio-theme=paper] { --studio-secondary: #b08a3e; --font-display: "Georgia", serif; --studio-title-tracking: -.02em; --studio-gradient-angle: 125deg; }
 :root[data-studio-theme-tier=duo] { --studio-secondary: var(--accent-2); }
 :root[data-studio-theme=eclipse] { --font-display: "Georgia", serif; --studio-gradient-angle: 110deg; }
 :root[data-studio-theme=dusk] { --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 160deg; }
@@ -15096,7 +15128,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <div class="settings-you-fields">
             <label class="field"><span class="field-label">Your name</span><input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?" autocomplete="off"></label>
             <label class="field"><span class="field-label">Companion name</span><input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi" autocomplete="off"></label>
-            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="chrome">Chrome</option><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Void collection"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
+            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="chrome">Chrome</option><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Light"><option value="daylight">Daylight</option><option value="paper">Paper</option></optgroup><optgroup label="Void collection"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
           </div>
           <div class="field settings-you-motion">
             <span class="field-label" id="settings-motion-label">Motion</span>
@@ -37924,6 +37956,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const BACKDROP_ORDER = ["follow", "aurora", "deepspace", "nebula", "embers", "fireflies", "bokeh", "dust", "grid", "minimal"];
   // Chrome's sky is deep space: silver stars over matte black.
   const THEME_BACKDROP = { chrome: "deepspace", gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust",
+    // The light themes: scenes drawn in ink, not light (aurora and bokeh add light, which a pale sky cannot show).
+    daylight: "grid", paper: "dust",
     // The Void collection's two-tone themes.
     void: "deepspace", eclipse: "dust", abyss: "fireflies", dusk: "grid" };
   // Speech bubbles: what an agent says while it works, drawn beside its orb.
@@ -71323,6 +71357,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // Jam, Twitch, any other page) can open in the player's built-in browser.
 // Every source plays through one card: the media menu's mini player, with a
 // transport, a volume and quick tree switches, that unfolds into sections.
+// It also owns the light themes, the three looks the first run offers (Light,
+// Dark, Stylized) with their heading faces, and the Shop's style packs: see
+// "Looks and style packs" below for the calls.
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -71344,6 +71381,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     ember: { name: "Ember", accent: "#dd997a", bright: "#ffc5a9", rgb: "221,153,122", bg: "#100805", panel: "#21150f", muted: "#c0ab9d" },
     aurora: { name: "Aurora", accent: "#71cbb7", bright: "#a7f3da", rgb: "113,203,183", bg: "#050d13", panel: "#101f29", muted: "#abc4c9", text: "#e7f5ee" },
     rose: { name: "Rose", accent: "#dc96af", bright: "#ffbed3", rgb: "220,150,175", bg: "#10080f", panel: "#23141e", muted: "#c6aebc", text: "#f7e5ea" },
+    // The light themes (tone "light"): dark ink on a pale page, which the
+    // stylesheets answer with a light color-scheme, softer shadows and deeper
+    // status hues. "bright" is the accent's deeper ink here, as it is its
+    // paler one on a dark theme: links, focus rings and chosen tabs use it.
+    daylight: { name: "Daylight", accent: "#2c5cc0", bright: "#1d479e", rgb: "44,92,192", bg: "#eef1f5", panel: "#fbfcfd", muted: "#4b5567", text: "#18202c", tone: "light" },
+    paper: { name: "Paper", accent: "#a14b26", bright: "#843815", rgb: "161,75,38", bg: "#f3eee4", panel: "#fffcf6", muted: "#625849", text: "#2b241d", tone: "light" },
     // The Void collection, free like every theme: each carries a second hue
     // (accent2) that the "duo" tier paints with, and the pickers list them
     // under their own small heading.
@@ -71370,6 +71413,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const isVoidTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].collection === "void";
   const isNodeStyle = (key) => typeof key === "string" && Object.hasOwn(NODE_STYLES, key);
   const isVoidNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].collection === "void";
+  const isLightTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].tone === "light";
   const NODE_LAYOUTS = {
     constellation: { name: "Constellation", detail: "An open arrangement" },
     tree: { name: "Branches", detail: "A clear hierarchy" },
@@ -71377,6 +71421,57 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     helix: { name: "Helix", detail: "A rising spiral" },
     layers: { name: "Terraces", detail: "Stacked levels" },
   };
+  // Heading faces (html[data-studio-font] and --font-display on the root),
+  // the one table of them: looks, packs and the Settings picker all name
+  // these keys. "studio" keeps each theme's own face (studio-ui.css gives
+  // Studio gold its serif and Neon Dusk its Trebuchet); the others replace it
+  // on every theme. Faces that ship with the system only: Studio loads no web
+  // font, and each stack ends in a generic family.
+  const FONTS = {
+    studio: { name: "Studio", detail: "Each theme's own headings", stack: null },
+    display: { name: "Display", detail: "Tall, condensed headings", stack: '"Bahnschrift Condensed", "Bahnschrift SemiCondensed", "Arial Narrow", "Roboto Condensed", sans-serif', tracking: "0em" },
+    serif: { name: "Serif", detail: "Book headings", stack: '"Sitka Heading", "Georgia", "Times New Roman", serif', tracking: "-.015em" },
+    mono: { name: "Mono", detail: "Code-style headings", stack: '"Cascadia Code", "Consolas", ui-monospace, monospace', tracking: "-.02em" },
+  };
+  const isFont = (key) => typeof key === "string" && Object.hasOwn(FONTS, key);
+  // Materials are MefiAppearance's presets (renderer/studio-ui.js): how much
+  // glass, glow and roundness the surfaces have.
+  const MATERIALS = ["focus", "studio", "atmosphere"];
+  // The looks the first run offers. Each lists its themes, its default first,
+  // and the extras it brings: Light and Dark keep the plain material and each
+  // theme's own headings, Stylized opens the glass, raises the glow and sets
+  // the display face. A theme added to the table lands in Light or Dark by its
+  // tone; Stylized is the expressive ones, named here.
+  const STYLIZED_THEMES = ["aurora", "void", "eclipse", "abyss", "dusk"];
+  const LOOKS = Object.freeze([
+    { id: "light", name: "Light", themes: Object.keys(THEMES).filter((key) => isLightTheme(key)), material: "studio", font: "studio" },
+    { id: "dark", name: "Dark", themes: Object.keys(THEMES).filter((key) => !isLightTheme(key) && !STYLIZED_THEMES.includes(key)), material: "studio", font: "studio" },
+    { id: "stylized", name: "Stylized", themes: STYLIZED_THEMES, material: "atmosphere", font: "display" },
+  ].map((look) => Object.freeze({ ...look, themes: Object.freeze([...look.themes]) })));
+  // A style pack as music.js keeps it: the Shop's pack data (#rrggbb colours,
+  // keys from the tables above) with its id and name. Only these fields are
+  // copied, so nothing else a caller hands over is painted or stored; a colour
+  // or key that is not one of ours refuses the whole pack (null).
+  const PACK_COLORS = ["accent", "background", "surface", "text", "accent2"];
+  function safePack(value) {
+    if (!value || typeof value !== "object" || !value.palette || typeof value.palette !== "object") return null;
+    const palette = {};
+    for (const key of PACK_COLORS) {
+      if (key === "accent2" && value.palette.accent2 == null) continue;
+      const color = hexColor(value.palette[key]);
+      if (!color) return null;
+      palette[key] = color.toLowerCase();
+    }
+    const id = typeof value.id === "string" && /^[\w:.-]{1,80}$/.test(value.id) ? value.id : null;
+    const name = typeof value.name === "string" && value.name.trim() ? value.name.replace(/\s+/g, " ").trim().slice(0, 60) : "Style pack";
+    const pack = { id, name, palette };
+    for (const [key, valid] of [["nodeStyle", isNodeStyle], ["material", (material) => MATERIALS.includes(material)], ["font", isFont]]) {
+      if (value[key] == null) continue;
+      if (!valid(value[key])) return null;
+      pack[key] = value[key];
+    }
+    return pack;
+  }
   const AUDIO_EFFECTS = {
     waves: { title: "Connection waves", detail: "Let sound gently bend the connections.", enabled: true },
     splitBands: { title: "Separate frequency lines", detail: "Bass, mids and treble drive different connections.", enabled: true },
@@ -71481,25 +71576,40 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const mixColor = (a, b, amount) => `#${channels(a).map((value, index) => Math.round(value + (channels(b)[index] - value) * amount).toString(16).padStart(2, "0")).join("")}`;
   const luminance = (color) => channels(color).map((value) => { const n = value / 255; return n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
   const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
-  function readableColor(color, background, minimum = 4.5) {
+  // `target` is the end an ink moves toward: by default whichever of white
+  // and black reads better on `background`.
+  function readableColor(color, background, minimum = 4.5, target = contrast("#FFFFFF", background) >= contrast("#000000", background) ? "#FFFFFF" : "#000000") {
     if (contrast(color, background) >= minimum) return color;
-    const target = contrast("#FFFFFF", background) >= contrast("#000000", background) ? "#FFFFFF" : "#000000";
     for (let step = 1; step <= 40; step += 1) { const candidate = mixColor(color, target, step / 40); if (contrast(candidate, background) >= minimum) return candidate; }
     return target;
   }
-  function resolvePalette(theme, customColors) {
+  // "custom" paints the saved custom colours and "pack" a style pack's palette
+  // (`pack`, as safePack keeps it); both take the same steps from here on.
+  function resolvePalette(theme, customColors, pack = null) {
     const custom = safeCustomColors(customColors);
-    const base = theme === "custom" ? { accent: custom.accent, bright: mixColor(custom.accent, "#FFFFFF", .3), bg: custom.background, panel: custom.surface, text: custom.text } : THEMES[theme] || THEMES[DEFAULT_THEME];
+    const chosen = theme === "custom" ? { accent: custom.accent, bg: custom.background, panel: custom.surface, text: custom.text }
+      : theme === "pack" && pack?.palette ? { accent: pack.palette.accent, accent2: pack.palette.accent2, bg: pack.palette.background, panel: pack.palette.surface, text: pack.palette.text } : null;
+    // Chosen colours get their stronger accent ink from the panel's tone:
+    // brighter on a dark panel, deeper on a light one.
+    const base = chosen ? { ...chosen, bright: mixColor(chosen.accent, luminance(chosen.panel) > .35 ? "#000000" : "#FFFFFF", .3) } : THEMES[theme] || THEMES[DEFAULT_THEME];
     // Leave contrast headroom for the translucent panels and their subtle sheen.
-    const text = readableColor(base.text || "#ece5d8", base.panel, 5.5);
-    const bright = readableColor(base.bright, base.panel, 4.5);
-    const muted = readableColor(base.muted || mixColor(text, base.panel, .32), base.panel, 5.5);
-    const dim = readableColor(mixColor(text, base.panel, .5), base.panel, 4.5);
+    let text = readableColor(base.text || "#ece5d8", base.panel, 5.5);
+    let bright = readableColor(base.bright, base.panel, 4.5);
+    let muted = readableColor(base.muted || mixColor(text, base.panel, .32), base.panel, 5.5);
+    let dim = readableColor(mixColor(text, base.panel, .5), base.panel, 4.5);
     const border = readableColor(mixColor(base.accent, base.panel, .6), base.panel, 3);
     const canvasText = readableColor(base.text || "#ece5d8", base.bg);
     // Custom background and surface colours may have opposite tones. Reading
     // areas use the safe base; the canvas keeps the exact chosen background.
     const readingBackground = [text, muted, bright].every((ink) => contrast(ink, base.bg) >= 4.5) ? base.bg : base.panel;
+    // Where the page is a reading surface too, each ink keeps its minimum
+    // there as well, moving the way it moved for the panel: a light page sits
+    // a shade darker than its panels, so an ink just readable on a panel could
+    // fall short on it. A dark page is darker than its panels; nothing moves.
+    if (readingBackground === base.bg) {
+      const toward = contrast("#FFFFFF", base.panel) >= contrast("#000000", base.panel) ? "#FFFFFF" : "#000000";
+      [text, bright, muted, dim] = [[text, 5.5], [bright, 4.5], [muted, 5.5], [dim, 4.5]].map(([ink, minimum]) => readableColor(ink, base.bg, minimum, toward));
+    }
     const onAccent = contrast("#FFFFFF", base.accent) > contrast("#000000", base.accent) ? "#FFFFFF" : "#000000";
     const actionEnd = mixColor(base.accent, onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF", .18);
     return { accent: base.accent, bright, accent2: base.accent2 || bright, background: base.bg, readingBackground, actionEnd, surface: base.panel, text, muted, dim, border,
@@ -71611,7 +71721,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // from before the Links tab, read once and never written again.
     const links = [...new Set([...(Array.isArray(raw.links) ? raw.links : []), ...(Array.isArray(raw.spotify) ? raw.spotify : [])]
       .map((item) => playableLink(mediaLink(item))?.url).filter(Boolean))].slice(0, 8);
-    return { theme: isTheme(raw.theme) ? raw.theme : DEFAULT_THEME, customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, links,
+    // A style pack is kept only while it is the theme on screen.
+    const pack = raw.theme === "pack" ? safePack(raw.pack) : null;
+    return { theme: pack ? "pack" : isTheme(raw.theme) ? raw.theme : DEFAULT_THEME, pack, font: isFont(raw.font) ? raw.font : "studio",
+      customColors: safeCustomColors(raw.customColors), volume: Number.isFinite(volume) ? Math.max(0, Math.min(1, volume)) : .7, links,
       nodeStyle: isNodeStyle(raw.nodeStyle) ? raw.nodeStyle : "orbs",
       nodeLayout: Object.hasOwn(NODE_LAYOUTS, raw.nodeLayout) ? raw.nodeLayout : "constellation",
       station: STATION_IDS.has(raw.station) ? raw.station : null,
@@ -71748,12 +71861,19 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function themeTokens(palette) {
     return { "--gold": palette.accent, "--gold-bright": palette.bright, "--gold-dim": `rgba(${palette.rgb},.32)`, "--hairline": `rgba(${channels(palette.border).join(",")},.5)`, "--hairline-strong": palette.border, "--tint-gold-1": `rgba(${palette.rgb},.06)`, "--tint-gold-2": `rgba(${palette.rgb},.09)`, "--tint-gold-3": `rgba(${palette.rgb},.14)`, "--ring": `0 0 0 3px rgba(${palette.rgb},.15)`, "--glow-gold": `0 0 14px rgba(${palette.rgb},.3)`, "--bg": palette.background, "--bg-deep": palette.background, "--cmd-bg": palette.background, "--panel-solid": palette.surface, "--panel": `rgba(${palette.surfaceRgb},.85)`, "--glass": `rgba(${palette.surfaceRgb},.76)`, "--glass-hard": `rgba(${palette.surfaceRgb},.94)`, "--glass-soft": `rgba(${palette.surfaceRgb},.7)`, "--ivory": palette.text, "--muted": palette.muted, "--dim": palette.dim, "--ink": palette.onAccent };
   }
-  // tier "duo": a theme with a second hue of its own (the Void collection),
-  // which the stylesheets paint with (--accent-2); every other theme is "solo".
-  const themeDetail = (key) => { const palette = resolvePalette(key, prefs.customColors); return { theme: key, tier: THEMES[key]?.accent2 ? "duo" : "solo", ...palette, tokens: themeTokens(palette) }; };
-  // Paints a theme; applyTheme decides whether it is saved.
-  function paintTheme(key) {
-    const detail = themeDetail(key);
+  // tier "duo": a theme with a second hue of its own (the Void collection, a
+  // pack with an accent2), which the stylesheets paint with (--accent-2) and
+  // music.css and styles.css answer under [data-studio-theme-tier="duo"];
+  // every other theme is "solo".
+  const themeDetail = (key, pack = prefs.pack) => {
+    const palette = resolvePalette(key, prefs.customColors, pack);
+    const second = key === "pack" ? pack?.palette?.accent2 : THEMES[key]?.accent2;
+    return { theme: key, tier: second ? "duo" : "solo", ...palette, tokens: themeTokens(palette) };
+  };
+  // Paints a theme; applyTheme decides whether it is saved. "pack" paints
+  // `pack`: the applied one, or the one the Shop is trying.
+  function paintTheme(key, pack = prefs.pack) {
+    const detail = themeDetail(key, pack);
     const root = document.documentElement;
     for (const [name, value] of Object.entries(detail.tokens)) root.style.setProperty(name, value);
     for (const [name, value] of Object.entries(detail.canvas)) root.style.setProperty(`--canvas-${name}`, value);
@@ -71766,7 +71886,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     root.dataset.studioThemeTier = detail.tier;
     // Shared glass surfaces adapt their edge and shadow to a light palette.
     root.dataset.studioThemeTone = luminance(detail.readingBackground) > 0.35 ? "light" : "dark";
-    for (const button of [...els.themes?.children || [], ...els.voidThemes?.children || []]) {
+    for (const button of [...els.themes?.children || [], ...els.lightThemes?.children || [], ...els.voidThemes?.children || []]) {
       button.setAttribute("aria-pressed", String(button.dataset.theme === key));
       if (button.dataset.theme === "custom") button.style.setProperty("--swatch", prefs.customColors.accent);
     }
@@ -71776,11 +71896,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
     return detail;
   }
-  // Every theme applies and saves the same way, Void collection included.
+  // Every theme applies and saves the same way, Void collection included;
+  // "pack" repaints the applied style pack (applyPack chooses one). Choosing
+  // for real ends a pack the Shop is trying.
   function applyTheme(theme, save = true) {
+    endPreview(false);
     settingsReveal.custom = false;
-    const key = isTheme(theme) ? theme : DEFAULT_THEME;
+    const key = theme === "pack" ? prefs.pack ? "pack" : DEFAULT_THEME : isTheme(theme) ? theme : DEFAULT_THEME;
     prefs.theme = key;
+    if (key !== "pack") prefs.pack = null;
     const detail = paintTheme(key);
     if (save) persist();
     event("mefi-theme-change", detail);
@@ -71793,24 +71917,133 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     applyTheme("custom", save);
     return true;
   }
+  // ---- Looks and style packs ---------------------------------------------------
+  // What the first run's "choose your look" and the Shop call (owner checks
+  // stay with the Shop: it decides what may be applied, this paints it):
+  //
+  //   looks() -> [{ id, name, themes, material, font }]: Light, Dark and
+  //     Stylized, each with its theme keys (its default first) and the extras
+  //     it brings: a material (a MefiAppearance preset) and a heading face (a
+  //     FONTS key).
+  //   applyLook(lookId, themeKey, save = true) -> the theme key it applied (a
+  //     key the look does not list is its first), or null for no such look.
+  //     The look's material and face go on with it, so Light and Dark put the
+  //     plain ones back. Everything is kept: the theme and face here, the
+  //     material in MefiAppearance's own store.
+  //   look() -> the id of the look the theme on screen belongs to, or null
+  //     (Custom, a pack).
+  //   fonts() -> [{ key, name, detail, stack }]; applyFont(key, save = true).
+  //   applyPack({ id, name, palette, nodeStyle?, material?, font? }, save = true)
+  //     -> true, or false (nothing changes) for a pack it cannot paint. The
+  //     pack becomes the theme "pack", painted from its palette the way Custom
+  //     is (plus accent2, which makes it two-tone), with its node style and
+  //     material when it names them and its face ("studio" when it names
+  //     none). It is kept in mefiStudio.music.v1 and comes back at boot.
+  //   previewPack(pack) -> true or false; paints a pack, its node style, face
+  //     and material for the Shop's Try without saving anything.
+  //     endPreview() -> true when it ended one: everything a try changed goes
+  //     back as it was. Choosing a theme, a face, a node style, a look or a
+  //     pack for real ends a try first.
+  //   packInfo() -> a copy of the applied pack, or null.
+  const lookOf = (theme) => LOOKS.find((look) => look.themes.includes(theme))?.id ?? null;
+  // What a material leaves on MefiAppearance, to tell whether it is still on.
+  const materialOf = (value) => value ? `${value.preset}|${value.glass}|${value.glow}` : "";
+  // The person's density (Size and density) stays as it is under any material.
+  function applyMaterial(material, save = true) {
+    const appearance = window.MefiAppearance;
+    if (!MATERIALS.includes(material) || typeof appearance?.apply !== "function") return false;
+    const density = appearance.get?.()?.density;
+    appearance.apply(density ? { preset: material, density } : { preset: material }, save);
+    return true;
+  }
+  function paintFont(key) {
+    const root = document.documentElement;
+    const chosen = isFont(key) ? key : "studio";
+    root.dataset.studioFont = chosen;
+    for (const [name, value] of [["--font-display", FONTS[chosen].stack], ["--studio-title-tracking", FONTS[chosen].tracking]]) {
+      if (value) root.style.setProperty(name, value);
+      else root.style.removeProperty?.(name);
+    }
+    for (const choice of els.fonts?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.font === chosen));
+  }
+  function applyFont(key, save = true) {
+    endPreview();
+    prefs.font = isFont(key) ? key : "studio";
+    paintFont(prefs.font);
+    if (save) persist();
+    return prefs.font;
+  }
+  function applyLook(lookId, themeKey, save = true) {
+    const look = LOOKS.find((one) => one.id === lookId);
+    if (!look) return null;
+    const theme = applyTheme(look.themes.includes(themeKey) ? themeKey : look.themes[0], save);
+    applyMaterial(look.material, save);
+    applyFont(look.font, save);
+    return theme;
+  }
+  function applyPack(value, save = true) {
+    const pack = safePack(value);
+    if (!pack) return false;
+    endPreview(false);
+    prefs.pack = pack;
+    applyTheme("pack", save);
+    if (pack.nodeStyle) applyNodeStyle(pack.nodeStyle, save);
+    if (pack.material) applyMaterial(pack.material, save);
+    applyFont(pack.font || "studio", save);
+    return true;
+  }
+  // The pack the Shop is trying, and what it changed beyond prefs (which a
+  // try never touches): the MefiAppearance store as it was, and the material
+  // the try left on, if any.
+  let trying = null;
+  function previewPack(value) {
+    const pack = safePack(value);
+    if (!pack) return false;
+    const appearance = window.MefiAppearance;
+    trying ||= { before: appearance?.get?.() ?? null, material: "" };
+    trying.pack = pack;
+    trying.nodeStyle = pack.nodeStyle || prefs.nodeStyle;
+    event("mefi-theme-change", { ...paintTheme("pack", pack), preview: true });
+    syncTreePreferences(false);
+    paintFont(pack.font || "studio");
+    if (pack.material && applyMaterial(pack.material, false)) trying.material = materialOf(appearance.get?.());
+    else if (trying.material && trying.before) { appearance.apply(trying.before, false); trying.material = ""; }
+    return true;
+  }
+  // paint false: the caller paints a theme of its own right after.
+  function endPreview(paint = true) {
+    if (!trying) return false;
+    const { before, material, nodeStyle } = trying;
+    trying = null;
+    if (paint) event("mefi-theme-change", paintTheme(prefs.theme));
+    if (nodeStyle !== prefs.nodeStyle) syncTreePreferences(false);
+    paintFont(prefs.font);
+    // The material goes back only while the try's is still on: one chosen in
+    // Settings meanwhile stays.
+    const appearance = window.MefiAppearance;
+    if (material && before && materialOf(appearance?.get?.()) === material) appearance.apply(before, false);
+    return true;
+  }
+  const copyPack = (pack) => pack ? { ...pack, palette: { ...pack.palette } } : null;
   // The palette on screen, read every frame by the tree rail and the Command
   // view. resolvePalette runs dozens of contrast searches (about 70 µs), so
   // the answer is kept until the theme or a custom colour changes, and every
-  // reader shares one frozen copy.
+  // reader shares one frozen copy. A pack the Shop is trying is on screen too.
   let paletteKey = null, paletteMemo = null;
   function themePalette() {
-    const theme = prefs.theme;
+    const theme = trying ? "pack" : prefs.theme;
+    const pack = trying ? trying.pack : prefs.pack;
     const custom = prefs.customColors;
-    const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme;
+    const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme === "pack" ? `pack|${PACK_COLORS.map((name) => pack?.palette?.[name] ?? "").join("|")}` : theme;
     if (key !== paletteKey || !paletteMemo) {
-      const palette = resolvePalette(theme, custom);
+      const palette = resolvePalette(theme, custom, pack);
       paletteMemo = Object.freeze({ theme, ...palette, canvas: Object.freeze(palette.canvas) });
       paletteKey = key;
     }
     return paletteMemo;
   }
   // Read per node per frame by the tree rail: plain fields, no storage reads.
-  function graphPreferences() { return { nodeStyle: prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
+  function graphPreferences() { return { nodeStyle: trying ? trying.nodeStyle : prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
   function syncTreePreferences(save) {
     const value = graphPreferences();
     Object.assign(document.documentElement.dataset, value);
@@ -71823,6 +72056,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     event("mefi-tree-preferences", value);
   }
   function applyNodeStyle(style, save = true) {
+    endPreview();
     prefs.nodeStyle = isNodeStyle(style) ? style : "orbs";
     syncTreePreferences(save);
     return prefs.nodeStyle;
@@ -71883,6 +72117,42 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       for (let index = 0; index < (kind === "style" ? 3 : 5); index += 1) element("i", null, null, preview);
       element("strong", null, option.name, choice);
       element("small", null, option.detail, choice);
+    }
+    return group;
+  }
+  // The light themes: an ordinary choice each, under a small heading of their
+  // own. The swatch is the theme's page with its accent on it.
+  function lightThemeChoices(parent) {
+    const title = element("h4", "music-node-label", "Light", parent);
+    title.id = "music-light-theme-label";
+    const group = element("div", "music-themes", null, parent);
+    group.id = "music-light-themes";
+    group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
+    for (const [key, palette] of Object.entries(THEMES).filter(([key]) => isLightTheme(key))) {
+      const choice = button(palette.name, "music-theme music-theme-light", group, () => applyTheme(key), `music-theme-${key}`);
+      choice.dataset.theme = key;
+      choice.style.setProperty("--swatch", palette.accent); choice.style.setProperty("--swatch-2", palette.bg);
+      choice.setAttribute("aria-pressed", String(prefs.theme === key));
+    }
+    return group;
+  }
+  // The heading faces (FONTS), each choice showing a sample in its own face.
+  function fontChoices(parent) {
+    const title = element("h4", "music-node-label", "Headings", parent);
+    title.id = "music-font-label";
+    const group = element("div", "music-fonts", null, parent);
+    group.id = "music-fonts";
+    group.setAttribute("role", "group"); group.setAttribute("aria-labelledby", title.id);
+    for (const [key, font] of Object.entries(FONTS)) {
+      const choice = button(null, "music-font", group, () => applyFont(key), `music-font-${key}`);
+      choice.dataset.font = key;
+      const sample = element("span", "music-font-sample", "Aa", choice);
+      sample.setAttribute("aria-hidden", "true");
+      if (font.stack) sample.style.fontFamily = font.stack;
+      const copy = element("span", "music-font-copy", null, choice);
+      element("strong", null, font.name, copy);
+      element("small", null, font.detail, copy);
+      choice.setAttribute("aria-pressed", String(prefs.font === key));
     }
     return group;
   }
@@ -73320,7 +73590,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     element("h3", null, "Color theme", themeSection);
     els.themes = element("div", "music-themes", null, themeSection);
     els.themes.setAttribute("role", "group"); els.themes.setAttribute("aria-label", "Color theme");
-    for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => !isVoidTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
+    for (const [key, palette] of [...Object.entries(THEMES).filter(([key]) => !isVoidTheme(key) && !isLightTheme(key)), ["custom", { name: "Custom palette", bright: prefs.customColors.accent }]]) {
       const choice = button(palette.name, "music-theme", els.themes, () => applyTheme(key));
       choice.dataset.theme = key; choice.style.setProperty("--swatch", palette.bright); choice.setAttribute("aria-pressed", String(prefs.theme === key));
     }
@@ -73343,7 +73613,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       els.customInputs[key] = { picker, hex };
     }
     button("Reset custom colors", "ghost music-custom-reset", els.customPalette, () => applyCustomColors(CUSTOM_DEFAULTS), "music-custom-reset");
+    els.lightThemes = lightThemeChoices(themeSection);
     els.voidThemes = voidThemeChoices(themeSection);
+    els.fonts = fontChoices(themeSection);
     element("p", "music-fineprint", "Colors are separate from node style and layout.", themeSection);
     const nodeSection = element("section", "music-node-settings", null, settings);
     nodeSection.dataset.appearancePanel = "nodes";
@@ -74016,7 +74288,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     build();
     bindAudioHover(document.getElementById("settings-audio-open"));
     window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
-    applyTheme(prefs.theme, false);
+    applyTheme(prefs.theme, false); paintFont(prefs.font);
     syncTreePreferences(false); render(); renderMediaMenu();
     if (lastLink) els.linkInput.value = lastLink.url;
     // A station that was sounding when Studio closed is tuned again. Smoke and
@@ -74301,7 +74573,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // Where the playing source is ({ position, duration } in seconds; duration 0 for a stream with no end): the status bar's time left.
     playback: () => { const at = playbackPosition(); return { position: at.position, duration: at.duration }; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
     // The free palettes as swatches, and the one on screen (Vibe's settings panel).
-    themes: () => Object.entries(THEMES).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel, ...(theme.accent2 ? { accent2: theme.accent2 } : {}) })),
+    themes: () => Object.entries(THEMES).map(([key, theme]) => ({ key, name: theme.name, accent: theme.accent, bright: theme.bright, bg: theme.bg, panel: theme.panel, tone: isLightTheme(key) ? "light" : "dark", ...(theme.accent2 ? { accent2: theme.accent2 } : {}) })),
+    // Looks and style packs (see "Looks and style packs" above).
+    looks: () => LOOKS.map((look) => ({ ...look, themes: [...look.themes] })), applyLook, look: () => lookOf(prefs.theme),
+    fonts: () => Object.entries(FONTS).map(([key, font]) => ({ key, name: font.name, detail: font.detail, stack: font.stack })), applyFont, font: () => prefs.font,
+    applyPack, previewPack, endPreview: () => endPreview(), packInfo: () => copyPack(prefs.theme === "pack" ? prefs.pack : null),
     // Every node style and layout, for the setup helper's Look section.
     nodeStyles: () => Object.entries(NODE_STYLES).map(([key, style]) => ({ key, name: style.name, detail: style.detail })),
     nodeLayouts: () => Object.entries(NODE_LAYOUTS).map(([key, layout]) => ({ key, name: layout.name, detail: layout.detail })), theme: () => prefs.theme,

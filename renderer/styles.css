@@ -186,11 +186,27 @@ body {
   --hairline: var(--theme-hairline);
   --hairline-strong: var(--theme-hairline-strong);
 }
-/* music.js sets the tone from the theme's background. */
+/* music.js sets the tone from the theme's background. A light tone takes the
+   light native controls (checkboxes, pickers, the search field's clear button,
+   autofill), shadows that shade instead of blacken, a lighter scrim, and status
+   hues deep enough to read as text on a light page: the dark themes' pale ones
+   wash out there. Each holds 4.5:1 on the light themes' pages and panels, and
+   on its own 14% tint (a chip, a well). */
 :root[data-studio-theme-tone="light"] {
+  color-scheme: light;
   --on-ivory: var(--panel-solid);
-  /* The dark theme's pale red washes out on a light page (Delete, errors). */
   --bad: #b42318;
+  --warn: #7f4c00;
+  --good: #15673a;
+  --live: #0a6a35;
+  --live-dim: rgba(10, 106, 53, 0.14);
+  --info: #2b52b4;
+  --idea: #64489c;
+  --shadow-1: 0 6px 16px rgba(20, 28, 40, 0.1);
+  --shadow-2: 0 18px 40px rgba(20, 28, 40, 0.14);
+  --shadow-3: 0 30px 70px rgba(20, 28, 40, 0.18);
+  --scrim: rgba(28, 34, 44, 0.34);
+  --frost-lift: 0 18px 44px -24px rgba(20, 28, 40, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 h1 { font: 600 var(--fs-2xl)/var(--lh-tight) var(--font-display); letter-spacing: 0.01em; margin: 2px 0; }
