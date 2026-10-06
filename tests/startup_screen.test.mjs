@@ -58,13 +58,15 @@ function environment(bridge) {
   const get = (id) => { if (!elements.has(id)) elements.set(id, new Element(id.includes("open") || id.includes("add") ? "button" : "div")); return elements.get(id); };
   const document = { getElementById: (id) => get(id), createElement: (tag) => new Element(tag), createElementNS: (_ns, tag) => new Element(tag) };
   const warnings = [];
-  const context = vm.createContext({ window: { mefiStudio: bridge }, document, console: { ...console, warn: (...args) => warnings.push(args) } });
+  const stored = new Map();
+  const localStorage = { getItem: (key) => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, String(value)), removeItem: (key) => stored.delete(key) };
+  const context = vm.createContext({ window: { mefiStudio: bridge }, document, localStorage, console: { ...console, warn: (...args) => warnings.push(args) } });
   vm.runInContext(source, context, { filename: "startup.js" });
   const rows = () => get("boot-projects").querySelectorAll('[role="radio"]');
   const wrappers = () => get("boot-projects").children.filter((child) => child.className === "boot-row");
   const button = (root, text) => root.querySelectorAll("button").find((candidate) => candidate.textContent === text) ?? null;
   return {
-    startup: context.window.MefiStartup, get, rows, wrappers, button, warnings,
+    startup: context.window.MefiStartup, get, rows, wrappers, button, warnings, stored,
     selected: () => rows().find((row) => row.attrs["aria-checked"] === "true")?.dataset.projectId ?? null,
     slot: (index) => wrappers()[index].querySelector(".boot-chip-slot"),
     note: () => get("boot-choose-note"),
@@ -627,6 +629,7 @@ test("Start a new app takes a name and a note, makes the folder, opens it, and n
   assert.deepEqual(plain(calls), [["create", { name: "Field Notes", about: "A small notes app." }], ["choose", made.id]], "the folder first, then it opens like any chosen project");
   assert.deepEqual(plain(await choice), { projectId: made.id, startAgents: false, changed: true });
   assert.deepEqual(seen, [], "the launch screen never publishes, links or even asks about GitHub");
+  assert.deepEqual(JSON.parse(env.stored.get("mefiStudio.firstTask")), { projectId: made.id, text: "A small notes app." }, "what they want to build waits as that app's first task in the welcome");
 });
 
 test("Start a new app: a description is optional, a refusal keeps the panel up in red, and a folder made but not opened still shows in the list", async () => {

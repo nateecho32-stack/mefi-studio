@@ -504,7 +504,11 @@
       if (!state.isCurrent()) return;
       adopt(result);
       if (result?.ok === false) note(result.error || "The app folder could not be made.", true);
-      else made = true;
+      else {
+        made = true;
+        // What they want to build is this app's first task, waiting in the first run's last step (renderer/setup-helper.js).
+        if (about) { try { localStorage.setItem("mefiStudio.firstTask", JSON.stringify({ projectId: result?.addedId ?? result?.selectedId ?? null, text: about.slice(0, 4000) })); } catch { /* a convenience */ } }
+      }
     } catch (error) { note(error?.message || "The app folder could not be made.", true); }
     finally { if (state.isCurrent()) { announce(""); setBusy(false); if (!made) go.textContent = "Start project"; } }
     if (!state.isCurrent()) return;

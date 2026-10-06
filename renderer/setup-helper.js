@@ -1526,6 +1526,13 @@
     const id = welcome.projects?.activeId ?? window.MefiWorkspace?.activeProjectId?.() ?? null;
     return id && id !== "project_none" ? id : null;
   };
+  // What the launch screen's new app said it should be (renderer/startup.js): that project's first task, ready to build.
+  const FIRST_TASK_KEY = "mefiStudio.firstTask";
+  const savedFirstTask = () => {
+    let saved = null;
+    try { saved = JSON.parse(read(FIRST_TASK_KEY) || "null"); } catch { return ""; }
+    return typeof saved?.text === "string" && (!saved.projectId || saved.projectId === welcomeProject()) ? saved.text.trim() : "";
+  };
   function paintTask() {
     const { title, lead, body } = welcome.els;
     title.textContent = "What should Studio make first?";
@@ -1555,6 +1562,7 @@
     els.steps.setAttribute("aria-valuetext", `Step ${welcome.step + 1} of ${WELCOME_STEPS}`);
     els.back.hidden = welcome.step === 0;
     els.next.textContent = welcome.step === WELCOME_STEPS - 1 ? "Build it" : "Continue";
+    if (welcome.step === WELCOME_STEPS - 1 && !welcome.text.trim()) welcome.text = savedFirstTask();
     els.next.disabled = welcome.busy || (welcome.step === WELCOME_STEPS - 1 && (!welcome.text.trim() || !welcomeProject()));
     welcomeSay("");
     if (welcome.step === 0) await paintConnect(serial);
@@ -1590,6 +1598,7 @@
       const result = await api().tasksCreate({ title: text.split("\n")[0].slice(0, 180), prompt: text, projectId });
       if (!result || result.ok === false) throw new Error(result?.error || "The task was not added.");
       welcome.text = "";
+      try { localStorage.removeItem(FIRST_TASK_KEY); } catch { /* private store */ }
       closeWelcome();
       const task = result.task;
       if (task?.id) {

@@ -14,8 +14,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   each tool uses), offers OpenCode's free models when you have no
   subscription, and now really switches Studio to the tool you signed in to
   when you press Continue (before, it kept the default). Its last step, **What
-  should Studio make first?**, has examples to tap and never adds a task with
-  no project open. Social's rail uses Studio's names (Friends, Map, Team) and
+  should Studio make first?**, has examples to tap, already holds what you
+  said a new app should be, and never adds a task with no project open.
+  Social's rail uses Studio's names (Friends, Map, Team) and
   gains Help; Friends and Team show their places as a row of chips when the
   side list is closed, so Rooms, Events, Your PCs and every Team page are
   reachable from Social; Events is in Studio's menu and in Search. Fixed:

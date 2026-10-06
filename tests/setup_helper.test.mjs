@@ -78,7 +78,7 @@ function load({ store = {}, search = "", options = {}, layout = null } = {}) {
     },
   };
   const localStorage = {
-    getItem: (key) => (saved.has(key) ? saved.get(key) : null), setItem: (key, value) => saved.set(key, String(value)),
+    getItem: (key) => (saved.has(key) ? saved.get(key) : null), setItem: (key, value) => saved.set(key, String(value)), removeItem: (key) => saved.delete(key),
     get length() { return saved.size; }, key: (index) => [...saved.keys()][index] ?? null,
   };
   const context = vm.createContext({
@@ -566,6 +566,35 @@ test("Continue walks to the project and the first task; Start the task adds it t
   assert.equal(env.saved.get("mefiStudio.setupHelper.seen"), env.helper.REVISION);
   assert.deepEqual(handed, [{ tour: false }], "the hand-off runs once, as the sheet's close runs it");
   assert.equal(env.helper.startup(), false, "a seen revision never opens again by itself");
+});
+
+test("a new app's note from the launch screen waits as the first task, and Build it uses it once", async () => {
+  const note = "A tiny page that says hello";
+  const env = load({ layout: "v2", store: { "mefiStudio.firstTask": JSON.stringify({ projectId: P, text: `  ${note}  ` }) } });
+  welcomeBridge(env);
+  env.window.MefiSessions = { select: () => {} };
+  env.window.MefiWorkspace = { activeProjectId: () => P, startTask: async () => {} };
+  env.helper.welcome();
+  await settle();
+  await env.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  await env.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  assert.equal(welcomeText(env).title, "What should Studio make first?");
+  assert.equal(env.welcome().querySelector("#setup-welcome-task").value, note, "what they wanted to build is already written in");
+  const next = env.welcome().querySelector("#setup-welcome-next");
+  assert.equal(next.disabled, false, "ready to build without typing it again");
+  await next.click();
+  await settle();
+  assert.deepEqual(env.calls.filter((row) => row[0] === "tasksCreate").map((row) => row[1].prompt), [note]);
+  assert.equal(env.saved.has("mefiStudio.firstTask"), false, "used once, then gone");
+  // A note written for another project never fills this one's first task.
+  const other = load({ layout: "v2", store: { "mefiStudio.firstTask": JSON.stringify({ projectId: "p2", text: note }) } });
+  welcomeBridge(other);
+  other.helper.welcome();
+  await settle();
+  await other.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  await other.welcome().querySelector("#setup-welcome-next").click(); await settle();
+  assert.equal(other.welcome().querySelector("#setup-welcome-task").value, "");
+  assert.equal(other.welcome().querySelector("#setup-welcome-next").disabled, true);
 });
 
 test("Continue from the first step puts Studio on what is ready: a signed-in subscription for everything, else OpenCode's free models", async () => {
