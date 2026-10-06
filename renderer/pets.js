@@ -305,9 +305,13 @@
         case "play": {
           const friend = (world.friends || []).find((other) => other.id === pet.playWith);
           if (!friend || time > pet.playFor || typing || calm) { pet.playWith = null; enter(calm || typing ? "perch" : "wander", world); break; }
-          // Round and round: a point on a small circle about the friend.
-          const angle = pet.clock * 3.1 + pet.playPhase;
-          steer(dt, friend.x + Math.cos(angle) * 48 * pet.size, friend.y + Math.sin(angle) * 34 * pet.size, SPEED.play, 0.5);
+          // Round and round: a point on a circle about the friend, and never
+          // so close that the two bodies tangle.
+          const angle = pet.clock * 2.6 + pet.playPhase;
+          let goalX = friend.x + Math.cos(angle) * 74 * pet.size, goalY = friend.y + Math.sin(angle) * 52 * pet.size;
+          const apart = Math.hypot(pet.x - friend.x, pet.y - friend.y);
+          if (apart < 44 * pet.size) { goalX = pet.x + (pet.x - friend.x) * 2; goalY = pet.y + (pet.y - friend.y) * 2; }
+          steer(dt, goalX, goalY, SPEED.play, 0.5);
           if (time > 0.6 && (pet.clock % 2.4) < dt) puff(pet, "heart", 1);
           break;
         }
