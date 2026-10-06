@@ -778,7 +778,7 @@ function codexMcpArgs(servers) {
 // Codex's app server has its own facade and is not affected. Off, every
 // command line is exactly the text-mode one.
 const SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null, platform = "win32", shim = () => null, promptFile = null, codexHarness = "exec", live = false, sessionId = null } = {}) {
+function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null, platform = "win32", shim = () => null, promptFile = null, codexHarness = "exec", live = false, sessionId = null, ownMcp = false } = {}) {
   if (cli === "grok") {
     // A headless agentic session. --prompt-file both starts grok's headless
     // mode and keeps a brief of up to EXECUTOR_PROMPT_MAX off every command
@@ -800,10 +800,15 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     // protocol stays readable, the model id held to real-id characters.
     // With live progress, stream-json (which print mode gives only with
     // --verbose) and the session id the host chose instead of plain text.
+    // --strict-mcp-config: the run gets the desk's servers and nothing else,
+    // as an OpenCode run does. Without it every worker also started the
+    // owner's own Claude Code servers (an npx proxy and a uvx Python server
+    // measured ~380 MB together) on a machine short of memory. `ownMcp` (the
+    // host's MEFI_STUDIO_WORKER_OWN_MCP=1) gives a run the owner's servers back.
     // --mcp-config takes a list, so it goes last.
     const selected = modelArg(route.model);
     const session = live && SESSION_UUID.test(String(sessionId ?? "")) ? ["--session-id", String(sessionId)] : [];
-    const args = ["-p", "--output-format", ...(live ? ["stream-json", "--verbose", ...session] : ["text"]), "--dangerously-skip-permissions", ...(selected ? ["--model", selected] : []), ...thinking, ...(desk?.claude ? ["--mcp-config", desk.claude] : [])];
+    const args = ["-p", "--output-format", ...(live ? ["stream-json", "--verbose", ...session] : ["text"]), "--dangerously-skip-permissions", ...(ownMcp ? [] : ["--strict-mcp-config"]), ...(selected ? ["--model", selected] : []), ...thinking, ...(desk?.claude ? ["--mcp-config", desk.claude] : [])];
     return { ...shellLaunch("claude", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: [], ...(live ? { stream: "claude" } : {}) };
   }
   if (cli === "codex") {

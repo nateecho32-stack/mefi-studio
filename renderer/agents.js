@@ -970,6 +970,12 @@
     // The report card and the logins are read each time their place opens (renderer/team-models.js).
     if (place.id === "seats") window.MefiTeamModels?.open?.(); else if (place.id === "providers") window.MefiTeamModels?.openProviders?.();
     window.MefiNav?.paintCurrent(); window.MefiScroll?.refresh();
+    // A way in to Routing (Search, Team's own links, a classic link) lands on it: Routing sits in More settings now
+    // (fileSeats), which opens at it instead of leaving the controls folded away under the seats.
+    if (!options.target && place.id === "seats" && pane === "routing") {
+      const more = $("agents-more"), routing = $("settings-routing");
+      if (more && routing && more.contains(routing)) { more.open = true; routing.scrollIntoView?.({ block: "start" }); }
+    }
     if (options.target) {
       const target = $(options.target); if (target && $("agents-overlay").contains(target)) { for (let el = target; el && el !== $("agents-body"); el = el.parentElement) if (el.tagName === "DETAILS") el.open = true; target.scrollIntoView?.({ block: "nearest" }); (target.nextElementSibling?.classList.contains("studio-select") ? target.nextElementSibling : target).focus?.({ preventScroll: true }); }
     }

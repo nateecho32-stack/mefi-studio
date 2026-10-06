@@ -383,12 +383,17 @@
       const facts = [`${top.owner.name} · ${rankName(top.owner.rank)}`, `Shared ${when(top.createdAt)}`, KINDS[top.kind] ?? "project", top.week ? `${plural(top.weekPlays, "play")} this week` : plural(top.plays, "play"), plural(top.stars, "star")];
       by.textContent = facts.join(" · ");
       const play = button("Play", () => {
-        void Promise.resolve(window.mefiStudio?.hubProjects?.("playProject", top.id)).then((answer) => {
+        // A playlist (renderer/playlists.js) plays in Studio's own player; the play counts the same way.
+        const playlist = window.MefiPlaylists?.fromLink?.(top.url, top.title);
+        const asked = playlist ? window.mefiStudio?.hubProjects?.("playProject", top.id, { here: true }) : window.mefiStudio?.hubProjects?.("playProject", top.id);
+        void Promise.resolve(asked).then((answer) => {
           const hold = page.you.hold;
-          status.textContent = !answer?.ok ? "That project could not be opened."
-            : top.owner.id === meId ? "Opened your own project in your browser. Your own plays don't earn credits."
-            : hold ? `Opened in your browser. ${HOLD_WORDS[hold.reason] ?? "Credits start once your account is in good standing"}, so this play won't earn yet.`
-            : "Opened in your browser. After two minutes you both earn credits.";
+          if (playlist) window.MefiPlaylists.play(playlist);
+          const opened = playlist ? "Playing in Studio" : "Opened in your browser";
+          status.textContent = !answer?.ok ? (playlist ? "Playing in Studio; this play won't count right now." : "That project could not be opened.")
+            : top.owner.id === meId ? `${playlist ? "Playing your own playlist in Studio" : "Opened your own project in your browser"}. Your own plays don't earn credits.`
+            : hold ? `${opened}. ${HOLD_WORDS[hold.reason] ?? "Credits start once your account is in good standing"}, so this play won't earn yet.`
+            : `${opened}. After two minutes you both earn credits.`;
         }).catch(() => { status.textContent = "That project could not be opened."; });
       }, "ghost front-play", "friends-front-play");
       story.append(by, play);

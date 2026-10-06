@@ -22,11 +22,17 @@
 // - Nobody waits forever: after MEFI_TEST_LEASE_MAX_WAIT_MIN minutes (60 by
 //   default) a waiter runs anyway and names the holder that looked stuck.
 //
+// A turn also has an end: a stage that runs past its limit (MEFI_TEST_STAGE_LIMIT_MIN;
+// 120 minutes for the parallel stage, 90 for the Electron lane, 30 for each
+// exclusive fixture) is stopped with everything it started. On 2026-10-06 an
+// Electron fixture whose own kill timer never landed (29 MB free) held the
+// Electron lane for nine hours, and every other run's windows waited on it.
+//
 // MEFI_TEST_LEASE=off turns all of it off. `node scripts/test-lease.mjs`
 // prints the board; `node scripts/test-lease.mjs run [--lane windows|suites]
 // -- <command>` runs one command under a lease, and `npm run test:one --
 // tests/x.test.mjs` picks the lane from what the files launch.
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFileSync, unlinkSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
@@ -334,6 +340,35 @@ export function suggestWindowWidth({ freeMB, env = process.env, roomMB = 900 } =
 }
 
 export const freeMemoryMB = () => os.freemem() / (1024 * 1024);
+
+/** How long a stage may run before the runner stops it, in minutes, by kind of stage. */
+export const STAGE_LIMITS_MIN = Object.freeze({ suites: 120, windows: 90, exclusive: 30 });
+
+export function stageLimitMs(kind, env = process.env) {
+  const forced = Number(env.MEFI_TEST_STAGE_LIMIT_MIN);
+  if (env.MEFI_TEST_STAGE_LIMIT_MIN != null && env.MEFI_TEST_STAGE_LIMIT_MIN !== "" && Number.isFinite(forced) && forced > 0) return Math.round(forced * 60_000);
+  return (STAGE_LIMITS_MIN[kind] ?? STAGE_LIMITS_MIN.suites) * 60_000;
+}
+
+// Ends a process and everything it started. On Windows that is taskkill /T
+// (an Electron fixture is a grandchild of the stage, and a plain kill leaves
+// it running); it is tried three times, since a starved machine can fail to
+// start taskkill itself. Elsewhere, and as the last resort, SIGKILL. -> stopped?
+export function killTree(pid, { platform = process.platform, spawnSyncImpl = spawnSync, kill = process.kill.bind(process) } = {}) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  if (platform === "win32") {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const ran = spawnSyncImpl("taskkill", ["/PID", String(pid), "/T", "/F"], { windowsHide: true, stdio: "ignore", timeout: 30_000 });
+      if (ran?.status === 0) return true;
+    }
+  }
+  try {
+    kill(pid, "SIGKILL");
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // A test file that drives a real Electron window: the same reading
 // scripts/run-node-tests.mjs uses to put a suite in the Electron lane.

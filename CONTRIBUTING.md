@@ -83,8 +83,12 @@ many suites at once as free memory allows (one per hardware thread less one
 when there is room, never fewer than four), the Electron lane runs one window
 at a time when memory is short, and each stage starts its slowest suites
 first from the timings every run records (`scripts/test-timings.mjs`, shared
-by every worktree). Switches: `MEFI_TEST_LEASE=off`, `MEFI_TEST_WIDTH`,
-`MEFI_TEST_WINDOW_WIDTH`, `MEFI_TEST_LEASE_MAX_WAIT_MIN`, `MEFI_TEST_LEASE_DIR`
+by every worktree). A stage that runs past its limit (120 minutes for the
+parallel stage, 90 for the Electron lane, 30 for each exclusive fixture) is
+stopped with everything it started, and the runner names the suites that were
+still running, so a hung fixture cannot hold the PC's Electron lane for hours.
+Switches: `MEFI_TEST_LEASE=off`, `MEFI_TEST_WIDTH`, `MEFI_TEST_WINDOW_WIDTH`,
+`MEFI_TEST_LEASE_MAX_WAIT_MIN`, `MEFI_TEST_STAGE_LIMIT_MIN`, `MEFI_TEST_LEASE_DIR`
 and `MEFI_TEST_TIMINGS`.
 
 `npm test` needs Python 3 and a real desktop. The runner finds Python before

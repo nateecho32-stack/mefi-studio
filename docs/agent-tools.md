@@ -322,7 +322,11 @@ per-run config file flag, so the server is passed as `-c mcp_servers.*`
 overrides (TOML literal strings, quoted for `cmd.exe`). Those overrides are
 on Codex's command line, which other processes can list, so a server whose
 environment names a credential (the desk's token) is never passed there, and
-the log names any server left out. A temp folder whose path holds a space or
+the log names any server left out. Claude Code also gets
+`--strict-mcp-config`, so a run starts only this attachment's servers and not
+the owner's own Claude Code servers (an npx proxy and a uvx Python server
+measured ~380 MB together); `MEFI_STUDIO_WORKER_OWN_MCP=1` gives runs the
+owner's servers back. A temp folder whose path holds a space or
 an apostrophe works for all three. Temporary configurations are cleaned up
 when the attempt ends or is canceled. Grok and Antigravity have no per-run MCP
 flag and retain their own native tool and search configuration; Studio does

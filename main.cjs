@@ -2549,7 +2549,7 @@ function hubRoom(method, args) {
 // public link in the browser and, two minutes later while Studio is still
 // running, tells the relay the play happened, which credits its owner and
 // this member. A play still waiting is kept once per project.
-const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1, reportProject: 2 });
+const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 2, star: 2, feature: 1, reportProject: 2 });
 const hubPlayTimers = new Map(); // projectId -> timeout
 function hubProjects(method, args) {
   const arity = Object.hasOwn(HUB_PROJECT_METHODS, method) ? HUB_PROJECT_METHODS[method] : -1;
@@ -2563,7 +2563,10 @@ function hubProjects(method, args) {
     let link = null;
     try { link = new URL(play.url); } catch { link = null; }
     if (link?.protocol !== "https:") return { ok: false, error: "bad-link" };
-    await shell.openExternal(link.href);
+    // A playlist (YouTube's play-them-all link) may play in Studio's own
+    // player (renderer/playlists.js): the play still counts, nothing opens.
+    const here = plain[1]?.here === true && /^(?:www\.|m\.)?youtube\.com$/i.test(link.hostname) && link.pathname === "/watch_videos";
+    if (!here) await shell.openExternal(link.href);
     if (hubPlayTimers.has(projectId)) return { ok: true, minMs: play.minMs, waiting: true };
     const timer = setTimeout(() => {
       hubPlayTimers.delete(projectId);
@@ -11123,14 +11126,15 @@ let outsideWorkSoonTimer = null;
 const outsideWorkOff = () => SMOKE || CAPTURE || CLI_MODE;
 
 // One git call in the project folder: never throws, never takes the index
-// lock a worker may need, and never sees Studio's own keys.
+// lock a worker may need, never starts an fsmonitor daemon, and never sees
+// Studio's own keys.
 function outsideGit(root, args, timeoutMs = OUTSIDE_GIT_TIMEOUT_MS) {
   return new Promise((resolve) => {
     try {
       const { execFile } = require("node:child_process");
       let options = { cwd: root, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true, encoding: "utf8" };
       try { options = require("./scripts/platform.cjs").withholdCredentials(options, process.env); } catch {}
-      execFile("git", ["-C", root, "--no-optional-locks", ...args], options, (error, stdout) => resolve({ ok: !error, code: error ? (typeof error.code === "number" ? error.code : null) : 0, stdout: String(stdout ?? "") }));
+      execFile("git", ["-C", root, "--no-optional-locks", "-c", "core.fsmonitor=false", ...args], options, (error, stdout) => resolve({ ok: !error, code: error ? (typeof error.code === "number" ? error.code : null) : 0, stdout: String(stdout ?? "") }));
     } catch {
       resolve({ ok: false, code: null, stdout: "" });
     }
@@ -15562,7 +15566,7 @@ async function readProjectInventory() {
   if (existsSync(path.join(root, ".git"))) {
     const { execFile } = require("node:child_process");
     const listed = await new Promise((resolve) => {
-      execFile("git", ["-C", root, "ls-files", "--cached", "--others", "--exclude-standard", "-z"], { timeout: 10000, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (error, out) => resolve(error ? null : String(out ?? "")));
+      execFile("git", ["-C", root, "-c", "core.fsmonitor=false", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], { timeout: 10000, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (error, out) => resolve(error ? null : String(out ?? "")));
     });
     if (listed !== null) {
       const files = listed.split("\0").filter(Boolean);
@@ -19866,6 +19870,7 @@ async function spawnNextJob(options) {
       platform: process.platform, shim: (name) => typeof windowsShim === "function" ? windowsShim(name, process.env) : null, promptFile: entry.promptFile ?? null,
       codexHarness: cli === "codex" && harness === "app-server" && !entry.codexExecOnly ? "app-server" : "exec",
       live: entry.liveProgress === true, sessionId: entry.liveProgress === true && cli === "claude" ? crypto.randomUUID() : null,
+      ownMcp: process.env.MEFI_STUDIO_WORKER_OWN_MCP === "1",
     });
     // With live progress, Claude Code streams its events under a session id
     // chosen here and `codex exec` prints its --json events; `entry.liveStream`

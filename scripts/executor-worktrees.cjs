@@ -58,8 +58,9 @@ function runProcess(exe, root, args, timeoutMs = GIT_TIMEOUT_MS) {
   });
 }
 
+// No fsmonitor daemon left behind in a run's worktree (scripts/sync.mjs runGit).
 function runGit(root, args) {
-  return runProcess("git", root, args);
+  return runProcess("git", root, ["-c", "core.fsmonitor=false", ...args]);
 }
 
 // The environment switch, or the owner's saved choice (settings.executor
