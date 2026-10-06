@@ -1,11 +1,16 @@
 # 0.5.0 release scope
 
-Updated 30 September 2026. The published Windows download is still 0.4.4. This
+Updated 6 October 2026. The published Windows download is still 0.4.4. This
 records the scope of the next release; it does not announce a release date or
 replace the packaging and release checks. **0.4.5 and 0.4.6 are skipped:** what
 was planned for them ships in 0.5.0. The plan is
 [plans/0.5.0-plan.md](plans/0.5.0-plan.md); the earlier scope note is kept at
 [archive/release-scope-0.4.5.md](archive/release-scope-0.4.5.md).
+
+0.5.0 ships as the Electron build. It is also the bridge release the move to
+Rust needs: its updater already knows the Rust host's zip, so a later release
+can change hosts ([rust-migration.md](rust-migration.md), "The bridge
+release"). The Rust host is not on 0.5.0's path.
 
 ## Included
 
@@ -49,11 +54,11 @@ files with Accept and Revert for a file or a whole attempt, advisory checks and
 the `run_check` and `project_logs` tools, before and after pictures; a time
 limit and usage on each task, pictures on a message, the `@ # /` picker and the
 Skills page. The room the new shell needs (four derived edges, `MefiNav.layout`
-and `MefiNav.usable()`) is in and off by default: `?layout=v2` shows it.
+and `MefiNav.usable()`) is in.
 
-The new shell itself, built in pieces on the same branch and off by default
-(`?layout=v2`, or `MEFI_STUDIO_LAYOUT=v2`; every piece draws, stores and asks for
-nothing without it): the frame (a top bar with the Vibe | Build switch, Search and
+The new shell itself, built in pieces on the same branch behind a switch
+(every piece draws, stores and asks for nothing in the classic layout): the
+frame (a top bar with the Vibe | Build switch, Search and
 the need pill; a session-list column and an inspector you resize by dragging or
 with keys, or fold into drawers in a small window; a status bar; Reset layout),
 tabs you add and pin that Studio keeps tidy (a preview tab, a background tab with
@@ -62,25 +67,51 @@ Ctrl+Tab and Ctrl+1 to 9), Size and density with a live miniature of the window,
 Today (Vibe's home) with one Inbox for everything waiting on you, and Build's
 session list, thread and inspector (Plan, Changes, Checks, Preview, Agent).
 
-## Planned for 0.5.0
+Landed from 1 to 5 October, ending with **the 0.5 layout as the default**:
+Studio opens in it unless you chose the classic one before, and the classic
+layout stays one switch away (Settings › You, Search's "Switch layout", or
+`MEFI_STUDIO_LAYOUT=v1` for one launch). In it: Work, Map, Team and Friends on
+the rail; Settings, a three-step first run and the plan draft page; the status
+bar, Search and one Inbox; Today in both modes; the Map (Map | Fleet |
+Pipelines, Running only, View); Team's places; and Friends as one page. The new
+**Chrome** theme (matte black and chrome with an iridescent finish) is what a
+new install opens in, and every theme had a finish pass.
 
-In this order. Anything not finished and tested at the first release candidate
-moves to 0.5.x instead of holding the release.
+Friends needs no setup any more: rooms, room chat, Listen together, companions
+and cowork file claims run through the Mefi Studio relay, a free Cloudflare
+worker built into Studio (its code is under `relay/`). The Lobby, invite
+codes, Who's online and the Project hub with credits and ranks came with it.
 
-- **The new shell:** built and off by default (see above): Vibe (calm,
-  glanceable) and Build (in depth) share one menu, one tab set, one inbox and one
-  status bar; tabs can be added and pinned and Studio manages the rest; panels
-  resize; text and information size have a live preview; scrollbars show only
-  while a pane can scroll and take no width. What remains is the owner's look at
-  it on the PC, fixing what that shows, and turning it on by default. Not built:
-  an embedded live Preview tab (the inspector's Preview has the project's
-  controls and Before and After), the pinned tree strip as a panel, and Drafts in
-  the session list (the app keeps none). Design source: `docs/prototype/`.
-- **Load times, agents sending only what is new, logging and Friends 2.0** (the
-  work planned for the skipped 0.4.5 and 0.4.6): measured first, then fixed.
-- **Worktrees in Studio:** implemented, including the entry in the new shell
-  and the mark on Build's task rows. The current Windows aggregate exercises
-  the Worktrees page; attended owner workflow checks remain.
+From the DevDay branch: GPT-6.1 Sol, Codex workers over `codex app-server`,
+using a ChatGPT plan, the Studio Daily on the launch screen, the Models
+Catalog and Performance face lift, and security fixes for remote approvals,
+catalogs and sharing.
+
+The Rust host is on `main` too (stages 1 and 2 of
+[rust-migration.md](rust-migration.md)): a source checkout runs on it with
+`npm run host`, a portable host build exists (`npm run package:host`), and
+parts of the engine already run in Rust there (settings and keys, a message's
+pictures, the Skills page's files, before and after pictures, the Git chip).
+None of it changes the Electron build that ships.
+
+## Still to land for 0.5.0
+
+As of 6 October. Anything not finished and tested at the first release
+candidate moves to 0.5.x instead of holding the release.
+
+| Work | Where it is | State |
+| --- | --- | --- |
+| Subscriptions and agent routing | `wip/models` | On today's `main`, in CI |
+| Credits that cannot be farmed; the Lobby front page and one Sign in with Discord card | `wip/credits-guard`, `wip/social` | Ready to gate and land. Role features wait for the Discord role IDs and can land switched off |
+| Load times and agents sending only what is new: row push deltas (S3), startup marks and a settings cache (S1), live CLI progress and the prompt cache (S12), the log core (S2) | `wip/s3-row-push`, `wip/s1-boot-startup-marks`, `wip/s12-cli-stream`, `wip/s2-log-core` | Partial, parked on a 3 October base. Being finished one at a time, measured before and after. S1's cache sits in front of settings, which the Rust host also reads, so the parity rule applies |
+| Vibe and Build as two modes of one shell | in progress | The labels are yours to decide (below) |
+| Two real-window suites red on the PCs, even on clean `main`: `layout_contract_render` (the window opens at 1921x1081) and `shell_render` (one pixel at 1100 px) | tests | Display-scaling rounding; to be fixed without weakening what they check. Hosted CI skips them |
+| Linux CI (`studio-linux.yml`) red since 4 October | `tests/rust_modules.test.mjs` (image-store folder), `tests/package_host.test.mjs` (`.exe` name) | Two Rust-side tests assume Windows paths. Windows CI is green |
+| Not built: an embedded live Preview tab (the inspector's Preview has the project's controls and Before and After), the pinned tree strip as a panel, Drafts in the session list (the app keeps none) | — | Design source: `docs/prototype/` |
+
+Worktrees in Studio are implemented, including the entry in the new shell and
+the mark on Build's task rows; the attended owner workflow checks remain (Try
+by hand, below).
 
 ## What still needs the owner
 
@@ -89,20 +120,22 @@ decision, and each has an owner-side default already in the code.
 
 **On each PC, once `main` is pulled**
 
-- Publish every branch that exists only on a PC (`feat/devday-2026`,
-  `overhaul/phase2`, `codex/release-signing-gated`, the `C:\wt\*` worktrees) as
-  `wip/<topic>` with GitHub Desktop, then run `npm run worktrees` and
-  `npm run sync`. A branch that is not on GitHub cannot be seen from a cloud
-  session and is lost with the PC.
+- Send the Discord role IDs for moderators and Room Hosts to the Friends work,
+  and finish whatever the Discord developer portal still needs from you.
+- Publish every branch that exists only on a PC (`overhaul/phase2`,
+  `codex/release-signing-gated`, the `C:\wt\*` worktrees) as `wip/<topic>`
+  with GitHub Desktop, then run `npm run worktrees` and `npm run sync`. A
+  branch that is not on GitHub cannot be seen from a cloud session and is lost
+  with the PC. (DevDay is published and on `main`.)
 - Copy `C:\Users\echor\.claude\plans\enumerated-hugging-fern.md` into
   `docs/plans/` so every PC and session can read it.
 - After pulling, delete the local branches `git branch --merged origin/main`
-  lists (the parked `wip/*` branches are in `main` now).
-- Run the real-window fixtures that hosted CI skips, one at a time: at least
-  `layout_contract_render` (about 5 minutes; recorded on Linux, every number is
-  CSS geometry and should match), `builder_render`, `command_render`.
-  `project_map_render` also fails on the Linux lane at 600x560 and 150% zoom
-  (9 px over its box) with or without this work; check it on Windows.
+  lists. On GitHub, only delete a branch that is in `main` or `gh-pages`, never
+  one listed under "Still to land" above.
+- The full `npm test` on the PCs fails only in `layout_contract_render` and
+  `shell_render`, as on clean `main`, until the fix above lands; any other
+  failure is new. `project_map_render` and `settings_render` also fail on the
+  Linux lane at 600x560 and 150% zoom, with or without this work.
 - Measure startup once (`tools/benchmark_startup.py`) so the load-time work has
   a number to beat.
 
@@ -124,8 +157,8 @@ decision, and each has an owner-side default already in the code.
   try a folder junction, a differently-cased path and a `.gitignore` saved by
   Notepad.
 
-**Try by hand: the new layout** (`?layout=v2`, or `MEFI_STUDIO_LAYOUT=v2`; the
-real-window tests ran on Linux fonts and Linux zoom only)
+**Try by hand: the new layout** (the default now; the real-window tests check
+geometry, not how it feels)
 
 - Keys on a real keyboard: Ctrl+M (mode), Ctrl+B and `[` (list, inspector),
   Ctrl+T, Ctrl+W (closes a tab and never the window, also on Today), Ctrl+Tab,
@@ -150,6 +183,20 @@ real-window tests ran on Linux fonts and Linux zoom only)
   not handled anywhere in the app.
 - Start Studio with `MEFI_STUDIO_NO_TAB_MANAGER=1` from a shortcut: the tab card
   says so and its master switch stays off.
+
+**Try by hand: what landed 1 to 5 October**
+
+- Friends between two PCs through the relay: an invite code, Who's online, a
+  room's chat after one PC was closed for a while (the missed messages fill
+  in), Listen together, a cowork file claim, and a Project hub card played for
+  two minutes (both sides earn credits).
+- The Map with real sessions: Map | Fleet | Pipelines, Running only, View ▾
+  and its keys, at 600x560 and at full size.
+- Chrome on a real display: the gradients, focus rings and small text at 125
+  and 150% scaling, and a switch back to the classic layout and to another
+  theme.
+- A ChatGPT plan sign-in, one Codex worker over `codex app-server`, and the
+  Studio Daily after a night away.
 
 **Decisions**
 
@@ -179,30 +226,42 @@ real-window tests ran on Linux fonts and Linux zoom only)
   colour; the front ring of two overlapping nodes runs under the one behind), and
   the media queue rule (it is still in progress, tests pin today's order, and the
   redesign has no kill switch).
-- The new shell: the two modes' labels (keep Vibe and Build, or rename), whether
-  the classic chrome is deleted at 0.5.0 or 0.5.1, the pinned tree strip as an
-  optional panel, and publishing the site's motion work after it is retargeted
-  from 0.4.5 to 0.5.0. In the tabs: that Ctrl+W never closes the window in the new
-  layout, even on Today (or lets Ctrl+W on Today fall through to Close), whether
-  the tab keys get a switch of their own, and that Home is titled Today in Build
-  too. In Today: "Answer all" (named in the brief, in no plan or prototype) is not
-  built, the count leaves out plans waiting on you, and "Decide later" lasts for
-  the session. In the sessions: a Queued group was added, there is no decision
-  countdown (the host decides at once where the permission mode allows it, and
-  waits otherwise), a Note cannot carry a picture and Ctrl+N is not bound in
-  Vibe. In Size: Configuration keeps its own live Interface scale slider beside
-  the page's draft and Apply (one home per control if you want a chip later).
+- Friends: whether it ships switched on in 0.5.0 if the Discord role IDs or a
+  real sign-in test are not done by the release candidate (it can ship
+  switched off; the relay is already deployed).
+- The new shell: the two modes' labels (keep Vibe and Build, or rename),
+  whether the classic chrome is deleted at 0.5.0 or 0.5.1 (the plan says
+  0.5.1), and the pinned tree strip as an optional panel. In the tabs: that
+  Ctrl+W never closes the window in the new layout, even on Today (or lets
+  Ctrl+W on Today fall through to Close), whether the tab keys get a switch of
+  their own, and that Home is titled Today in Build too. In Today: "Answer
+  all" (named in the brief, in no plan or prototype) is not built, the count
+  leaves out plans waiting on you, and "Decide later" lasts for the session.
+  In the sessions: a Queued group was added, there is no decision countdown
+  (the host decides at once where the permission mode allows it, and waits
+  otherwise), a Note cannot carry a picture and Ctrl+N is not bound in Vibe.
+  In Size: Configuration keeps its own live Interface scale slider beside the
+  page's draft and Apply (one home per control if you want a chip later).
 
 **At release time only**
 
-- Bump the version and cut `[0.5.0]`, then run `node scripts/release-notes.mjs`
-  and commit the JSON it writes (`tests/release_notes.test.mjs` fails on the
-  repo until it does), and consider wiring `node scripts/release-notes.mjs
-  --check` into `npm run check`.
+- Before the first tag, fix the release workflow's gate. A tag push runs the
+  full `npm test` on a hosted Windows runner, where the real-window suites have
+  failed since 0.4.0. The fix is drafted in `docs/release-workflow-signpath.yml`
+  (a `gate` input, `full` or `hosted`, plus a smoke launch and SignPath
+  signing). Changing a workflow file needs a token with the `workflow` scope
+  (`gh auth refresh -s workflow` on a PC). `release.yml` has no host switch
+  yet either, so tags stay Electron, as 0.5.0 should.
+- Bump the version (`package.json` still says 0.4.5) and cut `[0.5.0]`, then
+  run `node scripts/release-notes.mjs` and commit the JSON it writes:
+  `assets/whats-new.json` stops at 0.4.4, and `--check` fails once `[0.5.0]`
+  is cut until it is regenerated. Consider wiring `node
+  scripts/release-notes.mjs --check` into `npm run check`.
 - Write `docs/releases/0.5.0.md` leading with the manual update steps (0.4.4
-  cannot update itself), retarget the README, the docs and the public roadmap
-  from 0.4.5, and rehearse the update with `tests/update_rehearsal.test.mjs`.
-- No executable, tag or `gh-pages` publish happens before you say so.
+  cannot update itself), retarget the docs that still name 0.4.5 (the README
+  and the public site already say 0.5), and rehearse the update with
+  `tests/update_rehearsal.test.mjs`.
+- No executable, tag or `gh-pages` download change happens before you say so.
 
 ## Follows in 0.5.x
 
@@ -211,24 +270,27 @@ views, and good-for text for seats you define.
 
 ## Included with a service dependency
 
-Rooms, shared playback, playdates, cowork file claims, Discord linking and
-Discord remote controls have desktop-side code. They need a configured rooms hub
-and Discord connection, and remote controls also need the bot's matching
-support. Describe these as rolling out, not available to every installation. The
-local media player and Practice with Pip work without a hub.
+Rooms, room chat, shared playback, companions in the Playground and cowork file
+claims run through the Mefi Studio relay, which is deployed and built in, so
+they need no setup. Discord linking, Sign in with Discord and Discord remote
+controls still need the Discord app's settings, and remote controls also need
+the bot's matching support. Describe the Discord parts as rolling out, not
+available to every installation. The local media player and Practice with Pip
+need neither.
 
 ## Deferred or undecided
 
 Fleet's later work (agent lanes and budgets, missions measured from verified
 work, other PCs' and friends' fleets), Linux packaging, creative-tool
-integrations, room GitHub access, shared agent capacity, community credits and
-cosmetics, shared mixes, voice and code signing. No date is promised for these.
+integrations, room GitHub access, shared agent capacity, cosmetics, shared
+mixes, voice and code signing. No date is promised for these. (Credits and
+ranks landed with the Project hub.)
 
 ## Public site
 
-The release boundary is shown on the
-[roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html) and the
-0.4.5 guide on `gh-pages`. Those pages still say 0.4.5 and must be retargeted to
-0.5.0 before anything is published. Their source lives on `gh-pages`, separately
-from the application. Keep the download and latest-release labels on 0.4.4 until
-0.5.0 is actually published.
+The [site](https://nateecho32-stack.github.io/mefi-studio/) and its
+[roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html) say 0.5
+is being built and that Studio is moving to Rust, in the Chrome look, with
+screenshots of the 0.5 layout. Their source lives on `gh-pages`, separately
+from the application, and never merges into `main`. Keep the download and
+latest-release labels on 0.4.4 until 0.5.0 is actually published.

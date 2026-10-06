@@ -7,6 +7,19 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Studio times its own launch.** Trace shows one `[startup]` line per
+  launch (app ready, first paint, each loading step and when the window was
+  ready), and `--startup-report <file>` writes the same as JSON.
+  `MEFI_STUDIO_STARTUP_MARKS=0` turns it off.
+- **Settings are read from memory while the files are unchanged.** Studio no
+  longer re-reads `settings.json` and `auth.json` on every model call; an edit
+  from outside Studio is still picked up at once. `MEFI_STUDIO_SETTINGS_CACHE=0`
+  turns it off.
+- **The board reaches the window as changes, not as a copy of every card.**
+  When a task changes, Studio now sends only that card (about 5 KB instead of
+  about 690 KB on a 134-card board), and a running task's progress travels as
+  a few hundred bytes. Nothing on screen changes. `MEFI_STUDIO_FULL_PUSHES=1`
+  brings back whole-board pushes for one launch.
 - **Answer styles for the chat, with ELI5 as the default.** Mefi now explains
   things like you're five unless you pick another style: Short answers, Teach
   me, Brainstorm, Poke holes, Expert or plain. The new chip beside the

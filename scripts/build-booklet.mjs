@@ -30,6 +30,7 @@ const readFile = async (file, encoding) => lf(await readText(file, encoding));
 // without importing or executing a build module from the audited tree.
 export const BOOKLET_INPUTS = {
   "scripts": [
+    "startup-marks.js",
     "stage-labels.js",
     "node-visuals.js",
     "performance-core.js",
