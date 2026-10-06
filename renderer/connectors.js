@@ -29,8 +29,10 @@
   const info = (node, text) => { const circle = window.MefiUi?.info?.(text, { label: "About this" }); if (circle && typeof circle === "object" && "nodeType" in circle) node.append(circle); else node.title = text; return node; };
   const ago = (at) => { const minutes = Math.round((Date.now() - at) / 60000); return minutes < 1 ? "just now" : minutes < 60 ? `${minutes} min ago` : minutes < 1440 ? `${Math.round(minutes / 60)} h ago` : `${Math.round(minutes / 1440)} d ago`; };
 
-  async function read() {
+  // `fresh`: a read already under way began before a change, so this one waits for it and reads again.
+  async function read({ fresh = false } = {}) {
     if (!api()?.connectorsList) { state.error = "Connectors are set up in the desktop app."; paint(); return; }
+    if (state.reading && fresh) { await state.reading.catch(() => {}); return read(); }
     if (state.reading) return state.reading;
     state.reading = (async () => {
       try {
@@ -55,7 +57,7 @@
       return null;
     } finally {
       state.busy.delete(key);
-      await read();
+      await read({ fresh: true });
     }
   }
   const editable = () => state.list && !state.list.off;
@@ -146,8 +148,17 @@
     panel.classList.add("connectors-approve");
     panel.append(cmdbox(row.line));
     const facts = el("ul", "connectors-facts");
-    if (row.envKeys?.length || row.saved?.length) facts.append(el("li", "", `It gets these settings: ${[...new Set([...(row.envKeys || []), ...(row.saved || [])])].join(", ")}.`));
-    if (row.standIns?.length) facts.append(el("li", "", `${row.standIns.join(", ")} comes from the GitHub sign-in Studio already has.`));
+    if (row.transport === "http") {
+      // An online connector: what leaves this PC, and where it goes.
+      facts.append(el("li", "", `It is online: what agents ask it travels to ${row.host || "that address"}.`));
+      for (const [header, key] of Object.entries(row.headerKeys || {})) {
+        facts.append(el("li", "", `It sends the ${header} header to ${row.host || "that address"}, from the value saved for ${key}${row.saved?.includes(key) ? "" : " (none saved yet, so it is not sent)"}. Nothing else from this PC fills it.`));
+      }
+    } else {
+      const from = (key) => (row.saved?.includes(key) ? "saved in Studio" : row.standIns?.includes(key) ? "Studio's GitHub sign-in" : row.missing?.includes(key) ? "no value yet" : "from Windows");
+      const keys = [...new Set([...(row.envKeys || []), ...(row.saved || [])])];
+      if (keys.length) facts.append(el("li", "", `It gets these settings, as values on this PC: ${keys.map((key) => `${key} (${from(key)})`).join(", ")}.`));
+    }
     if (row.source) facts.append(el("li", "", `From ${row.source}.`));
     facts.append(el("li", "", "If its command ever changes, Studio asks you again."));
     panel.append(facts);

@@ -169,3 +169,26 @@ test("MEFI_STUDIO_SERIAL_TOOLS=1 runs a turn's calls one after another", () => f
     assert.deepEqual(events, ["start:slow", "end:slow", "start:fast", "end:fast"]);
   } finally { if (before === undefined) delete process.env.MEFI_STUDIO_SERIAL_TOOLS; else process.env.MEFI_STUDIO_SERIAL_TOOLS = before; }
 }));
+
+test("calls to one connector in a turn keep their order; another connector's run beside them", () => fixture(async (root) => {
+  const events = [];
+  const file = path.join(root, "mcp.json");
+  await fs.writeFile(file, JSON.stringify({ servers: { browser: { command: "x", tools: [{ name: "navigate" }, { name: "shot" }], places: ["agents"] }, docs: { command: "y", tools: [{ name: "find" }], places: ["agents"] } } }));
+  tools.useMcp({ pool: { call: async (server, name) => { events.push(`start:${server.id}.${name}`); await new Promise((resolve) => setTimeout(resolve, name === "navigate" ? 40 : 5)); events.push(`end:${server.id}.${name}`); return { content: [{ type: "text", text: name }] }; } } });
+  let turns = 0;
+  await tools.run({ root, role: "lead", settings: { agentTools: { lead: { webSearch: false, webRead: false } } }, mcpFile: file, system: "s", user: "u", call: async () => (++turns === 1 ? { ok: true, text: '{"studio_tool_calls":[{"name":"mcp__browser__navigate","arguments":{}},{"name":"mcp__browser__shot","arguments":{}},{"name":"mcp__docs__find","arguments":{}}]}' } : { ok: true, text: "final" }) });
+  assert.ok(events.indexOf("end:browser.navigate") < events.indexOf("start:browser.shot"), events.join(" "));
+  assert.ok(events.indexOf("start:docs.find") < events.indexOf("end:browser.navigate"), "the other connector did not wait");
+}));
+
+test("a tool folder a run left behind is cleared after six hours, one in use is not", () => fixture(async (root) => {
+  const old = await fs.mkdtemp(path.join(root, "mefi-tools-")), fresh = await fs.mkdtemp(path.join(root, "mefi-tools-"));
+  for (const folder of [old, fresh]) await fs.writeFile(path.join(folder, "policy.json"), JSON.stringify({ connectorEnv: { x: { TOKEN: "secret" } } }));
+  const long = new Date(Date.now() - 7 * 60 * 60 * 1000);
+  await fs.utimes(old, long, long);
+  await fs.mkdir(path.join(root, "unrelated-folder"));
+  assert.deepEqual(await configs.sweep({ dir: root }), { removed: 1 });
+  assert.equal(await fs.stat(old).catch(() => null), null);
+  assert.ok(await fs.stat(path.join(fresh, "policy.json")));
+  assert.ok(await fs.stat(path.join(root, "unrelated-folder")));
+}));

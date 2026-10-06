@@ -85,31 +85,50 @@ function idFrom(name) {
   const id = String(name ?? "").toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^[-_]+|[-_]+$/g, "").slice(0, 40);
   return ID.test(id) ? id : "";
 }
-/** JSON with comments and trailing commas (VS Code's and OpenCode's files), as plain JSON. */
+/** JSON with comments and trailing commas (VS Code's and OpenCode's files), as plain JSON. Text inside strings is never changed. */
 function stripJsonc(text) {
-  let out = "", quote = false;
-  const source = String(text ?? "").replace(/^﻿/, "");
+  let out = "", quote = false, comma = -1;
+  const source = String(text ?? "").replace(/^\uFEFF/, "");
   for (let at = 0; at < source.length; at += 1) {
     const char = source[at];
     if (quote) {
       out += char;
       if (char === "\\") { out += source[at + 1] ?? ""; at += 1; } else if (char === "\"") quote = false;
-    } else if (char === "\"") { quote = true; out += char; }
+    } else if (char === "\"") { quote = true; comma = -1; out += char; }
     else if (char === "/" && source[at + 1] === "/") { while (at < source.length && source[at] !== "\n") at += 1; out += "\n"; }
     else if (char === "/" && source[at + 1] === "*") { at += 2; while (at < source.length && !(source[at] === "*" && source[at + 1] === "/")) at += 1; at += 1; }
-    else out += char;
+    else if (char === ",") { comma = out.length; out += char; }
+    // A comma whose next real character closes the object or the list was a trailing one: it goes.
+    else if ((char === "}" || char === "]") && comma >= 0) { out = out.slice(0, comma) + out.slice(comma + 1) + char; comma = -1; }
+    else { if (!/\s/.test(char)) comma = -1; out += char; }
   }
-  return out.replace(/,(\s*[}\]])/g, "$1");
+  return out;
 }
 // One TOML value Codex's config uses for servers: a string, an array of strings, an inline table of strings, a boolean.
+// A TOML basic string's inside, escapes decoded in pairs: \\\\ is one backslash, so a Windows path written the TOML way reads right.
+function tomlString(inside) {
+  let out = "";
+  for (let at = 0; at < inside.length; at += 1) {
+    const char = inside[at];
+    if (char !== "\\") { out += char; continue; }
+    const next = inside[at + 1];
+    at += 1;
+    if (next === "u" || next === "U") {
+      const width = next === "u" ? 4 : 8, hex = inside.slice(at + 1, at + 1 + width);
+      if (/^[0-9a-fA-F]+$/.test(hex) && hex.length === width) { const code = parseInt(hex, 16); out += code <= 0x10ffff ? String.fromCodePoint(code) : ""; at += width; continue; }
+    }
+    out += { b: "\b", t: "\t", n: "\n", f: "\f", r: "\r", "\"": "\"", "\\": "\\" }[next] ?? `\\${next ?? ""}`;
+  }
+  return out;
+}
 function tomlValue(raw) {
   const text = raw.trim();
-  if (/^"/.test(text)) { try { return JSON.parse(text.replace(/\\(?!["\\/bfnrtu])/g, "\\\\")); } catch { return null; } }
+  if (/^"/.test(text)) return /^"(?:[^"\\]|\\.)*"$/s.test(text) ? tomlString(text.slice(1, -1)) : null;
   if (/^'/.test(text)) return text.endsWith("'") ? text.slice(1, -1) : null;
   if (text === "true" || text === "false") return text === "true";
   if (/^\[/.test(text)) {
     const items = [];
-    for (const match of text.slice(1, -1).matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'/g)) items.push(match[1] !== undefined ? tomlValue(`"${match[1]}"`) : match[2]);
+    for (const match of text.slice(1, -1).matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'/g)) items.push(match[1] !== undefined ? tomlString(match[1]) : match[2]);
     return items.filter((item) => typeof item === "string");
   }
   if (/^\{/.test(text)) {
@@ -170,7 +189,7 @@ const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 // A value another app wrote for a setting: a real one, or a placeholder it fills in itself (${VAR}, ${input:x}).
 const placeholder = (value) => typeof value !== "string" || !value || /\$\{[^}]*\}|^\$[A-Za-z_]|%[A-Za-z_]+%|<[^>]+>/.test(value);
 /** One server as another app wrote it, in Studio's words; `values` are the real setting values found (host only). */
-function fromOther(name, entry, source) {
+function fromOther(name, entry, source, { codex = false, deviceEnv = {} } = {}) {
   if (!record(entry)) return null;
   const type = String(entry.type ?? entry.transport ?? "").toLowerCase();
   const url = entry.url ?? entry.serverUrl ?? entry.httpUrl ?? null;
@@ -178,7 +197,12 @@ function fromOther(name, entry, source) {
   let envKeys = [];
   const env = record(entry.env) ? entry.env : record(entry.environment) ? entry.environment : {};
   for (const [key, value] of Object.entries(env)) if (mcpLib.envName(key)) { envKeys.push(key); if (!placeholder(value)) values[key] = String(value); }
-  if (typeof entry.bearer_token_env_var === "string" && mcpLib.envName(entry.bearer_token_env_var)) headerKeys.Authorization = entry.bearer_token_env_var;
+  // Codex names the setting that holds an online server's bearer token; any other app's file saying so is not trusted with it.
+  if (codex && typeof entry.bearer_token_env_var === "string" && mcpLib.envName(entry.bearer_token_env_var)) {
+    headerKeys.Authorization = entry.bearer_token_env_var;
+    const value = deviceEnv?.[entry.bearer_token_env_var];
+    if (typeof value === "string" && value) values[entry.bearer_token_env_var] = value;
+  }
   if (record(entry.headers)) {
     for (const [header, value] of Object.entries(entry.headers).slice(0, 8)) {
       if (!/^[A-Za-z][A-Za-z0-9-]{0,63}$/.test(header)) continue;
@@ -272,12 +296,30 @@ function createConnectors({
   });
 
   // ---- secrets ----
+  // For reading a value: anything unreadable is simply not there.
   async function readSecrets() {
     if (!secretFile) return {};
     try {
       const parsed = JSON.parse(await fs.readFile(secretFile, "utf8"));
       return record(parsed?.servers) ? parsed.servers : {};
     } catch { return {}; }
+  }
+  // For changing the file: only a missing file starts empty. One that is not JSON is copied aside first (nothing is
+  // lost), and one that can't be read right now (another program holds it) refuses the change instead of wiping it.
+  async function secretsForWrite() {
+    if (!secretFile) return {};
+    let text;
+    try { text = await fs.readFile(secretFile, "utf8"); } catch (error) {
+      if (error?.code === "ENOENT") return {};
+      throw refuse("Studio could not read its saved connector values just now, so nothing was changed. Try again in a moment.");
+    }
+    try {
+      const parsed = JSON.parse(text);
+      if (record(parsed) && (parsed.servers === undefined || record(parsed.servers))) return record(parsed.servers) ? parsed.servers : {};
+    } catch { /* copied aside below */ }
+    try { await fs.writeFile(`${secretFile}.broken-${new Date(now()).toISOString().replace(/[:.]/g, "-")}`, text, { mode: 0o600, flag: "wx" }); }
+    catch { throw refuse("Studio's saved connector values are damaged and could not be copied aside, so nothing was changed."); }
+    return {};
   }
   const writeSecrets = (servers) => replaceFile(secretFile, `${JSON.stringify({ v: 1, servers }, null, 2)}\n`);
   const secretLock = (work) => serial(work);
@@ -286,7 +328,7 @@ function createConnectors({
     if (!entries.length && !replace) return;
     if (entries.length && (!secretFile || !canEncrypt())) throw refuse("This PC can't keep that value safely in Studio. Set it as a Windows environment variable instead, and Studio passes it on.");
     if (!secretFile) return;
-    const all = await readSecrets();
+    const all = await secretsForWrite();
     const mine = replace ? {} : { ...(record(all[id]) ? all[id] : {}) };
     for (const [key, value] of entries) mine[key] = encrypt(value);
     if (Object.keys(mine).length) all[id] = mine; else delete all[id];
@@ -304,6 +346,8 @@ function createConnectors({
         try { const plain = decrypt(value); if (typeof plain === "string" && plain) out[key] = plain; } catch { /* a value this PC can't read is missing */ }
       }
     }
+    // An online connector gets only what was saved for it: whatever it is given leaves this PC.
+    if (server.transport === "http") return out;
     for (const key of keys) {
       if (out[key] || env[key] !== undefined) continue;
       const stand = await Promise.resolve(fallbackEnv(key)).catch(() => null);
@@ -315,11 +359,13 @@ function createConnectors({
   // ---- what the page shows ----
   function view(row, savedKeys, standIns) {
     const needs = [...new Set([...(row.envKeys || []), ...Object.values(row.headerKeys || {})])];
-    const missing = needs.filter((key) => !savedKeys.includes(key) && env[key] === undefined && !standIns.includes(key));
+    const online = row.transport === "http";
+    const missing = needs.filter((key) => !savedKeys.includes(key) && (online || (env[key] === undefined && !standIns.includes(key))));
+    if (online) standIns = [];
     return {
       id: row.id, title: typeof row.title === "string" && row.title.trim() ? row.title.trim().slice(0, 80) : row.id,
       transport: row.transport, line: row.transport === "http" ? row.url : displayLine(row.command, row.args),
-      ...(row.transport === "http" ? { url: row.url, headerKeys: { ...row.headerKeys } } : { command: row.command, args: [...row.args] }),
+      ...(row.transport === "http" ? { url: row.url, host: (() => { try { return new URL(row.url).host; } catch { return ""; } })(), headerKeys: { ...row.headerKeys } } : { command: row.command, args: [...row.args] }),
       envKeys: [...row.envKeys], saved: savedKeys.filter((key) => needs.includes(key)), standIns: standIns.filter((key) => needs.includes(key)), missing,
       status: row.status, fingerprint: row.fingerprint, enabled: row.enabled !== false, places: [...row.places],
       tools: row.tools.map((tool) => ({ name: tool.name, description: tool.description, off: row.off.includes(tool.name) })),
@@ -331,7 +377,7 @@ function createConnectors({
   }
   async function standInKeys(rows) {
     const keys = new Set();
-    for (const row of rows) for (const key of [...row.envKeys, ...Object.values(row.headerKeys || {})]) {
+    for (const row of rows) for (const key of row.transport === "http" ? [] : row.envKeys) {
       if (env[key] !== undefined) continue;
       const stand = await Promise.resolve(fallbackEnv(key)).catch(() => null);
       if (typeof stand === "string" && stand) keys.add(key);
@@ -502,7 +548,7 @@ function createConnectors({
     if (typeof value !== "string") throw refuse("Give a value.");
     if (value === "") {
       await secretLock(async () => {
-        const all = await readSecrets();
+        const all = await secretsForWrite();
         if (record(all[id])) { delete all[id][key]; if (!Object.keys(all[id]).length) delete all[id]; await writeSecrets(all); }
       });
     } else await secretLock(() => saveValues(id, { [key]: value }));
@@ -561,7 +607,7 @@ function createConnectors({
       } catch { continue; }
       if (!record(servers)) continue;
       for (const [name, entry] of Object.entries(servers).slice(0, 64)) {
-        const one = fromOther(name, entry, `${source.label} (${shown(source.file)})`);
+        const one = fromOther(name, entry, `${source.label} (${shown(source.file)})`, { codex: source.id === "codex", deviceEnv: env });
         if (one) found.push({ ...one, key: crypto.createHash("sha256").update(`${source.id}:${name}`).digest("hex").slice(0, 16), sourceId: source.id });
       }
     }

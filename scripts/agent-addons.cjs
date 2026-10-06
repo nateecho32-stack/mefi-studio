@@ -69,8 +69,8 @@ async function fileText(file) {
   return text;
 }
 const builtinId = (name) => crypto.createHash("sha256").update(`builtin:${name}`).digest("hex").slice(0, 24);
-// A folder name that can stand in a prompt and a tool's list as a skill's name.
-const listable = (name) => typeof name === "string" && name.length <= 64 && /^[A-Za-z0-9][\w .-]*$/.test(name);
+// A folder name that can stand in a prompt and a tool's list as a skill's name: the rule choices are kept under too.
+const listable = (name) => skillUseLib().validName(name);
 // Every skill an agent can be given, one per name, in the order a name resolves: the
 // project's own (.agents first, then other tools' folders), the home folder's, then
 // the ones built into Studio. Each row: { id, name, scope, kind, title, description,
@@ -84,7 +84,9 @@ async function skillCatalog(root, options = {}) {
     if (!text) continue;
     seen.add(row.name);
     const parsed = formatLib().parse(text);
-    rows.push({ id: row.id, name: row.name, scope: row.scope, kind: "skill", title: row.name, description: formatLib().describe(text), chars: text.length, file: row.file, ...(parsed.description ? {} : { undescribed: true }) });
+    // A project's or the home folder's copy of one of Studio's answer styles is still that style (Copy to this project).
+    const style = builtinsLib().get(row.name)?.kind === "style" ? builtinsLib().get(row.name) : null;
+    rows.push({ id: row.id, name: row.name, scope: row.scope, kind: style ? "style" : "skill", title: style ? style.title : row.name, description: formatLib().describe(text), chars: text.length, file: row.file, ...(parsed.description ? {} : { undescribed: true }) });
   }
   for (const skill of builtinsLib().list()) {
     if (seen.has(skill.name)) continue;
@@ -98,6 +100,24 @@ async function skillText(row) {
   if (typeof row?.text === "string") return row.text;
   return row?.file ? fileText(row.file) : "";
 }
+// The team's picks for this agent with their text, as the prompt sends them: the first eight that fit 16,000 characters.
+async function pickedSkills(root, settings, role, options) {
+  const selected = settings?.agentSkills?.[role];
+  if (!Array.isArray(selected) || !selected.length) return [];
+  const rows = await inventory(root, options), out = [];
+  let remaining = 16000;
+  for (const id of selected.slice(0, 8)) {
+    const row = rows.find((item) => item.id === id);
+    if (!row) continue;
+    const text = await fs.readFile(row.file, "utf8").catch(() => "");
+    if (!text || text.length > remaining) continue;
+    remaining -= text.length;
+    out.push({ name: row.name, text });
+  }
+  return out;
+}
+// What the team's picks leave of the always-on budget.
+const roomAfter = (picked) => ({ room: 16000 - picked.reduce((sum, item) => sum + item.text.length, 0), count: 8 - picked.length });
 // The names a team picked for this agent (settings.agentSkills), so the other lists leave them out.
 async function pickedNames(root, settings, role, options) {
   const selected = settings?.agentSkills?.[role];
@@ -123,10 +143,10 @@ async function alwaysSkills(root, settings, role, options = {}, { room, count } 
   for (const row of always) { const text = await skillText(row); if (text) found.push({ name: row.name, text }); }
   return skillUseLib().fitAlways(found, { room, count });
 }
-/** The names of the skills always on for a role: the team's picks, then its place's. */
+/** The names of the skills always on for a role, as its prompt carries them: the team's picks, then its place's in what is left. */
 async function alwaysNames(root, settings, role, options = {}) {
-  const picked = await pickedNames(root, settings, role, options);
-  return [...picked, ...(await alwaysSkills(root, settings, role, options)).used.map((item) => item.name)];
+  const picked = await pickedSkills(root, settings, role, options).catch(() => []);
+  return [...picked.map((item) => item.name), ...(await alwaysSkills(root, settings, role, options, roomAfter(picked))).used.map((item) => item.name)];
 }
 /**
  * The skills a role's model may load by itself (use_skill): [{ name, title, description, scope, chars }],
@@ -224,23 +244,10 @@ async function rulesState(root, { files = true } = {}) {
 // `options.text`) within their own: the same budget a /name in a chat message has
 // (mentions.cjs). A skill is in the prompt once, whichever way it came.
 async function skillInstructions(root, settings, role, options) {
-  const selected = settings?.agentSkills?.[role];
-  const parts = [], have = new Set();
-  let remaining = 16000;
-  if (Array.isArray(selected) && selected.length) {
-    const rows = await inventory(root, options);
-    for (const id of selected.slice(0, 8)) {
-      const row = rows.find((item) => item.id === id);
-      if (!row) continue;
-      const text = await fs.readFile(row.file, "utf8").catch(() => "");
-      if (!text || text.length > remaining) continue;
-      remaining -= text.length;
-      have.add(row.name);
-      parts.push(`Skill: ${row.name}\n${text}`);
-    }
-  }
-  let out = parts.length ? `\n\nSelected agent skills (follow within this agent's existing task, tool permissions and response format):\n${parts.join("\n\n")}` : "";
-  const always = await alwaysSkills(root, settings, role, options, { room: remaining, count: 8 - parts.length }).catch(() => ({ used: [] }));
+  const picked = await pickedSkills(root, settings, role, options);
+  const have = new Set(picked.map((item) => item.name));
+  let out = picked.length ? `\n\nSelected agent skills (follow within this agent's existing task, tool permissions and response format):\n${picked.map((item) => `Skill: ${item.name}\n${item.text}`).join("\n\n")}` : "";
+  const always = await alwaysSkills(root, settings, role, options, roomAfter(picked)).catch(() => ({ used: [] }));
   for (const item of always.used) have.add(item.name);
   if (always.used.length) out += skillUseLib().alwaysBlock(always.used, skillUseLib().placeOf(role));
   out += await namedSkills(root, options, have);
@@ -249,7 +256,8 @@ async function skillInstructions(root, settings, role, options) {
 // The skills a task's own words name with /name, as a chat message's do.
 async function namedSkills(root, options = {}, have = new Set()) {
   if (skillUseOff() || typeof options?.text !== "string" || !options.text.includes("/")) return "";
-  const calls = mentionsLib().skillCalls(options.text.slice(0, 20000)).filter((call) => !have.has(call.name));
+  // Only a plain call counts (it starts the words, or the name has a dash like /bug-triage): "the /test route" is prose.
+  const calls = mentionsLib().skillCalls(options.text.slice(0, 20000)).filter((call) => call.asked && !have.has(call.name));
   if (!calls.length) return "";
   const rows = await skillCatalog(root, options).catch(() => []);
   const found = [];
@@ -268,6 +276,7 @@ function validate(value) {
   }
   return null;
 }
-/** Forget the kept skill texts (the Skills page saved, or a test changed a file within one clock tick). */
+/** Forget the kept skill texts. The host never needs to (a text is read again when its size or time changes); a test
+ * that rewrites a file within one clock tick does. */
 function forget() { texts.clear(); }
 module.exports = { catalog, inventory, instructions, validate, rulesState, readRuleFile, skillCatalog, skillText, alwaysNames, autoSkills, loadSkill, forget };

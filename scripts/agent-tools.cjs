@@ -465,9 +465,20 @@ async function run({ system, user, root, settings, role, call, scrub = (value) =
         catch (error) { output = { error: error.message }; }
         return { request, output, ok };
       };
-      const outcomes = [];
-      if (process.env.MEFI_STUDIO_SERIAL_TOOLS === "1") for (const request of batch) outcomes.push(await one(request));
-      else outcomes.push(...await Promise.all(batch.map(one)));
+      // Calls to one connector keep their order (a browser navigates, then takes its picture); different
+      // connectors and Studio's own tools run side by side.
+      const outcomes = new Array(batch.length);
+      if (process.env.MEFI_STUDIO_SERIAL_TOOLS === "1") for (const [index, request] of batch.entries()) outcomes[index] = await one(request);
+      else {
+        const lanes = new Map();
+        batch.forEach((request, index) => {
+          const server = /^mcp__([A-Za-z0-9_-]+?)__/.exec(String(request?.name ?? ""))?.[1];
+          const key = server ? `mcp:${server}` : `call:${index}`;
+          if (!lanes.has(key)) lanes.set(key, []);
+          lanes.get(key).push(index);
+        });
+        await Promise.all([...lanes.values()].map(async (lane) => { for (const index of lane) outcomes[index] = await one(batch[index]); }));
+      }
       for (const outcome of outcomes) {
         const { request, output } = outcome;
         let { ok } = outcome;

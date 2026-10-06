@@ -144,7 +144,8 @@
       const ready = row.status === "ready";
       const what = el("span", "chat-tools-words");
       what.append(el("strong", "", row.title), el("small", "", ready ? `${plural(row.tools, "tool")}${row.tools ? "" : ": test it in Connectors to find them"}` : row.status === "off" ? "Switched off in Connectors" : "Waiting for your approval in Connectors"));
-      line.append(what, sw(row.on, `Let the chat use ${row.title}`, (value) => void setConnector(row, value), { disabled: !current?.editable || sending }));
+      // One that waits for approval is approved in Connectors first; switching it on here would promise a tool it can't give.
+      line.append(what, sw(row.on, `Let the chat use ${row.title}`, (value) => void setConnector(row, value), { disabled: !current?.editable || sending || !ready && row.status !== "off" }));
       tools.append(line);
     }
     if (!connectors.length) tools.append(el("p", "chat-tools-hint", "Connectors add tools like a browser or GitHub. None yet."));

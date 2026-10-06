@@ -63,4 +63,20 @@ async function remove(files) {
   for (const name of ["policy.json", "opencode.json", "claude.json", "preview.log", `preview.log.${process.pid}.tmp`]) await fs.rm(path.join(files.folder, name), { force: true }).catch(() => {});
   await fs.rmdir(files.folder).catch(() => {});
 }
-module.exports = { prepare, remove, updateLogs };
+// Folders a run left behind (Studio was closed or killed while a builder ran): its policy file can hold the values a
+// connector needed, so at start Studio removes every mefi-tools-* folder older than `olderThanMs` (a run is killed long
+// before that), leaving any folder a run of another Studio window might still use alone. { removed } is how many went.
+async function sweep({ dir = os.tmpdir(), olderThanMs = 6 * 60 * 60 * 1000, now = Date.now() } = {}) {
+  let removed = 0;
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !/^mefi-tools-[A-Za-z0-9]{6}$/.test(entry.name)) continue;
+    const folder = path.join(dir, entry.name);
+    const info = await fs.stat(folder).catch(() => null);
+    if (!info || now - info.mtimeMs < olderThanMs) continue;
+    await remove({ folder });
+    if (!(await fs.stat(folder).catch(() => null))) removed += 1;
+  }
+  return { removed };
+}
+module.exports = { prepare, remove, updateLogs, sweep };

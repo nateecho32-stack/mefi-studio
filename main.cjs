@@ -13164,6 +13164,13 @@ if (typeof agentTools !== "undefined" && typeof agentTools.useSkills === "functi
   agentTools.useMcp(process.env.MEFI_STUDIO_NO_MCP_POOL === "1" ? { envFor: (server) => connectorsHost().envFor(server) } : { pool: { call: (...args) => connectorPool().call(...args) } });
   if (typeof app !== "undefined" && typeof app?.on === "function") app.on("will-quit", () => { try { connectorPoolLoaded?.closeAllSync(); } catch { /* nothing left to close */ } });
 }
+// A builder run's tool folder holds the values its connectors needed; one left behind by a run Studio could not end
+// (it was closed or killed) is cleared half a minute after start (agent-tool-configs.cjs sweep: six hours old or more).
+if (typeof agentToolConfigs !== "undefined" && typeof agentToolConfigs.sweep === "function" && typeof setTimeout === "function") {
+  setTimeout(() => {
+    agentToolConfigs.sweep().then(({ removed }) => { if (removed && typeof logLine === "function") logLine(`[tools] cleared ${removed} tool folder(s) left by earlier runs`); }).catch(() => {});
+  }, 30000).unref?.();
+}
 // The Skills page's view of how every skill is used, and the chat's styles.
 async function skillUseView() {
   const settings = await readSettings();
@@ -13192,7 +13199,7 @@ async function setSkillUse(payload = {}) {
       if (!lib.PLACES.includes(payload.place) || typeof payload.auto !== "boolean") { refusal = "Choose the chat, agents or builders, on or off."; return false; }
       next = lib.setAuto(settings.skillUse, { place: payload.place, on: payload.auto });
     } else {
-      if (!lib.PLACES.includes(payload.place) || ![...lib.USES, "default"].includes(payload.use) || require("./scripts/skill-format.cjs").nameProblem(payload.name)) { refusal = "Choose a skill, a place and how it is used."; return false; }
+      if (!lib.PLACES.includes(payload.place) || ![...lib.USES, "default"].includes(payload.use) || !lib.validName(payload.name)) { refusal = "Choose a skill, a place and how it is used."; return false; }
       next = lib.setUse(settings.skillUse, { name: payload.name, place: payload.place, use: payload.use });
     }
     const problem = lib.validate(next);
@@ -18415,8 +18422,10 @@ async function spawnNextJob(options) {
     // The route's CLI decides how the project's rules reach this builder: Claude Code,
     // Codex and OpenCode read AGENTS.md and CLAUDE.md themselves, so they get the owner's
     // own rules text only (agent-rules.cjs deliversFiles).
-    // A skill the task's own words name (/name) comes along too (agent-addons.cjs namedSkills).
-    const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), builderSettings, "builder", { cli: runRoute?.cli, text: [job.title, job.ref?.prompt].filter((part) => typeof part === "string").join("\n") }));
+    // A skill the owner's own words for the task name (/name) comes along too (agent-addons.cjs namedSkills): only a
+    // task the owner wrote (origin.by "owner"), never words a planner or a hand-off wrote.
+    const ownerWords = job.ref?.origin?.by === "owner" && typeof job.ref?.prompt === "string" ? job.ref.prompt : "";
+    const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), builderSettings, "builder", { cli: runRoute?.cli, text: ownerWords }));
     // A task's saved record goes to the worker as its own small run file
     // (writeTaskRunContext); the handoff header points at it. Only when that
     // write fails is the builder sent to the whole board file, as before.

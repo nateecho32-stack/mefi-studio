@@ -224,7 +224,8 @@ test("main.cjs sends the card what it needs and takes the rules-only save, witho
   // The builder's prompt reads the run's own team (captured at dispatch) with how the owner uses skills today,
   // and the task's words, so a /skill-name in them brings that skill (agent-addons.cjs namedSkills).
   assert.match(source, /const builderSettings = entry\.agentConfiguration\?\.configuration \? \{ \.\.\.entry\.agentConfiguration\.configuration, skillUse: typeof readSettings === "function" \? \(await readSettings\(\)\.catch\(\(\) => \(\{\}\)\)\)\?\.skillUse : undefined \} : await readAgentSettings\(\);/);
-  assert.match(source, /agentAddons\.instructions\(projectRoot\(\), builderSettings, "builder", \{ cli: runRoute\?\.cli, text: \[job\.title, job\.ref\?\.prompt\]/);
+  assert.match(source, /const ownerWords = job\.ref\?\.origin\?\.by === "owner" && typeof job\.ref\?\.prompt === "string" \? job\.ref\.prompt : "";/, "only words the owner wrote can name a skill for the builder");
+  assert.match(source, /agentAddons\.instructions\(projectRoot\(\), builderSettings, "builder", \{ cli: runRoute\?\.cli, text: ownerWords \}\)/);
   // Every other call site names its own role and passes no CLI: nothing else can be given "the CLI reads it".
   const sites = [...source.matchAll(/agentAddons\.instructions\(([^\n]*)\)\)/g)].map((match) => match[1]);
   assert.equal(sites.length, 5, "assistantFetch, cliAssistantCall, httpAssistantCall, seatFetch and the builder: no sixth caller has gone unchecked");

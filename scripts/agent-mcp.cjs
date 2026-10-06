@@ -134,12 +134,14 @@ async function catalog(file) {
 const timedOut = (message) => Object.assign(new Error(message), { timedOut: true });
 // A server's own error words, short, with anything that looks like a key masked.
 const plainTail = (text, limit = 300) => String(text ?? "").replace(/\s+/g, " ").replace(/\b[A-Za-z0-9_\-]{32,}\b/g, "…").trim().slice(-limit);
+// Where programs and their files are, never a secret: what a server needs to find its runtime and its browser.
+const SYSTEM_ENV = Object.freeze(["PATH", "Path", "PATHEXT", "SystemRoot", "SystemDrive", "WINDIR", "HOME", "HOMEDRIVE", "HOMEPATH", "USERPROFILE", "USERNAME", "APPDATA", "LOCALAPPDATA", "ProgramData", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "CommonProgramFiles", "TEMP", "TMP", "ComSpec", "NUMBER_OF_PROCESSORS", "PROCESSOR_ARCHITECTURE", "OS", "LANG", "TZ", "USER", "LOGNAME", "SHELL", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME"]);
 // Environment values are references to existing device variables, plus the values
 // the owner saved for this server (passed in as `env`, never read from the file).
 // Provider keys and the rest of Studio's environment are not inherited.
 function serverEnv(server, env = {}) {
   const out = {};
-  for (const key of ["PATH", "Path", "PATHEXT", "SystemRoot", "SystemDrive", "WINDIR", "HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "ComSpec", ...(server.envKeys || [])]) {
+  for (const key of [...SYSTEM_ENV, ...(server.envKeys || [])]) {
     if (typeof key === "string" && process.env[key] !== undefined) out[key] = process.env[key];
   }
   for (const [key, value] of Object.entries(record(env) ? env : {})) if (envName(key) && typeof value === "string") out[key] = value;
@@ -154,7 +156,7 @@ function startProblem(server, error) {
   return new Error("MCP server could not start.");
 }
 // One stdio connection, initialized: resolves when the server answered initialize.
-function connectStdio(server, { env = {}, timeoutMs = 30000, spawnImpl = spawn } = {}) {
+function connectStdio(server, { env = {}, timeoutMs = 30000, spawnImpl = spawn, onStart = null } = {}) {
   return new Promise((resolve, reject) => {
     const started = Date.now();
     const fullEnv = serverEnv(server, env);
@@ -174,6 +176,8 @@ function connectStdio(server, { env = {}, timeoutMs = 30000, spawnImpl = spawn }
       if (!shim || !child.pid) { try { child.kill(); } catch { /* already gone */ } return; }
       try { spawnSync("taskkill", ["/pid", String(child.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore", timeout: 5000 }); } catch { try { child.kill(); } catch { /* already gone */ } }
     };
+    // Whoever started it can stop it before it has answered (Studio quitting while a server starts).
+    try { onStart?.({ close: () => end(), closeSync: () => endSync() }); } catch { /* a listener never breaks the start */ }
     let sequence = 0, buffer = "", closed = false, stderr = "", info = null;
     const pending = new Map(), closers = new Set(), notices = new Set();
     const fail = (error) => {
@@ -199,6 +203,7 @@ function connectStdio(server, { env = {}, timeoutMs = 30000, spawnImpl = spawn }
       while ((at = buffer.indexOf("\n")) >= 0) {
         const line = buffer.slice(0, at); buffer = buffer.slice(at + 1);
         let message; try { message = JSON.parse(line); } catch { continue; }
+        if (!message || typeof message !== "object" || Array.isArray(message)) continue;
         if (message.method && message.id !== undefined) {
           // A server may ask whether the client is still there; nothing else is offered to it.
           if (message.method === "ping") write({ id: message.id, result: {} });
@@ -254,6 +259,22 @@ async function listAll(request, { timeoutMs = 30000 } = {}) {
   }
   return tools;
 }
+// A body read as it streams, refused past `max` bytes.
+async function readCapped(response, max) {
+  if (!response.body) return "";
+  const reader = response.body.getReader(), decoder = new TextDecoder();
+  let text = "", bytes = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      bytes += value.length;
+      if (bytes > max) throw new Error("MCP output limit exceeded.");
+      text += decoder.decode(value, { stream: true });
+    }
+    return text + decoder.decode();
+  } finally { await reader.cancel().catch(() => {}); }
+}
 // Server-sent events: the JSON-RPC message answering `id`, read as it streams.
 async function readEvents(response, id, max = LIMITS.lineBytes) {
   const reader = response.body.getReader(), decoder = new TextDecoder();
@@ -287,8 +308,10 @@ async function connectHttp(server, { env = {}, timeoutMs = 30000, fetchImpl = fe
   const url = httpAddress(server.url);
   if (!url) throw new Error("That address can not be used: Studio reads https:// addresses, or http:// on this PC.");
   const base = { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "User-Agent": `mefi-studio/${VERSION}` };
+  // A header's value is one the owner saved for this connector (env, from the host), never the device's environment:
+  // what an online connector is sent leaves the PC, so only what the owner gave it for that purpose goes.
   for (const [header, key] of Object.entries(record(server.headerKeys) ? server.headerKeys : {})) {
-    const value = env?.[key] ?? process.env[key];
+    const value = env?.[key];
     if (typeof value !== "string" || !value || /[\r\n]/.test(value)) continue;
     // A bare token saved for Authorization is sent the way such servers expect it.
     base[header] = header.toLowerCase() === "authorization" && !/\s/.test(value.trim()) ? `Bearer ${value.trim()}` : value;
@@ -306,14 +329,15 @@ async function connectHttp(server, { env = {}, timeoutMs = 30000, fetchImpl = fe
     if (given && !session && /^[\x21-\x7e]{1,200}$/.test(given)) session = given;
     if (message.id === undefined) { await response.body?.cancel?.().catch(() => {}); return null; }
     if (response.status === 401 || response.status === 403) { await response.body?.cancel?.().catch(() => {}); throw new Error(`The connector refused Studio (HTTP ${response.status}). Check the key saved for it.`); }
+    if (response.status === 404 && session) { await response.body?.cancel?.().catch(() => {}); close(); throw new Error("The connector ended its session; the next call starts a new one."); }
     if (!response.ok) { await response.body?.cancel?.().catch(() => {}); throw new Error(`The connector answered HTTP ${response.status}.`); }
     const type = String(response.headers.get("content-type") || "").toLowerCase();
     let reply;
     try {
       if (type.includes("text/event-stream")) reply = await readEvents(response, message.id);
       else {
-        const text = await response.text();
-        if (text.length > LIMITS.lineBytes) throw new Error("MCP output limit exceeded.");
+        if (Number(response.headers.get("content-length")) > LIMITS.lineBytes) { await response.body?.cancel?.().catch(() => {}); throw new Error("MCP output limit exceeded."); }
+        const text = await readCapped(response, LIMITS.lineBytes);
         const parsed = JSON.parse(text);
         reply = (Array.isArray(parsed) ? parsed : [parsed]).find((item) => item?.id === message.id);
       }
@@ -409,7 +433,7 @@ function createPool({ idleMs = 120000, max = 6, envFor = null, connectImpl = con
     clearTimeout(entry.timer);
     entry.dropped = true;
     if (entry.session) entry.session.close();
-    else entry.ready?.then((session) => session.close(), () => {});
+    else { entry.starting?.close(); entry.ready?.then((session) => session.close(), () => {}); }
   }
   function entryFor(server) {
     const print = fingerprint(server);
@@ -421,8 +445,8 @@ function createPool({ idleMs = 120000, max = 6, envFor = null, connectImpl = con
       if (!quiet) break;
       drop(quiet);
     }
-    entry = { id: server.id, print, busy: 0, used: Date.now(), timer: null, tools: null, session: null, dropped: false };
-    entry.ready = (async () => connectImpl(server, { env: envFor ? (await envFor(server)) || {} : {}, timeoutMs: startupMs }))();
+    entry = { id: server.id, print, busy: 0, used: Date.now(), timer: null, tools: null, session: null, dropped: false, starting: null };
+    entry.ready = (async () => connectImpl(server, { env: envFor ? (await envFor(server)) || {} : {}, timeoutMs: startupMs, onStart: (handle) => { entry.starting = handle; if (entry.dropped) handle.close(); } }))();
     entry.ready.then((session) => {
       if (entry.dropped) { session.close(); return; }
       entry.session = session;
@@ -456,7 +480,7 @@ function createPool({ idleMs = 120000, max = 6, envFor = null, connectImpl = con
     close: (id) => { const entry = open.get(id); if (entry) drop(entry); },
     closeAll: () => { for (const entry of [...open.values()]) drop(entry); },
     // For a process that is exiting: every server and what it started end now.
-    closeAllSync: () => { for (const entry of [...open.values()]) { if (open.get(entry.id) === entry) open.delete(entry.id); entry.dropped = true; clearTimeout(entry.timer); entry.session?.closeSync?.(); } },
+    closeAllSync: () => { for (const entry of [...open.values()]) { if (open.get(entry.id) === entry) open.delete(entry.id); entry.dropped = true; clearTimeout(entry.timer); if (entry.session) entry.session.closeSync?.(); else entry.starting?.closeSync?.(); } },
     ids: () => [...open.keys()],
     size: () => open.size,
   };

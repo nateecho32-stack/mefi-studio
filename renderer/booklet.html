@@ -13604,7 +13604,7 @@ span.sx-thumb { padding: 8px 10px; border: 1px dashed var(--hairline-strong); bo
 .chat-tools-section { display: grid; gap: 6px; min-width: 0; }
 .chat-tools-h { margin: 0 2px 2px; font: 600 12px/1.2 var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .chat-tools-styles { display: grid; gap: 4px; }
-.chat-tools-style { display: grid; gap: 2px; width: 100%; padding: 8px 10px 8px 30px; position: relative; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--ivory); font: inherit; text-align: left; cursor: pointer; }
+.chat-tools-style { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; justify-items: start; align-items: start; gap: 2px; width: 100%; min-height: 0; height: auto; padding: 8px 10px 8px 30px; position: relative; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--ivory); font: inherit; text-align: left; white-space: normal; cursor: pointer; }
 .chat-tools-style::before { content: ""; position: absolute; left: 10px; top: 11px; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
 .chat-tools-style[aria-checked="true"] { border-color: color-mix(in srgb, var(--gold) 45%, transparent); background: color-mix(in srgb, var(--gold) 9%, transparent); }
 .chat-tools-style[aria-checked="true"]::before { border-color: var(--gold); background: radial-gradient(circle, var(--gold) 0 3.5px, transparent 4px); }
@@ -82431,7 +82431,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const ready = row.status === "ready";
       const what = el("span", "chat-tools-words");
       what.append(el("strong", "", row.title), el("small", "", ready ? `${plural(row.tools, "tool")}${row.tools ? "" : ": test it in Connectors to find them"}` : row.status === "off" ? "Switched off in Connectors" : "Waiting for your approval in Connectors"));
-      line.append(what, sw(row.on, `Let the chat use ${row.title}`, (value) => void setConnector(row, value), { disabled: !current?.editable || sending }));
+      // One that waits for approval is approved in Connectors first; switching it on here would promise a tool it can't give.
+      line.append(what, sw(row.on, `Let the chat use ${row.title}`, (value) => void setConnector(row, value), { disabled: !current?.editable || sending || !ready && row.status !== "off" }));
       tools.append(line);
     }
     if (!connectors.length) tools.append(el("p", "chat-tools-hint", "Connectors add tools like a browser or GitHub. None yet."));
@@ -86131,8 +86132,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const info = (node, text) => { const circle = window.MefiUi?.info?.(text, { label: "About this" }); if (circle && typeof circle === "object" && "nodeType" in circle) node.append(circle); else node.title = text; return node; };
   const ago = (at) => { const minutes = Math.round((Date.now() - at) / 60000); return minutes < 1 ? "just now" : minutes < 60 ? `${minutes} min ago` : minutes < 1440 ? `${Math.round(minutes / 60)} h ago` : `${Math.round(minutes / 1440)} d ago`; };
 
-  async function read() {
+  // `fresh`: a read already under way began before a change, so this one waits for it and reads again.
+  async function read({ fresh = false } = {}) {
     if (!api()?.connectorsList) { state.error = "Connectors are set up in the desktop app."; paint(); return; }
+    if (state.reading && fresh) { await state.reading.catch(() => {}); return read(); }
     if (state.reading) return state.reading;
     state.reading = (async () => {
       try {
@@ -86157,7 +86160,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       return null;
     } finally {
       state.busy.delete(key);
-      await read();
+      await read({ fresh: true });
     }
   }
   const editable = () => state.list && !state.list.off;
@@ -86248,8 +86251,17 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     panel.classList.add("connectors-approve");
     panel.append(cmdbox(row.line));
     const facts = el("ul", "connectors-facts");
-    if (row.envKeys?.length || row.saved?.length) facts.append(el("li", "", `It gets these settings: ${[...new Set([...(row.envKeys || []), ...(row.saved || [])])].join(", ")}.`));
-    if (row.standIns?.length) facts.append(el("li", "", `${row.standIns.join(", ")} comes from the GitHub sign-in Studio already has.`));
+    if (row.transport === "http") {
+      // An online connector: what leaves this PC, and where it goes.
+      facts.append(el("li", "", `It is online: what agents ask it travels to ${row.host || "that address"}.`));
+      for (const [header, key] of Object.entries(row.headerKeys || {})) {
+        facts.append(el("li", "", `It sends the ${header} header to ${row.host || "that address"}, from the value saved for ${key}${row.saved?.includes(key) ? "" : " (none saved yet, so it is not sent)"}. Nothing else from this PC fills it.`));
+      }
+    } else {
+      const from = (key) => (row.saved?.includes(key) ? "saved in Studio" : row.standIns?.includes(key) ? "Studio's GitHub sign-in" : row.missing?.includes(key) ? "no value yet" : "from Windows");
+      const keys = [...new Set([...(row.envKeys || []), ...(row.saved || [])])];
+      if (keys.length) facts.append(el("li", "", `It gets these settings, as values on this PC: ${keys.map((key) => `${key} (${from(key)})`).join(", ")}.`));
+    }
     if (row.source) facts.append(el("li", "", `From ${row.source}.`));
     facts.append(el("li", "", "If its command ever changes, Studio asks you again."));
     panel.append(facts);

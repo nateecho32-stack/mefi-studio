@@ -185,3 +185,44 @@ test("MEFI_STUDIO_NO_SKILL_USE=1 sends no skill by its place and offers none to 
     assert.match(await addons.instructions(root, {}, "companion", { home }), /Skill: eli5/, "only 1 switches it off");
   } finally { if (before === undefined) delete process.env.MEFI_STUDIO_NO_SKILL_USE; else process.env.MEFI_STUDIO_NO_SKILL_USE = before; }
 }));
+
+test("a project's copy of a built-in style is still that style, so Copy to this project keeps ELI5 on", () => project(async ({ root, home }) => {
+  const eli5 = builtins.get("eli5");
+  await skill(root, ".agents/skills", "eli5", eli5.description, `${eli5.body}\n- And use our team's words.`);
+  const row = (await addons.skillCatalog(root, { home })).find((item) => item.name === "eli5");
+  assert.deepEqual([row.scope, row.kind, row.title], ["project", "style", "Explain like I'm 5"]);
+  const chat = await addons.instructions(root, {}, "companion", { home });
+  assert.match(chat, /Skill: eli5[\s\S]*our team's words/, "the project's copy is the one in use, still on for the chat");
+  assert.deepEqual(await addons.autoSkills(root, {}, "builder", { home }), [], "and still only called by builders and agents");
+}));
+
+test("a skill named the way another tool names them (pdf_tools) can be listed and its use changed", () => project(async ({ root, home }) => {
+  await skill(home, ".claude/skills", "pdf_tools", "Work with PDF files", "PDF-BODY");
+  await skill(home, ".claude/skills", "My Skill", "Spaces are not a name", "x");
+  const names = (await addons.skillCatalog(root, { home })).map((row) => row.name);
+  assert.ok(names.includes("pdf_tools")); assert.ok(!names.includes("My Skill"));
+  const policy = use.setUse({}, { name: "pdf_tools", place: "builders", use: "always" });
+  assert.deepEqual(policy.skills, { pdf_tools: { builders: "always" } });
+  assert.equal(use.validate(policy), null);
+  assert.match(await addons.instructions(root, { skillUse: policy }, "builder", { home }), /PDF-BODY/);
+  for (const bad of ["__proto__", "constructor", "../x", "a b", ""]) assert.equal(use.validName(bad), false, bad);
+}));
+
+test("a /word in a task's prose is not a call: only a name that starts the words or has a dash", () => project(async ({ root, home }) => {
+  await skill(root, ".agents/skills", "test", "Run the tests", "TEST-BODY");
+  await skill(root, ".agents/skills", "bug-triage", "Reproduce a bug first", "TRIAGE-BODY");
+  assert.equal(await addons.instructions(root, {}, "builder", { home, text: "Fix the /test route so it returns 200" }), "");
+  assert.match(await addons.instructions(root, {}, "builder", { home, text: "/test the checkout flow" }), /TEST-BODY/);
+  assert.match(await addons.instructions(root, {}, "builder", { home, text: "then run /bug-triage on it" }), /TRIAGE-BODY/);
+}));
+
+test("what counts as on for a role is what its prompt carries: the team's picks leave less room", () => project(async ({ root, home }) => {
+  await skill(root, ".agents/skills", "big-pick", "A big team pick", "p".repeat(15600));
+  await skill(root, ".agents/skills", "house-rules", "Our conventions", "r".repeat(600));
+  const [big] = (await addons.catalog(root, { home })).filter((row) => row.name === "big-pick");
+  const settings = { agentSkills: { companion: [big.id] }, skillUse: { skills: { "house-rules": { chat: "always" } } } };
+  const prompt = await addons.instructions(root, settings, "companion", { home });
+  const names = await addons.alwaysNames(root, settings, "companion", { home });
+  assert.ok(names.includes("big-pick"));
+  for (const name of ["house-rules", "eli5"]) assert.equal(names.includes(name), prompt.includes(`Skill: ${name}\n`), `${name}: named on exactly when it is sent`);
+}));

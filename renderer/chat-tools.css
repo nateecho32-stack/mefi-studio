@@ -12,7 +12,7 @@
 .chat-tools-section { display: grid; gap: 6px; min-width: 0; }
 .chat-tools-h { margin: 0 2px 2px; font: 600 12px/1.2 var(--font-ui); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .chat-tools-styles { display: grid; gap: 4px; }
-.chat-tools-style { display: grid; gap: 2px; width: 100%; padding: 8px 10px 8px 30px; position: relative; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--ivory); font: inherit; text-align: left; cursor: pointer; }
+.chat-tools-style { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; justify-items: start; align-items: start; gap: 2px; width: 100%; min-height: 0; height: auto; padding: 8px 10px 8px 30px; position: relative; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--ivory); font: inherit; text-align: left; white-space: normal; cursor: pointer; }
 .chat-tools-style::before { content: ""; position: absolute; left: 10px; top: 11px; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
 .chat-tools-style[aria-checked="true"] { border-color: color-mix(in srgb, var(--gold) 45%, transparent); background: color-mix(in srgb, var(--gold) 9%, transparent); }
 .chat-tools-style[aria-checked="true"]::before { border-color: var(--gold); background: radial-gradient(circle, var(--gold) 0 3.5px, transparent 4px); }

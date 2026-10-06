@@ -44,7 +44,10 @@ const LIMITS = Object.freeze({
   loadChars: 16000,
   overrides: 300,
 });
-const NAME = /^[a-z0-9][a-z0-9-]{0,63}$/;
+// A skill's name as Studio lists it and keeps choices for it: the folder's name, letters, numbers, dots, dashes and
+// underscores (another tool's `pdf_tools` too). Calling one with /name still takes the lowercase-and-dash names.
+const NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+const validName = (name) => typeof name === "string" && NAME.test(name) && !["__proto__", "constructor", "prototype"].includes(name);
 const PLACE_WORDS = Object.freeze({ chat: "the chat", agents: "Studio's helper agents", builders: "the builders" });
 const USE_WORDS = Object.freeze({ always: "Always on", auto: "When it fits", call: "Only when called" });
 
@@ -60,7 +63,7 @@ function normalize(value) {
   if (record(value.auto)) for (const place of PLACES) if (typeof value.auto[place] === "boolean") out.auto[place] = value.auto[place];
   if (record(value.skills)) {
     for (const [name, uses] of Object.entries(value.skills).slice(0, LIMITS.overrides)) {
-      if (!NAME.test(name) || !record(uses)) continue;
+      if (!validName(name) || !record(uses)) continue;
       const kept = {};
       for (const place of PLACES) if (USES.includes(uses[place])) kept[place] = uses[place];
       if (Object.keys(kept).length) out.skills[name] = kept;
@@ -82,7 +85,7 @@ function validate(value) {
     const entries = Object.entries(value.skills);
     if (entries.length > LIMITS.overrides) return `Studio keeps choices for up to ${LIMITS.overrides} skills.`;
     for (const [name, uses] of entries) {
-      if (!NAME.test(name)) return "A skill's name is lowercase letters, numbers and dashes.";
+      if (!validName(name)) return "A skill's name is letters, numbers, dots, dashes and underscores.";
       if (!record(uses)) return "Invalid skill settings.";
       for (const [place, use] of Object.entries(uses)) if (!PLACES.includes(place) || !USES.includes(use)) return "Choose always, when it fits or only when called, for the chat, agents or builders.";
     }
@@ -104,7 +107,7 @@ function defaultUse(skill, place) {
  */
 function useOf(value, skill, place) {
   const policy = value?.skills && value?.auto ? value : normalize(value);
-  const chosen = policy.skills[skill?.name]?.[place] ?? defaultUse(skill, place);
+  const chosen = (Object.hasOwn(policy.skills, skill?.name ?? "") ? policy.skills[skill.name][place] : undefined) ?? defaultUse(skill, place);
   if (chosen === "auto" && (policy.auto[place] === false || tooBig(skill))) return "call";
   return chosen;
 }
@@ -176,7 +179,7 @@ function catalogLine(auto) {
 /** A new settings.skillUse with one skill's use in one place changed ("default" forgets the choice). */
 function setUse(value, { name, place, use }) {
   const policy = normalize(value);
-  if (!NAME.test(String(name ?? "")) || !PLACES.includes(place)) return policy;
+  if (!validName(String(name ?? "")) || !PLACES.includes(place)) return policy;
   const current = { ...(policy.skills[name] ?? {}) };
   if (use === "default") delete current[place];
   else if (USES.includes(use)) current[place] = use;
@@ -229,10 +232,10 @@ function summary(value, catalog) {
     if (!skill?.name || seen.has(skill.name)) continue;
     seen.add(skill.name);
     const uses = {}, chosen = {};
-    for (const place of PLACES) { uses[place] = useOf(policy, skill, place); chosen[place] = policy.skills[skill.name]?.[place] ?? null; }
+    for (const place of PLACES) { uses[place] = useOf(policy, skill, place); chosen[place] = (Object.hasOwn(policy.skills, skill.name) ? policy.skills[skill.name][place] : undefined) ?? null; }
     rows.push({ name: skill.name, uses, chosen, defaults: Object.fromEntries(PLACES.map((place) => [place, defaultUse(skill, place)])) });
   }
   return { auto: { ...policy.auto }, rows };
 }
 
-module.exports = { PLACES, USES, DEFAULT_STYLE, ROLE_PLACES, LIMITS, PLACE_WORDS, USE_WORDS, placeOf, normalize, validate, defaultUse, useOf, plan, fitAlways, alwaysBlock, catalogLine, setUse, setAuto, setStyle, chatStyles, summary };
+module.exports = { PLACES, USES, DEFAULT_STYLE, ROLE_PLACES, LIMITS, PLACE_WORDS, USE_WORDS, NAME, validName, placeOf, normalize, validate, defaultUse, useOf, plan, fitAlways, alwaysBlock, catalogLine, setUse, setAuto, setStyle, chatStyles, summary };

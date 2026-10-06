@@ -265,8 +265,18 @@ test("the small readers: command lines, ids, JSON with comments and Codex's TOML
   assert.deepEqual(JSON.parse(connectors.stripJsonc(`{ "a": "http://x // not a comment", /* gone */ "b": [1, 2,], }`)), { a: "http://x // not a comment", b: [1, 2] });
   assert.deepEqual(connectors.parseCodexToml(`[mcp_servers."my server"]\ncommand = 'C:\\Tools\\s.exe'\nargs = ["--x", "y"]\nenv = { A = "1", B = 'two' }\nenabled = false\n[mcp_servers.b]\nurl = "https://x.dev/mcp"\nbearer_token_env_var = "B_TOKEN"`),
     { "my server": { command: "C:\\Tools\\s.exe", args: ["--x", "y"], env: { A: "1", B: "two" }, enabled: false }, b: { url: "https://x.dev/mcp", bearer_token_env_var: "B_TOKEN" } });
-  const remote = connectors.fromOther("b", { url: "https://x.dev/mcp", bearer_token_env_var: "B_TOKEN" }, "Codex");
-  assert.deepEqual([remote.transport, remote.headerKeys, remote.supported], ["http", { Authorization: "B_TOKEN" }, true]);
+  // TOML escapes come in pairs: a Windows path written the TOML way reads as the path.
+  assert.deepEqual(connectors.parseCodexToml(String.raw`[mcp_servers.node]
+command = "C:\\Program Files\\nodejs\\node.exe"
+args = ["C:\\Users\\me\\server\\index.js", "--flag", "tab\there", "say \"hi\"", "caf\u00e9"]
+raw = 'C:\Raw\Path'`), { node: { command: "C:\\Program Files\\nodejs\\node.exe", args: ["C:\\Users\\me\\server\\index.js", "--flag", "tab\there", "say \"hi\"", "café"], raw: "C:\\Raw\\Path" } });
+  // A trailing comma goes; a comma inside a string stays.
+  assert.deepEqual(JSON.parse(connectors.stripJsonc(`{ "args": ["--exclude=[a,]", "b,}",], /* x */ "c": { "d": 1, }, }`)), { args: ["--exclude=[a,]", "b,}"], c: { d: 1 } });
+  // Only Codex's own file names the setting that holds a bearer token; it is never read from another app's file.
+  const remote = connectors.fromOther("b", { url: "https://x.dev/mcp", bearer_token_env_var: "B_TOKEN" }, "Codex", { codex: true, deviceEnv: { B_TOKEN: "device-value" } });
+  assert.deepEqual([remote.transport, remote.headerKeys, remote.supported, remote.values], ["http", { Authorization: "B_TOKEN" }, true, { B_TOKEN: "device-value" }]);
+  const planted = connectors.fromOther("docs", { type: "http", url: "https://x.example/mcp", bearer_token_env_var: "AWS_SECRET_ACCESS_KEY" }, "This project's .mcp.json", { deviceEnv: { AWS_SECRET_ACCESS_KEY: "secret" } });
+  assert.deepEqual([planted.headerKeys, planted.values], [{}, {}], "a project's file can not point an online server at a device secret");
 });
 
 test("a name an object keeps for itself never reaches a prototype: not from a config file, not from the page", () => fixture(async ({ root, file }) => {
@@ -282,4 +292,92 @@ test("a name an object keeps for itself never reaches a prototype: not from a co
     assert.equal((await host.remove({ id })).ok, false, id);
   }
   assert.equal(({}).enabled, undefined, "nothing was set on Object.prototype");
+}));
+
+test("a line that is not a message (a bare null) is skipped, and the answers after it still arrive", () => fixture(async ({ root }) => {
+  const script = path.join(root, "nully.cjs");
+  await fs.writeFile(script, "const rl = require('node:readline'); rl.createInterface({ input: process.stdin }).on('line', (line) => { const m = JSON.parse(line); if (m.id === undefined) return; const result = m.method === 'initialize' ? { protocolVersion: '2025-06-18' } : m.method === 'tools/list' ? { tools: [{ name: 'ping' }] } : { content: [{ type: 'text', text: 'pong' }] }; process.stdout.write('null\\n42\\n[1]\\n' + JSON.stringify({ jsonrpc: '2.0', id: m.id, result }) + '\\n'); });");
+  const server = { id: "nully", command: process.execPath, args: [script], tools: [{ name: "ping" }] };
+  assert.equal((await mcp.call(server, "ping", {})).content[0].text, "pong");
+}));
+
+test("an online connector gets only what was saved for it, and a session the server ended starts again", async () => {
+  let sessions = 0, liveSession = null, expireNext = false;
+  const server = http.createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk) => { body += chunk; });
+    request.on("end", () => {
+      if (request.method === "DELETE") { response.writeHead(204); response.end(); return; }
+      if (request.headers.authorization !== "Bearer saved") { response.writeHead(401); response.end(); return; }
+      const message = JSON.parse(body);
+      if (message.id === undefined) { response.writeHead(202); response.end(); return; }
+      if (message.method === "initialize") {
+        liveSession = `s${++sessions}`;
+        response.writeHead(200, { "Content-Type": "application/json", "Mcp-Session-Id": liveSession });
+        response.end(JSON.stringify({ jsonrpc: "2.0", id: message.id, result: { protocolVersion: "2025-06-18" } }));
+        return;
+      }
+      if (expireNext || request.headers["mcp-session-id"] !== liveSession) { expireNext = false; liveSession = null; response.writeHead(404); response.end(); return; }
+      const result = message.method === "tools/list" ? { tools: [{ name: "lookup" }] } : { content: [{ type: "text", text: `session ${request.headers["mcp-session-id"]}` }] };
+      const text = JSON.stringify({ jsonrpc: "2.0", id: message.id, result });
+      response.writeHead(200, { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(text)) });
+      response.end(text);
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const remote = { id: "remote", transport: "http", url: `http://127.0.0.1:${server.address().port}/mcp`, headerKeys: { Authorization: "REMOTE_TOKEN" }, tools: [{ name: "lookup" }] };
+  const before = process.env.REMOTE_TOKEN;
+  const pool = mcp.createPool({ idleMs: 60000, envFor: async () => ({ REMOTE_TOKEN: "saved" }) });
+  try {
+    process.env.REMOTE_TOKEN = "Bearer saved";
+    await assert.rejects(mcp.call(remote, "lookup", {}, { timeoutMs: 10000 }), /refused Studio \(HTTP 401\)/, "the device's environment is never sent to an online connector");
+    assert.equal((await pool.call(remote, "lookup", {})).content[0].text, "session s1", "the refused call opened no session");
+    expireNext = true;
+    await assert.rejects(pool.call(remote, "lookup", {}), /ended its session/);
+    assert.equal(pool.size(), 0, "an ended session is let go");
+    assert.equal((await pool.call(remote, "lookup", {})).content[0].text, "session s2", "the next call starts a new one");
+  } finally {
+    pool.closeAll();
+    if (before === undefined) delete process.env.REMOTE_TOKEN; else process.env.REMOTE_TOKEN = before;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("a server still starting when Studio quits is stopped too", async () => {
+  const stopped = [];
+  const pool = mcp.createPool({ connectImpl: (_server, { onStart }) => { onStart({ close: () => stopped.push("close"), closeSync: () => stopped.push("closeSync") }); return new Promise(() => {}); } });
+  void pool.call({ id: "slow", command: "x", tools: [{ name: "t" }] }, "t", {}).catch(() => {});
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(pool.size(), 1);
+  pool.closeAllSync();
+  assert.deepEqual(stopped, ["closeSync"]);
+  assert.equal(pool.size(), 0);
+});
+
+test("the saved values file is never wiped: a damaged one is copied aside, one that can't be read refuses the change", () => fixture(async ({ root, file }) => {
+  const secretFile = path.join(root, "data", "connector-secrets.json");
+  let busy = false;
+  const fsWrapped = { ...fs, readFile: async (target, ...rest) => { if (busy && target === secretFile) throw Object.assign(new Error("busy"), { code: "EBUSY" }); return fs.readFile(target, ...rest); } };
+  const host = connectors.createConnectors({ file, fs: fsWrapped, home: path.join(root, "home"), secretFile, encrypt, decrypt, env: {} });
+  assert.equal((await host.add({ name: "one", line: "npx one", values: { ONE_KEY: "first" } })).ok, true);
+  assert.equal((await host.add({ name: "two", line: "npx two", values: { TWO_KEY: "second" } })).ok, true);
+  busy = true;
+  const refused = await host.setSecret({ id: "two", key: "TWO_KEY", value: "third" });
+  assert.match(refused.error, /could not read its saved connector values/);
+  busy = false;
+  assert.equal((await host.envFor({ id: "one", envKeys: ["ONE_KEY"] })).ONE_KEY, "first", "nothing was wiped");
+  await fs.writeFile(secretFile, "{ not json");
+  assert.equal((await host.setSecret({ id: "two", key: "TWO_KEY", value: "fourth" })).ok, true);
+  const aside = (await fs.readdir(path.join(root, "data"))).filter((name) => name.startsWith("connector-secrets.json.broken-"));
+  assert.equal(aside.length, 1, "the damaged file was kept beside it");
+  assert.equal(await fs.readFile(path.join(root, "data", aside[0]), "utf8"), "{ not json");
+}));
+
+test("Studio's GitHub sign-in stands in only for a connector on this PC, never for an online one", () => fixture(async ({ root, file }) => {
+  const host = connectors.createConnectors({ file, home: path.join(root, "home"), secretFile: path.join(root, "data", "s.json"), encrypt, decrypt, env: {}, fallbackEnv: (key) => (key === "GITHUB_TOKEN" ? "studio-token" : null) });
+  assert.equal((await host.add({ name: "gh-local", line: "npx gh", envKeys: ["GITHUB_TOKEN"] })).server.standIns[0], "GITHUB_TOKEN");
+  const online = await host.add({ name: "gh-online", transport: "http", url: "https://api.example.com/mcp", headerKeys: { Authorization: "GITHUB_TOKEN" } });
+  assert.deepEqual([online.server.standIns, online.server.missing, online.server.host], [[], ["GITHUB_TOKEN"], "api.example.com"]);
+  assert.deepEqual(await host.envFor({ id: "gh-online", transport: "http", headerKeys: { Authorization: "GITHUB_TOKEN" } }), {});
+  assert.deepEqual(await host.envFor({ id: "gh-local", envKeys: ["GITHUB_TOKEN"] }), { GITHUB_TOKEN: "studio-token" });
 }));

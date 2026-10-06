@@ -96,7 +96,7 @@ test("choosing a style, plain answers, the skills switch and a connector send ex
   assert.equal(github.disabled, false);
   github.checked = true; await github.trigger("change"); await settle();
   assert.deepEqual(t.calls.find(([name]) => name === "connectorsUpdate")[1], { id: "github", places: ["builders", "chat"] });
-  assert.equal(root.querySelectorAll(".chat-tools-switch")[2].disabled, false, "a connector waiting for approval still shows, its switch leads nowhere harmful");
+  assert.equal(root.querySelectorAll(".chat-tools-switch")[2].disabled, true, "a connector waiting for approval is approved in Connectors first");
   // The links go where they say.
   await root.querySelectorAll(".chat-tools-link").find((link) => link.textContent === "Connectors").click();
   assert.deepEqual(plain(t.nav.at(-1)), ["agents", { place: "connectors" }]);
