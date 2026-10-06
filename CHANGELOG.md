@@ -30,6 +30,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   other models now and then" on and models picked automatically, Studio starts
   such a trial itself (one at a time, Sonnet on your Claude login first) and
   says so in the feed. Team setting: `agentKinds`.
+- **Team › Seats and models is simpler.** It opens on who does what in plain
+  words, six choices for how Studio decides (pick models, how hard to think,
+  what a stuck job does, asking before Max, trying other models, subscriptions
+  first), one line per job with its model, what it is good for, its thinking
+  and its results on this PC, the report card, and the steps a stuck job
+  climbs. The how-to sits in small "i" circles, and the detailed cards wait
+  under More settings. Team › Providers starts with "Use one provider for
+  everything" and your subscription logins.
 - **Chrome's buttons no longer look struck through.** The metal on main
   buttons and chosen tabs had a hard dark line at half height, right behind
   the words. Its horizon is now a soft band below them, and the darkest part

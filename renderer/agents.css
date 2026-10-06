@@ -53,6 +53,9 @@
 .agents-save-bar > button { min-height: 32px; padding-block: 6px; }
 .agents-save-bar p { margin: 0; flex: 1; font-size: var(--fs-sm); color: var(--muted); }
 .agents-save-bar [data-tone=bad] { color: var(--bad); }
+/* In the 0.5 layout Apply changes lights up only while the draft holds edits (renderer/agents.js sets data-dirty);
+   with nothing to apply it rests as a quiet button, still pressable. */
+#agents-overlay[data-places="v2"] .agents-save-bar:not([data-dirty="true"]) > .primary { background: transparent; border-color: var(--hairline); color: var(--muted); box-shadow: none; text-shadow: none; filter: none; font-weight: 500; }
 .agents-card .studio-field strong { display: block; font-weight: 500; }
 .agents-card .studio-field small { display: block; margin-top: 3px; }
 .agents-card .studio-field input:not([type=checkbox]) { width: 100%; min-width: 0; }
