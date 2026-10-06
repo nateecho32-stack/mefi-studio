@@ -697,8 +697,8 @@ app.whenReady().then(async () => {
   await sleep(300);
   const vibe = await strip();
   assert.ok(vibe.strip.y >= -0.5 && vibe.strip.b <= vibe.usable.top + 0.5, "Vibe: the strip is at the top of the window, over the page");
-  assert.equal(await run("return window.MefiNav.get('workspace').short;"), "Vibe", "in Vibe the nav calls Home by its own name");
-  assert.deepEqual(vibe.items.filter((item) => item.home).map((item) => item.title), [await run("return window.MefiToday ? 'Today' : 'Vibe';")], "and the first tab says the same, until the Today board (where it is in the window) gives it its name");
+  assert.equal(await run("return window.MefiNav.get('workspace').short;"), "Social", "in Social the nav calls Home by its own name");
+  assert.deepEqual(vibe.items.filter((item) => item.home).map((item) => item.title), [await run("return window.MefiToday ? 'Today' : 'Social';")], "and the first tab says the same, until the Today board (where it is in the window) gives it its name");
   await capture("tabs-vibe.png");
   await run("await window.MefiNav.go('workspace');");
   await setup("build"); await home();

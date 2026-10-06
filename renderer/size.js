@@ -348,7 +348,7 @@
       h("div", "sm-itabs", null, h("span", "", { text: "Plan" }), h("span", "sm-on", null, "Changes ", h("em", "", { text: "3" })), h("span", "", { text: "Checks" })),
       h("div", "sm-ipad", null, files, h("div", "sm-card", null, h("div", "sm-card-title", null, "Acceptance checks", h("small", "", { text: "1 of 5" })), h("p", "", { text: "Renders when there are no notes" }))));
     const main = h("div", "sm-main", null,
-      h("div", "sm-top", null, h("span", "sm-seg", null, h("span", "", { text: "Vibe" }), h("span", "sm-on", { text: "Build" })), h("span", "", null, "Notes app / ", h("b", "", { text: SAMPLE.title }))),
+      h("div", "sm-top", null, h("span", "sm-seg", null, h("span", "", { text: "Social" }), h("span", "sm-on", { text: "Studio" })), h("span", "", null, "Notes app / ", h("b", "", { text: SAMPLE.title }))),
       h("div", "sm-tabs", null,
         h("span", "sm-tab sm-pin", null, h("span", "", { text: "Today" })),
         h("span", "sm-tab sm-on", null, h("span", "sm-dot sm-need"), h("span", "", { text: SAMPLE.title })),
@@ -521,7 +521,7 @@
   function modeName() {
     let mode = null;
     try { mode = window.MefiShell?.mode?.() ?? window.MefiVibe?.mode?.() ?? null; } catch { /* no mode to name */ }
-    return mode === "vibe" ? "Vibe" : mode === "build" ? "Build" : "";
+    return mode === "vibe" ? "Social" : mode === "build" ? "Studio" : "";
   }
   // The panels' sizes as the window has them, read-only: MefiShell knows them when it is there.
   function panelSizes() {

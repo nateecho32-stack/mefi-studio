@@ -152,9 +152,9 @@ test("Search and Shortcuts name Home as Vibe in Vibe mode and list it once", () 
   const palette = loaded.nav.list({ showIn: "palette" }).map((dest) => dest.id);
   assert.equal(palette.includes("vibe"), false, "no second entry for the same place");
   const home = loaded.nav.get("workspace");
-  assert.equal(home.label, "Vibe");
+  assert.equal(home.label, "Social");
   assert.equal(home.key, "H");
-  assert.match(home.desc, /calm front door/);
+  assert.match(home.desc, /light eye on your agents/);
   const build = load({ mode: "build", view: "workspace" });
   assert.equal(build.nav.get("workspace").label, "Home", "Build keeps its Home");
   assert.equal(build.nav.list({ showIn: "palette" }).some((dest) => dest.id === "workspace"), true);

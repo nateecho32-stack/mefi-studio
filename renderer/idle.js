@@ -6298,7 +6298,7 @@
     if (!["auto", "verify"].includes(value)) return false;
     state.buildModeSaving = true;
     try {
-      const result = await autopilotPrefs({ autoBuild: value === "auto" }, "Build mode");
+      const result = await autopilotPrefs({ autoBuild: value === "auto" }, "Build approval");
       if (!result && window.mefiStudio?.assistantStatus) {
         // A lost acknowledgement may still have saved the mode. Read it back;
         // a newer status push takes precedence over this recovery snapshot.
@@ -6307,7 +6307,7 @@
         try {
           const fresh = await Promise.race([
             window.mefiStudio.assistantStatus(),
-            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Build mode status is unavailable.")), 12000); }),
+            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error("Build approval status is unavailable.")), 12000); }),
           ]);
           const status = fresh?.status ?? fresh;
           if (fresh?.ok !== false && typeof status?.autoBuild === "boolean" && state.assistant === previous) {

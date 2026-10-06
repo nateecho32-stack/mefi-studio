@@ -255,17 +255,17 @@
      go the same way, and each opens a compact panel beside the front door
      (renderer/vibe-panels.js) instead of a Build sheet. The Build view
      (everything above and below) is one switch away. -->
-<section id="vibe-layer" class="vibe" aria-label="Vibe" hidden tabindex="-1">
+<section id="vibe-layer" class="vibe" aria-label="Social" hidden tabindex="-1">
   <div class="vibe-sky" aria-hidden="true"><i class="vibe-aurora one"></i><i class="vibe-aurora two"></i><i class="vibe-aurora three"></i></div>
   <header class="vibe-top">
     <div class="vibe-top-left">
       <button id="vibe-project" class="vibe-project" type="button" title="Switch project" aria-controls="workspace-sidebar-panel"><span class="vibe-project-mark" aria-hidden="true">M+</span><span class="vibe-project-text"><small>Project</small><b id="vibe-project-name">Choose a project</b></span><svg class="glyph vibe-chev" aria-hidden="true"><use href="#g-chev"/></svg></button>
       <button id="vibe-new-app" class="vibe-icon" type="button" data-vibe-panel="newapp" title="Start a new app from a prompt" aria-label="Start a new app"><svg class="glyph" aria-hidden="true"><use href="#g-add"/></svg></button>
     </div>
-    <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe">
+    <div class="mode-switch" role="radiogroup" aria-label="Mode" data-mode="vibe">
       <i class="mode-thumb" aria-hidden="true"></i>
-      <button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
-      <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+      <button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Social: friends, and a light eye on your agents"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
+      <button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
     </div>
     <div class="vibe-top-actions">
       <button id="vibe-update" class="vibe-pulse vibe-update" type="button" data-tone="ask" title="An update is ready" hidden><svg class="glyph" aria-hidden="true"><use href="#g-update"/></svg><span id="vibe-update-text">Update ready</span></button>
@@ -357,7 +357,7 @@
        beside the front door (renderer/vibe-panels.js). Full view opens the
        Build page for the same thing inside Vibe's rail. -->
   <aside id="vibe-panel" class="vibe-chat vibe-panel" aria-labelledby="vibe-panel-title" hidden>
-    <header class="vibe-chat-head"><div class="vibe-panel-heading"><button id="vibe-panel-back" class="vibe-icon vibe-panel-back" type="button" aria-label="Back" title="Back (Esc)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-back"/></svg></button><div><small id="vibe-panel-kicker">Vibe</small><h2 id="vibe-panel-title">Tasks</h2></div></div><button id="vibe-panel-close" class="vibe-icon" type="button" aria-label="Close the panel" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
+    <header class="vibe-chat-head"><div class="vibe-panel-heading"><button id="vibe-panel-back" class="vibe-icon vibe-panel-back" type="button" aria-label="Back" title="Back (Esc)" hidden><svg class="glyph" aria-hidden="true"><use href="#g-back"/></svg></button><div><small id="vibe-panel-kicker">Social</small><h2 id="vibe-panel-title">Tasks</h2></div></div><button id="vibe-panel-close" class="vibe-icon" type="button" aria-label="Close the panel" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
     <div id="vibe-panel-body" class="vibe-panel-body"></div>
     <footer class="vibe-ask-foot vibe-panel-foot"><span id="vibe-panel-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-panel-full" class="vibe-ask-link" type="button">Full view <span aria-hidden="true">↗</span></button></footer>
   </aside>
@@ -367,8 +367,8 @@
      and the rest, so leaving the front door never lands in the Build view; the
      spark at the top goes back to Vibe and only the switch at the foot leaves
      the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
-<nav id="vibe-rail" class="vibe-rail" aria-label="Vibe" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Vibe (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button>
+<nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Social (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
   <div class="vibe-rail-items">
     <button type="button" data-nav="command" data-vibe-section="agents" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
     <button type="button" data-nav="tasks" data-vibe-section="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
@@ -380,7 +380,7 @@
   </div>
   <div class="vibe-rail-foot">
     <button type="button" data-nav="studio" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
-    <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button>
+    <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
   </div>
 </nav>
 <!-- Today and the Inbox (layout v2; renderer/today.js registers both routes only then). Vibe's Home draws the same board
@@ -436,18 +436,18 @@
 <div id="vibe-notes" class="vibe-notes" hidden>
   <div class="vibe-notes-card" role="dialog" aria-modal="true" aria-labelledby="vibe-notes-title" aria-describedby="vibe-notes-lede">
     <header class="vibe-notes-head"><span class="vibe-notes-tag"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg>What's new</span><button id="vibe-notes-close" class="vibe-icon" type="button" aria-label="Close what's new" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
-    <h2 id="vibe-notes-title">Two ways to work: Vibe and Build</h2>
-    <p id="vibe-notes-lede" class="vibe-notes-lede">Studio now opens in <b>Vibe</b>, a calmer front door. Everything you already use lives in <b>Build</b>, one click away.</p>
+    <h2 id="vibe-notes-title">Two ways to work: Social and Studio</h2>
+    <p id="vibe-notes-lede" class="vibe-notes-lede">Mefi Studio opens in <b>Social</b>: friends, and a light eye on your agents. In-depth building lives in <b>Studio</b>, one click away.</p>
     <div class="vibe-notes-modes">
-      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Vibe</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
-      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Build</b><span>The full studio: Command, boards, models and every setting.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Social</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Studio</b><span>In-depth building: Command, boards, models and every setting.</span></figcaption></figure>
     </div>
     <ul class="vibe-notes-list">
-      <li>Switch any time with the <b>Vibe / Build</b> toggle at the top, or from the menu and Search.</li>
+      <li>Switch any time with the <b>Social / Studio</b> switch at the top, or from the menu and Search.</li>
       <li>One box: <b>Talk it over</b> with Mefi, or <b>Build it</b> as a task.</li>
       <li>Building now, Needs you and Freshly done share one screen.</li>
     </ul>
-    <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Build</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Vibe</button></footer>
+    <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Studio</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Social</button></footer>
   </div>
 </div>
 <!-- What's new (renderer/whats-new.js): opens from the toast after an update, from Settings › Updates or from Search; never by itself at launch. -->
@@ -708,7 +708,7 @@
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
-            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Vibe, even if you closed Studio in Build. Off: Studio keeps the mode you closed it in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Vibe</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch keeps the mode you closed in."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
@@ -727,8 +727,8 @@
           <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
-            <span class="settings-mode-text"><b>Studio mode</b><span id="settings-mode-hint">Vibe is the calm front door. Build is the full studio.</span></span>
-            <div class="mode-switch" role="radiogroup" aria-label="Studio mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Vibe: the calm front door"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Vibe</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Build: the full studio"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Build</span></button></div>
+            <span class="settings-mode-text"><b>Mode</b><span id="settings-mode-hint">Social is for friends and a light eye on your agents. Studio is for in-depth building.</span></span>
+            <div class="mode-switch" role="radiogroup" aria-label="Mode" data-mode="vibe" data-mode-stay><i class="mode-thumb" aria-hidden="true"></i><button type="button" role="radio" data-ui-mode="vibe" aria-checked="true" title="Social: friends, and a light eye on your agents"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button><button type="button" role="radio" data-ui-mode="build" aria-checked="false" title="Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button></div>
           </div>
         </details>
 <details class="settings-optional settings-card" id="settings-notifications" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-bell"/></svg></span><span class="settings-summary-text"><b>Notifications</b><span>Windows alerts, taskbar flash and count, quiet hours</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>

@@ -1631,7 +1631,7 @@
     });
     nav.register({
       id: "home-chat", label: "Open the conversation", short: "Conversation", kind: "action", layer: null, section: "home", group: "surfaces", key: null, glyph: "g-chat", badge: null,
-      paletteGroup: "Actions", desc: "Build's Home as it was: the conversation with Mefi, the queue, Activity and the app preview",
+      paletteGroup: "Actions", desc: "Studio's Home as it was: the conversation with Mefi, the queue, Activity and the app preview",
       searchTerms: "conversation chat talk message assistant mefi classic home queue activity preview",
       showIn: showIn({ palette: true, help: true }), hidden: () => !building(), keyMatch: () => false,
       run: () => { openChat(); },

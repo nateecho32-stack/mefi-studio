@@ -406,7 +406,7 @@ test("the panels table is read-only and comes from MefiShell when it is there, a
   env.size.close(); env.size.open({ focus: false });
   const table = () => env.at("panels").querySelectorAll("dt, dd").map((node) => node.textContent);
   assert.deepEqual(table(), ["List", "300 px", "Inspector", "420 px", "Tab strip", "38 px", "Status bar", "28 px", "Rail", "256 px"]);
-  assert.equal(env.at("panels").parentNode.querySelector("small").textContent, "in Vibe");
+  assert.equal(env.at("panels").parentNode.querySelector("small").textContent, "in Social");
   sizes.list = 0; sizes.tabs = 0;
   env.window.dispatchEvent({ type: "mefi:shell-layout" });
   assert.deepEqual(table().slice(0, 6), ["List", "closed", "Inspector", "420 px", "Tab strip", "off"], "it follows the shell while the page is open");

@@ -230,10 +230,10 @@
     {
       // In Vibe mode Home is Vibe (go() lands there), so Search, Shortcuts
       // and the rail name it that instead of listing Home and Vibe twice.
-      id: "workspace", get label() { return vibeMode() ? "Vibe" : "Home"; }, get short() { return vibeMode() ? "Vibe" : "Home"; }, kind: "view", layer: null,
+      id: "workspace", get label() { return vibeMode() ? "Social" : "Home"; }, get short() { return vibeMode() ? "Social" : "Home"; }, kind: "view", layer: null,
       commandPrimary: true, section: "home",
       group: "surfaces", key: "H", get glyph() { return vibeMode() ? "g-spark" : "g-home"; }, badge: null,
-      get desc() { return vibeMode() ? "The calm front door: talk or build from one box, see what's building and what needs you" : "Project overview, conversation and work queue"; },
+      get desc() { return vibeMode() ? "Friends, and a light eye on your agents: talk or build from one box, see what's building and what needs you" : "Project overview, conversation and work queue"; },
       searchTerms: "home vibe project folder conversation chat give task review done",
       showIn: showIn({ dock: true, palette: true, help: true, footer: true }),
       open: () => window.MefiWorkspace?.enter?.(), close: () => window.MefiWorkspace?.exit?.(),
@@ -1007,7 +1007,7 @@
     root?.classList.toggle("from-command", Boolean(state.returnTo));
     const back = root?.querySelector(".sheet-back");
     if (back) {
-      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Vibe" : "Command";
+      const label = state.returnTo === "workspace" ? "Home" : state.returnTo === "vibe" ? "Social" : "Command";
       back.title = `Back to ${label} (Esc)`;
       const copy = back.querySelector(".label");
       if (copy) copy.textContent = label;
@@ -3129,7 +3129,7 @@
       const wait = booting() ? 1500 : busy ? 5000 : KEY_HINT_QUIET_MS - (now - quietSince);
       if (wait > 0 && tries++ < 120) { setTimeout(attempt, wait); return; }
       try { localStorage.setItem(KEY_HINT_STORE, "1"); } catch { /* the tip may show again next launch */ }
-      const home = vibeMode() ? "Vibe" : "workspace";
+      const home = vibeMode() ? "Social" : "workspace";
       window.MefiToast(`Tip: outside a text field, single keys move around Studio. H ${home}, D Command view, T task board. Press ? for the full list.`, "info", {
         duration: 12000,
         action: { label: "Show keys", run: () => go("help") },

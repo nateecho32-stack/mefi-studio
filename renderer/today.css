@@ -109,7 +109,7 @@
    The greeting says which mode it is; the box is the words with one row of controls under them (Add files, the permission mode, then Talk
    it over and Build it with its key), the keys' line under the box; each card that waits on you is its session, with the question in a box
    of its own and the first two answers; every column says when it is empty. */
-#vibe-layer[data-today="on"] .today .vibe-kicker::after { content: " · Vibe"; }
+#vibe-layer[data-today="on"] .today .vibe-kicker::after { content: " · Social"; }
 /* The question in plain ink, as the prototype's (the front door's gradient lettering stays the front door's own, in v1). */
 #vibe-layer[data-today="on"] .today .vibe-hero h1 { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--t-ink); }
 #vibe-layer[data-today="on"] .today .vibe-compose { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 6px; padding: 14px 16px 12px; }

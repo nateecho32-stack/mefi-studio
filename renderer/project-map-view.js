@@ -182,7 +182,7 @@
         }
         ideaBranches.append(branch);
       }
-      if (!ideaBranches.children.length) ideaBranches.append(element("p", "pm-ideas-empty", words.length ? "No ideas or tasks match this search." : "Your first idea starts a branch. Ask Mefi in Vibe to modify, experiment, fix or improve something; saved ideas and tasks will grow here."));
+      if (!ideaBranches.children.length) ideaBranches.append(element("p", "pm-ideas-empty", words.length ? "No ideas or tasks match this search." : "Your first idea starts a branch. Ask Mefi in Social to modify, experiment, fix or improve something; saved ideas and tasks will grow here."));
       if (focusKey) [...ideaBranches.querySelectorAll("[data-idea-action]")].find(item => item.dataset.ideaAction === focusKey)?.focus({ preventScroll: true });
     }
 
