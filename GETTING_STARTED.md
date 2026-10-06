@@ -1,42 +1,241 @@
-# Your first project in Mefi's Studio AI+
+# Getting started with Mefi's Studio AI+
 
-For the new workspace, team presets and companion controls, see [Unified Studio](docs/unified-studio.md).
+Mefi's Studio AI+ (Studio, for short) is a Windows app that builds software
+with AI. You say what you want in plain words. An AI coding tool writes the
+code, Studio checks the work, and you decide whether to keep it.
 
-## First: the setup helper
+Start with **Your first ten minutes**. The rest is for later: where things
+are, what each launch does, and the [New machine checklist](#new-machine-checklist).
 
-On your first launch (and once after an update that adds to it) the **setup
-helper** opens before anything else. It is the one place for every setting
-that decides what your agents do: connecting an AI, the team and its models,
-routing and fallback, how work runs, permissions, per-agent tools and skills,
-this computer's limits, and the look. **Quick setup** takes three steps:
-connect an AI (a subscription you already have, such as Codex or Claude Code,
-an API key, or a local LM Studio), choose how much Mefi may decide for you,
-and finish. **Everything** walks every section. Changes save as you make
-them; **Save & close** or `Esc` leaves at any point. Reopen it from Search
-(`Ctrl K`, type *setup*) or Help, or jump to one part with *Setup helper ›
-Routing*.
+## Your first ten minutes
 
-When it closes, the walkthrough below takes over. If the helper already
-connected an AI, the walkthrough skips its scan and starts at Your workspace.
+### 1. Open Studio
+
+1. Download the Windows zip from the
+   [releases page](https://github.com/nateecho32-stack/mefi-studio/releases).
+2. Right-click it, choose **Extract All**, and keep the folder together.
+3. Open `Mefi Studio AI+.exe` in that folder.
+4. Windows SmartScreen may stop it the first time, because Studio is not
+   code-signed yet (signing tells Windows who made an app). Choose **More
+   info**, then **Run anyway**.
+
+Running from source? See [Get Studio running](#get-studio-running).
+
+### 2. Start a new app
+
+A **project** is a folder on your PC that holds one app. Studio opens on a
+launch screen, **The Studio Daily**, with a card that says **Choose a
+project**.
+
+- Press **Start a new app**. Name the app and, under **What do you want to
+  build?**, say what it should do in a sentence or two. Press **Start
+  project**.
+- Studio makes a folder under **Mefi Apps** in your home folder, starts
+  version history in it (Git, which remembers every change so it can be
+  undone) and opens it.
+- Already have a project folder? Press **Open a folder…**. On GitHub? **Get
+  from GitHub** downloads it and opens it.
+
+If something fails, a line on the card says why.
+
+### 3. Pick the AI that builds for you
+
+Studio has no AI of its own. It works through an AI coding tool you sign in to
+with your own account. A short welcome in three steps opens next. Step one,
+**Pick the AI that builds for you**, says which account each tool uses:
+**Claude Code** your Claude subscription, **Codex** your ChatGPT plan,
+**Grok** your Grok account, **Antigravity** your Google account. **OpenCode**
+has free models to start with. A subscription's work counts toward that
+plan's limits, as if you used the tool yourself. Studio adds no bill of its
+own, and your password stays in the company's own sign-in window.
+
+1. Press **Install and sign in** on the tool you pay for (**Sign in** if it is
+   already installed). A window opens: sign in there with your account.
+2. Come back to Studio. A tool you are signed in to says **✓ Ready**.
+3. Press **Continue**. Studio switches to that tool for chatting, planning and
+   building, and says so under the list.
+
+No subscription? Install **OpenCode** and press **Continue** to use its free
+models. They cost nothing, but they run one task at a time, and their makers
+may use what you send to improve them. Have an API key (a secret code from an
+AI company; you pay per use), a ChatGPT plan or an AI on your PC? Press
+**Other ways: an API key, a ChatGPT plan or a local model** and set it up
+there. Then give your first task in the box on Today.
+
+Without an AI, nothing can be built. If Studio later says **No AI connected**,
+open **Help › Setup guide** and go to **Connect an AI**. Signed in to a
+subscription? Press **Set up automatically**. Using OpenCode? Press **Start
+free with OpenCode**, then **Scan OpenCode** and **Use scanned setup**.
+
+### 4. Choose the project
+
+The second step, **Choose a project**, shows the folder Studio builds in. Your
+new app is already open (**✓ Open**). Press **Continue**. No project yet?
+Choose **Start a new app…** or **Open a folder…** here.
+
+### 5. Say what to make first
+
+The last step asks **What should Studio make first?** What you wrote for your
+new app is already in the box. If not, describe something small, the way you
+would tell a friend, or tap an example under **Or try one:**. Press **Build
+it**. Studio turns your words into a **task** (one job for the AI) and starts
+it. **Skip** (or `Esc`) closes the welcome at any step; **Help › Setup
+guide** has the same settings and more.
+
+### 6. Watch it work
+
+Your task shows on **Today**, Studio's home page, under **Running**. Press it
+to see what the AI does, step by step. `D` opens **the Map**, a live picture
+of your agents (the AI helpers) at work. The pause button in the top bar
+holds new work; running jobs still finish.
+
+If nothing starts, the line under the box on Today says what holds the agents
+back, with one button that fixes it:
+
+| The line says | Press |
+| --- | --- |
+| Agents are off | **Start agents** |
+| No AI connected | **Connect an AI** |
+| Agents paused | **Resume agents** |
+| *N* tasks need your OK | **Review tasks** |
+| No project open | **Open a project** |
+
+When the AI has a question or needs your OK, the top bar says **1 needs you**.
+Press it to open the **Inbox** (`Ctrl J`) and answer there.
+
+### 7. Check the result, then keep it or undo it
+
+When the work is done, the task moves to **Review** and Studio runs its own
+checks. Then it is your turn:
+
+1. Open the task and press **See the changes**. The **Changes** tab lists every
+   file the AI changed, line by line; **Checks** shows what was tested.
+2. Try the app yourself.
+3. Happy? Press **Approve and finish**, and the task moves to **Done**.
+   (**Accept changes**, on the Changes tab, only notes that you looked.)
+4. Not happy? **Revert**, beside a file, puts that one file back. **Revert
+   attempt** puts every file back and reopens the task: press it again when it
+   says **Revert all** and a number, and **Undo** brings the changes back.
+   **Request changes** says what to change; Studio makes a follow-up task.
+
+A task Studio checked by itself shows **Verified** under **Done**; you can
+still open it and look. That is the loop. Next, try **Talk it over** to chat
+about an idea first, or **Plans** for something bigger.
+
+## Where things are
+
+### Social and Studio
+
+Studio has two modes in one window. The **Social** | **Studio** switch at the
+top left (`Ctrl M`) flips between them; both show the same projects and tasks.
+
+- **Social**, the calm mode, is where Studio opens. **Today** has the box, then
+  your tasks under **Needs you**, **Running**, **Review** and **Done**.
+- **Studio**, the in-depth mode, lists every task on the left under **Needs
+  you**, **Running**, **Review**, **Queued** and **Done**, with **New task**
+  (`Ctrl N`) on top. The task you pick fills the middle; the **inspector** on
+  the right shows its **Plan**, **Changes**, **Checks**, **Preview** and
+  **Agent**.
+
+In the box, **Build it** (`Ctrl Enter`) makes a task and starts it; **Talk it
+over** (`Enter`) chats with **Mefi**, Studio's assistant. **Modify**,
+**Experiment**, **Fix** and **Improve** start the sentence for you, and
+**Suggest a next step** asks Mefi for ideas. An open task has its own box for
+a **Note** to its next run, an **Ask** about it, or a **Change**.
+
+### The menu on the left
+
+| Place | What it is for |
+| --- | --- |
+| **Today** | Home: the box and your tasks. `H` |
+| **Tasks** | The task board, with **All**, **Open**, **Review** and **Done** filters. `T` |
+| **Plans** | Think a bigger idea through. Studio asks questions and writes a plan; once you approve it, you choose when to make its tasks. `P` |
+| **Ideas** | Ideas the agents noticed. Nothing is built until you make one a task. `I` |
+| **Map** | Your agents at work, live. **Live work**, on its right, lists what runs and what waits. `D` |
+| **Team** | Who does the work, which AI each part uses (**Providers** holds your AI connections), and how much it may decide alone (**Permissions**). |
+| **Friends** | Optional: **The Lobby**, **Rooms**, **Your PCs**, **Playground**, **Project hub** and **Events**. |
+| **Search** | Find any page, setting, task or action by typing a few words. `Ctrl K` |
+| **Settings** | Your name and startup (**General**), notifications, look (**Size and density** for bigger text), sound, updates and **Other apps**. `Ctrl ,` |
+| **Help** | **Start here** (a guided tour in seven stops), **Setup guide** (every agent setting; **Quick setup** takes about two minutes), **Shortcuts** (`?`), **What's new**, **Report a problem** and the **Void Engine Discord**. |
+
+Social lists these one by one and hides the menu on Today itself (from there,
+use Search, a key, or the **+** beside the tabs). Studio groups them: **Work**
+(Today, with Tasks, Plans, Ideas, Inbox, Analyzer and Worktrees as its
+pages), **Map**, **Team** and **Friends**, with Settings and Help at the foot
+and Search in the top bar. Each place lists its own pages when you open it.
+
+The **top bar** holds **Search or run a command**, **All clear** or how many
+things need you (it opens the **Inbox**: questions, permissions, approvals,
+results to check and tasks that stopped), and the agents with their pause
+button. The **status bar** at the bottom has **Layout**, your AI usage, this
+PC's CPU and memory (it opens **Team › Resources**) and the permission mode.
+
+### Permission modes
+
+The permission mode is how much Studio may do without asking you. Change it
+with the chip in the box (it reads **Auto** at first), at the right end of the
+status bar, or in **Team › Permissions**.
+
+| Mode | What happens to a new task |
+| --- | --- |
+| **Always ask** | Every new task, yours too, waits for your OK. |
+| **Accept per task** | You OK each new task once. Then Mefi handles its ordinary questions. |
+| **Auto** (the default) | Tasks start on their own, the agents' proposals too. Mefi answers what it is sure about. |
+| **Elevated only** | Your tasks start on their own. Tasks the agents propose wait for your OK. |
+
+### What each task state means
+
+| Group | What it means | What to do |
+| --- | --- | --- |
+| **Needs you** | A question, a permission or an OK waits for you. | Answer it on the task or in the Inbox. |
+| **Running** | An AI is working on it. | Watch, or leave it. **Stop** saves its progress and waits for you. |
+| **Queued** | It waits its turn: for a free worker, for a task it depends on, or for the agents to start. Today shows it under **Running**, marked *up next*. | Usually nothing. If agents are off, press **Start agents**. |
+| **Review** | Finished, and being checked. | Look at the changes, then **Approve and finish** or ask for changes. |
+| **Done** | Finished. **Verified** means Studio's checks passed. | Try it. **Reopen** puts it back if something is wrong. |
+
+## Every launch: choose the project, then start the agents
+
+Studio shows the launch screen before it reads anything. Your projects are
+listed, with the one you had open last already picked. Press **Open**.
+
+- The **Start agents** switch beside **Open** decides whether the agents start
+  too. With it off, no AI works and nothing is built until you say so. Today
+  says **Agents are off**, and its **Start agents** button (or the play button
+  in the top bar, or the tray icon's menu) starts them.
+- **Settings › General › Agents when Studio opens** sets where the switch
+  starts: **Resume what I had** (the default: on for a project whose agents
+  were running when you left), **Start agents** or **Keep agents off**.
+
+One launch skips the question: the one after work was cut short. If Studio
+stopped while work was going (a crash, a forced close, a PC restart or its own
+restart after an update) and that work was under ten minutes old, the next
+launch reopens the same folder and says *Picking up where you left off*.
+Agents that were running come back; agents that were held stay held.
+
+Closing Studio yourself is the opposite: the next launch asks again. By
+default the window's close button only tucks Studio into the tray (the small
+icons by the clock), where running agents keep working. Open it again from the
+tray icon, or choose **Quit** there to stop it. **Keep running in the tray when
+the window closes** (**Help › Setup guide › Machine & app**) turns that off.
 
 ## Stuck? Ask Claude Code or Codex
 
 If you already use Claude Code, Codex or another AI helper, it can walk you
-through setup. In Studio, **Copy setup prompt** (on the setup helper's first
-page, and in **Settings › Other apps**) copies a prompt that says where Studio
-is on this PC (its folder, its app files, its settings and data folder, the
-open project), what to read first and what to leave alone. Paste it into the
-helper. It holds no keys.
+through setup. Once Studio runs, **Copy setup prompt** (in **Settings › Other
+apps**, and on the first page of **Help › Setup guide**) copies a prompt that
+tells the helper where Studio is on this PC, what to read first and what to
+leave alone. Paste it into the helper. It holds no keys.
 
-If Studio isn't running yet, open a terminal in Studio's folder (the one with
-`Mefi Studio AI+.exe`, or the source checkout with `main.cjs`), start the
+If Studio isn't running yet, open a terminal in Studio's folder: the one with
+`Mefi Studio AI+.exe`, or the source checkout with `main.cjs`. (In File
+Explorer, click the address bar, type `cmd` and press Enter.) Start the
 helper there (`claude` or `codex`) and paste this:
 
 ```text
 I'm setting up Mefi's Studio AI+ on this PC and I'd like your help. Studio's
-folder is the current folder: check that it holds README.md and either
-"Mefi Studio AI+.exe" (the portable app; its app files are in
-resources/app) or main.cjs (a source checkout). If it doesn't, ask me where I
+folder is the current folder: check that it holds either "Mefi Studio AI+.exe"
+(the portable app; its app files, README.md included, are in resources/app)
+or main.cjs and README.md (a source checkout). If it doesn't, ask me where I
 put Studio.
 
 Read README.md and GETTING_STARTED.md first (in resources/app for the portable
@@ -46,9 +245,12 @@ app), then walk me through setup one step at a time, in plain words:
    `codex --version`, `opencode --version`). Tell me what is missing.
 2. Help me start Studio: the .exe for the portable app, or `npm ci`, then
    `npm run build-booklet`, then `npm start` for a source checkout.
-3. Get one AI and one builder connected in Studio, and tell me which screen to
-   use for each.
-4. If something fails, read the docs and Studio's log and tell me what went
+3. Help me connect one AI: a subscription I already pay for (Claude Code or
+   Codex), OpenCode's free models, or an API key. On the first launch Studio
+   asks "Pick the AI that builds for you"; later it is Team › Providers or
+   Help › Setup guide. Tell me what to click.
+4. Help me start or open my first project and give it one small, clear task.
+5. If something fails, read the docs and Studio's log and tell me what went
    wrong.
 
 Ground rules: never open, print, copy or edit my keys (auth.json, any .env
@@ -59,142 +261,71 @@ before you install anything.
 
 Once Studio runs, **Settings › Other apps** can also let those helpers talk to
 Studio directly: see what the agents are doing, message Mefi and hand Studio
-tasks (which wait for your OK). See [Other apps](docs/studio-api.md).
-
-## The walkthrough
-
-The in-app walkthrough opens automatically on your first launch, once the
-setup helper closes. It has seven
-stops: **Scan**, **Your workspace**, **First map**, **Connections**,
-**Create**, **Monitor** and **Review**. The numbered sections below cover the
-five stops you work through by hand. You can close the guide whenever you
-want; it remembers your place and stays closed on later launches. Choose
-**Help › Start here** at the foot of the menu on the left, or open the guide from
-Settings or Shortcuts (`?`), to continue.
-
-The other two stops only read. **Scan** starts by itself on the first launch
-and finds out what this computer already has: the OpenCode command line, the
-providers linked in it, the free models it can reach and the keys saved in
-Studio. It saves nothing until you choose **Use this setup**. **First map**
-runs a read-only explorer over the selected folder and saves its suggested
-first tasks as ideas, never as tasks. Once a setup is saved, selecting a
-folder starts the map; **Map this project** starts it by hand.
-
-Five stops have a **Walk me…** button. It keeps a small coach in the corner
-while it opens the matching menu with you and highlights the exact control: the
-project **+**, Agents › Setup › Connections, the task box, Live work, and Review (in Vibe mode, Vibe's own box and Tasks
-panel). Scan and First map keep their buttons (**Run the first scan**, **Map
-this project**) on the guide's own sheet, and the coach hands you back to it
-at those stops. Their **I have an API key or a local model server** button
-walks to Connections instead of a CLI install, and the scan runs again when
-you come back. Press **Done — next
-stop** and the coach travels to the next menu; the workspace stop ticks itself
-off as soon as you select a project. **Esc** or **End tour** puts the coach
-away, and the setup trail under the workspace invitation shows what is done.
-The guide never creates a task or starts a build, so nothing is built until
-you do it yourself.
-
-## Every launch: choose the project, then start the agents
-
-Studio opens on a launch screen before it reads anything. Pick the project to
-open (the one you last had open is preselected) or **Open another folder…**,
-then press **Open**; the **Start agents** switch beside it decides whether the
-agents start with it. With the switch off (the default) the assistant and the
-coding workers stay off: the companion bar reads *Agents
-are waiting for you*, and its **Start agents** button (also in the tray menu)
-releases them whenever you are ready. Nothing is built, briefed or spent
-before that. A pause you saved earlier still stands and asks for **Resume** as
-before, and a renderer reload never shows the screen twice in one launch.
-
-One launch skips the question: the one that follows work you did not finish.
-If Studio went away while work was going — a crash, a taskkill, a reboot, or
-its own restart after an update — and that work was under ten minutes old, the
-next launch reopens the same folder and says *Picking up where you left off*
-instead of asking. Agents that were running at the time come back with it;
-agents that were held stay held. Closing the studio yourself is the opposite
-signal: Alt+F4, the window's close button, or **Quit** in the tray all end the
-sitting, so the next launch asks which folder to open, however recent the work
-was. (With background mode on, closing the window parks Studio in the tray and
-its agents work on — the question still returns on the next launch, and
-reopening the window from the tray starts a new sitting.)
+tasks, which wait for your OK. See [Other apps](docs/studio-api.md).
 
 ## New machine checklist
 
-A newly installed Studio opens with no project at all: nothing is read or built
-until you choose a folder. Work through this list once; only the first two
-sections are required, and nothing starts on its own.
+A new install opens with no project: nothing is read or built until you choose
+a folder. Work through this list once; nothing starts on its own.
 
 ### Install what Studio needs
 
-- **Windows** — Studio is built for Windows, and its saved keys are protected
-  by the Windows keystore (DPAPI).
-- **Node 24 and npm** — needed for a source install only; `npm ci` downloads
-  Electron once (about 110 MB), and stops at once with "Unsupported engine" on
-  an older Node. A portable download needs neither.
-- **Git** — needed to clone this repository, and recommended at runtime:
-  Studio reads the open project through git to verify a result that claims a
-  commit, warn agents about staged or uncommitted work and add history to the
-  project map, and **Friends › Your PCs** and opt-in worktree runs need it.
-  Without git those checks are skipped or read as unknown.
-- **Python 3** — needed only for the test contracts (`npm test`). The runner
-  tries `python`, then `py -3`, then `python3`, so the `py` launcher that
-  python.org's installer adds by default is enough.
-- **A builder CLI (optional)** — `opencode` is the preferred coding worker;
-  `grok`, `claude`, `codex` and `agy` (Antigravity) are detected too. Studio connects
-  without one, but no build can start until one is installed and signed in.
-- **`gh` (optional)** — when GitHub CLI is signed in, Studio can reuse its
+- **Windows 10 or 11.** Saved keys are protected by the Windows keystore
+  (DPAPI).
+- **Git** (recommended). Studio uses it for a new app's version history, to
+  check a result that claims a commit, and to warn agents about unsaved work.
+  **Friends › Your PCs** and worktree runs need it. Without Git, those checks
+  are skipped.
+- **A coding tool**: Claude Code (`claude`), Codex (`codex`), Grok (`grok`),
+  Antigravity (`agy`) or OpenCode (`opencode`). The first launch can install
+  one with **Install and sign in**. Without one, Studio still chats and plans,
+  but nothing can be built.
+- **Node 24 and npm**, only to run from source. `npm ci` downloads Electron
+  once (about 110 MB) and stops with "Unsupported engine" on an older Node.
+- **Python 3**, only for `npm test`. `python`, `py -3` or `python3` all work.
+- **GitHub CLI (`gh`)**, optional. When it is signed in, Studio can reuse its
   token for private release updates instead of saving one.
 
 ### Get Studio running
 
-- Source: `npm ci`, then `npm run build-booklet`, then `npm start` from the
+- **Portable:** extract the whole `Mefi Studio AI+` folder before opening
+  `Mefi Studio AI+.exe`, and keep its other folders beside it.
+- **Source:** `npm ci`, then `npm run build-booklet`, then `npm start` from the
   repository root. `npm start` needs a normal shell: if `ELECTRON_RUN_AS_NODE`
-  is set (some agent harnesses set it), clear it first or Studio refuses to
+  is set (some agent harnesses set it), clear it first, or Studio refuses to
   start and prints the fix.
-- Portable: extract the entire `Mefi Studio AI+` folder before opening
-  `Mefi Studio AI+.exe`, and keep its supporting folders beside it.
-- The browser fallback (`npm run start:web`) cannot run desktop workflows such
-  as launching builders or the game.
+- The browser preview (`npm run start:web`) cannot start coding tools or the
+  game.
 
-### Open your first folder
+### Connect an AI
 
-Add a folder in **Projects** with **+** — the **M+** at the top of the menu
-on the left opens it — or choose **Open a folder**. The first folder you open becomes the active project, and Studio scans
-it locally — no AI request — showing old plans and starting points in
-**Analyzer**. Later folders are added alongside; select one to switch, and
-**Remove project** drops a folder from the list without touching its files
-(opening it again restores it).
+The first launch's welcome does this ([step 3](#3-pick-the-ai-that-builds-for-you)).
+A new install also runs **auto setup** by itself: it looks at the keys, coding
+tools and local model servers on this PC and picks a working setup, without
+sending a request or changing a key. **Team › Providers** shows what it chose
+and holds every connection; press **Run auto setup** there after you add a
+key or a tool.
 
-### Connect one assistant and one builder
-
-A fresh install runs **auto setup** by itself on its first launch, from the
-keys, CLIs and local servers already on the machine, and Agents setup says what it
-chose. Open **Agents › Setup › Providers** to
-review that choice, press **Run auto setup** again after adding a key or CLI,
-or configure a provider there and choose its route under **Agents › Setup › Routing & fallback**. The
-assistant (conversation) and the builder (coding work) are separate
-capabilities: a saved key alone never proves a build can start.
-
-| What you have | Choose | What it needs |
+| What you have | Use | What it needs |
 | --- | --- | --- |
-| z.ai coding plan | **z.ai GLM** | a saved z.ai key |
-| OpenCode Go subscription | **OpenCode Go** | its saved key |
-| OpenCode Zen key | **OpenCode Zen** | its saved key |
-| OpenRouter API key | **OpenRouter** | its saved key; the free models router is the default |
-| Grok, Claude Code, Codex or Antigravity login | that CLI | the CLI on PATH, no key |
-| A local model server | **LM Studio (local)** | LM Studio running with a loaded model |
-| Ollama or another OpenAI-compatible server | **Custom endpoint** | endpoint URL; the key is optional (auto setup finds Ollama on its default port) |
+| A Claude, ChatGPT, Grok or Google subscription | **Claude Code**, **Codex**, **Grok** or **Antigravity** | The tool installed and signed in. No key. |
+| No subscription | **OpenCode** and its free models | OpenCode installed. No key. |
+| OpenCode Go subscription | **OpenCode Go** | Its key |
+| OpenCode Zen key | **OpenCode Zen** | Its key |
+| z.ai coding plan | **z.ai GLM** | Its key |
+| OpenRouter key | **OpenRouter** | Its key (free models included) |
+| A model running on this PC | **LM Studio** | LM Studio running with a model loaded |
+| Ollama or another OpenAI-compatible server | **Custom endpoint** | Its address; a key only if it asks. Auto setup finds Ollama on its usual port. |
 
-- **Jev model selection** needs a key for its route (Vercel AI Gateway,
-  TypeSafe, OpenCode Zen or OpenRouter); without one Studio uses fixed model
-  defaults. Without any connection, the catalog, manual planning and saved work
-  still function.
-- Keys are encrypted with the Windows keystore and stored in
-  `%APPDATA%\Mefi's Studio AI+\auth.json`, a credentials file kept separate
-  from the `settings.json` preferences. They are bound to the Windows account
-  that saved them. A new user enters their own keys — copying the file between
-  machines does not work. A headless install stores a key from the
-  repository root; in PowerShell:
+- Paste a key into its tile under **Team › Providers** and press **Save**.
+  Keys are encrypted with the Windows keystore in
+  `%APPDATA%\Mefi's Studio AI+\auth.json`, apart from the `settings.json`
+  preferences. They only work for the Windows account that saved them, so
+  each person enters their own on each PC.
+- **Decision model** (automatic model choice, optional, in Team › Providers)
+  needs a key for its route: Vercel AI Gateway, TypeSafe, OpenCode Zen or
+  OpenRouter. Without one, Studio uses fixed model defaults.
+- No screen to type into? Store a key from the repository root, in PowerShell:
 
   ```powershell
   $env:MEFI_STUDIO_KEY = "<your OpenCode Go key>"
@@ -207,169 +338,60 @@ capabilities: a saved key alone never proves a build can start.
   [.env.example](.env.example) pairs each flag with its `MEFI_STUDIO_*_KEY`
   variable. Remove the variable once the key is stored: while it is set,
   Studio uses it instead of the saved key.
-- Models are saved per provider and per builder CLI, so switching routes never
-  carries one provider's model id into another.
 
 ### Review the defaults
 
-These ship on and are the choices most worth a look on another machine; every
-one stays editable in **Settings** or the workspace.
+A new PC starts with these. Each stays on that PC, and each can be changed.
 
-- **Auto build** is on by default. Turn it off for **Verify first** when a new
-  user should approve each task before it runs.
-- **Parallel builds** follows **Machine managed** admission; manual limits of
-  one to three workers suit a machine dedicated to Studio.
-- **Proactive** briefings, **useWeb**, **auto reference** and the machine
-  guards (auto-kill strays, 240 idle seconds, 20-minute age, 1.5 GB) are on.
-  Relax the guards on a small or busy machine rather than switching them off.
-- **Your name**, the **companion name** and **Open Workspace on launch** live
-  in **Settings › General**. Themes, Motion and Blur behind panels live in
-  **Appearance**. These preferences stay per machine.
+- The **permission mode** is **Auto**; see [Permission modes](#permission-modes).
+- **Parallel builds** is **Machine managed**: as many coding workers as this
+  PC can take. **Team › Overview** can cap it at one to three.
+- Studio stops runaway test runs: idle for 240 seconds, older than 20 minutes
+  or using more than 1,500 MB. On a small or busy PC, relax these in **Help ›
+  Setup guide › Machine & app** rather than turning them off.
+- Your name, the companion's name, **Open Today on launch**, **Always start in
+  Social mode** and **Agents when Studio opens** are in **Settings ›
+  General**. Themes and motion are in **Settings › Appearance**.
 
 ### Optional integrations
 
-- **Ruins Runner (LÖVE)** — Settings › System › Integrations launches the game checkout
-  when one is found. Set `MEFI_STUDIO_GAME_ROOT` when it is not a sibling `2d Trippy
-  Hell` folder, and run the game's `tools/build-windows.ps1` once if its LÖVE
-  runtime is missing.
-- **Discord Server Styler** — its card appears under Settings › System once
-  Studio finds the separate checkout: a sibling `discord-server-styler` folder,
-  or the path in `MEFI_STYLER_ROOT`.
-- **A different working repository** — set `MEFI_STUDIO_REPO`; otherwise Studio
-  opens with no project until a folder is chosen.
-- **Private release updates** — save a read-only GitHub token in **Settings ›
-  System › Updates**, set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio reuse the `gh`
-  token.
+- **Ruins Runner (LÖVE)**: the author's game, a separate project. Once Studio
+  finds a checkout, **Settings › System** shows an **Integrations** card that
+  launches it. Set `MEFI_STUDIO_GAME_ROOT` when it is not a sibling
+  `2d Trippy Hell` folder, and run the game's `tools/build-windows.ps1` once
+  if its LÖVE runtime is missing.
+- **Discord Server Styler**: its card appears under **Settings › System** once
+  Studio finds the separate checkout: a sibling `discord-server-styler`
+  folder, or the path in `MEFI_STYLER_ROOT`.
+- **A different working repository**: set `MEFI_STUDIO_REPO`. Otherwise Studio
+  opens with no project until you choose a folder.
+- **Private release updates**: save a read-only GitHub token in **Settings ›
+  Updates** (**Save token**), set `MEFI_STUDIO_GITHUB_TOKEN`, or let Studio
+  reuse the signed-in `gh` token.
 
 ### What not to copy between machines
 
 Settings, keys, tasks, conversations, captures and databases are local state
-and do not travel. Only `data/curated.json` and `data/models.json` belong to
-the repository. On one machine, a source install and a portable build keep
-their own tasks, ideas, plans and conversations (each in its own `data/`
-folder; `resources\app\data` in the portable build) but share
+and do not travel; only `data/curated.json` and `data/models.json` belong to
+the repository. On one PC, a source install and a portable build keep their
+own tasks, ideas, plans and conversations (each in its own `data/` folder;
+`resources\app\data` in the portable build) but share
 `%APPDATA%\Mefi's Studio AI+`: settings, saved keys, the project list, the
-Discord link and resume state. Because they share it, only one of the two runs
-at a time. Never copy `auth.json` to another machine: its encrypted fields
-cannot be decrypted there. `settings.json` holds preferences only, but it is
-still local state — build the new machine's own state with the steps above.
-
-## 1. Choose the folder you want to work on
-
-In **Projects**, choose **+** and select an existing project folder. The first
-folder you open becomes the active project; Studio scans it locally and shows
-what it found in **Analyzer**. Check the name and folder above the conversation.
-Later folders are added to **Projects** (the **M+** at the top of the menu)
-— select one to switch. Tasks,
-conversations, plans and references belong to that project. For your first run,
-use a small project whose changes you can easily inspect.
-
-Choose **Auto build** in the guide or in the backlog panel under **Your work**.
-It is on by default.
-Turn it off for **Verify first** if you want to choose what gets built. This
-preference is saved for all projects and can be changed at any time.
-
-## 2. Connect your tools
-
-Open **Settings** (`4`, or `Ctrl ,` from anywhere). A fresh install already ran
-auto setup once on its first launch; configure your assistant connection and
-coding provider in **Connections**, then choose assistant and builder routes
-in **Models**, or choose **Run auto setup** to apply a
-configuration from the keys, CLIs and local servers already on this machine. The setup overview above the controls shows what was detected; auto
-setup explains each choice and never sends a request or changes a saved key.
-You do not need every option: save the model for the provider you actually
-have (models are kept per provider, so switching never mixes them), and the
-readiness line names what the selected option has. Conversation and coding
-are separate capabilities: saving an assistant key alone does not prove a coding
-worker can start. Read the connection result before starting a task. The model
-catalog, manual planning and browsing saved work remain available without AI.
-
-## 3. Give one clear task
-
-In the Home composer choose **Create task**, describe the intended change and
-what would count as done, then send it with **Create task**. **Use a task outline** adds space for the
-goal, acceptance checks and boundaries. For example:
-
-```text
-Add a clear empty state to the saved notes list.
-
-Done when:
-- With no saved notes, show a short explanation and a Create note button.
-- Creating a note replaces the empty state with the normal list.
-- The layout works in the smallest supported window.
-
-Keep unchanged:
-The existing note format and save location.
-```
-
-Chat and task drafts are saved separately for each project. After creation,
-**View task** opens the saved brief and status. A failed board refresh does not
-mean creation failed; use **Retry loading** before adding the same work again.
-If scheduling is paused, the task waits until you choose **Resume**.
-With **Verify first**, open the task in **Review**, inspect its full brief,
-files and prerequisites, then choose **Approve build**. Leave it waiting if
-you do not want to build it. Editing the scope or explicitly retrying requires
-approval again. Approval does not override Pause or unfinished prerequisites.
-
-Use **Chat** for discussion. Use **Plan an idea** when the approach is
-unclear or the work has several dependent steps. In Plans, settle the questions,
-review the specification, approve it, then explicitly create its tasks.
-
-## 4. Follow the work
-
-The strip at the top of the workspace shows the service state, running
-workers, what needs you, what is next, the machine and today's usage; its
-**Pause** button holds all new work until you press **Resume**.
-
-**Your work** gives you All, Queue, Ideas, Review and Done views. **Agents › Live** opens Command view, where **Live work** shows running workers, reported steps and queue
-readiness, and **Agents › Setup** holds team configuration, queue execution, parallel builds and build approval with an at-a-glance strip above them (**Agents & queue ↗** in
-Settings opens it too). Open a task to inspect its brief, dependencies, attempts and evidence.
-
-| What you see | What it means | Next step |
-| --- | --- | --- |
-| Ready | Eligible for scheduling | Check Pause, the coding connection and any dispatcher hold |
-| Awaiting build approval | Verify first is holding unapproved work | Review the full task and choose Approve build, or leave it waiting |
-| Working | A worker has started | Follow its reported activity and inspect the result when it finishes |
-| Waiting on prerequisites | Required tasks are unfinished | Open the named prerequisite |
-| Retry scheduled | A failed attempt is cooling down | Inspect the failure and displayed retry time |
-| Needs attention | A blocker or retry limit needs a decision | Open the task and correct the cause before retrying |
-| Awaiting verification | The attempt finished but completion is not established | Review checks, evidence and delegated work |
-| Done | Verified or explicitly confirmed complete | Read the result and inspect the actual project change |
-
-**Work through backlog** admits saved ideas in small batches alongside existing
-tasks. Independent tasks can use **Parallel builds**; shared files and unfinished
-prerequisites can make a task wait even when another worker slot is available.
-
-## 5. Review and recover
-
-Open **Review** for unfinished verification and blocked tasks. A worker's exit
-alone does not prove the intended behavior works. Read the evidence, run the
-project's relevant checks and try the changed workflow before accepting it.
-
-**Pause** stops new scheduling while current jobs finish. It does not cancel
-them. If work stops progressing, read its last activity and the scheduling
-reason before retrying. A worker that cannot be confirmed stopped retains its
-file ownership, preventing another attempt from writing over it. Follow the
-reported recovery instructions; do not delete task records or ownership files
-to force another run. An unresponsive external operation can still require
-restarting Studio after the external process is stopped.
-
-Use **Settings** (**Providers**, and the **Connection log** under System) for
-connection errors, the **Task board** for prerequisites and retry limits, and
-the **Session explorer** for session details. **Ctrl K** (Search Studio) finds
-any page, tool or setting, **Ctrl ,** opens Settings, **H** returns home, **D**
-opens Command and **Esc** closes the current layer.
+Discord link and resume state. So only one of the two runs at a time. Never
+copy `auth.json` to another PC: its encrypted fields cannot be decrypted
+there. `settings.json` holds only preferences, but it is still local state.
 
 ## Download and data notes
 
-For a published Windows portable release, extract the entire application folder
-before opening `Mefi Studio AI+.exe`; keep its supporting folders beside it.
-Source installs use `npm ci`, `npm run build-booklet`, then `npm start` from the
-repository root. The browser preview cannot run local desktop workflows.
+- A downloaded release starts with the public model catalog only: none of the
+  maintainer's projects, conversations or keys. Ruins Runner is installed
+  separately.
+- Back up the install's `data/` folder and `%APPDATA%\Mefi's Studio AI+`
+  before you move an installation.
+- Coming from 0.4.4? It cannot update itself: move by hand, as the README's
+  [Updating from 0.4.4](README.md#updating-from-044) explains. From 0.5 on,
+  Studio updates itself (**Settings › Updates**).
 
-Source and portable installations keep separate task, idea, plan and
-conversation stores in their own `data/` folders, and share the settings,
-keys, project list and resume state in `%APPDATA%\Mefi's Studio AI+`. Back up
-both before moving an installation. A downloaded release begins
-with the public model catalog; it does not contain the maintainer's projects,
-conversations or credentials. Ruins Runner is optional and is installed separately.
+More to read: [Unified Studio](docs/unified-studio.md) (the window and the two
+modes), [the glossary](docs/architecture.md#glossary) (Studio's own words) and
+[Guided CLI setup](docs/cli-setup.md) (coding tools and their account limits).
