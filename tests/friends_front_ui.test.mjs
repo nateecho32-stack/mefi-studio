@@ -84,6 +84,7 @@ function environment({ status = { configured: true, linked: true, state: "ready"
   const context = vm.createContext({
     window, document: { createElement: (tag) => new Element(tag), createTextNode: textNode, visibilityState: "visible" },
     navigator: { clipboard: { writeText: async (value) => { copied.push(value); } } },
+    localStorage: (() => { const store = new Map(); return { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, String(value)) }; })(),
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].cleared = true; },
     Date, Number, Array, Set, Map, Promise, JSON, Object, String, Math,
   });
@@ -259,6 +260,34 @@ test("Rooms shows the same sign-in card when nobody is signed in", async () => {
   assert.equal(rooms.dataset.state, "not-linked");
   assert.ok(rooms.find("friends-gate"), "Friends' one sign-in card");
   assert.equal(rooms.find("rooms-link"), null, "instead of its own Link Discord button");
+});
+
+test("pop-ups: friends coming online are one toast, invites, requests and plays each say so, and they can be turned off", async () => {
+  const env = environment();
+  const toasts = [];
+  env.window.MefiToast = (text, kind, options) => toasts.push({ text, kind, label: options?.action?.label, run: options?.action?.run });
+  env.push({ type: "friendOnline", user: { id: "200000000000000001", name: "Alice" } });
+  env.push({ type: "friendOnline", user: { id: "200000000000000002", name: "Bob" } });
+  env.push({ type: "friendOnline", user: { id: "200000000000000002", name: "Bob" } });
+  assert.equal(toasts.length, 0, "a moment to gather who else is coming online");
+  env.timers.find((timer) => timer.ms === 3000).fn();
+  assert.deepEqual(toasts.map((toast) => [toast.text, toast.label]), [["Alice and Bob are online", "Say hi"]]);
+  toasts[0].run();
+  assert.deepEqual(JSON.parse(JSON.stringify(env.goes.at(-1))), ["friends-page", { place: "lobby" }]);
+  env.push({ type: "invite", invite: { id: "inv_a", roomId: "room_a", roomName: "Friday jam", invitedBy: { id: "200000000000000001", name: "Alice" }, status: "pending", expiresAt: 1 } });
+  env.push({ type: "joinRequest", request: { id: "req_a", roomId: "room_a", requester: { id: "200000000000000002", name: "Bob" }, note: "", status: "pending", createdAt: 1 } });
+  env.push({ type: "credits", balance: 50, delta: 5, reason: "played", rank: "ember" });
+  env.push({ type: "credits", balance: 53, delta: 3, reason: "starred", rank: "ember" });
+  env.push({ type: "credits", balance: 52, delta: 2, reason: "play", rank: "ember" });
+  assert.deepEqual(toasts.slice(1).map((toast) => [toast.text, toast.label]), [
+    ["Alice invited you to Friday jam", "See the invite"],
+    ["Bob asks to join one of your rooms", "See requests"],
+    ["Someone played your project: +5 credits", "Project hub"],
+    ["Someone starred your project: +3 credits", "Project hub"],
+  ], "your own play's credits say so on the Project hub, not as a pop-up");
+  env.front.popups.set(false);
+  env.push({ type: "credits", balance: 58, delta: 5, reason: "played", rank: "ember" });
+  assert.equal(toasts.length, 5, "turned off: nothing");
 });
 
 test("main lets the renderer read the front page through hub:room", () => {

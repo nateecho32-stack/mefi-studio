@@ -75,7 +75,7 @@ const PRESENCE_EVERY_MS = 30_000;
 const KEEPALIVE_EVERY_MS = 30_000;
 const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
 // What this Studio tells the hub it can do (hello.features).
-const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive"]);
+const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online"]);
 // A historyReply must fit the hub's 16 KB frame limit.
 const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
@@ -600,6 +600,12 @@ function createHubClient(options = {}) {
           emit({ type: "historyRequest", roomId: frame.roomId, requestId: frame.requestId, before: SNOWFLAKE.test(String(frame.before ?? "")) ? String(frame.before) : null });
         }
         return;
+      // Someone this member shares a room with just opened Studio (feature "friend.online").
+      case "friendOnline": {
+        const who = user(frame.user);
+        if (who) emit({ type: "friendOnline", user: who });
+        return;
+      }
       // This member earned or spent credits (feature "credits").
       case "credits":
         if (Number.isFinite(frame.balance) && Number.isFinite(frame.delta)) {

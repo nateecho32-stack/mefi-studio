@@ -208,7 +208,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const onlineHidden = (uid) => store.get('SELECT online_hidden FROM members WHERE user_id = ?', uid)?.online_hidden === 1;
 
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline];
 
   // ---- rooms in the store --------------------------------------------------------
 
@@ -524,12 +524,42 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     const { claims } = verdict;
     const member = sessions.member(claims.uid);
     if (!member) return closeSocket(ws, a, CLOSE_CODES.unauthorized, 'unknown member');
-    if (readySockets().filter((entry) => entry.a.uid === claims.uid).length >= WS_LIMITS.socketsPerUser) return closeSocket(ws, a, CLOSE_CODES.tooManySockets, 'too many sockets');
+    const mine = readySockets().filter((entry) => entry.a.uid === claims.uid).length;
+    if (mine >= WS_LIMITS.socketsPerUser) return closeSocket(ws, a, CLOSE_CODES.tooManySockets, 'too many sockets');
     joinLobby(claims.uid);
     Object.assign(a, { s: 'ready', uid: claims.uid, sid: claims.sid, exp: claims.exp, ro: claims.readOnly || member.readOnly ? 1 : 0, name: member.name, mod: member.isMod ? 1 : 0, j: member.joinedAt, rooms: [], cf: frame.features ?? [], np: null });
     sockets.write(ws, a);
     sendReady(ws, a);
+    if (!mine) announceOnline(claims.uid, member.name);
     await schedule();
+  }
+
+  // Someone just opened Studio (their first socket): told to the people they
+  // share a room with, never the Lobby's whole crowd, never when they hide
+  // from Who's online, at most once every 30 minutes per pair, and only to
+  // Studios that said they understand friendOnline.
+  const announced = new Map(); // "uid>friend" -> when
+  function announceOnline(uid, name) {
+    if (onlineHidden(uid)) return;
+    const friends = new Set(store.all(
+      `SELECT DISTINCT b.user_id AS id FROM room_members a JOIN room_members b ON b.room_id = a.room_id JOIN rooms r ON r.id = a.room_id
+        WHERE a.user_id = ? AND b.user_id <> ? AND a.room_id <> ? AND r.status <> 'closed'`,
+      uid,
+      uid,
+      LOBBY.id,
+    ).map((row) => row.id));
+    if (!friends.size) return;
+    const at = now();
+    if (announced.size > 5000) announced.clear();
+    const told = new Set();
+    for (const { ws, a } of readySockets()) {
+      if (!friends.has(a.uid) || !(a.cf ?? []).includes(FEATURES.friendOnline)) continue;
+      const key = `${uid}>${a.uid}`;
+      if (!told.has(a.uid) && at - (announced.get(key) ?? 0) < 30 * MINUTE_MS) continue;
+      told.add(a.uid);
+      announced.set(key, at);
+      sendFrame(ws, 'friendOnline', { user: { id: uid, name } });
+    }
   }
 
   function sendReady(ws, a) {
