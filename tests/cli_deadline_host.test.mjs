@@ -238,7 +238,7 @@ test("the Daily editor's deadline stops a CLI editor, and an HTTP editor keeps i
 
 test("the chat and the outside-work check hand their limits down too", () => {
   const chat = section("async function assistantOverseerTurn(", "  // A picture on the message rides a scope");
-  assert.match(chat, /seatFetch\("companion", chatSystem, body, 1500, \{ fallback: \(system = chatSystem\) => assistantFetch\(system, body, 1500, \{ taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null, timeoutMs: budgetMs \}\), cliTimeoutMs: budgetMs \}\)/);
+  assert.match(chat, /seatFetch\("companion", chatSystem, body, 1500, \{ fallback: \(system = chatSystem, _fromSeat = false, input = body\) => assistantFetch\(system, input, 1500, \{ taskType: "conversation", allowCli: DATA_ONLY_CLIS, skillRole: null, timeoutMs: budgetMs \}\), cliTimeoutMs: budgetMs \}\)/, "the companion's fallback keeps the tool transcript (input) and the reply budget");
   assert.match(chat, /: assistantFetch\(chatSystem, body, 1500, \{ taskType: "conversation", allowCli: DATA_ONLY_CLIS, timeoutMs: budgetMs \}\)/);
   assert.match(source, /assistantFetch\(prompt\.system, prompt\.user, 1500, \{ taskType: "relevance", allowCli: DATA_ONLY_CLIS, skillRole: null, timeoutMs: OUTSIDE_CHECK_TIMEOUT_MS \}\)/);
   assert.match(source, /setTimeout\(\(\) => resolve\(\{ ok: false, timedOut: true \}\), OUTSIDE_CHECK_TIMEOUT_MS\)/, "the same limit the check races");
