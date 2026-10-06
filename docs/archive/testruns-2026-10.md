@@ -6,6 +6,36 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-05 The 0.5 layout is the only layout: the classic layout's code goes, every window fixture runs the 0.5 layout
+
+Branch `ui/v2-only` (gated in `C:\wt\ui-v2only`, merged with main up to f1934aa in `C:\wt\v2m` as 8e4a501). Owner
+chose to remove the classic layout at 0.5.0. The switch and its ways back go (setLayout/setShell, ?layout=,
+MEFI_STUDIO_LAYOUT, the Settings and Search toggles); the classic code goes (nav.js's v1 paths, the classic rail,
+local navigation, dock, sheet links, tab row, footer and help button; the classic Search rows; the Agents navigation;
+the companion hub's Friends section and the Friends page's tab row and Close; Command's .cmd-top with its Ambience,
+View and Agent settings popovers, telemetry pills and corner usage panel; the CSS long tail, ~2,600 net lines of app
+code). Every Electron fixture launches the 0.5 layout; layout_contract_render and its v1 record are retired. Real bugs
+the converted fixtures found are fixed: Team seat rows at 1100, Fleet's fit at 1100, the Project map at 600x560@150%,
+Today's box, an Inbox question without options, the orb drag, the slim rail, the Settings strip, the plan page header,
+Activity over the chat box, Today's permissions popover, the inspector's Team card, the empty Map's Start button,
+hidden key tips, the Inbox keeping the focus on the need pill when its first card was a question without options so
+Escape never closed it (a47ac39), and main's new skills chip pushing Build it off Today's row at 1440x900 (aae6947).
+
+Hosted CI (Windows, the whole Node/Python/check/lint/audit chain; the 43 real-window suites skipped there): green on
+0da4dfd (37397654824), dc5264f (37398953883), 574fa9d (37399987736), 8b5eacb (37401397849) and 8e4a501
+(37402884931). Here, every Electron suite one at a time on 0da4dfd: 44 of 45 ok; shell_render timed out at "Escape
+closed the Inbox" while clean main d71e1e0 passed that step (control run), fixed in a47ac39, after which it stops
+where clean main stops on this PC ("it shrinks to leave the main area its 320", the display-scaling case). npm run
+check and npm run audit on 0da4dfd: exit 0 (audit 0 errors, 0 warnings); npm run check on 8b5eacb and 8e4a501: ok.
+After the merges with main 33c3c4e, d71e1e0, d55269f and f1934aa: friends_render, companion_hub_render,
+settings_render, size_render, skills_render, team_render, today_render, unified_studio_render, workflow_render ok on
+8b5eacb; builder_render (failed on 8b5eacb, the skills chip), today_render, workflow_render ok on aae6947;
+command_render, media_browser_render, media_window_render ok on 8e4a501; Friends, rail and Today unit suites 89/89 and
+59/59. sessions_render failed at "the keyboard starts on the open project" on 8b5eacb and on clean main f1934aa (both
+runs fast, ~45 s) and passed on main d71e1e0, b79b4bc and 0661f8c and on this branch's b632757 (154 s): the timing
+flake an older row here already saw at that step. performance_render, startup_render and renderer_recovery ok on
+b632757 (main's studio log on disk and Trace).
+
 ## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
 
 Branch `fix/linux-ci` (60b90a1, off main dfda798), test expectations only: rust_modules feeds the image-store

@@ -39,6 +39,28 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The release workflow's hosted gate, smoke launch, signing switch and Rust-host switch; the 0.5 scope refreshed
+
+Cloud session, branch `claude/funny-einstein-19ljkq` (436fd2c, a45cc38) on main fa672de. `release.yml` now holds
+`docs/release-workflow-signpath.yml` (removed) and the PC's patch 575579f from `wip/release-yml-host-switch`, joined
+where they meet: every package-release call passes the resolved host, the folder lookup matches it, and the smoke
+launch gives the Rust host MEFI_STUDIO_USER_DATA and reads its stderr. Nothing ran: the workflow starts only on a
+`v*` tag or a dispatch, and neither was made.
+
+Why the hosted gate matters, measured: `ci.yml`'s `npm test` on main 4ce5657 (run 37476474394) skipped 46
+real-window tests (the Electron lane's 43 of 69 and 3 serialized), because `scripts/fetch-electron.mjs` leaves the
+binary out when CI=true. `release.yml` fetches it before `npm test`, so its full gate runs them on the hosted runner.
+
+Here (Linux, Node 24.21.0): PyYAML parses the workflow (22 steps, in order); `tests/release_workflow.test.mjs` 6/6
+through `npm run test:one`, and six mutations of the workflow (TAG_HOST, a signing step's if, --skip-build, the
+test:fast step, the smoke pattern, a branch trigger) each fail it; `npm run check` ok (296 targets, 609 specs);
+`npm run lint` 47 warnings, as on main, none in the new file; `npm run audit` 0 findings; `npm run test:fast` 7422
+tests, 7364 pass, 58 skipped, 0 fail (2 min 38 s); Python contracts 248 OK (3 skipped); the normalized-path lock ok.
+Not checked: the workflow on a runner, and the Rust host's smoke launch there (WebView2 on the runner, and
+Start-Process -Wait on its child processes); the first `host: tauri` dispatch shows both.
+
+My merge of `ui/social-studio-names` 0fc3043 was dropped before pushing: main's 0f5076a carries the same change.
+
 ## 2026-10-06 Background git leaves no fsmonitor daemons, and Claude workers start only the desk's MCP servers
 
 Branch `fix/git-fsmonitor-worker-mcp` in `C:\wt\fsmon`: the 2026-10-03 commit c575fd3 (left on one PC in `C:\wt\mem`,
@@ -471,36 +493,6 @@ module_purity, preload_fanout 114/114 together; preload_fanout 17/17 after the o
 progress delivers the board at once, untouched cards keep their objects, progress that moves no card delivers
 nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
 (no Electron in the container); judged on the Windows "Studio checks" run of this commit.
-
-## 2026-10-05 The 0.5 layout is the only layout: the classic layout's code goes, every window fixture runs the 0.5 layout
-
-Branch `ui/v2-only` (gated in `C:\wt\ui-v2only`, merged with main up to f1934aa in `C:\wt\v2m` as 8e4a501). Owner
-chose to remove the classic layout at 0.5.0. The switch and its ways back go (setLayout/setShell, ?layout=,
-MEFI_STUDIO_LAYOUT, the Settings and Search toggles); the classic code goes (nav.js's v1 paths, the classic rail,
-local navigation, dock, sheet links, tab row, footer and help button; the classic Search rows; the Agents navigation;
-the companion hub's Friends section and the Friends page's tab row and Close; Command's .cmd-top with its Ambience,
-View and Agent settings popovers, telemetry pills and corner usage panel; the CSS long tail, ~2,600 net lines of app
-code). Every Electron fixture launches the 0.5 layout; layout_contract_render and its v1 record are retired. Real bugs
-the converted fixtures found are fixed: Team seat rows at 1100, Fleet's fit at 1100, the Project map at 600x560@150%,
-Today's box, an Inbox question without options, the orb drag, the slim rail, the Settings strip, the plan page header,
-Activity over the chat box, Today's permissions popover, the inspector's Team card, the empty Map's Start button,
-hidden key tips, the Inbox keeping the focus on the need pill when its first card was a question without options so
-Escape never closed it (a47ac39), and main's new skills chip pushing Build it off Today's row at 1440x900 (aae6947).
-
-Hosted CI (Windows, the whole Node/Python/check/lint/audit chain; the 43 real-window suites skipped there): green on
-0da4dfd (37397654824), dc5264f (37398953883), 574fa9d (37399987736), 8b5eacb (37401397849) and 8e4a501
-(37402884931). Here, every Electron suite one at a time on 0da4dfd: 44 of 45 ok; shell_render timed out at "Escape
-closed the Inbox" while clean main d71e1e0 passed that step (control run), fixed in a47ac39, after which it stops
-where clean main stops on this PC ("it shrinks to leave the main area its 320", the display-scaling case). npm run
-check and npm run audit on 0da4dfd: exit 0 (audit 0 errors, 0 warnings); npm run check on 8b5eacb and 8e4a501: ok.
-After the merges with main 33c3c4e, d71e1e0, d55269f and f1934aa: friends_render, companion_hub_render,
-settings_render, size_render, skills_render, team_render, today_render, unified_studio_render, workflow_render ok on
-8b5eacb; builder_render (failed on 8b5eacb, the skills chip), today_render, workflow_render ok on aae6947;
-command_render, media_browser_render, media_window_render ok on 8e4a501; Friends, rail and Today unit suites 89/89 and
-59/59. sessions_render failed at "the keyboard starts on the open project" on 8b5eacb and on clean main f1934aa (both
-runs fast, ~45 s) and passed on main d71e1e0, b79b4bc and 0661f8c and on this branch's b632757 (154 s): the timing
-flake an older row here already saw at that step. performance_render, startup_render and renderer_recovery ok on
-b632757 (main's studio log on disk and Trace).
 
 ## Read Before Any Tests
 
