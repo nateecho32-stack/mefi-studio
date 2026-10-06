@@ -5,8 +5,11 @@ desktop adapter loads only when requested. Local IPC owns queueing, invitations,
 revocation and setup; the network protocol exposes only authenticated worker
 operations. Atomic coordinator and worker journals persist each start grant
 before execution. Expired assignments remain uncertain rather than moving to
-another worker. See [paired-workers.md](paired-workers.md) for the first profile,
-transport requirements, recovery and activation steps.
+another worker. A coordinator or worker the owner started comes back by itself
+after Studio restarts or updates, and PCs on different Studio versions keep
+working together unless one is really behind (`scripts/link-compat.cjs`). See
+[paired-workers.md](paired-workers.md) for the first profile, transport
+requirements, recovery, reconnecting and activation steps.
 
 The booklet builder declares one ordered, frozen `BOOKLET_INPUTS` inventory.
 Reads carry their source name with their content, so emission and error-source

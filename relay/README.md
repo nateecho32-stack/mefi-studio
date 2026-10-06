@@ -149,7 +149,7 @@ a one-line summary.
 | `src/worker.mjs` | The Worker: answers `/v1/health`, refuses anything outside `/v1/` or over 16 KB, routes the rest to the one Hub object. |
 | `src/hub-object.mjs` | The Hub Durable Object: every socket (Hibernation API, with the keepalive ping answered by Cloudflare) and the SQLite database, handed to the core. A plain class, so Node can load it too. |
 | `src/relay.mjs` | The core: every HTTP route and WebSocket frame, rooms, chat, presence, companions, peer history, moderation, retention. Platform-free. |
-| `src/protocol.mjs` | Frame and body shapes (the hub's v1, plus `companion`, `historyRequest` / `historyReply` / `history`, `hello.features`, `message.sig`). |
+| `src/protocol.mjs` | Frame and body shapes (the hub's v1, plus `companion`, `historyRequest` / `historyReply` / `history`, `hello.features`, `message.sig`). `checkVersion` is the protocol window: a hello may name any protocol from `OLDEST_PROTOCOL` to `PROTOCOL_VERSION` (or send its own `oldest`), and only a Studio below the window is closed with 4002 "protocol version"; a Studio whose oldest is above the relay's newest gets 4002 "relay version" and retries by itself. Keep both numbers equal to `LINKS.friends` in Studio's `scripts/link-compat.cjs`. |
 | `src/sessions.mjs` | Sign-in with the member's own Discord token, and the relay's 15-minute session tokens. |
 | `src/chat.mjs` | Message ids that prove their author, and message signatures. |
 | `src/listen.mjs` · `src/media.mjs` | Listen together, and which links are allowed (`publicHost`). |

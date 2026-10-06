@@ -62,8 +62,13 @@
 
 // The claim path rules and lease shape, shared with main's "Cowork claims".
 const cowork = require("./cowork.cjs");
+// The protocol window this Studio speaks with the relay (scripts/link-compat.cjs).
+const { LINKS } = require("./link-compat.cjs");
 
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = LINKS.friends.protocol;
+const OLDEST_PROTOCOL = LINKS.friends.oldest;
+// A relay older than this Studio's window is being updated: try again this often.
+const RELAY_BEHIND_RETRY_MS = 5 * 60_000;
 // The Mefi Studio relay's public address (relay/, on Cloudflare). Settings ›
 // Community › Connection details and MEFI_STUDIO_HUB_URL win, so a maintainer
 // can point a build at a test relay or hub (http is accepted only on loopback).
@@ -588,15 +593,17 @@ function createHubClient(options = {}) {
       let ws;
       try { ws = new SocketImpl(address.ws); } catch { setState("offline", "network"); retry(); return; }
       socket = ws;
-      ws.onopen = () => { if (socket === ws) send({ type: "hello", session: session.token, protocol: PROTOCOL_VERSION, features: [...CLIENT_FEATURES] }); };
+      // `oldest` lets a newer relay keep speaking to this Studio; a relay
+      // from before the window drops the field and compares `protocol` only.
+      ws.onopen = () => { if (socket === ws) send({ type: "hello", session: session.token, protocol: PROTOCOL_VERSION, oldest: OLDEST_PROTOCOL, features: [...CLIENT_FEATURES] }); };
       ws.onmessage = (event) => { if (socket === ws) receive(event?.data); };
       ws.onerror = () => {};
-      ws.onclose = (event) => { if (socket === ws) closed(Number(event?.code) || 1006); };
+      ws.onclose = (event) => { if (socket === ws) closed(Number(event?.code) || 1006, typeof event?.reason === "string" ? event.reason : ""); };
     })();
     try { await opening; } finally { opening = null; }
   }
 
-  function closed(code) {
+  function closed(code, reason = "") {
     socket = null;
     if (presenceTimer) { stopEvery(presenceTimer); presenceTimer = null; }
     if (keepaliveTimer) { stopEvery(keepaliveTimer); keepaliveTimer = null; }
@@ -605,7 +612,15 @@ function createHubClient(options = {}) {
     if (!wanted) { setState("off"); return; }
     log(`[hub] socket closed ${code}`);
     if (code === 4001 || code === 4005) { session = null; setState("offline", "session"); retry(backoff ? undefined : 0); return; }
-    if (code === 4002) { setState("error", "version"); return; }
+    // Outside the relay's protocol window (relay/src/protocol.mjs checkVersion).
+    // When the relay is the side behind it is being updated, so Studio tries
+    // again by itself; when this Studio is, only an update helps, and the
+    // update's relaunch connects again by itself.
+    if (code === 4002) {
+      if (/relay/i.test(reason)) { setState("offline", "relay-behind"); retry(RELAY_BEHIND_RETRY_MS); return; }
+      setState("error", "version");
+      return;
+    }
     if (code === 4004) { setState("offline", "too-many-sockets"); retry(60_000); return; }
     setState("offline", "network");
     retry();
@@ -812,6 +827,15 @@ function createHubClient(options = {}) {
       backoff = 0;
       await open();
       return status();
+    },
+    // After sleep or a network change: try at once instead of waiting out the
+    // backoff. A refusal (an old Studio, a lost sign-in) waits for its own fix.
+    reconnectNow() {
+      if (!wanted || state === "ready" || state === "error" || opening) return false;
+      backoff = 0;
+      retryTimer = clearTimer(retryTimer);
+      void open();
+      return true;
     },
     // Closes the socket and ends the hub session. Rooms and the now-playing
     // share are forgotten, so a later connect starts clean.
@@ -1286,7 +1310,7 @@ function createHubClient(options = {}) {
 }
 
 module.exports = {
-  PROTOCOL_VERSION, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, HOLDERS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
+  PROTOCOL_VERSION, OLDEST_PROTOCOL, RELAY_BEHIND_RETRY_MS, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, HOLDERS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
   hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
   remoteText, remoteButtons, remoteCommand, remotePcs,
   KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,

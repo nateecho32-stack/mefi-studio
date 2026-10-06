@@ -67,6 +67,23 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   room's join code. The prizes and co-work rewards share a daily community
   pot that grows with the number of people active that week, so the credits
   keep their worth as the community grows; plays and stars pay as before.
+
+- **Your PCs and Friends reconnect by themselves.** A paired coordinator or
+  worker you started now comes back by itself after Studio restarts, updates,
+  rolls back or crashes, and a worker that loses its coordinator keeps trying
+  (5 s, then longer, up to a minute) and tries at once when the PC wakes. A
+  running check rides out a short drop instead of stopping. Updates no longer
+  wait for you to stop idle paired services: they wait only for a check that
+  is running, close the services cleanly and start them again after the
+  relaunch. Each role has a "Start by itself when Studio starts" switch, and
+  Stop turns it off. Friends has a **Reconnect by itself** switch at the foot
+  of The Lobby (on unless you turn it off) and reconnects at once after
+  sleep. PCs and friends on different Studio versions keep connecting: each
+  side accepts a window of protocol versions (`scripts/link-compat.cjs`), and
+  only a Studio that is really behind is asked to update, after which it
+  looks for the update and reconnects by itself. Your PCs shows each paired
+  PC's Studio version and notes "older, still connects".
+
 - **Friends says what helps.** When the connection to the room service can't
   be made, Friends now says why in one sentence and offers only what helps:
   Sign in with Discord again when the sign-in ran out, Update Studio when it

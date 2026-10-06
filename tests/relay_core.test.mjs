@@ -97,8 +97,24 @@ test("WebSocket rules: hello first, one protocol, a cap on sockets per member", 
   early.send({ type: "subscribe", roomId: "room_a" });
   await until(() => early.socket.readyState === 3, "closed for speaking before hello");
   const wrong = await rawSocket(relay, "tok-alice");
+  let closed = null;
+  wrong.socket.onclose = (event) => { closed = event; };
   wrong.send({ type: "hello", session: wrong.session, protocol: 2 });
   await until(() => wrong.socket.readyState === 3, "closed for the wrong protocol");
+  assert.deepEqual([closed?.code, closed?.reason], [4002, "relay version"], "a Studio that speaks only 2 is told the relay is behind, so it retries");
+  // The protocol window: a newer Studio that still speaks 1 connects, and
+  // today's Studio (protocol 1, no oldest) is unchanged.
+  const newer = await rawSocket(relay, "tok-alice");
+  newer.send({ type: "hello", session: newer.session, protocol: 2, oldest: 1 });
+  await until(() => newer.of("ready").length, "ready for a newer Studio");
+  assert.equal(newer.of("ready")[0].protocol, 1, "it speaks the highest number both know");
+  assert.equal(newer.of("ready")[0].oldest, 1, "ready names the relay's oldest");
+  newer.socket.close();
+  const today = await rawSocket(relay, "tok-alice");
+  today.send({ type: "hello", session: today.session, protocol: 1 });
+  await until(() => today.of("ready").length, "ready for today's Studio");
+  assert.equal(today.of("ready")[0].protocol, 1);
+  today.socket.close();
 
   const sockets = [];
   for (let index = 0; index < 6; index += 1) {
