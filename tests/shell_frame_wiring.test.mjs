@@ -156,7 +156,8 @@ test("?layout= and MEFI_STUDIO_LAYOUT reach the page the way the contract reads 
   assert.deepEqual(run({ MEFI_STUDIO_LAYOUT: " V2 " }), { layout: "v2", query: { layout: "v2" } }, "case and spaces do not matter");
   for (const junk of ["", "v3", "2", "true", "v2; rm -rf", "classic", "0.5"]) assert.deepEqual(run({ MEFI_STUDIO_LAYOUT: junk }), { layout: "", query: {} }, `${JSON.stringify(junk)} is ignored`);
   // It is merged into the query the window loads with, and the diagnostic launches keep theirs.
-  assert.match(main, /query: \{ capture: CAPTURE \? "1" : "0", smoke: SMOKE \? "1" : "0", \.\.\.layoutQuery\(\) \}/);
+  // (The startup marks' ?marks=0 rides after it; tests/startup_marks.test.mjs pins that.)
+  assert.match(main, /query: \{ capture: CAPTURE \? "1" : "0", smoke: SMOKE \? "1" : "0", \.\.\.layoutQuery\(\)(, \.\.\.\(typeof startupMarks [^\n]*\))? \}/);
   // What nav.js makes of the queries main.cjs builds.
   const cases = [["?capture=0&smoke=0&layout=v2", {}, true], ["?capture=0&smoke=0&layout=v1", { "mefiStudio.layout": "v2" }, false], ["?capture=0&smoke=0", { "mefiStudio.layout": "v2" }, true], ["?capture=1&smoke=0&layout=v2", {}, true], ["?capture=1&smoke=0", { "mefiStudio.layout": "v2" }, false], ["?capture=0&smoke=1&layout=v2", {}, true]];
   for (const [search, stored, expected] of cases) {

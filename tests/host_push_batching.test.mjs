@@ -1,8 +1,9 @@
 // The host's high-frequency paths to the renderer and the disk: worker log
-// lines are batched per beat, whole-board pushes are coalesced, unending
-// output lines stay bounded, overlapping queue-status reads share one board
-// read, and the machine watch writes its diagnostics only when they change.
-// Each slice below is the real main.cjs code between two literal markers.
+// lines are batched per beat, board pushes are coalesced and carry only the
+// rows the page lacks, unending output lines stay bounded, overlapping
+// queue-status reads share one board read, and the machine watch writes its
+// diagnostics only when they change. Each slice below is the real main.cjs
+// code between two literal markers.
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
@@ -12,6 +13,9 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { createProjects } = require("../scripts/projects.cjs");
+const { createRowPush } = require("../scripts/row-push.cjs");
+// Objects built inside the vm have its prototypes; compare their content.
+const plain = (value) => JSON.parse(JSON.stringify(value));
 const source = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const section = (start, end) => {
   const from = source.indexOf(start), to = source.indexOf(end, from + start.length);
@@ -95,11 +99,17 @@ test("a launched child's lines split across chunks, CRLF included, and an unendi
   assert.ok(lines[4].startsWith("y".repeat(4000)) && lines[4].endsWith("(61536 more characters)"), "the partial line was held to 64 KiB before the log clipped it");
 });
 
-function pushHost({ smoke = false } = {}) {
+// `rows` adds main's own rowPushes line (scripts/row-push.cjs), under `env`;
+// without it the slice has no row pushes and sends lists whole, as before.
+function pushHost({ smoke = false, rows = false, env = {} } = {}) {
   const time = clock(), sent = [];
   let active = { id: "a" }, hidden = false, minimized = false;
   const window = { isDestroyed: () => false, isMinimized: () => minimized, isVisible: () => !hidden, webContents: { send: (channel, payload) => sent.push({ channel, payload }) } };
   const context = vm.createContext({ ...time, window, SMOKE: smoke, CAPTURE: false, projects: { current: () => active, active: () => active } });
+  if (rows) {
+    Object.assign(context, { process: { env }, createRowPush });
+    vm.runInContext(section("const rowPushes = ", "let assistantLoading = null;"), context);
+  }
   vm.runInContext(section("function send(channel, payload) {", "// registerIpc installs"), context);
   return {
     context, time, sent,
@@ -197,6 +207,127 @@ test("the studio window sends held pushes when it is shown or restored", () => {
   const create = section("function createWindow() {", "// Screenshot tour:");
   assert.match(create, /window\.on\("show", flushHeldPushes\)/);
   assert.match(create, /window\.on\("restore", flushHeldPushes\)/);
+  assert.match(create, /window\.webContents\.ipc\.on\("eyes:rows-sync", \(_event, channel\) => resyncRows\(channel\)\);/);
+});
+
+// ---- row pushes (scripts/row-push.cjs through sendRows) ----
+
+const card = (id, extra = {}) => ({ id, title: `Card ${id}`, ...extra });
+
+test("the four list channels each get a row push, and MEFI_STUDIO_FULL_PUSHES=1 keeps whole plain lists", () => {
+  const rows = pushHost({ rows: true });
+  assert.deepEqual(plain(vm.runInContext("[...rowPushes.keys()]", rows.context)), ["eyes:tasks", "eyes:requests", "eyes:ideas", "eyes:checkpoints"]);
+  const whole = pushHost({ rows: true, env: { MEFI_STUDIO_FULL_PUSHES: "1" } });
+  assert.equal(vm.runInContext("rowPushes", whole.context), null);
+  whole.context.send("eyes:tasks", ["v1"]);
+  whole.context.send("eyes:checkpoints", { s1: [] });
+  whole.context.resyncRows("eyes:tasks");
+  assert.deepEqual(whole.sent, [{ channel: "eyes:tasks", payload: ["v1"] }, { channel: "eyes:checkpoints", payload: { s1: [] } }]);
+});
+
+test("a board list goes whole once, then only what changed; a push with nothing new sends nothing and opens no window", () => {
+  const { context, time, sent } = pushHost({ rows: true });
+  context.send("eyes:tasks", [card("a"), card("b")]);
+  assert.equal(sent.length, 1);
+  const first = sent[0].payload;
+  assert.equal(first.full, true);
+  assert.deepEqual(first.rows, [card("a"), card("b")]);
+  assert.equal(first.projectId, "a");
+  context.send("eyes:tasks", [card("a"), card("b", { title: "B" })]);
+  assert.equal(sent.length, 1, "inside the window the list waits");
+  time.advance(250);
+  assert.equal(sent[1].payload.base, first.rev, "the trailing push is measured against what the page got");
+  assert.deepEqual(sent[1].payload.upsert, [card("b", { title: "B" })]);
+  time.advance(250);
+  assert.equal(time.pending(), 0);
+  context.send("eyes:tasks", [card("a"), card("b", { title: "B", runProgress: { runId: "r", at: 9 } })]);
+  assert.equal(sent.length, 2, "progress alone crosses as eyes:progress, not here");
+  assert.equal(time.pending(), 0, "and opens no window");
+  context.send("eyes:tasks", [card("a"), card("b", { title: "B" }), card("c")]);
+  assert.equal(sent.length, 3, "the next real change goes at once");
+  assert.deepEqual(sent[2].payload.upsert, [card("c")]);
+  context.send("eyes:requests", [{ title: "No id" }]);
+  assert.equal(sent[3].payload.full, true, "an inbox without ids goes whole");
+});
+
+test("the page's rows-sync resends the newest list whole, at once or as the list already on its way", () => {
+  const { context, time, sent } = pushHost({ rows: true });
+  context.send("eyes:tasks", [card("a")]);
+  context.send("eyes:tasks", [card("a"), card("b")]);
+  context.resyncRows("eyes:tasks");
+  assert.equal(sent.length, 1, "a list is coalescing: it goes whole instead");
+  time.advance(250);
+  assert.equal(sent[1].payload.full, true);
+  assert.deepEqual(sent[1].payload.rows, [card("a"), card("b")]);
+  context.resyncRows("eyes:tasks");
+  assert.equal(sent.length, 3, "nothing queued: whole, at once");
+  assert.equal(sent[2].payload.full, true);
+  assert.deepEqual(sent[2].payload.rows, [card("a"), card("b")]);
+  context.resyncRows("eyes:assistant");
+  context.resyncRows(undefined);
+  assert.equal(sent.length, 3, "only the list channels resync");
+});
+
+test("a list push after a project switch goes whole, and a resync for the project left sends nothing", () => {
+  const { context, time, sent, switchTo } = pushHost({ rows: true });
+  context.send("eyes:tasks", [card("a")]);
+  time.advance(250);
+  switchTo("b");
+  context.resyncRows("eyes:tasks");
+  assert.equal(sent.length, 1, "the switch sends its own lists");
+  context.send("eyes:tasks", [card("x")]);
+  assert.equal(sent[1].payload.full, true);
+  assert.equal(sent[1].payload.projectId, "b");
+});
+
+test("while hidden, a held list and a resync wait for the window; the flush sends only what the page lacks", () => {
+  const { context, time, sent, hide, show } = pushHost({ rows: true });
+  context.send("eyes:tasks", [card("a")]);
+  time.advance(250);
+  hide();
+  context.send("eyes:tasks", [card("a"), card("b")]);
+  assert.equal(sent.length, 1);
+  show();
+  assert.deepEqual(sent[1].payload.upsert, [card("b")], "the held list crosses as a delta");
+  time.advance(250);
+  hide();
+  context.resyncRows("eyes:tasks");
+  assert.equal(sent.length, 2, "a resync waits while hidden");
+  show();
+  assert.equal(sent[2].payload.full, true);
+  assert.deepEqual(sent[2].payload.rows, [card("a"), card("b")]);
+});
+
+test("checkpoint stores cross at once as set and del, never held or coalesced", () => {
+  const { context, sent, hide } = pushHost({ rows: true });
+  const s1 = [{ note: "one" }];
+  context.send("eyes:checkpoints", { s1 });
+  context.send("eyes:checkpoints", { s1, s2: [{ note: "two" }] });
+  context.send("eyes:checkpoints", { s1, s2: [{ note: "two" }] });
+  assert.equal(sent.length, 2, "the same store again sends nothing");
+  assert.equal(sent[0].payload.full, true);
+  assert.deepEqual(sent[1].payload.set, { s2: [{ note: "two" }] });
+  hide();
+  context.send("eyes:checkpoints", { s2: [{ note: "two" }] });
+  assert.deepEqual(sent[2].payload.del, ["s1"], "not held while hidden, as before");
+});
+
+test("eyes:progress waits while hidden with each card's newest, and is dropped when the project changed", () => {
+  const { context, sent, hide, show, switchTo } = pushHost({ rows: true });
+  context.send("eyes:progress", { projectId: "a", byTask: { t1: { at: 1 } } });
+  assert.equal(sent.length, 1, "a visible window gets it at once");
+  hide();
+  context.send("eyes:progress", { projectId: "a", byTask: { t1: { at: 2 } } });
+  context.send("eyes:progress", { projectId: "a", byTask: { t2: { at: 3 } } });
+  context.send("eyes:progress", { projectId: "a", byTask: { t1: { at: 4 } } });
+  assert.equal(sent.length, 1);
+  show();
+  assert.deepEqual(plain(sent.slice(1)), [{ channel: "eyes:progress", payload: { projectId: "a", byTask: { t1: { at: 4 }, t2: { at: 3 } } } }]);
+  hide();
+  context.send("eyes:progress", { projectId: "a", byTask: { t1: { at: 5 } } });
+  switchTo("b");
+  show();
+  assert.equal(sent.length, 2, "another project's progress is dropped");
 });
 
 test("overlapping queue-status asks share one board read; a later ask reads again", async () => {

@@ -6,6 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import path from "node:path";
 
 const require = createRequire(import.meta.url);
 const { PORTED, FACTORIES, withRust, factory, off } = require("../scripts/rust-modules.cjs");
@@ -161,9 +162,12 @@ test("the image-store factory turns the named-ids Set into an array, hands previ
   const calls = [];
   const host = { callWithFunctions: async (api, args) => { calls.push({ api, args }); return { ok: true, api }; } };
   const thumbs = [];
-  const collaborators = { dir: () => "C:\\data\\attachments", keep: async () => new Set(["img_aaaaaaaaaaaaaaaaaaaaaaaa"]), thumbnail: async (bytes, mime) => { thumbs.push([bytes, mime]); return null; } };
+  // An absolute folder in this platform's own form (C:\\data\\attachments on Windows, /data/attachments elsewhere):
+  // folder() resolves it, and a Windows path is not absolute on Linux.
+  const attachments = path.resolve(path.sep, "data", "attachments");
+  const collaborators = { dir: () => attachments, keep: async () => new Set(["img_aaaaaaaaaaaaaaaaaaaaaaaa"]), thumbnail: async (bytes, mime) => { thumbs.push([bytes, mime]); return null; } };
   const store = withEnv(undefined, () => factory("image-store", collaborators, host));
-  assert.equal(store.folder(), "C:\\data\\attachments", "answered by the engine, without waiting");
+  assert.equal(store.folder(), attachments, "answered by the engine, without waiting");
   await store.save({ name: "a.png", data: "QUJD" });
   await store.resolve(undefined);
   await store.prune({ keep: new Set(["img_bbbbbbbbbbbbbbbbbbbbbbbb"]) });

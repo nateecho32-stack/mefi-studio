@@ -298,7 +298,10 @@ class MefiStudioIdleTests(unittest.TestCase):
         booklet = (STUDIO / "renderer" / "booklet.js").read_text(encoding="utf-8")
         self.assertIn("paintCatalog", booklet)
         self.assertIn('refresh("open", { fresh: retry })', booklet)
-        self.assertIn("window.MefiBoot.run([", booklet)
+        # The gate is MefiBoot's, run through the startup marks' timing
+        # wrapper when renderer/startup-marks.js is loaded.
+        self.assertIn("const launchGate = window.MefiStartupMarks?.wrapBoot?.(window.MefiBoot) ?? window.MefiBoot;", booklet)
+        self.assertIn("launchGate.run([", booklet)
         self.assertIn("window.MefiWorkspace?.ready?.({ retry })", booklet)
 
     def test_docs_register_this_contract(self):
