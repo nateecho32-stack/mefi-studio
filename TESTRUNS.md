@@ -39,6 +39,50 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Background git leaves no fsmonitor daemons, and Claude workers start only the desk's MCP servers
+
+Branch `fix/git-fsmonitor-worker-mcp` in `C:\wt\fsmon`: the 2026-10-03 commit c575fd3 (left on one PC in `C:\wt\mem`,
+260 commits behind) replayed onto main 539fb8f. One conflict, `cliInvocation`'s Claude line, which main had given live
+progress and the thinking flag: `--strict-mcp-config` sits beside them. Added since: the `MEFI_STUDIO_WORKER_OWN_MCP=1`
+switch and its pin, a live-mode pin, a `sync` test (git reports `core.fsmonitor=false` in a repository that turns it on),
+and the same override in the Rust ports (`repo::run_git`, `git::run`'s `child_env` for git children, `eyes::git`).
+The memory figures (nine daemons at ~44 MB from one worktree list; ~380 MB of the owner's own MCP servers per Claude
+worker) are the 10-03 measurements, not taken again.
+
+CI `Studio checks` (Windows: check, lint, `npm test`, audit) green on 7a034f1, the same change on main 4b150b3.
+Local, with mefi-core built from this branch (`CARGO_TARGET_DIR=C:\rt\fsmon`): rust_parity_repo, rust_parity_git,
+rust_parity_eyes, executor_core and sync 86/86, none skipped. `npm run check` ok on 539fb8f. An earlier local run
+(executor_core, executor_live_progress, executor_worktree, git_actions, sync x5, outside_work x2, usage_tracker_host,
+eyes x3) had one failure, `sync`'s session-hook test, where `git config` hit runGit's 30 s limit with 128-617 MB free
+and eight sessions' tests queued; it passed in the 86/86 run.
+
+## 2026-10-06 The rail's words are whole, and its places are checked at every window size
+
+Branch `ui/rail-words` in `C:\wt\modes` on main 4b150b3: 0f5076a (the Social/Studio launch hint, "Each launch opens
+the mode you last used", which main's merge of the rename did not take) and f9fb916 (at rest the rail keeps 4 px at
+its sides instead of 10 and a tile 2 px, so a word has about 51 px instead of 39; the rail's 64 px is unchanged).
+
+Measured in a real window (`shell_render`, new section 2b, Studio's rail at 1920x1080, 1440x900, 1100x720, 600x560 and
+600x560 at 150%): before, "Settings" needed 43 px and had 39 at the three larger sizes (Segoe UI), and every place was
+reachable; after, no word is cut and every place's middle is the place itself at all five sizes, with Segoe UI and with
+Verdana standing in for Linux's DejaVu Sans. Social's Home has no rail (a question for the owner, not changed here).
+The whole `shell_render` passes on this branch (214 s), the new section included; `skills_render` 1/1.
+
+`npm run check` ok, `npm run audit` 0 errors and 0 warnings, `npm run lint` 0 errors and 47 warnings (as main).
+shell_frame_css, shell_frame_bars, layout_contract_css, app_rail, vibe_home, vibe_panels, vibe_frame, booklet_build
+and size_page: 182/182.
+
+The skills landing (d55269f) said six of its window suites were still queued: all passed afterwards on its tree, one at
+a time: today_render (67 s), skills_render (27 s), composer_render (47 s), autonomy_render (17 s), agent_setup_render
+(45 s) and unified_studio_render (190 s), with team_render and sessions_render as reported.
+
+Incident on this PC, 08:26: removing a throwaway worktree with `git worktree remove --force` followed its node_modules
+junction into the shared node_modules and deleted @electron/get, @electron-internal/extract-zip, @types/node, debug and
+Electron's chrome_100_percent.pak and chrome_200_percent.pak before a locked DLL stopped it. Restored by 08:31 from
+Electron's download cache and an `npm ci --ignore-scripts` scratch copy; all 15 lock entries match, `electron.exe
+--version` is 44.4.1 and window suites pass again. A window suite that failed oddly on this PC between 08:26 and 08:31
+should be run again.
+
 ## 2026-10-06 A test stage that runs past its limit is stopped with everything it started
 
 Branch `wip/test-speed` (C:\wt\speed), main 017d51a merged in. Overnight an economy-events gate held the machine-wide
@@ -457,35 +501,6 @@ command_render, media_browser_render, media_window_render ok on 8e4a501; Friends
 runs fast, ~45 s) and passed on main d71e1e0, b79b4bc and 0661f8c and on this branch's b632757 (154 s): the timing
 flake an older row here already saw at that step. performance_render, startup_render and renderer_recovery ok on
 b632757 (main's studio log on disk and Trace).
-
-## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
-
-Branch `fix/linux-ci` (60b90a1, off main dfda798), test expectations only: rust_modules feeds the image-store
-factory's folder() a platform-native absolute folder (a `C:\` path is relative on Linux), and package_host names
-the Rust host program mefi-studio.exe on Windows and mefi-studio elsewhere, as rust-host.mjs does. Here (Windows):
-rust_modules and package_host pass alone. Hosted CI on the branch (run 37395258702, Windows): the whole chain green.
-studio-linux.yml runs on the main push this lands with; it failed on every main push since 4 October on exactly
-these two tests.
-
-## 2026-10-05 The Mefi Studio relay, the Project hub, the Lobby and one Friends page land on main
-
-Branch `wip/friends-ux` in `C:\wt\fux`: wip/relay (the Cloudflare relay under `relay/`, hub-client, room history,
-credits, the Project hub; 7b7d243) merged in 2bb548b, the Friends page in both layouts with tabs and Close, the
-Your PCs summary, the Lobby, join codes and Who's online (dab7bb4), the Project hub in the rail and the page-based
-friends_navigation (3b35abf). main d8a8cf4 merged (the Map, the 0.5 default; CHANGELOG keeps both sides' entries,
-booklet.html regenerated and equal to the auto-merge).
-
-Full `npm test` on 3b35abf (after another session's gate finished, none overlapping): Node 7035 tests, 7017 pass, 14
-skipped, 4 fail, all git-heavy and all pass alone: attempt_review_host 28/28, attempt_snapshots_host 25/25. Electron
-lane 78: 71 pass, 1 skipped, 6 fail: layout_contract_render and shell_render (as on clean main), fleet_render 1/1,
-media_window_render 1/1, node_views_render 1/1 and performance_render 2/2 alone. Python 248 tests OK; path lock ok;
-`npm run check` ok; `npm run lint` 44 warnings, the same as clean main; `npm run audit` 0 findings. Relay suites
-(relay_core, relay_e2e, relay_credits, relay_connect, room_history, hub_client, hub_host) pass inside the Node stage.
-
-After the merge with d8a8cf4 (3d48f57), re-checked rather than re-gated: `npm run check`; friends_navigation 6/6,
-app_rail 40/40, onboarding 43/43, rooms_ui 13/13, pc_sync_ui 13/13, project_hub_ui 5/5, booklet_build 5/5,
-layout_contract_nav 15/15, shell_frame_bars 34/34, command_toolbar 19/19, check_testruns 9/9; friends_render,
-companion_hub_render, unified_studio_render and map_render 1/1 each.
 
 ## Read Before Any Tests
 

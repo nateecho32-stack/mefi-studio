@@ -6,6 +6,35 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
+
+Branch `fix/linux-ci` (60b90a1, off main dfda798), test expectations only: rust_modules feeds the image-store
+factory's folder() a platform-native absolute folder (a `C:\` path is relative on Linux), and package_host names
+the Rust host program mefi-studio.exe on Windows and mefi-studio elsewhere, as rust-host.mjs does. Here (Windows):
+rust_modules and package_host pass alone. Hosted CI on the branch (run 37395258702, Windows): the whole chain green.
+studio-linux.yml runs on the main push this lands with; it failed on every main push since 4 October on exactly
+these two tests.
+
+## 2026-10-05 The Mefi Studio relay, the Project hub, the Lobby and one Friends page land on main
+
+Branch `wip/friends-ux` in `C:\wt\fux`: wip/relay (the Cloudflare relay under `relay/`, hub-client, room history,
+credits, the Project hub; 7b7d243) merged in 2bb548b, the Friends page in both layouts with tabs and Close, the
+Your PCs summary, the Lobby, join codes and Who's online (dab7bb4), the Project hub in the rail and the page-based
+friends_navigation (3b35abf). main d8a8cf4 merged (the Map, the 0.5 default; CHANGELOG keeps both sides' entries,
+booklet.html regenerated and equal to the auto-merge).
+
+Full `npm test` on 3b35abf (after another session's gate finished, none overlapping): Node 7035 tests, 7017 pass, 14
+skipped, 4 fail, all git-heavy and all pass alone: attempt_review_host 28/28, attempt_snapshots_host 25/25. Electron
+lane 78: 71 pass, 1 skipped, 6 fail: layout_contract_render and shell_render (as on clean main), fleet_render 1/1,
+media_window_render 1/1, node_views_render 1/1 and performance_render 2/2 alone. Python 248 tests OK; path lock ok;
+`npm run check` ok; `npm run lint` 44 warnings, the same as clean main; `npm run audit` 0 findings. Relay suites
+(relay_core, relay_e2e, relay_credits, relay_connect, room_history, hub_client, hub_host) pass inside the Node stage.
+
+After the merge with d8a8cf4 (3d48f57), re-checked rather than re-gated: `npm run check`; friends_navigation 6/6,
+app_rail 40/40, onboarding 43/43, rooms_ui 13/13, pc_sync_ui 13/13, project_hub_ui 5/5, booklet_build 5/5,
+layout_contract_nav 15/15, shell_frame_bars 34/34, command_toolbar 19/19, check_testruns 9/9; friends_render,
+companion_hub_render, unified_studio_render and map_render 1/1 each.
+
 ## 2026-10-05 The Map, the 0.5 layout as the default and Chrome's buttons land on main
 
 Branch `ui/map2` in `C:\wt\ui-map2` over main c7a4d26: the Map place (WIP 404a0c5 finished: the session list stays in
