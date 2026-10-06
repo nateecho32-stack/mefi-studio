@@ -64,6 +64,25 @@ in 115 s on main's copy earlier today, and this branch does not touch it). The n
 run_node_tests_stage_limit (a copy of the runner meets a suite kept alive by a child that never ends: stopped in
 about 5 s, named, the run failed, the turn given back, no process left) and test_lease 13/13.
 
+## 2026-10-06 Sharing playlists in rooms and on the Project hub lands on main
+
+Branch `feat/playlists-share` in `C:\wt\playlists` (aadb6ad; parked first as `wip/playlists-share` 48e3a8a), rebased
+onto main e0e5a46 with the CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged. No relay
+change and no deploy: a room gets the share text as a message, the hub a YouTube `watch_videos` link.
+
+On this PC: `npm run check` ok (296 targets, every selector used), eslint on the touched files adds no warnings (the
+5 in main.cjs are older), `npm run audit` no findings. Node, run together: playlists 16/16 (4 new), rooms_ui and
+project_hub_ui (one new case each; the HUB_PROJECT_METHODS pin now reads playProject: 2 and pins the `here` rule),
+music, booklet_build, together_ui, friends_front_ui and every hub_* suite: 234 pass, 0 fail. Windows CI (`Studio
+checks`) runs on this commit before the fast-forward. Electron suites were not run here: the change adds no window
+fixture and the media ones passed this morning on the same menu; friends_render (12 px text rule) is covered by the
+card's 12 px floor in music.css.
+
+Seen in a browser preview of the real renderer files with a stub room service: Share › Send it to friends lists only
+active rooms you're in (the Lobby first), Post sent 1,337 characters to the Lobby, the chat card plays and saves once
+(then Saved and Open in Playlists), Add to the Project hub sent a 226-character link with a blurb naming the channels,
+and the hub shelf offers Save; no console errors.
+
 ## 2026-10-06 A way to Routing opens More settings at Routing; the background check reads the Settings strip where Settings shows
 
 Branch `fix/routing-narrow` in `C:\wt\routing`, off main 017d51a. The full Electron lane on main 0b2fa14 (here, one
@@ -467,29 +486,6 @@ After the merge with d8a8cf4 (3d48f57), re-checked rather than re-gated: `npm ru
 app_rail 40/40, onboarding 43/43, rooms_ui 13/13, pc_sync_ui 13/13, project_hub_ui 5/5, booklet_build 5/5,
 layout_contract_nav 15/15, shell_frame_bars 34/34, command_toolbar 19/19, check_testruns 9/9; friends_render,
 companion_hub_render, unified_studio_render and map_render 1/1 each.
-
-## 2026-10-05 The Map, the 0.5 layout as the default and Chrome's buttons land on main
-
-Branch `ui/map2` in `C:\wt\ui-map2` over main c7a4d26: the Map place (WIP 404a0c5 finished: the session list stays in
-the list column on Map pages, Map | Fleet | Pipelines as a switch in the Map bar and in Fleet's and the Agent brain's
-heads, Running only, View ▾ with music.js's five node layouts), the 0.5 layout as the default (13a7034; ?smoke/?capture
-launches and a saved classic choice keep v1), one page at a time over the Map and Chrome's metal without the dark
-line through button labels (7b3b867), and companion_hub_render asking for the classic layout it walks (649d229).
-
-`npm run check` 0, `npm run audit` 0, lint 0 errors (45 warnings, none new). Full `npm test` on 7b3b867 here: Node
-6993 tests, 6965 pass, 13 fail + 1 cancelled, all slow git/process suites starved while other sessions' agents and
-tests held the memory (attempt_review_host, attempt_snapshots_host, git_actions, rust_parity_repo, sync,
-sync_changes x2, sync_lineage x2, update_rehearsal, worktree_actions, worktrees x2); hosted CI on the same commit
-(run 37377470163, Windows) passed the whole chain: Node 6993/6959/0 fail (34 skipped), Electron lane 88/45/0 fail
-(43 real-window suites skipped there), Python and audit green. The local Electron lane was cut off by the runner's
-2-hour limit after project_map_render with one failure, companion_hub_render (the 0.5 default sent its Friends
-click to the Friends page; fixed in 649d229, 1/1); layout_contract_render failed as on clean main here (viewport
-1921x1081). The remaining 23 Electron suites then ran one at a time on 649d229 and passed, except shell_render
-(as on clean main on this PC): release_channel_render, renderer_recovery, review_render, rust_host_bridge,
-sessions_render, settings_render, setup_helper_render, size_render, skills_render, stamp_exe, startup_render,
-tabs_render, task_overview_render, team_render, today_render, tree_dynamics_render, unified_studio_render,
-workflow_render, worktrees_render, command_render (57 s), eyes_toggle_electron, occlusion_probe. map_render (new)
-passed in the lane.
 
 ## Read Before Any Tests
 

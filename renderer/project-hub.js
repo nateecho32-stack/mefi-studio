@@ -240,7 +240,11 @@
       by.append(badge(project.owner.rank));
       text.append(head, by);
       if (project.blurb) text.append(node("p", "project-hub-blurb", project.blurb));
-      text.append(node("span", "muted project-hub-meta", `${project.host} · ${plural(project.plays, "play")} · ${plural(project.stars, "star")} · ${KINDS.find(([id]) => id === project.kind)?.[1] ?? "Other"}`));
+      // A playlist (YouTube's play-them-all link) shows its videos and plays in Studio (renderer/playlists.js).
+      const playlist = window.MefiPlaylists?.fromLink?.(project.url, project.title);
+      const shelf = playlist && window.MefiPlaylists.cardFor?.(playlist, { play: false, title: false });
+      if (shelf) text.append(shelf);
+      text.append(node("span", "muted project-hub-meta", `${project.host} · ${plural(project.plays, "play")} · ${plural(project.stars, "star")} · ${playlist ? "Playlist" : KINDS.find(([id]) => id === project.kind)?.[1] ?? "Other"}`));
       row.append(text, actions(project));
       return row;
     }
@@ -406,9 +410,17 @@
     }
 
     async function play(project) {
+      // A playlist plays in Studio's own player; the play counts the same way.
+      const playlist = window.MefiPlaylists?.fromLink?.(project.url, project.title);
       await guard("Opening…", async () => {
-        const answer = await call("playProject", project.id);
-        status.textContent = answer?.ok ? `${project.title} opened in your browser. Play for ${Math.round((answer.minMs ?? 120000) / 60000)} minutes and it counts${project.owner.id === me?.user?.id ? "" : " for you both"}.` : why(answer, "That project could not be opened.");
+        const answer = playlist ? await call("playProject", project.id, { here: true }) : await call("playProject", project.id);
+        const minutes = Math.round((answer?.minMs ?? 120000) / 60000), counts = project.owner.id === me?.user?.id ? "" : " for you both";
+        if (playlist) {
+          window.MefiPlaylists.play(playlist);
+          status.textContent = answer?.ok ? `${project.title} is playing in Studio. Listen for ${minutes} minutes and it counts${counts}.` : `${project.title} is playing in Studio; this play won't count: ${why(answer, "the room service didn't answer.")}`;
+          return;
+        }
+        status.textContent = answer?.ok ? `${project.title} opened in your browser. Play for ${minutes} minutes and it counts${counts}.` : why(answer, "That project could not be opened.");
       });
     }
     async function star(project, on) {

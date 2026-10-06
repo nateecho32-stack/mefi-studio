@@ -12,6 +12,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   test windows) is stopped together with everything it started, and the run
   says which suites were still going. One stuck test window had held every
   session's window tests for nine hours.
+- **Share a playlist with friends inside Studio.** A playlist's **Share**
+  now has **Send it to friends**: **Post** puts it in any room you're in (the
+  Lobby too), where it shows as a playlist card friends can play or save, and
+  **Add to the Project hub** lists a playlist of YouTube videos there. On the
+  hub (and as the Lobby's top project) a playlist's **Play** plays it in
+  Studio's own player instead of opening the browser, and the play still
+  earns you both credits. Long lists fit one message; the YouTube link
+  carries every video.
 - **A way to Routing lands on Routing again.** Routing moved into **More
   settings** on Team's Seats and models page, so Search's Routing (and
   Team's own links to it) opened the page with Routing folded away. It now
