@@ -3848,6 +3848,8 @@ body.command-active .walkthrough-coach { right: calc(392px + var(--shell-x1)); }
   50% { outline-color: transparent; }
 }
 .help-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.help-links { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: -4px; }
+.help-links[hidden] { display: none; }
 /* Settings: seven compact category panes and direct control search. */
 .settings-panel { container: settings / inline-size; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
 .settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: var(--s4); }

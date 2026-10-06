@@ -368,18 +368,19 @@
      spark at the top goes back to Vibe and only the switch at the foot leaves
      the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
 <nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Social (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Today (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Today</span></button>
   <div class="vibe-rail-items">
-    <button type="button" data-nav="command" data-vibe-section="agents" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button type="button" data-nav="tasks" data-vibe-section="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+    <button type="button" data-nav="friends" data-vibe-place="friends" title="Friends: the Lobby, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
+    <button type="button" data-nav="command" data-vibe-place="map" title="The Map: your agents at work, live (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span>Map</span><span class="count warn" data-badge="questions" hidden></span></button>
+    <button type="button" data-nav="tasks" data-vibe-place="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
     <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
     <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
-    <button type="button" data-nav="friends" title="Rooms, your PCs and companion playdates"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Friends</span></button>
+    <button type="button" data-nav="agents" data-vibe-place="team" title="Team: who builds, which AI it uses and how much it may decide"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span>Team</span></button>
     <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
   </div>
-  <div class="vibe-rail-foot">
-    <button type="button" data-nav="studio" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+  <div class="vibe-rail-foot" id="vibe-rail-foot">
+    <button type="button" data-nav="studio" data-vibe-place="settings" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+    <button type="button" data-nav="help" data-vibe-place="help" title="Help: start here, the setup guide and every shortcut (?)"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg><span>Help</span></button>
     <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
   </div>
 </nav>
@@ -708,14 +709,14 @@
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
-            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social mode</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
           <p class="muted" id="idle-home-hint" data-info-anchor="idle-home-label">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
-          <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
+          <label class="field"><span class="field-label">Agents when Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
           <div class="settings-you-switches" id="launch-daily-news-row">
             <label class="switch" title="On: the launch screen is a front page with the day's biggest AI and developer-tool news beside your projects, fetched once a day. Off: only the project chooser, and Studio fetches no news."><input type="checkbox" id="launch-daily-news" checked><span class="track"></span><span>Daily news on the launch screen</span></label>
@@ -724,7 +725,7 @@
           <div class="settings-you-switches" id="open-at-login-row" hidden>
             <label class="switch" title="Studio opens in the tray when you sign in to Windows, on the project you had open."><input type="checkbox" id="open-at-login"><span class="track"></span><span>Start with Windows</span></label>
           </div>
-          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.</p>
+          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow Agents when Studio opens. A PC you leave working keeps working after an update restart.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
             <span class="settings-mode-text"><b>Mode</b><span id="settings-mode-hint">Social is for friends and a light eye on your agents. Studio is for in-depth building.</span></span>
@@ -2268,6 +2269,7 @@
       </div>
     </header>
     <p class="help-start">New to Studio? <button class="ghost mini" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-flag"/></svg>Start here</button></p>
+    <p class="help-links" id="help-links" role="group" aria-label="More help"></p>
     <div class="shortcut-grid" id="help-grid"></div>
   </div>
 </div>

@@ -41,7 +41,7 @@ function finish(error) {
 process.on("uncaughtException", finish); process.on("unhandledRejection", finish);
 
 // The prototype's list, in its order, under its headings (TEAM_SUBS with TEAM_HEADS).
-const LIST = ["Overview", "Providers", "Seats and models", "Permissions", "# Context for agents", "Rules", "Skills", "Connectors", "Related folders", "Workflows", "# Monitor", "Health and usage", "Models", "Inspect"];
+const LIST = ["Overview", "Providers", "Seats and models", "Permissions", "# Context for agents", "Rules", "Skills", "Connectors", "Related folders", "Workflows", "# Monitor", "Health and usage", "Resources", "Models", "Inspect"];
 // The places that are panes of this page: the title, the panes that show, and whether the team draft's bars show.
 const PANES = [
   ["overview", "Team", ["overview", "behavior"], { save: true, toolbar: true }],

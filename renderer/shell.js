@@ -959,6 +959,7 @@
     }
     // The Git chip rides with the page list (renderer/git-sync.js keeps one popover for every chip); mounting again is harmless.
     if (model) { try { window.MefiGitSync?.mount?.(pages.git, { variant: "list" }); } catch { /* no chip in this build */ } }
+    paintPlaceBars(model);
     const shown = Boolean(model);
     if (pages.shown !== shown || pages.section !== (model?.section ?? null)) {
       pages.shown = shown;
@@ -985,6 +986,43 @@
     const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : Math.max(0, Math.min(items.length - 1, at + (event.key === "ArrowDown" ? 1 : -1)));
     event.preventDefault?.();
     items[next]?.focus?.({ preventScroll: true });
+  }
+
+  // ---- the place bar: a place's pages as one row at the top of its page ----------------------------------
+  // The same model the list column draws (pageModel: Team's, Friends' and the rest), for when the column is not showing it:
+  // Social keeps the column closed, and a small window folds it into a drawer. Friends and Team mount one in their heads
+  // (placeBar(host, section)); html[data-frame-pages] hides it while the docked column lists the same pages (shell.css).
+  const placeBars = new Set();
+  function placeBar(host, section) {
+    if (!host || typeof host.append !== "function" || typeof section !== "string") return null;
+    const bar = el("nav", "shell-place-bar", { "aria-label": `${section.charAt(0).toUpperCase()}${section.slice(1)} places`, "data-section": section });
+    bar.hidden = true;
+    host.append(bar);
+    placeBars.add(bar);
+    paintPlaceBars(state.on ? pageModel() : null);
+    return bar;
+  }
+  function paintPlaceBars(model) {
+    if (!placeBars.size) return;
+    const n = nav();
+    const rows = !model ? [] : model.rows ? model.rows : (model.pages || []).map((page) => ({ kind: "row", key: page.id, label: page.label, current: page.current, run: () => n?.go?.(page.id) }));
+    const key = JSON.stringify([model?.section ?? null, rows.map((row) => [row.kind, row.key ?? null, row.label, Boolean(row.current), Boolean(row.open), Boolean(row.sub)])]);
+    for (const bar of placeBars) {
+      if (bar.dataset.key === key) continue;
+      bar.dataset.key = key;
+      if (!model || model.section !== bar.dataset.section) { bar.hidden = true; bar.replaceChildren(); continue; }
+      const items = [];
+      for (const row of rows) {
+        if (row.sub) continue;
+        if (row.kind === "heading") { items.push(text("span", "shell-place-group", row.label)); continue; }
+        const chip = button(`shell-place-chip${row.current || row.open ? " is-current" : ""}`, null, (event) => row.run?.(event), { "data-page": row.key ?? row.label });
+        chip.textContent = row.label;
+        if (row.current || row.open) chip.setAttribute("aria-current", "page");
+        items.push(chip);
+      }
+      bar.replaceChildren(...items);
+      bar.hidden = items.length === 0;
+    }
   }
 
   // ---- the feed: what the bars say -------------------------------------------------------------
@@ -1154,7 +1192,11 @@
     items.usage = el("span", "shell-usage");
     // The prototype's second rule: between what waits on you and the usage meters, there only while the meters are.
     items.usageSep = el("span", "shell-sep-v shell-usage-sep", { "aria-hidden": "true" });
-    item("player", "shell-player", () => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(); else nav()?.go?.("audio"); }, "Music and video");
+    // The media menu opens from this button: it places itself here and says so on this button (aria-expanded), not on
+    // Settings' own way in.
+    item("player", "shell-player", (event) => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(event?.currentTarget ?? items.player ?? null); else nav()?.go?.("audio"); }, "Music and video");
+    items.player.setAttribute("aria-haspopup", "dialog");
+    items.player.setAttribute("aria-expanded", "false");
     items.player.setAttribute("aria-haspopup", "true");
     items.player.append(icon("audio"), text("span", "shell-player-title", ""), text("span", "shell-player-time", ""));
     // The machine's load opens Team › Resources (renderer/resources.js), where its apps can be held back for the agents;
@@ -1674,6 +1716,8 @@
     status: () => (state.on ? { ...(state.live ?? readLive()) } : null),
     // Whether the list column shows the section's page list now (the column's panels make way while it does), and for which section.
     pages: () => (state.on && state.pages ? { shown: state.pages.shown, section: state.pages.section } : { shown: false, section: null }),
+    // A place's pages as a row at the top of its page, for when the list column is not showing them (Social, small windows).
+    placeBar,
     layout: () => clone(state.prefs),
     onInbox: null,
     LIMITS, DEFAULTS, REGIONS, MODES, PRESETS,

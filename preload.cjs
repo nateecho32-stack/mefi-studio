@@ -73,6 +73,7 @@ const api = {
   readCatalog: () => ipcRenderer.invoke("catalog:read"),
   refreshCatalog: () => ipcRenderer.invoke("catalog:refresh"),
   launchStudio: () => ipcRenderer.invoke("studio:launch"),
+  gameStatus: () => ipcRenderer.invoke("studio:game-status"),
   runSmoke: () => ipcRenderer.invoke("studio:smoke"),
   launchGame: () => ipcRenderer.invoke("studio:game"),
   stopStudio: () => ipcRenderer.invoke("studio:stop"),

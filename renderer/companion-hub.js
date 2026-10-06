@@ -538,6 +538,8 @@
     const title = node("h1", "", "Friends"); title.id = "friends-place-title"; title.tabIndex = -1;
     const about = node("p", "muted friends-place-about");
     head.append(title, about);
+    // The places as a row under the title, for when the list column is not showing them (Social, a small window).
+    window.MefiShell?.placeBar?.(head, "friends");
     // Moderation's row joins the list column once the relay says this member is a moderator.
     window.MefiFriendsMod?.subscribe?.(() => window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: friendsPage.place } })));
     const body = node("div", "friends-place-body"); body.id = "friends-place-body";
@@ -574,6 +576,9 @@
     // A room asked for by name (The Lobby's rooms and people) opens in Rooms, even when Rooms is already up.
     friendsPage.room = place.id === "rooms" && typeof params.room === "string" ? params.room : null;
     friendsPage.root.hidden = false;
+    // The frame measures again now the page shows: Social's rail stands beside Friends (vibe.css), and the claim above
+    // was announced while the page was still hidden.
+    window.MefiShell?.sync?.("friends");
     friendsPage.root.dataset.place = place.id;
     friendsPage.title.textContent = place.label;
     friendsPage.about.textContent = place.about;

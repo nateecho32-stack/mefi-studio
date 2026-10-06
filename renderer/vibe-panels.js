@@ -647,7 +647,7 @@
       else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
       note(startBox.checked ? "Every launch starts in Social." : "Each launch opens the mode you last used.", "good");
     });
-    start.append(el("span", "vibe-set-label", "Always start in Social"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
+    start.append(el("span", "vibe-set-label", "Always start in Social mode"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
     body.append(start);
 
     // Key tips (renderer/key-tips.js): the small pop-ups naming each button's key.

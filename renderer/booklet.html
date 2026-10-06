@@ -3858,6 +3858,8 @@ body.command-active .walkthrough-coach { right: calc(392px + var(--shell-x1)); }
   50% { outline-color: transparent; }
 }
 .help-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+.help-links { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: -4px; }
+.help-links[hidden] { display: none; }
 /* Settings: seven compact category panes and direct control search. */
 .settings-panel { container: settings / inline-size; padding: 0; border: 0; background: transparent; backdrop-filter: none; }
 .settings-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding-bottom: var(--s4); }
@@ -8147,6 +8149,8 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .agents-head p { display: none; margin: 0; }
 .agents-head > div:first-child { min-width: 0; }
 .agents-head .muted { font-size: var(--fs-sm); }
+/* Team's places as a row under the title (renderer/shell.js placeBar). */
+#agents-overlay .agents-head .shell-place-bar { margin: 10px 0 2px; }
 .agents-head-actions { display: flex; align-items: center; justify-content: end; flex-wrap: wrap; gap: 8px; }
 .agents-eyebrow { font-size: var(--fs-2xs); letter-spacing: .12em; color: var(--gold-bright); }
 /* Team in the 0.5 layout (renderer/agents.js openTeam): the prototype's page head, a title with the line that says what
@@ -9782,7 +9786,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 #friends-overlay[hidden] { display: none; }
 /* The page's fill is the theme's glass (--studio-page-fill, mostly clear in Chrome), so what it stands over must not read
    through: the content under it steps aside while it shows, as under a workspace page (studio-ui.css). The frame stays. */
-body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
+body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #vibe-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
 #friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
 #friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
@@ -10610,17 +10614,18 @@ html[data-ui-mode="vibe"] :is(#app-rail, #workspace-sidebar-toggle) { display: n
   font-family: var(--font-ui);
   animation: vibe-rail-in var(--motion-slow) var(--ease-out) both;
 }
-.vibe-rail[hidden], body.vibe-active:not(:has(.workspace-page:not([hidden]))) .vibe-rail { display: none; }
+/* Off on Today itself (its own home), on every page over it, Friends included. */
+.vibe-rail[hidden], body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) .vibe-rail { display: none; }
 html[data-no-blur] .vibe-rail { backdrop-filter: none; background: color-mix(in srgb, var(--panel-solid) 96%, transparent); }
 @keyframes vibe-rail-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 .vibe-rail-items, .vibe-rail-foot { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 .vibe-rail-items { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
-.vibe-rail-foot { padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--ivory) 8%, transparent); }
+.vibe-rail-foot { position: relative; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--ivory) 8%, transparent); }
 .vibe-rail button {
   position: relative; display: grid; justify-items: center; align-content: center; gap: 4px;
   width: 100%; min-height: 54px; margin: 0; padding: 6px 2px; box-sizing: border-box;
   border: 0; border-radius: 16px; background: none; box-shadow: none; color: var(--muted);
-  font: 550 10.5px/1.2 var(--font-ui); text-align: center; cursor: pointer; transform: none;
+  font: 550 max(12px, calc(12px * var(--text-scale, 1)))/1.2 var(--font-ui); text-align: center; cursor: pointer; transform: none;
   transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
 }
 .vibe-rail button .glyph { width: 19px; height: 19px; transition: transform var(--motion-base) var(--ease-spring); }
@@ -10665,8 +10670,8 @@ html[data-ui-mode="vibe"] {
 
 /* On Vibe's own page there is no rail, so sheets and the project panel use
    the whole window instead of leaving a strip where the rail would be. */
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: var(--shell-list-w); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #toast-host { left: calc(var(--shell-list-w) + 24px); bottom: calc(104px + var(--shell-y1)); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: var(--shell-list-w); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) #toast-host { left: calc(var(--shell-list-w) + 24px); bottom: calc(104px + var(--shell-y1)); }
 
 /* Search */
 html[data-ui-mode="vibe"] #palette-overlay { padding-top: 11vh; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); }
@@ -10693,7 +10698,7 @@ html[data-ui-mode="vibe"] .overlay:not(.workspace-page) .sheet-close { border-ra
    project button on the Vibe page. */
 html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: calc(10px + var(--shell-y1)); left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
 html[data-ui-mode="vibe"] #workspace-sidebar[data-open="true"] #workspace-sidebar-panel { transform: none; opacity: 1; box-shadow: var(--studio-float-shadow); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project { border-radius: 14px; font-size: 13px; }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project.selected { color: var(--ivory); background: var(--v-menu-pick); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }
@@ -12835,8 +12840,13 @@ html[data-frame] .shell-region {
   font: 450 var(--frame-fs)/1.35 var(--font-ui);
   color: var(--ivory);
 }
+/* The classic node-tree strip on the window's right edge is not part of the 0.5 frame (the Map is the tree now): on the
+   tab pages (Settings, the model pages, Activity) it covered the page's right edge and the top bar. tree3d.js stops
+   drawing while it has no size, and a pin saved by the old layout reserves no room. */
+html[data-frame] #tree-rail { display: none !important; }
+html[data-frame] body, html[data-frame] body:has(#tree-rail.pinned) { padding-right: calc(var(--gutter) + var(--shell-x1)); }
 /* Vibe's own Home has no rail on screen: the list starts at the window's edge there. */
-html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
+html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
 
 /* Vibe's own layer starts under the bar; its header keeps the project, new app, update, conversation
    and settings buttons and drops the mode switch, the pulse and the search the bar carries now. */
@@ -13040,6 +13050,21 @@ html[data-frame] .shell-page[aria-current="page"] .glyph { color: var(--gold-bri
 html[data-frame] .shell-page .count { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 9px; background: var(--tint-gold-2, color-mix(in srgb, var(--gold) 10%, transparent)); color: var(--ivory); font: 650 var(--frame-fs-s)/18px var(--font-ui); text-align: center; }
 html[data-frame] .shell-page .count.warn { color: var(--warn); }
 html[data-frame] .shell-page .count[hidden] { display: none; }
+/* The place bar (renderer/shell.js placeBar): the same pages as one wrapping row at the top of a place's page, for when
+   the list column is not showing them (Social keeps it closed; a small window folds it). While the docked column lists
+   them (html[data-frame-pages]) the bar steps aside, so a place never shows its pages twice. */
+html[data-frame] .shell-place-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 14px; }
+html[data-frame] .shell-place-bar[hidden], html[data-frame][data-frame-pages] .shell-place-bar { display: none; }
+html[data-frame] .shell-place-chip {
+  display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--hairline-strong); background: color-mix(in srgb, var(--ivory) 3%, transparent);
+  color: var(--muted); font: 500 var(--frame-fs)/1 var(--font-ui); cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out), border-color var(--motion-fast) var(--ease-out);
+}
+html[data-frame] .shell-place-chip:hover { color: var(--ivory); border-color: color-mix(in srgb, var(--gold) 45%, var(--hairline-strong)); }
+html[data-frame] .shell-place-chip:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+html[data-frame] .shell-place-chip[aria-current="page"] { color: var(--ivory); font-weight: 600; background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+html[data-frame] .shell-place-group { margin: 0 2px 0 8px; color: var(--dim); font-size: var(--frame-fs); white-space: nowrap; }
 html[data-frame] .shell-pages-group { margin: 10px 0 2px; padding: 0 10px; color: var(--muted); font: 650 var(--frame-fs-s)/1.3 var(--font-ui); letter-spacing: 0; text-transform: none; }
 html[data-frame] .shell-pages-group.is-current { color: var(--ivory); }
 /* A place whose page is the current row reads as open; the way to every setting in one tree sits apart at the end. */
@@ -14644,18 +14669,19 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
      spark at the top goes back to Vibe and only the switch at the foot leaves
      the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
 <nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Social (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Social</span></button>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Today (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Today</span></button>
   <div class="vibe-rail-items">
-    <button type="button" data-nav="command" data-vibe-section="agents" title="Watch the live node tree (D)"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Watch</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button type="button" data-nav="tasks" data-vibe-section="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
+    <button type="button" data-nav="friends" data-vibe-place="friends" title="Friends: the Lobby, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
+    <button type="button" data-nav="command" data-vibe-place="map" title="The Map: your agents at work, live (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span>Map</span><span class="count warn" data-badge="questions" hidden></span></button>
+    <button type="button" data-nav="tasks" data-vibe-place="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
     <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
     <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button type="button" data-nav="agents" title="Your agents, models and usage"><svg class="glyph" aria-hidden="true"><use href="#g-agents"/></svg><span>Agents</span></button>
-    <button type="button" data-nav="friends" title="Rooms, your PCs and companion playdates"><svg class="glyph" aria-hidden="true"><use href="#g-orbit"/></svg><span>Friends</span></button>
+    <button type="button" data-nav="agents" data-vibe-place="team" title="Team: who builds, which AI it uses and how much it may decide"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span>Team</span></button>
     <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
   </div>
-  <div class="vibe-rail-foot">
-    <button type="button" data-nav="studio" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+  <div class="vibe-rail-foot" id="vibe-rail-foot">
+    <button type="button" data-nav="studio" data-vibe-place="settings" title="Settings (Ctrl ,)"><svg class="glyph" aria-hidden="true"><use href="#g-sliders"/></svg><span>Settings</span></button>
+    <button type="button" data-nav="help" data-vibe-place="help" title="Help: start here, the setup guide and every shortcut (?)"><svg class="glyph" aria-hidden="true"><use href="#g-help"/></svg><span>Help</span></button>
     <button id="vibe-rail-build" type="button" data-ui-mode="build" title="Switch to Studio: in-depth building"><svg class="glyph" aria-hidden="true"><use href="#g-wrench"/></svg><span>Studio</span></button>
   </div>
 </nav>
@@ -14984,14 +15010,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
             <label class="switch" id="settings-companion-motion" title="Your companion floats and blinks beside the conversation. Calm and Off keep it still."><input id="workspace-motion" type="checkbox" checked><span class="track"></span><span>Let your companion move</span></label>
             <label class="switch" title="Blur what sits behind every sheet, menu and Home panel. Off gives them a plain, darker backdrop."><input type="checkbox" id="pref-blur" checked><span class="track"></span><span>Blur behind panels</span></label>
             <label class="switch" id="idle-home-switch" title="On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way."><input type="checkbox" id="idle-home"><span class="track"></span><span id="idle-home-label">Open Home on launch</span></label>
-            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social</span></label>
+            <label class="switch" id="settings-start-vibe-switch" title="On: every launch starts in Social, even if you closed the app in Studio. Off: each launch opens the mode you last used."><input type="checkbox" id="settings-start-vibe" checked><span class="track"></span><span>Always start in Social mode</span></label>
             <label class="switch" id="settings-key-tips-switch" title="Small pop-ups beside buttons and tabs that show the key that does the same thing. Click one to fade it away."><input type="checkbox" id="settings-key-tips" checked><span class="track"></span><span>Show key tips</span></label>
             <label class="switch" id="settings-composer-picker-switch" title="Typing @ in Home's message box offers this project's files, # its tasks and / its skills, and the box shows what the message points at. Off leaves @, # and / as plain typing, and a /skill in a message is not expanded."><input type="checkbox" id="settings-composer-picker" checked><span class="track"></span><span>Suggest files, tasks and skills while I type</span></label>
             <label class="switch" title="On: after five minutes without input, Studio switches to Command view. Off: it stays on the page you left open."><input type="checkbox" id="idle-command-idle"><span class="track"></span><span>Show Command view after 5 quiet minutes</span></label>
           </div>
           <p class="muted" id="idle-home-hint" data-info-anchor="idle-home-label">When disabled, Studio reopens the last tab page you used after the project chooser.</p>
           <!-- settings.ui.launchAgents (main.cjs launchAgentsInfo); the launch screen's default button follows it. -->
-          <label class="field"><span class="field-label">When Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
+          <label class="field"><span class="field-label">Agents when Studio opens</span><select id="launch-agents" aria-describedby="launch-agents-hint"><option value="resume">Resume what I had</option><option value="start">Start agents</option><option value="off">Keep agents off</option></select><span class="field-hint" id="launch-agents-hint">Resume starts agents on a project where they were running when you closed Studio. The launch screen still offers both choices.</span></label>
           <!-- settings.ui.dailyNews (main.cjs news:edition, startup:state news); renderer/daily-paper.js keeps it. -->
           <div class="settings-you-switches" id="launch-daily-news-row">
             <label class="switch" title="On: the launch screen is a front page with the day's biggest AI and developer-tool news beside your projects, fetched once a day. Off: only the project chooser, and Studio fetches no news."><input type="checkbox" id="launch-daily-news" checked><span class="track"></span><span>Daily news on the launch screen</span></label>
@@ -15000,7 +15026,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <div class="settings-you-switches" id="open-at-login-row" hidden>
             <label class="switch" title="Studio opens in the tray when you sign in to Windows, on the project you had open."><input type="checkbox" id="open-at-login"><span class="track"></span><span>Start with Windows</span></label>
           </div>
-          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow When Studio opens. A PC you leave working keeps working after an update restart.</p>
+          <p class="muted" id="open-at-login-hint" hidden>Studio opens in the tray when you sign in, on the project you had open, and agents follow Agents when Studio opens. A PC you leave working keeps working after an update restart.</p>
           <!-- The Vibe / Build choice, switched in place (vibe.js keeps you on Settings). -->
           <div class="settings-mode-row" id="settings-mode">
             <span class="settings-mode-text"><b>Mode</b><span id="settings-mode-hint">Social is for friends and a light eye on your agents. Studio is for in-depth building.</span></span>
@@ -16544,6 +16570,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       </div>
     </header>
     <p class="help-start">New to Studio? <button class="ghost mini" data-nav="onboarding"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-flag"/></svg>Start here</button></p>
+    <p class="help-links" id="help-links" role="group" aria-label="More help"></p>
     <div class="shortcut-grid" id="help-grid"></div>
   </div>
 </div>
@@ -24313,7 +24340,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -24387,6 +24414,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
       ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
+      ["friends-events", "Events", "g-bolt", "This week's Build Jam, co-work hours and building together", "events"],
     ].map(([id, label, glyph, desc, target]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
       searchTerms: `friends ${label} ${desc}`,
@@ -25361,7 +25389,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     else if (id === "map") id = "command";
     // Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The Lobby and each
     // way in at its own place. (Spelled out here, not shared: suites run go() on its own.)
-    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
+    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub", "friends-events": "events" };
     if (Object.hasOwn(friendsPages, id)) {
       params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
@@ -25742,7 +25770,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events"]) { const dest = get(id); if (dest) children.append(navButton(dest, "app-rail-item", { key: false })); }
         group.append(children);
       }
       sections.append(group);
@@ -26223,7 +26251,28 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const element = target ?? document.getElementById("help-grid");
     if (!element) return;
     element.textContent = "";
-    const rows = list({ showIn: "help" }).filter((dest) => dest.key);
+    // The sheet's own row of help: the Help menu's rows (HELP_MENU_V2, one list for both), past Start here and the sheet itself.
+    const links = target ? null : document.getElementById("help-links");
+    if (links) {
+      links.textContent = "";
+      let count = 0;
+      for (const [id, words] of HELP_MENU_V2) {
+        const dest = get(id);
+        if (!dest || id === "onboarding" || id === "help" || dest.hidden?.()) continue;
+        const link = document.createElement("button");
+        link.type = "button";
+        link.className = "ghost mini";
+        link.dataset.helpLink = id;
+        link.textContent = words;
+        // The sheet steps aside first: a page (the setup guide) opens under the transient layer, not behind it.
+        link.addEventListener("click", () => { close("help"); go(id); });
+        links.append(link);
+        count += 1;
+      }
+      links.hidden = count === 0;
+    }
+    // A shortcut kept only as a chord (Ctrl J for the Inbox) is a shortcut too.
+    const rows = list({ showIn: "help" }).filter((dest) => dest.key || dest.chord);
     HELP_SECTIONS.forEach(([title, sections], index) => {
       const items = rows.filter((dest) => sections.includes(sectionOf(dest)));
       if (!items.length && title !== "Help") return;
@@ -26238,7 +26287,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       group.setAttribute("aria-labelledby", heading.id);
       group.append(heading);
       for (const dest of items) {
-        group.append(helpRow(dest.key, dest.label));
+        if (dest.key) group.append(helpRow(dest.key, dest.label));
         if (dest.chord) group.append(helpRow(dest.chord, dest.label));
       }
       if (title === "Help") group.append(helpRow("Esc", ESC_HELP));
@@ -26540,6 +26589,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const title = head.querySelector?.(".sheet-title");
         if (typeof title?.after === "function") title.after(group); else head.append?.(group);
       }
+      // The Agent brain's Playbook and Project map are Team › Workflows: the Map's switch does not belong over them.
+      group.hidden = Boolean(head.closest?.("#agent-brain-overlay")) && Boolean(tab) && tab !== "live";
       for (const button of Array.from(group.children ?? [])) {
         const on = button.dataset.nav === id && (id !== "agent-brain" || tab === "live");
         if (on) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
@@ -85665,6 +85716,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const title = node("h1", "", "Friends"); title.id = "friends-place-title"; title.tabIndex = -1;
     const about = node("p", "muted friends-place-about");
     head.append(title, about);
+    // The places as a row under the title, for when the list column is not showing them (Social, a small window).
+    window.MefiShell?.placeBar?.(head, "friends");
     // Moderation's row joins the list column once the relay says this member is a moderator.
     window.MefiFriendsMod?.subscribe?.(() => window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: friendsPage.place } })));
     const body = node("div", "friends-place-body"); body.id = "friends-place-body";
@@ -85701,6 +85754,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // A room asked for by name (The Lobby's rooms and people) opens in Rooms, even when Rooms is already up.
     friendsPage.room = place.id === "rooms" && typeof params.room === "string" ? params.room : null;
     friendsPage.root.hidden = false;
+    // The frame measures again now the page shows: Social's rail stands beside Friends (vibe.css), and the claim above
+    // was announced while the page was still hidden.
+    window.MefiShell?.sync?.("friends");
     friendsPage.root.dataset.place = place.id;
     friendsPage.title.textContent = place.label;
     friendsPage.about.textContent = place.about;
@@ -89746,6 +89802,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     { id: "folders", label: "Related folders", glyph: "g-explorer", group: "Context for agents", panes: ["folders"], about: "Extra folders agents may read but never change." },
     { id: "flows", label: "Workflows", glyph: "g-route", group: "Context for agents", views: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]] },
     { id: "health", label: "Health and usage", glyph: "g-gauge", group: "Monitor", views: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]] },
+    // The resource manager (renderer/resources.js): other apps slowed, paused or closed so the agents get this PC.
+    { id: "resources", label: "Resources", glyph: "g-gauge", group: "Monitor", views: [["Resources", "resources"]] },
     { id: "models", label: "Models", glyph: "g-graph", group: "Monitor", views: [["Catalog", "booklet"], ["Performance", "graph"]] },
     { id: "inspect", label: "Inspect", glyph: "g-eyes", group: "Monitor", views: [["Sessions", "explorer"], ["Activity and evidence", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"], ["Performance profiler", "profiler"], ["Machine status", "explorer", { panel: "diagnostics" }], ["Connection log", "agents", { place: "providers", target: "settings-log" }]] },
   ]);
@@ -89834,6 +89892,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const settings = button("Studio appearance", () => go("studio", { category: "appearance" }), "ghost mini");
     const headActions = node("div", "agents-head-actions"); headActions.append(button("Reload saved settings", discard, "ghost mini"), settings);
     head.append(title, headActions); sheet.append(head);
+    // Team's places as a row under the title, for when the list column is not showing them (Social, a small window).
+    window.MefiShell?.placeBar?.(title, "team");
     const body = node("div", "agents-body"); body.id = "agents-body";
     for (const name of ["overview", "connections", "team", "routing", "behavior"]) { const pane = node("div", "agents-pane"); pane.id = `agents-${name}`; pane.dataset.agentsPane = name; pane.hidden = true; body.append(pane); }
     sheet.append(body);
@@ -93307,7 +93367,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       else { try { localStorage.setItem("mefiStudio.uiMode.launch", startBox.checked ? "vibe" : "last"); } catch { /* private store */ } }
       note(startBox.checked ? "Every launch starts in Social." : "Each launch opens the mode you last used.", "good");
     });
-    start.append(el("span", "vibe-set-label", "Always start in Social"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
+    start.append(el("span", "vibe-set-label", "Always start in Social mode"), startBox, el("span", "vibe-set-hint", "Off reopens Studio if that is where you left off."));
     body.append(start);
 
     // Key tips (renderer/key-tips.js): the small pop-ups naming each button's key.
@@ -93894,11 +93954,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function paintSettings(current) {
     const vibe = current === "vibe";
     const label = document.getElementById("idle-home-label");
-    if (label) label.textContent = vibe ? "Open Social on launch" : "Open Home on launch";
+    if (label) label.textContent = vibe ? "Open Today on launch" : "Open Home on launch";
     const hint = document.getElementById("idle-home-hint");
     if (hint) hint.textContent = vibe ? "When disabled, Studio reopens the last page you used after the project chooser." : "When disabled, Studio reopens the last tab page you used after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Social. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Today. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
     if (modeHint) modeHint.textContent = vibe ? "Social: friends, and a light eye on your agents, and every page opens in Social's rail." : "Studio: in-depth building, with Home, the menu and every tool.";
   }
@@ -93925,18 +93985,20 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (held && held !== document.body && held.isConnected && document.activeElement !== held) held.focus?.({ preventScroll: true });
   }
 
-  // ---- the Vibe rail --------------------------------------------------------
-  // Marks where you are: the page itself, or the stop that owns its section
-  // (Analyzer lights Tasks, the model pages and Evidence light Agents).
+  // ---- the Social rail ------------------------------------------------------
+  // Marks where you are: the page itself, or the stop for its place, as Studio's rail files it (MefiNav.placeOf):
+  // Analyzer lights Tasks, Fleet and Pipelines light the Map, Skills and the model pages light Team, every Friends
+  // place lights Friends.
   function paintRail() {
     const rail = $("rail");
     if (!rail || rail.hidden) return;
     const nav = window.MefiNav;
     const id = nav?.current?.() ?? null;
     const buttons = [...rail.querySelectorAll("button[data-nav]")];
-    const section = nav?.railSection?.(nav?.get?.(id));
-    const match = buttons.find((button) => button.dataset.nav === id)
-      ?? buttons.find((button) => (section === "work" && button.dataset.nav === "tasks") || (section === "agents" && button.dataset.nav === "agents"));
+    let place = null;
+    try { place = nav?.placeOf?.(id) ?? null; } catch { place = null; }
+    const match = buttons.find((button) => button.dataset.nav === id || (id === "friends-page" && button.dataset.nav === "friends"))
+      ?? buttons.find((button) => place && button.dataset.vibePlace === place);
     for (const button of buttons) {
       if (button === match) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
@@ -95615,15 +95677,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   });
   window.MefiNav?.register?.({
     id: "build-mode", label: "Switch to Studio", short: "Studio", kind: "action", layer: null, section: "home", group: "surfaces",
-    glyph: "g-wrench", badge: null, desc: "In-depth building: Home, Command, boards, models and every setting",
+    glyph: "g-wrench", badge: null, desc: "In-depth building: Home, the Map, boards, models and every setting",
     searchTerms: "studio build mode in depth full advanced switch",
-    showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
+    // Search lists the frame's own switch (shell.js shell-do-mode, Ctrl M) once; this record stays for the routes that name it.
+    showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false },
     hidden: () => mode() === "build",
     run: () => setMode("build"),
   });
   window.MefiNav?.register?.({
-    id: "whats-new", label: "What's new", short: "What's new", kind: "action", layer: null, section: "help", group: "system",
-    glyph: "g-spark", badge: null, desc: "The Social and Studio modes, and a link to the full changelog",
+    id: "whats-new", label: "What are Social and Studio?", short: "Social and Studio", kind: "action", layer: null, section: "help", group: "system",
+    glyph: "g-spark", badge: null, desc: "The two modes in plain words, and a link to the full changelog",
     searchTerms: "whats new changelog release notes patch notes update",
     showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
     run: () => showNotes({ force: true }),
@@ -102888,6 +102951,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     // The Git chip rides with the page list (renderer/git-sync.js keeps one popover for every chip); mounting again is harmless.
     if (model) { try { window.MefiGitSync?.mount?.(pages.git, { variant: "list" }); } catch { /* no chip in this build */ } }
+    paintPlaceBars(model);
     const shown = Boolean(model);
     if (pages.shown !== shown || pages.section !== (model?.section ?? null)) {
       pages.shown = shown;
@@ -102914,6 +102978,43 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : Math.max(0, Math.min(items.length - 1, at + (event.key === "ArrowDown" ? 1 : -1)));
     event.preventDefault?.();
     items[next]?.focus?.({ preventScroll: true });
+  }
+
+  // ---- the place bar: a place's pages as one row at the top of its page ----------------------------------
+  // The same model the list column draws (pageModel: Team's, Friends' and the rest), for when the column is not showing it:
+  // Social keeps the column closed, and a small window folds it into a drawer. Friends and Team mount one in their heads
+  // (placeBar(host, section)); html[data-frame-pages] hides it while the docked column lists the same pages (shell.css).
+  const placeBars = new Set();
+  function placeBar(host, section) {
+    if (!host || typeof host.append !== "function" || typeof section !== "string") return null;
+    const bar = el("nav", "shell-place-bar", { "aria-label": `${section.charAt(0).toUpperCase()}${section.slice(1)} places`, "data-section": section });
+    bar.hidden = true;
+    host.append(bar);
+    placeBars.add(bar);
+    paintPlaceBars(state.on ? pageModel() : null);
+    return bar;
+  }
+  function paintPlaceBars(model) {
+    if (!placeBars.size) return;
+    const n = nav();
+    const rows = !model ? [] : model.rows ? model.rows : (model.pages || []).map((page) => ({ kind: "row", key: page.id, label: page.label, current: page.current, run: () => n?.go?.(page.id) }));
+    const key = JSON.stringify([model?.section ?? null, rows.map((row) => [row.kind, row.key ?? null, row.label, Boolean(row.current), Boolean(row.open), Boolean(row.sub)])]);
+    for (const bar of placeBars) {
+      if (bar.dataset.key === key) continue;
+      bar.dataset.key = key;
+      if (!model || model.section !== bar.dataset.section) { bar.hidden = true; bar.replaceChildren(); continue; }
+      const items = [];
+      for (const row of rows) {
+        if (row.sub) continue;
+        if (row.kind === "heading") { items.push(text("span", "shell-place-group", row.label)); continue; }
+        const chip = button(`shell-place-chip${row.current || row.open ? " is-current" : ""}`, null, (event) => row.run?.(event), { "data-page": row.key ?? row.label });
+        chip.textContent = row.label;
+        if (row.current || row.open) chip.setAttribute("aria-current", "page");
+        items.push(chip);
+      }
+      bar.replaceChildren(...items);
+      bar.hidden = items.length === 0;
+    }
   }
 
   // ---- the feed: what the bars say -------------------------------------------------------------
@@ -103083,7 +103184,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     items.usage = el("span", "shell-usage");
     // The prototype's second rule: between what waits on you and the usage meters, there only while the meters are.
     items.usageSep = el("span", "shell-sep-v shell-usage-sep", { "aria-hidden": "true" });
-    item("player", "shell-player", () => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(); else nav()?.go?.("audio"); }, "Music and video");
+    // The media menu opens from this button: it places itself here and says so on this button (aria-expanded), not on
+    // Settings' own way in.
+    item("player", "shell-player", (event) => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(event?.currentTarget ?? items.player ?? null); else nav()?.go?.("audio"); }, "Music and video");
+    items.player.setAttribute("aria-haspopup", "dialog");
+    items.player.setAttribute("aria-expanded", "false");
     items.player.setAttribute("aria-haspopup", "true");
     items.player.append(icon("audio"), text("span", "shell-player-title", ""), text("span", "shell-player-time", ""));
     // The machine's load opens Team › Resources (renderer/resources.js), where its apps can be held back for the agents;
@@ -103603,6 +103708,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     status: () => (state.on ? { ...(state.live ?? readLive()) } : null),
     // Whether the list column shows the section's page list now (the column's panels make way while it does), and for which section.
     pages: () => (state.on && state.pages ? { shown: state.pages.shown, section: state.pages.section } : { shown: false, section: null }),
+    // A place's pages as a row at the top of its page, for when the list column is not showing them (Social, small windows).
+    placeBar,
     layout: () => clone(state.prefs),
     onInbox: null,
     LIMITS, DEFAULTS, REGIONS, MODES, PRESETS,
@@ -104863,7 +104970,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const home = { group: "Home", route: { id: "workspace", params: {} }, title: homeTitle(), glyph: "g-home", terms: "home today vibe front door" };
     // In the 0.5 layout Today is Work's first page (nav.js placeOf), so it leads Work's rows instead of a group of its own.
     const pages = destinations();
-    const lead = v2() ? [{ ...home, group: "Work" }, ...pages.filter((row) => row.group === "Work")] : [home];
+    // Today is that first row once: the Today sheet's own record would be a second "Today" under it.
+    const lead = v2() ? [{ ...home, group: "Work" }, ...pages.filter((row) => row.group === "Work" && row.route?.id !== "today")] : [home];
     const rest = v2() ? pages.filter((row) => row.group !== "Work") : pages;
     const rows = [...closed, ...[...lead, ...sessionRows(query), ...rest].filter(match)];
     const have = new Map(order().map((rec) => [keyOf(rec.route), rec]));
@@ -108806,6 +108914,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       return;
     }
     hint.textContent = "Uses the separate game project's cached LÖVE runtime and documented smoke-test script when available.";
+    // The game launcher is the owner's optional Ruins Runner project: without one on this PC the card stays out of
+    // Settings (as Server Styler's does below), rather than offering buttons that can only fail.
+    if (typeof window.mefiStudio.gameStatus === "function") {
+      void Promise.resolve(window.mefiStudio.gameStatus()).then((status) => {
+        const card = document.getElementById("settings-integrations");
+        if (card && status?.ok !== false) card.hidden = status?.available !== true;
+      }).catch(() => {});
+    }
     window.mefiStudio.onStudioLog((line) => studioLog(line));
     document.getElementById("settings-log")?.addEventListener("toggle", () => { if (studioLogStale) paintStudioLog(); });
 

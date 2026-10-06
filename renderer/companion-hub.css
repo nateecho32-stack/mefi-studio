@@ -412,7 +412,7 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 #friends-overlay[hidden] { display: none; }
 /* The page's fill is the theme's glass (--studio-page-fill, mostly clear in Chrome), so what it stands over must not read
    through: the content under it steps aside while it shows, as under a workspace page (studio-ui.css). The frame stays. */
-body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
+body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #vibe-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
 #friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
 #friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f22, 22px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }

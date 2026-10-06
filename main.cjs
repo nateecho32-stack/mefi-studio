@@ -25567,6 +25567,9 @@ function registerIpc() {
   });
 
   ipcMain.handle("studio:smoke", () => launcherBusy() ?? runGameScript("smoke", "Run Dev Tool (LOVE2D).cmd", ["--smoke"]));
+  // Whether the optional game project (Ruins Runner, MEFI_STUDIO_GAME_ROOT) is on this PC: Settings › System shows its
+  // launcher card only then, so nobody else sees buttons that can only fail.
+  ipcMain.handle("studio:game-status", () => ({ ok: true, available: Boolean(GAME_ROOT) }));
 
   // ---- Coding CLIs ---------------------------------------------------------
   // OpenCode, Grok, Codex, Claude Code and Antigravity are the owner's

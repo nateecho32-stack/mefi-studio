@@ -259,5 +259,5 @@ test("the full-window layers take all four edges from the free area", () => {
   has(css["vibe.css"], /\.vibe-rail \{\s*position: fixed; top: 0; bottom: var\(--shell-y1\);/, "Vibe's rail stops above the status bar");
   has(styles, /html\[data-shell="rail"\] #workspace-sidebar-panel \{ left: var\(--shell-rail-w\); height: calc\(100% - var\(--shell-y1\)\); \}/, "and so does the project panel that slides out of it");
   has(css["music.css"], /html\[data-layout="v2"\] body \{ --appearance-w: min\(clamp\(320px, 28vw, 390px\), calc\(100vw - var\(--shell-x0, 0px\) - var\(--shell-x1, 0px\) - 24px\)\); \}/, "the Appearance editor takes the room that is there between the columns, in v2 only");
-  has(css["vibe.css"], /body\.vibe-active:not\(:has\(\.workspace-page:not\(\[hidden\]\)\)\) #toast-host \{ left: calc\(var\(--shell-list-w\) \+ 24px\); bottom: calc\(104px \+ var\(--shell-y1\)\); \}/, "toasts on Vibe's Home stand right of the list and above the status bar");
+  has(css["vibe.css"], /body\.vibe-active:not\(:has\(\.workspace-page:not\(\[hidden\]\), #friends-overlay:not\(\[hidden\]\)\)\) #toast-host \{ left: calc\(var\(--shell-list-w\) \+ 24px\); bottom: calc\(104px \+ var\(--shell-y1\)\); \}/, "toasts on Vibe's Home (no page, Friends included, over it) stand right of the list and above the status bar");
 });

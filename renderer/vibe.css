@@ -625,17 +625,18 @@ html[data-ui-mode="vibe"] :is(#app-rail, #workspace-sidebar-toggle) { display: n
   font-family: var(--font-ui);
   animation: vibe-rail-in var(--motion-slow) var(--ease-out) both;
 }
-.vibe-rail[hidden], body.vibe-active:not(:has(.workspace-page:not([hidden]))) .vibe-rail { display: none; }
+/* Off on Today itself (its own home), on every page over it, Friends included. */
+.vibe-rail[hidden], body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) .vibe-rail { display: none; }
 html[data-no-blur] .vibe-rail { backdrop-filter: none; background: color-mix(in srgb, var(--panel-solid) 96%, transparent); }
 @keyframes vibe-rail-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 .vibe-rail-items, .vibe-rail-foot { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
 .vibe-rail-items { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: none; }
-.vibe-rail-foot { padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--ivory) 8%, transparent); }
+.vibe-rail-foot { position: relative; padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--ivory) 8%, transparent); }
 .vibe-rail button {
   position: relative; display: grid; justify-items: center; align-content: center; gap: 4px;
   width: 100%; min-height: 54px; margin: 0; padding: 6px 2px; box-sizing: border-box;
   border: 0; border-radius: 16px; background: none; box-shadow: none; color: var(--muted);
-  font: 550 10.5px/1.2 var(--font-ui); text-align: center; cursor: pointer; transform: none;
+  font: 550 max(12px, calc(12px * var(--text-scale, 1)))/1.2 var(--font-ui); text-align: center; cursor: pointer; transform: none;
   transition: color var(--motion-fast) var(--ease-out), background var(--motion-fast) var(--ease-out);
 }
 .vibe-rail button .glyph { width: 19px; height: 19px; transition: transform var(--motion-base) var(--ease-spring); }
@@ -680,8 +681,8 @@ html[data-ui-mode="vibe"] {
 
 /* On Vibe's own page there is no rail, so sheets and the project panel use
    the whole window instead of leaving a strip where the rail would be. */
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: var(--shell-list-w); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #toast-host { left: calc(var(--shell-list-w) + 24px); bottom: calc(104px + var(--shell-y1)); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: var(--shell-list-w); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) #toast-host { left: calc(var(--shell-list-w) + 24px); bottom: calc(104px + var(--shell-y1)); }
 
 /* Search */
 html[data-ui-mode="vibe"] #palette-overlay { padding-top: 11vh; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); }
@@ -708,7 +709,7 @@ html[data-ui-mode="vibe"] .overlay:not(.workspace-page) .sheet-close { border-ra
    project button on the Vibe page. */
 html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: calc(10px + var(--shell-y1)); left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
 html[data-ui-mode="vibe"] #workspace-sidebar[data-open="true"] #workspace-sidebar-panel { transform: none; opacity: 1; box-shadow: var(--studio-float-shadow); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]), #friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project { border-radius: 14px; font-size: 13px; }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project.selected { color: var(--ivory); background: var(--v-menu-pick); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }

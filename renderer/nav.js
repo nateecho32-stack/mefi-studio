@@ -133,7 +133,7 @@
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -207,6 +207,7 @@
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
       ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
+      ["friends-events", "Events", "g-bolt", "This week's Build Jam, co-work hours and building together", "events"],
     ].map(([id, label, glyph, desc, target]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
       searchTerms: `friends ${label} ${desc}`,
@@ -1181,7 +1182,7 @@
     else if (id === "map") id = "command";
     // Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The Lobby and each
     // way in at its own place. (Spelled out here, not shared: suites run go() on its own.)
-    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub" };
+    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub", "friends-events": "events" };
     if (Object.hasOwn(friendsPages, id)) {
       params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
@@ -1562,7 +1563,7 @@
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub"]) children.append(navButton(get(id), "app-rail-item", { key: false }));
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events"]) { const dest = get(id); if (dest) children.append(navButton(dest, "app-rail-item", { key: false })); }
         group.append(children);
       }
       sections.append(group);
@@ -2043,7 +2044,28 @@
     const element = target ?? document.getElementById("help-grid");
     if (!element) return;
     element.textContent = "";
-    const rows = list({ showIn: "help" }).filter((dest) => dest.key);
+    // The sheet's own row of help: the Help menu's rows (HELP_MENU_V2, one list for both), past Start here and the sheet itself.
+    const links = target ? null : document.getElementById("help-links");
+    if (links) {
+      links.textContent = "";
+      let count = 0;
+      for (const [id, words] of HELP_MENU_V2) {
+        const dest = get(id);
+        if (!dest || id === "onboarding" || id === "help" || dest.hidden?.()) continue;
+        const link = document.createElement("button");
+        link.type = "button";
+        link.className = "ghost mini";
+        link.dataset.helpLink = id;
+        link.textContent = words;
+        // The sheet steps aside first: a page (the setup guide) opens under the transient layer, not behind it.
+        link.addEventListener("click", () => { close("help"); go(id); });
+        links.append(link);
+        count += 1;
+      }
+      links.hidden = count === 0;
+    }
+    // A shortcut kept only as a chord (Ctrl J for the Inbox) is a shortcut too.
+    const rows = list({ showIn: "help" }).filter((dest) => dest.key || dest.chord);
     HELP_SECTIONS.forEach(([title, sections], index) => {
       const items = rows.filter((dest) => sections.includes(sectionOf(dest)));
       if (!items.length && title !== "Help") return;
@@ -2058,7 +2080,7 @@
       group.setAttribute("aria-labelledby", heading.id);
       group.append(heading);
       for (const dest of items) {
-        group.append(helpRow(dest.key, dest.label));
+        if (dest.key) group.append(helpRow(dest.key, dest.label));
         if (dest.chord) group.append(helpRow(dest.chord, dest.label));
       }
       if (title === "Help") group.append(helpRow("Esc", ESC_HELP));
@@ -2360,6 +2382,8 @@
         const title = head.querySelector?.(".sheet-title");
         if (typeof title?.after === "function") title.after(group); else head.append?.(group);
       }
+      // The Agent brain's Playbook and Project map are Team › Workflows: the Map's switch does not belong over them.
+      group.hidden = Boolean(head.closest?.("#agent-brain-overlay")) && Boolean(tab) && tab !== "live";
       for (const button of Array.from(group.children ?? [])) {
         const on = button.dataset.nav === id && (id !== "agent-brain" || tab === "live");
         if (on) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");

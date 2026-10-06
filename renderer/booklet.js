@@ -1138,6 +1138,14 @@
       return;
     }
     hint.textContent = "Uses the separate game project's cached LÖVE runtime and documented smoke-test script when available.";
+    // The game launcher is the owner's optional Ruins Runner project: without one on this PC the card stays out of
+    // Settings (as Server Styler's does below), rather than offering buttons that can only fail.
+    if (typeof window.mefiStudio.gameStatus === "function") {
+      void Promise.resolve(window.mefiStudio.gameStatus()).then((status) => {
+        const card = document.getElementById("settings-integrations");
+        if (card && status?.ok !== false) card.hidden = status?.available !== true;
+      }).catch(() => {});
+    }
     window.mefiStudio.onStudioLog((line) => studioLog(line));
     document.getElementById("settings-log")?.addEventListener("toggle", () => { if (studioLogStale) paintStudioLog(); });
 

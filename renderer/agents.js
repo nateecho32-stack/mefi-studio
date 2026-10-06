@@ -103,6 +103,8 @@
     { id: "folders", label: "Related folders", glyph: "g-explorer", group: "Context for agents", panes: ["folders"], about: "Extra folders agents may read but never change." },
     { id: "flows", label: "Workflows", glyph: "g-route", group: "Context for agents", views: [["Brain maps", "brains"], ["Playbook", "agent-brain", { tab: "playbook" }], ["Project map", "agent-brain", { tab: "map" }], ["Context", "context"]] },
     { id: "health", label: "Health and usage", glyph: "g-gauge", group: "Monitor", views: [["Recorded calls", "usage", { view: "usage" }], ["Provider accounts", "usage", { view: "tracker" }]] },
+    // The resource manager (renderer/resources.js): other apps slowed, paused or closed so the agents get this PC.
+    { id: "resources", label: "Resources", glyph: "g-gauge", group: "Monitor", views: [["Resources", "resources"]] },
     { id: "models", label: "Models", glyph: "g-graph", group: "Monitor", views: [["Catalog", "booklet"], ["Performance", "graph"]] },
     { id: "inspect", label: "Inspect", glyph: "g-eyes", group: "Monitor", views: [["Sessions", "explorer"], ["Activity and evidence", "eyes"], ["Trace", "trace"], ["Overhead", "overhead"], ["Performance profiler", "profiler"], ["Machine status", "explorer", { panel: "diagnostics" }], ["Connection log", "agents", { place: "providers", target: "settings-log" }]] },
   ]);
@@ -191,6 +193,8 @@
     const settings = button("Studio appearance", () => go("studio", { category: "appearance" }), "ghost mini");
     const headActions = node("div", "agents-head-actions"); headActions.append(button("Reload saved settings", discard, "ghost mini"), settings);
     head.append(title, headActions); sheet.append(head);
+    // Team's places as a row under the title, for when the list column is not showing them (Social, a small window).
+    window.MefiShell?.placeBar?.(title, "team");
     const body = node("div", "agents-body"); body.id = "agents-body";
     for (const name of ["overview", "connections", "team", "routing", "behavior"]) { const pane = node("div", "agents-pane"); pane.id = `agents-${name}`; pane.dataset.agentsPane = name; pane.hidden = true; body.append(pane); }
     sheet.append(body);

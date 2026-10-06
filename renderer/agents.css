@@ -5,6 +5,8 @@
 .agents-head p { display: none; margin: 0; }
 .agents-head > div:first-child { min-width: 0; }
 .agents-head .muted { font-size: var(--fs-sm); }
+/* Team's places as a row under the title (renderer/shell.js placeBar). */
+#agents-overlay .agents-head .shell-place-bar { margin: 10px 0 2px; }
 .agents-head-actions { display: flex; align-items: center; justify-content: end; flex-wrap: wrap; gap: 8px; }
 .agents-eyebrow { font-size: var(--fs-2xs); letter-spacing: .12em; color: var(--gold-bright); }
 /* Team in the 0.5 layout (renderer/agents.js openTeam): the prototype's page head, a title with the line that says what
