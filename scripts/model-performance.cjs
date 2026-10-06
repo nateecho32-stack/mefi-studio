@@ -21,6 +21,9 @@ const outcomeOf = (value) => OUTCOMES.includes(value) ? value : value === "repor
 // rest are transport rows (chat, planner, reviewer, routing calls).
 const isAttempt = (row) => row.source === "worker" || Boolean(row.outcome);
 const locks = new Map();
+// Git's "racily clean" window, the one settings-cache.cjs uses: no
+// filesystem here keeps file times coarser than FAT's 2 s.
+const RACY_MS = 2000;
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const clip = (value, max) => typeof value === "string" ? value.replace(/[\u0000-\u001f]/g, " ").trim().slice(0, max) : "";
@@ -284,7 +287,7 @@ function retainedRows(rows, limit, attemptLimit) {
   });
 }
 
-function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10000, maxAttempts = 5000 } = {}) {
+function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10000, maxAttempts = 5000, racyMs = RACY_MS, fileClock = Date.now } = {}) {
   const file = path.resolve(identifier(filePath, "performance file", 2000));
   const limit = Math.max(1, Math.min(50000, integer(maxRecords) ?? 10000));
   // Builder attempts keep their own share of the cap (see retainedRows).
@@ -296,6 +299,14 @@ function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10
   // Checking metadata on every operation also notices another store instance,
   // replacement, deletion and same-length edits without a polling delay.
   const revision = (stat) => [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(":");
+  // File times move once per clock tick (15.6 ms on Windows by default, 2 s
+  // on FAT), so an in-place rewrite of the same length within the tick of the
+  // version read keeps all five fields. While the file is younger than the
+  // racy window by fileClock (the clock file times come from; `now` stamps
+  // rows and may be fake), a cache hit also compares the bytes. Once a read
+  // finds it older, any later write moves a time. racyMs 0 turns this off.
+  const racyWindow = number(racyMs) ?? RACY_MS;
+  const racy = (stat, at) => racyWindow > 0 && [stat.mtimeNs, stat.ctimeNs].some((ns) => !(at - Number(ns) / 1e6 >= racyWindow));
   const serialized = (run) => {
     const result = (locks.get(file) ?? Promise.resolve()).then(run);
     const settled = result.then(() => {}, () => {});
@@ -304,12 +315,25 @@ function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10
     return result;
   };
   async function load({ mutable = false } = {}) {
-    let raw, before;
+    let raw, stat, before, bytes, at;
     try {
-      before = revision(await fs.stat(file, { bigint: true }));
-      if (cached?.revision === before) return mutable ? copy(cached.state) : cached.state;
+      stat = await fs.stat(file, { bigint: true });
+      before = revision(stat);
+      if (cached?.revision === before) {
+        if (!cached.bytes) return mutable ? copy(cached.state) : cached.state;
+        at = fileClock();
+        bytes = await fs.readFile(file);
+        if (bytes.equals(cached.bytes)) {
+          if (!racy(stat, at)) cached.bytes = null;
+          return mutable ? copy(cached.state) : cached.state;
+        }
+      }
       invalidate();
-      raw = JSON.parse(await fs.readFile(file, "utf8"));
+      if (!bytes) {
+        at = fileClock();
+        bytes = await fs.readFile(file);
+      }
+      raw = JSON.parse(bytes.toString("utf8"));
     }
     catch (error) { invalidate(); if (error.code === "ENOENT") return empty(); throw new Error("Could not read the model performance ledger; existing data was preserved", { cause: error }); }
     if (raw?.version !== VERSION || !Array.isArray(raw.observations) || !Array.isArray(raw.ratings)) throw new Error("Unsupported model performance ledger; existing data was preserved");
@@ -321,7 +345,8 @@ function createModelPerformanceStore({ filePath, now = Date.now, maxRecords = 10
     if (lifetime.calls < observations.length) throw new Error("Invalid retained model performance counts");
     const state = { version: VERSION, observations, ratings, retention: { limit, dropped: integer(raw.retention?.dropped) ?? 0 }, lifetime };
     // Do not associate a read with metadata from a concurrent external rewrite.
-    try { if (!mutable && revision(await fs.stat(file, { bigint: true })) === before) cached = { revision: before, state }; }
+    // A fresh file keeps the bytes it was parsed from, for the comparison.
+    try { if (!mutable && revision(await fs.stat(file, { bigint: true })) === before) cached = { revision: before, state, bytes: racy(stat, at) ? bytes : null }; }
     catch { /* The next operation retries a fresh read. */ }
     return state;
   }
