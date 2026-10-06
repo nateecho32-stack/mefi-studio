@@ -53,7 +53,7 @@ test("every setup helper section fits desktop and narrow windows, traps focus, s
     assert.equal(team.args[0].scope, "defaults");
     assert.equal(team.args[0].configuration.agentBrain.deskTool, true);
     assert.equal(report.welcome.length, 6, "the welcome's three steps at two window sizes");
-    assert.equal(report.welcomeTask.length, 1, "Start the task adds one task");
+    assert.equal(report.welcomeTask.length, 1, "Build it adds one task");
     assert.ok(report.closedByEscape && report.complete);
   } finally {
     assert.equal(path.dirname(fixture), path.resolve(tmpdir()));

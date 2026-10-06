@@ -65,9 +65,11 @@ function load({ store = {}, search = "", options = {}, layout = null } = {}) {
   const events = [];
   const controls = { rows: [], push(row) { this.rows.push(JSON.parse(JSON.stringify(row))); }, at(index) { return this.rows.at(index); } };
   const saved = new Map(Object.entries(store));
+  const listeners = {};
   const window = {
     location: { search },
-    addEventListener() {}, dispatchEvent: (event) => { events.push([event.type, event.detail]); return true; },
+    addEventListener(type, fn) { (listeners[type] ??= []).push(fn); }, removeEventListener(type, fn) { listeners[type] = (listeners[type] ?? []).filter((one) => one !== fn); },
+    dispatchEvent: (event) => { events.push([event.type, event.detail]); return true; },
     mefiStudio: api,
     MefiNav: { register: (dest) => { registered.push(dest); return dest; }, claim: (id) => calls.push(["claim", id]), release: (id) => calls.push(["release", id]) },
     MefiWorkspace: { activeProjectId: () => P },
@@ -92,7 +94,9 @@ function load({ store = {}, search = "", options = {}, layout = null } = {}) {
   const byText = (root, text, selector = "button") => root.querySelectorAll(selector).find((node) => node.textContent.includes(text));
   const toggleNamed = (text) => content().querySelectorAll(".setup-helper-toggle").find((row) => row.textContent.includes(text))?.querySelector("input");
   const welcome = () => document.body.children.find((node) => node.id === "setup-welcome");
-  return { window, document, helper, calls, events, registered, controls, saved, overlay, content, byText, toggleNamed, welcome };
+  // The window getting focus back (from a sign-in or install window), as the browser tells its listeners.
+  const refocus = () => { for (const fn of [...(listeners.focus ?? [])]) fn({ type: "focus" }); };
+  return { window, document, helper, calls, events, registered, controls, saved, overlay, content, byText, toggleNamed, welcome, refocus, listeners };
 }
 
 test("the helper registers one sheet destination and a Search entry per section, named by concept", () => {
@@ -566,6 +570,38 @@ test("Continue walks to the project and the first task; Start the task adds it t
   assert.equal(env.saved.get("mefiStudio.setupHelper.seen"), env.helper.REVISION);
   assert.deepEqual(handed, [{ tour: false }], "the hand-off runs once, as the sheet's close runs it");
   assert.equal(env.helper.startup(), false, "a seen revision never opens again by itself");
+});
+
+test("a sign-in finished in its own window counts: coming back to Studio, Check again and Continue read the tools again", async () => {
+  const env = load({ layout: "v2" });
+  let clis = [{ id: "codex", name: "Codex", installed: true, signedIn: false, subscription: true }, { id: "opencode", name: "OpenCode", installed: false, subscription: false }];
+  welcomeBridge(env);
+  env.window.mefiStudio.cliSetupStatus = async () => { env.calls.push(["cliSetupStatus"]); return { ok: true, selected: "auto", clis: structuredClone(clis) }; };
+  env.helper.welcome();
+  await settle();
+  const ends = () => env.welcome().querySelectorAll(".setup-welcome-opt").map((row) => row.querySelector(".setup-welcome-chip, button")?.textContent);
+  assert.deepEqual(ends(), ["Sign in", "Install"]);
+  assert.ok(env.welcome().querySelector("#setup-welcome-recheck"), "Check again shows while a tool is not ready");
+  // Signed in in Codex's own window; Studio's window gets focus back.
+  clis = [{ ...clis[0], signedIn: true }, clis[1]];
+  env.refocus();
+  await settle();
+  assert.deepEqual(ends(), ["✓ Ready", "Install"], "coming back to Studio reads the tools again");
+  // Installed while the step showed, with no focus change: Continue reads them once more before it acts.
+  clis = [{ ...clis[0], signedIn: false }, { ...clis[1], installed: true }];
+  env.window.mefiStudio.firstScan = async () => { env.calls.push(["firstScan"]); return { ok: true }; };
+  env.window.mefiStudio.firstScanApply = async () => { env.calls.push(["firstScanApply"]); return { ok: true }; };
+  await env.welcome().querySelector("#setup-welcome-next").click();
+  await settle();
+  assert.deepEqual(env.calls.filter((row) => /^first|^cliSetupUse/.test(row[0])).map((row) => row[0]), ["firstScan", "firstScanApply"], "OpenCode, installed a moment ago, is the one set up");
+  // Check again on a step that is drawn from a fresh read; the listener goes when the welcome closes.
+  await env.welcome().querySelector("#setup-welcome-back").click(); await settle();
+  const reads = env.calls.filter((row) => row[0] === "cliSetupStatus").length;
+  await env.welcome().querySelector("#setup-welcome-recheck").click(); await settle();
+  assert.equal(env.calls.filter((row) => row[0] === "cliSetupStatus").length, reads + 1);
+  await env.welcome().querySelector("#setup-welcome-skip").click();
+  await settle();
+  assert.equal((env.listeners.focus ?? []).length, 0, "no focus listener is left behind");
 });
 
 test("a new app's note from the launch screen waits as the first task, and Build it uses it once", async () => {

@@ -154,7 +154,7 @@ app.whenReady().then(async () => {
   // ---- the 0.5 layout's first run: the three-step welcome (renderer/setup-helper.js) ----------------------------------------
   // A capture launch never opens it by itself, so it is opened the way startup opens it on a fresh profile. Each step is measured
   // at 1920x1080 and at 600x560 zoomed 150% (the card fits the window, no text under 12 px, every line at 4.5:1 in the theme)
-  // and walked with real pointer presses and real typing; Start the task adds the task through tasks:create.
+  // and walked with real pointer presses and real typing; Build it adds the task through tasks:create.
   report.welcome = [];
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
   await until("window.MefiSetupHelper && window.MefiShell?.active?.() && !window.MefiBoot?.isActive?.()", "studio ready (v2)");
@@ -169,7 +169,7 @@ app.whenReady().then(async () => {
   for (const [width, height, zoom] of [[1920, 1080, 1], [600, 560, 1.5]]) {
     window.setContentSize(width, height); contents.setZoomFactor(zoom); await sleep(400);
     await run("window.MefiSetupHelper.welcome();");
-    const titles = ["Connect the AI you already use", "Choose a project", "Give it a first task"];
+    const titles = ["Pick the AI that builds for you", "Choose a project", "What should Studio make first?"];
     for (const [step, title] of titles.entries()) {
       await until(`document.getElementById('setup-welcome-title')?.textContent === ${JSON.stringify(title)} && document.querySelectorAll('#setup-welcome-body > *').length > 0`, `${title} at ${width}x${height}@${zoom}`);
       await sleep(300);
@@ -191,19 +191,19 @@ app.whenReady().then(async () => {
       assert.equal(layout.bars, step + 1, `${title}: the progress shows step ${step + 1} of 3`);
       assert.equal(layout.back, step > 0, `${title}: Back from the second step on`);
       if (step === 0) assert.deepEqual(layout.rows, ["Claude Code", "Codex", "OpenCode"], "the tools found on this PC");
-      if (step === 1) assert.deepEqual(layout.rows, ["Setup trial", "Open a folder…", "Start a new app…"], "the projects, then the ways to add one");
+      if (step === 1) assert.deepEqual(layout.rows, ["Setup trial", "Start a new app…", "Open a folder…"], "the projects, then the ways to add one, a new app first");
       if (width === 1920) await capture(`first-run-${step + 1}-1920x1080.png`);
       else if (step === 0) await capture("first-run-1-600x560@1.5.png");
       if (step < 2) await pointer("#setup-welcome-next");
     }
     if (width === 1920) {
-      // Real typing, then Start the task.
+      // Real typing, then Build it.
       await run("document.getElementById('setup-welcome-task').focus();");
       contents.insertText("Add an empty state to the notes list"); await sleep(250);
-      assert.equal(await run("return document.getElementById('setup-welcome-next').disabled;"), false, "typed words enable Start the task");
+      assert.equal(await run("return document.getElementById('setup-welcome-next').disabled;"), false, "typed words enable Build it");
       await capture("first-run-3-typed-1920x1080.png");
       await pointer("#setup-welcome-next");
-      await until("!window.MefiSetupHelper.welcomeOpen()", "Start the task closes the welcome");
+      await until("!window.MefiSetupHelper.welcomeOpen()", "Build it closes the welcome");
       report.welcomeTask = await run("return window.setupFixture.calls().filter((call) => call.name === 'tasksCreate').map((call) => call.args[0]);");
       assert.deepEqual(report.welcomeTask, [{ title: "Add an empty state to the notes list", prompt: "Add an empty state to the notes list", projectId: "setup-project" }], "the task is added through tasks:create in the open project");
     } else {

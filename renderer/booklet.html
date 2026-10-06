@@ -92255,7 +92255,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         const result = await need("cliSetupAction")({ id: cli.id, action });
         if (result?.ok === false) throw new Error(result.error || "That did not open.");
         welcomeSay(result?.message || "Finish it in the window that opened, then come back here.");
-        setTimeout(async () => { try { welcome.clis = await api()?.cliSetupStatus?.() ?? welcome.clis; } catch { /* keep the last read */ } if (welcome.open && welcome.step === 0) void showWelcome(0, { focus: false }); }, 1500);
+        setTimeout(() => { void recheckClis(); }, 1500);
       } catch (error) { welcomeSay(plain(error, "That did not open."), true); if (control) control.disabled = false; }
     };
     const shown = found.length ? found : clis.filter((item) => item.subscription);
@@ -92272,6 +92272,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       else { small = cli.signedIn === false ? `${account} · sign in to use it` : `${account} · installed`; end = button("Sign in", act(cli, "login"), "ghost mini"); }
       rows.push(welcomeRow({ mark: MARKS[cli.id] || cli.name.slice(0, 2).toUpperCase(), name: cli.name, small, end, on: cli.installed && (cli.signedIn === true || !cli.subscription), key: cli.id }));
     }
+    // A sign-in or an install finishes in its own window: Check again reads the tools now (coming back to Studio does too).
+    const waiting = shown.some((cli) => !cli.installed || (cli.subscription && cli.signedIn !== true));
+    const again = waiting ? button("Check again", () => { welcomeSay("Checking your AI tools…"); void recheckClis().then(() => welcomeSay("")); }, "ghost mini setup-welcome-recheck") : null;
+    if (again) again.id = "setup-welcome-recheck";
     const more = button("Other ways: an API key, a ChatGPT plan or a local model", () => {
       // Keys, local models and the ChatGPT plan live in the sheet; it hands on when it closes, as the welcome would have.
       const then = welcome.then; welcome.then = null;
@@ -92280,12 +92284,31 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       open("providers", { reason: "first-run" });
     }, "ghost mini setup-welcome-more");
     more.id = "setup-welcome-more";
-    body.replaceChildren(...rows, more);
+    body.replaceChildren(...rows, ...(again ? [again] : []), more);
   }
+  // The tools on this PC, read again, and the first step drawn from them while it shows. Focus stays on the row (or the
+  // button) it was on, since the step is drawn anew.
+  async function recheckClis({ repaint = true } = {}) {
+    try { welcome.clis = await api()?.cliSetupStatus?.() ?? welcome.clis; } catch { /* keep the last read */ }
+    if (!repaint || !welcome.open || welcome.step !== 0) return;
+    const held = welcome.els?.card?.contains?.(document.activeElement) ? document.activeElement : null;
+    const heldKey = held?.closest?.("[data-option]")?.dataset?.option ?? held?.id ?? null;
+    await showWelcome(0, { focus: false });
+    if (!heldKey || !welcome.open || welcome.step !== 0) return;
+    const body = welcome.els?.body;
+    const back = body?.querySelector?.(`[data-option="${heldKey}"] button`) ?? body?.querySelector?.(`[data-option="${heldKey}"]`) ?? document.getElementById?.(heldKey) ?? welcome.els?.title;
+    back?.focus?.({ preventScroll: true });
+  }
+  // Coming back to Studio from a sign-in or install window: the first step reads the tools again.
+  const welcomeRefocus = () => { if (welcome.open && welcome.step === 0 && !welcome.busy) void recheckClis(); };
   // Leaving the first step puts Studio on what is ready, so the first task runs on it: a signed-in subscription for the
   // whole studio (setup:cli-use, the sheet's Use for the whole studio), else OpenCode's free models (the first scan's
   // setup, setup:first-scan and -apply). With nothing ready nothing changes, and Today's line says what is missing.
   async function useConnected() {
+    // What was signed in or installed since the step was drawn counts: the tools are read once more first.
+    welcomeSay("Checking your AI tools…");
+    await recheckClis({ repaint: false });
+    welcomeSay("");
     const clis = welcome.clis?.ok ? (welcome.clis.clis || []) : [];
     const ready = ["claude", "codex", "grok", "antigravity"].map((id) => clis.find((cli) => cli.id === id && cli.installed && cli.signedIn === true)).find(Boolean);
     if (ready) {
@@ -92425,7 +92448,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function openWelcome({ then = null } = {}) {
     const els = buildWelcome();
-    if (!welcome.open) { welcome.open = true; welcome.previous = document.activeElement; welcome.then = then; els.overlay.hidden = false; }
+    if (!welcome.open) { welcome.open = true; welcome.previous = document.activeElement; welcome.then = then; els.overlay.hidden = false; window.addEventListener?.("focus", welcomeRefocus); }
     void showWelcome(0);
     window.dispatchEvent(new CustomEvent("mefi-setup-helper", { detail: { open: true, section: "first-run" } }));
     return true;
@@ -92433,6 +92456,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function hideWelcome() {
     if (!welcome.open) return false;
     welcome.open = false; welcome.serial += 1;
+    window.removeEventListener?.("focus", welcomeRefocus);
     if (welcome.els) welcome.els.overlay.hidden = true;
     const back = welcome.previous; welcome.previous = null;
     if (back && document.contains?.(back)) back.focus?.({ preventScroll: true });
