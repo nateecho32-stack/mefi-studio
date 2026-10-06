@@ -14,7 +14,7 @@ Switch with the **Social | Studio** switch at the top left or `Ctrl M`. Search h
 In Social:
 
 - In the box, `Enter` talks it over and `Ctrl Enter` builds it.
-- On Today, `T`, `P`, `I` and `M` open compact **Tasks**, **Plans**, **Ideas** and **Team** panels, and `S` opens **Settings**. **Full view** opens the whole page, and **Back** or `Esc` steps out.
+- On Today, `T`, `P`, `I` and `M` open compact **Tasks**, **Plans**, **Ideas** and **Team** panels, and `S` opens **Settings**. `N` opens the Inbox at the first thing that needs you. **Full view** opens the whole page, and **Back** or `Esc` steps out.
 - Other pages open beside Social's own narrow rail. **Today**, at its top, takes you back.
 
 See [Social mode](vibe-mode.md).
@@ -56,7 +56,7 @@ The **status bar** at the bottom holds **Layout** (the list, the inspector, the 
 | `Ctrl T` / `Ctrl W` | Add a tab / close the tab you're on. `Ctrl W` never closes the window. |
 | `Ctrl Tab`, `Ctrl 1` to `9` | Move between tabs |
 | `Ctrl Shift T` | Reopen the tab you closed last |
-| `Ctrl B` / `[` | Show or hide the list / the inspector |
+| `Ctrl B` / `[` | Show or hide the list / the inspector. On the Map, `[` steps through tasks instead. |
 | `Ctrl +` `Ctrl −` `Ctrl 0` | Interface scale up, down, or back to normal |
 | `Ctrl ,` | Open Settings, even while typing |
 | `Ctrl Shift ,` | Open **Configuration**: every setting in one searchable tree |
@@ -100,7 +100,7 @@ Trace has no single key: open it from **Team › Inspect › Trace** or Search.
 | --- | --- |
 | `←` `→` | Cycle sessions, or the siblings of the selected item |
 | `↑` `↓` | Up to the parent, or down into its to-dos and tasks |
-| `]` | The next task node |
+| `[` `]` | Cycle task nodes |
 | `Enter` | Run the selected node's first action |
 | Double-click | The same, on the node you click |
 | Right-drag | Orbit the camera |

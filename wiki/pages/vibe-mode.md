@@ -87,7 +87,7 @@ On Today, single keys open compact panels beside the box. Rows open their detail
 | `M` | **Team**: who's working, and on which model |
 | `S` | **Settings**, also behind the Settings button at the top right |
 | `C` | The conversation with Mefi |
-| `N` | The first thing that needs you |
+| `N` | The Inbox, at the first thing that needs you |
 | `/` | The box |
 
 - **Tasks** shows **Lanes** for **Needs you**, **Ready**, **Building**, **Checking**, **Later** and **Done**, each with a count. It can pause new work and set a **Worker limit**: 1, 2, 3 or **Automatic**. A task's **Inspector** sets its priority, estimated minutes, **Done when** checks and a **Defer until** date. A finished task offers **Ask for a change**.

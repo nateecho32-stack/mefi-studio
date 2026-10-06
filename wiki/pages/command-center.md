@@ -38,7 +38,7 @@ The pause button in the top bar holds new work, while running jobs finish. The r
 - **Fit** (`F`) rearranges the tree and brings it all into view. `Shift F` fits the selected branch.
 - **Overview** keeps the whole tree framed, and **Follow** tracks the current work. `C` cycles Overview, Follow and Free.
 - **Spin** turns the 3D orbit. `Space` pauses or resumes it. It doesn't pause your agents.
-- The mouse wheel or a two-finger pinch zooms toward the pointer. The arrow keys step through the tree.
+- The mouse wheel or a two-finger pinch zooms toward the pointer. The arrow keys step through the tree, and `[` and `]` through its task nodes.
 
 [Navigation and shortcuts](shortcuts.md#in-command-view) lists every key. If you'd like the tree to hold still, turn off **Spin** and pick a view that's easy to read.
 
