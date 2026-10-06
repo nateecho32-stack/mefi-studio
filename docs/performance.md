@@ -1,6 +1,36 @@
 # Agent loop and startup measurements
 
 
+## The studio log kept on disk, October 6, 2026
+
+The studio log lived only in a 5,000-line ring (five builders filled it in
+about 80 seconds) and the window stream, so nothing older than a few minutes
+survived. `main.cjs`'s "Log core" block now keeps it, with the assistant's log
+and the window's warnings, as JSON lines in this PC's local folder
+(`scripts/local-dirs.cjs`: `%LOCALAPPDATA%\MefiStudio`, never inside OneDrive),
+sealed into monthly gzip archives that are never deleted
+(`scripts/segment-archive.cjs`), and Trace's **Load older** pages back through
+it. The core opens 1.5 s after the app is ready, so neither its modules nor
+its folder touch the launch; a builder's own output lines are kept at debug
+level, under the default threshold.
+
+Measured with main.cjs's own `logLine` and "Log core" code (Linux, Node 24, a
+200,000-line burst of 80-100 character lines, two rounds):
+
+| | Before | After |
+| --- | ---: | ---: |
+| main-thread time per `logLine` | 2.9-4.3 us | 5.4-6.0 us |
+| total CPU for the burst, writes and masking included | 0.55-0.87 s | 1.74-1.83 s |
+| on disk | nothing | 15.5 MB of segments, 1.22 MB once sealed (12.7x) |
+| newest 250 lines | the ring only | 5.4 ms (14-15 ms from a sealed archive) |
+| 250 problems (errors and warnings) | the ring only | 15-20 ms |
+| a page 90% of the way back | not kept | 51-60 ms |
+
+No write is synchronous except the exit path's last flush. A busy session
+logs tens of lines a second, so the extra cost is well under a millisecond a
+second. `MEFI_STUDIO_LOG_CORE=0` or `settings.logs.keep: false` keeps the log
+in memory only, as before; `settings.logs.level` sets the threshold.
+
 ## Prompts a provider can cache, and live progress from the coding CLIs, October 6, 2026
 
 A provider that caches prompt prefixes bills a repeated prefix as a cheap

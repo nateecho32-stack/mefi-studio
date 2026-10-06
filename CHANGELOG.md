@@ -7,6 +7,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Studio's log is kept, and Trace can read back through it.** The studio
+  log, the assistant's log and the window's warnings are now saved on this PC
+  (in its local app-data folder, never in OneDrive), packed into monthly
+  archives that are never deleted. Trace's new **Load older** button pages
+  back past the last few thousand lines, and **Open file** shows the folder.
+  `MEFI_STUDIO_LOG_CORE=0` (or `logs.keep: false` in settings) keeps the log in
+  memory only, as before.
 - **Claude Code and Codex builders show their steps while they work.** A
   task run on Claude Code or Codex now shows its todo list, the tool it is
   running and its token use as it goes, as OpenCode runs already did, instead
