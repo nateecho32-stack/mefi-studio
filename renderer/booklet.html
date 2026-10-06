@@ -10033,6 +10033,22 @@ button.front-item:hover b { text-decoration: underline; text-decoration-color: v
 /* The Lobby's masthead is its title: the Friends page's own heading and line step aside (still read aloud, still focused). */
 #friends-overlay[data-place="lobby"] :is(#friends-place-title, .friends-place-about) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
+/* ---- Friends › Moderation (renderer/friends-mod.js): only moderators see it ---- */
+.friends-mod { display: grid; gap: 14px; min-width: 0; }
+.friends-mod-status { margin: 0; color: var(--muted); font-size: 13px; }
+.friends-mod-status:empty { display: none; }
+.friends-mod-body { display: grid; gap: 18px; min-width: 0; }
+.friends-mod-section { display: grid; gap: 6px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); }
+.friends-mod-heading { margin: 0 0 4px; font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ivory); }
+.friends-mod-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.friends-mod-words { display: grid; gap: 2px; min-width: 0; flex: 1 1 280px; }
+.friends-mod-words strong { color: var(--ivory); font-weight: 600; overflow-wrap: anywhere; }
+.friends-mod-words .muted { font-size: 12.5px; overflow-wrap: anywhere; }
+.friends-mod-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.friends-mod-facts { margin: 0; color: var(--ivory); font-size: 13px; }
+.friends-mod-lookup { display: flex; flex-wrap: wrap; gap: 8px; }
+.friends-mod-search { flex: 1 1 220px; min-width: 0; }
+
 /* Vibe: the calm front door (renderer/vibe.js), the Vibe / Build switch and
    the one-time "what's new" card. Inlined last, so it wins ties. Every colour
    comes from the active theme's tokens (--gold is the accent, --ivory the
@@ -78416,6 +78432,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
   }
   const why = (answer, fallback) => REASONS[answer?.reason] || REASONS[answer?.error] || fallback;
+  const why_ = why;
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   let current = null;
   let hearing = false;
@@ -78465,6 +78482,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     current?.dispose();
     let me = null, tab = "map", projects = [], featured = [], selected = null, busy = false;
     const draft = { url: "", title: "", blurb: "", kind: "game" };
+    const reporting = new Set(); // projects whose report reasons are open
     const call = async (method, ...args) => {
       try { return await api.hubProjects(method, ...args); } catch (error) { return { ok: false, error: "failed", message: error?.message }; }
     };
@@ -78523,6 +78541,22 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (!own) row.append(button(project.starred ? "Starred" : "Star", () => star(project, !project.starred)));
       if (own && !project.featuredUntil) row.append(button(`Feature (${me?.featureCost ?? 100} credits)`, () => feature(project)));
       if (own) row.append(button("Remove", () => remove(project)));
+      // Anyone may report someone else's project; a moderator may also take it off the hub.
+      if (!own) row.append(button(reporting.has(project.id) ? "Cancel report" : "Report", () => { if (reporting.has(project.id)) reporting.delete(project.id); else reporting.add(project.id); paint(); }));
+      if (!own && me?.moderator) row.append(button("Remove (moderator)", () => remove(project)));
+      if (reporting.has(project.id)) {
+        const why = node("div", "project-hub-report");
+        why.append(node("span", "muted", "What is wrong with it?"));
+        for (const reason of ["Spam or a broken link", "Not safe to open", "Someone else's work", "Something else"]) {
+          why.append(button(reason, () => guard("Sending the report…", async () => {
+            const answer = await call("reportProject", project.id, reason);
+            reporting.delete(project.id);
+            status.textContent = answer?.ok ? "Thanks. A moderator will look at it." : why_(answer, "The report did not go through.");
+            paint();
+          })));
+        }
+        row.append(why);
+      }
       return row;
     }
 
@@ -78841,6 +78875,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // every minute while it is on screen and the window can be seen, and stops
 // when Friends lets it go (dispose). Everything is text: names and titles go
 // in with textContent, and nothing from the relay becomes a link.
+//
+// Pop-ups (popups.hear, on the module's one hub listener, Friends open or
+// not): a friend you share a room with opened Studio, someone invited you to
+// a room or asks to join yours, and someone played or starred your project.
+// Each is a toast (window.MefiToast) with a way to the right Friends place;
+// several friends coming online at once are one toast. "Pop-ups from
+// friends" at The Lobby's foot turns them off (localStorage
+// mefiStudio.friendsPopups = "0"), and none show while the window is hidden.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
@@ -78925,13 +78967,54 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return root;
   }
 
+  // ---- Pop-ups --------------------------------------------------------------------
+  const POPUPS_KEY = "mefiStudio.friendsPopups";
+  const popups = {
+    on() { try { return globalThis.localStorage?.getItem(POPUPS_KEY) !== "0"; } catch { return true; } },
+    set(on) { try { globalThis.localStorage?.setItem(POPUPS_KEY, on ? "1" : "0"); } catch { /* this window only */ } },
+    online: [], // names waiting to be said together
+    timer: null,
+    show(text, label, place, extra = {}) {
+      if (!popups.on() || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
+      window.MefiToast?.(text, "info", { action: { label, run: () => goPlace(place, extra) } });
+    },
+    hear(event) {
+      switch (event?.type) {
+        case "friendOnline": {
+          if (!event.user?.name || popups.online.includes(event.user.name)) return;
+          popups.online.push(event.user.name);
+          // A few friends opening Studio together are one toast.
+          if (!popups.timer) popups.timer = setTimeout(() => {
+            const names = popups.online.splice(0);
+            popups.timer = null;
+            if (!names.length) return;
+            const who = names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : `${names[0]} and ${names.length - 1} others`;
+            popups.show(`${who} ${names.length === 1 ? "is" : "are"} online`, "Say hi", "lobby");
+          }, 3000);
+          return;
+        }
+        case "invite":
+          if (event.invite?.status === "pending") popups.show(`${event.invite.invitedBy.name} invited you to ${event.invite.roomName}`, "See the invite", "rooms");
+          return;
+        case "joinRequest":
+          if (event.request?.status === "pending") popups.show(`${event.request.requester.name} asks to join one of your rooms`, "See requests", "rooms");
+          return;
+        case "credits":
+          if (event.delta > 0 && event.reason === "played") popups.show(`Someone played your project: +${event.delta} credits`, "Project hub", "hub");
+          else if (event.delta > 0 && event.reason === "starred") popups.show(`Someone starred your project: +${event.delta} credits`, "Project hub", "hub");
+          return;
+        default:
+      }
+    },
+  };
+
   // ---- The Lobby: the front page ------------------------------------------------
   let current = null; // the card on screen: { hear }
   let hearing = false;
   function listen(api) {
     if (hearing || typeof api?.onHubEvent !== "function") return;
     hearing = true;
-    api.onHubEvent((event) => { current?.hear(event); });
+    api.onHubEvent((event) => { popups.hear(event); current?.hear(event); });
   }
 
   function card() {
@@ -79145,7 +79228,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         }).catch(() => { tick.checked = !tick.checked; });
       });
       toggle.append(tick, node("span", "", "Show me as online"));
-      bar.append(toggle);
+      const pops = node("label", "front-visible");
+      const popTick = node("input");
+      popTick.type = "checkbox";
+      popTick.id = "friends-front-popups";
+      popTick.checked = popups.on();
+      popTick.addEventListener("change", () => { popups.set(popTick.checked); status.textContent = popTick.checked ? "Pop-ups from friends are on." : "Pop-ups from friends are off."; });
+      pops.append(popTick, node("span", "", "Pop-ups from friends"));
+      bar.append(toggle, pops);
       const invite = node("span", "front-invite");
       if (code?.code) {
         invite.append(document.createTextNode("Invite code "), node("b", "front-code", code.code));
@@ -79184,7 +79274,232 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return root;
   }
 
-  window.MefiFriendsFront = { gate, card };
+  window.MefiFriendsFront = { gate, card, popups };
+  // Pop-ups need the hub listener with Friends closed too.
+  listen(bridge());
+})();
+
+// Friends › Moderation (window.MefiFriendsMod): the relay's moderator tools,
+// shown only to moderators (the relay says who is one in hub-client me();
+// every admin route checks again, so the page being shown grants nothing).
+//
+// One card, four parts:
+//   - Looks like farming: members whose last 30 days of credits came mostly
+//     from one person, or two people trading credits (relay GET
+//     /v1/admin/credits/flags), each with Review.
+//   - Reports: messages and projects members reported, with Resolve, Remove
+//     project and Suspend the author for a week.
+//   - Look someone up: a member search, then Review.
+//   - Review: where a member's credits came from, how old each account is,
+//     Take back (from one person, or everything in 30 days) and Suspend.
+// Everything goes through main's hub:room channel (HUB_ROOM_METHODS mod*) and
+// the hub:projects removeProject; text only; every action that changes
+// something asks twice (MefiUi.arm).
+(function () {
+  "use strict";
+  const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+  const button = (text, run, id = null) => { const el = node("button", "ghost friends-mod-button", text); el.type = "button"; if (id) el.id = id; el.addEventListener("click", run); return el; };
+  const confirmed = (label, armed, ask, run) => (window.MefiUi?.arm
+    ? window.MefiUi.arm(button(label, () => {}), { run, armed })
+    : button(label, () => { if (window.confirm?.(ask) !== false) run(); }));
+  const bridge = () => window.mefiStudio;
+  const RANKS = { spark: "Spark", ember: "Ember", flame: "Flame", comet: "Comet", star: "Star", nova: "Nova", void: "Void" };
+  const HOLDS = { "read-only": "read-only or suspended", "new-account": "Discord account under 30 days old", "new-member": "under a week in the server", "forgot-me": "used Forget me in the last 30 days", unknown: "not signed in yet" };
+  const DAY = 86_400_000;
+  const age = (ms) => {
+    if (!Number.isFinite(ms)) return "unknown";
+    const days = Math.floor((Date.now() - ms) / DAY);
+    return days < 1 ? "under a day" : days < 60 ? `${days} day${days === 1 ? "" : "s"}` : days < 730 ? `${Math.floor(days / 30)} months` : `${Math.floor(days / 365)} years`;
+  };
+  const why = (answer, fallback) => (answer?.error === "forbidden" ? "Only moderators can do that." : answer?.error === "rate-limited" ? "Slow down a moment, then try again." : fallback);
+
+  // Whether this member is a moderator, as the relay last said (null: not known yet).
+  let moderator = null;
+  const listeners = new Set();
+  async function learn() {
+    const api = bridge();
+    if (typeof api?.hubProjects !== "function" || typeof api?.hubStatus !== "function") return moderator;
+    try {
+      const hub = (await api.hubStatus())?.status;
+      if (hub?.state !== "ready" || !hub.credits) return moderator;
+      const me = await api.hubProjects("me");
+      if (me?.ok) {
+        const next = me.moderator === true;
+        if (next !== moderator) { moderator = next; for (const fn of listeners) { try { fn(moderator); } catch {} } }
+      }
+    } catch { /* asked again next time Friends opens */ }
+    return moderator;
+  }
+  const isMod = () => moderator === true;
+  const subscribe = (fn) => { listeners.add(fn); return () => listeners.delete(fn); };
+
+  function card() {
+    const root = node("section", "friends-mod");
+    root.id = "friends-mod";
+    root.setAttribute("aria-labelledby", "friends-mod-title");
+    const title = node("h4", "friends-mod-title", "Moderation");
+    title.id = "friends-mod-title";
+    const status = node("p", "friends-mod-status");
+    status.id = "friends-mod-status";
+    status.setAttribute("role", "status");
+    const body = node("div", "friends-mod-body");
+    root.append(title, status, body);
+    const api = bridge();
+    if (typeof api?.hubRoom !== "function") { status.textContent = "Moderation works in the desktop app."; root.dataset.state = "unavailable"; return root; }
+    let flags = [], reports = [], found = [], review = null, query = "", busy = false, gone = false;
+    const call = async (method, ...args) => { try { return await api.hubRoom(method, ...args); } catch { return { ok: false, error: "failed" }; } };
+    const guard = async (label, work) => {
+      if (busy) return;
+      busy = true;
+      root.setAttribute("aria-busy", "true");
+      if (label) status.textContent = label;
+      try { await work(); } catch { status.textContent = "That did not work. Try again."; }
+      busy = false;
+      root.removeAttribute("aria-busy");
+    };
+
+    async function load() {
+      const known = await learn();
+      if (gone) return;
+      if (!known) {
+        root.dataset.state = "not-moderator";
+        status.textContent = "Moderation is for the Void Engine moderators. Sign in with Discord in Friends first if you are one.";
+        body.replaceChildren();
+        return;
+      }
+      const [flagged, reported] = await Promise.all([call("modFlags"), call("modReports")]);
+      if (gone) return;
+      flags = flagged?.ok ? flagged.flags : [];
+      reports = reported?.ok ? reported.reports : [];
+      root.dataset.state = "ready";
+      status.textContent = flagged?.ok || reported?.ok ? "" : "The relay did not answer. Try again in a moment.";
+      paint();
+    }
+
+    function section(name, id, parts, empty) {
+      const box = node("section", "friends-mod-section");
+      box.id = id;
+      box.append(node("h5", "friends-mod-heading", name));
+      if (!parts.length && empty) box.append(node("p", "muted", empty));
+      box.append(...parts);
+      return box;
+    }
+    function row(text, meta, actions) {
+      const item = node("div", "friends-mod-row");
+      const words = node("div", "friends-mod-words");
+      words.append(node("strong", "", text), node("span", "muted", meta));
+      const tools = node("div", "friends-mod-actions");
+      tools.append(...actions);
+      item.append(words, tools);
+      return item;
+    }
+
+    async function open(userId) {
+      await guard("Reading their credits…", async () => {
+        const answer = await call("modReview", userId);
+        if (!answer?.ok) { status.textContent = answer?.error === "not-found" ? "That member has not signed in to the relay." : why(answer, "Their credits could not be read."); return; }
+        review = answer;
+        status.textContent = "";
+        paint();
+      });
+    }
+
+    function farming() {
+      return section("Looks like farming", "friends-mod-flags", flags.map((flag) => row(
+        flag.name,
+        flag.why === "mutual"
+          ? `${flag.total} credits in 30 days; trading credits with ${flag.mutual.map((other) => other.name).join(", ")}`
+          : `${flag.total} credits in 30 days, ${flag.top.share}% from ${flag.top.name} (Discord account ${age(flag.top.accountCreatedAt)} old)`,
+        [button("Review", () => { void open(flag.id); })],
+      )), "Nothing looks like farming in the last 30 days.");
+    }
+
+    function reportList() {
+      return section("Reports", "friends-mod-reports", reports.map((report) => {
+        const tools = [];
+        tools.push(confirmed("Resolve", "Mark it handled?", "Mark this report as handled?", () => guard("Resolving…", async () => {
+          const answer = await call("modResolve", report.id);
+          status.textContent = answer?.ok ? "Marked as handled." : why(answer, "It could not be resolved.");
+          await load();
+        })));
+        if (report.kind === "project" && report.projectId) tools.push(confirmed("Remove project", "Take it off the hub?", "Take this project off the hub?", () => guard("Removing…", async () => {
+          const answer = await api.hubProjects?.("removeProject", report.projectId);
+          if (answer?.ok) await call("modResolve", report.id);
+          status.textContent = answer?.ok ? "The project is off the hub." : why(answer, "It could not be removed.");
+          await load();
+        })));
+        if (report.author) tools.push(confirmed(`Suspend ${report.author.name} for a week`, "Suspend them?", `Suspend ${report.author.name} for 7 days?`, () => guard("Suspending…", async () => {
+          const answer = await call("modSuspend", report.author.id, 7 * 24 * 60);
+          status.textContent = answer?.ok ? `${report.author.name} is suspended for 7 days.` : why(answer, "The suspension did not go through.");
+        })));
+        const what = report.kind === "project" ? "Project" : report.verified ? "Message (signed copy)" : "Message";
+        return row(`${what}: ${report.reason}`, `${report.text ? `“${report.text.slice(0, 200)}” · ` : ""}reported by ${report.reporter?.name ?? "a member"}${report.author ? ` · by ${report.author.name}` : ""}`, tools);
+      }), "No open reports.");
+    }
+
+    function lookup() {
+      const box = node("div", "friends-mod-lookup");
+      const input = node("input", "friends-mod-search");
+      input.type = "search";
+      input.id = "friends-mod-search";
+      input.placeholder = "A member's name";
+      input.setAttribute("aria-label", "Look someone up by name");
+      input.value = query;
+      const go = button("Look up", () => guard("Looking…", async () => {
+        query = input.value.trim();
+        if (!query) return;
+        const answer = await call("searchMembers", query);
+        found = answer?.ok ? answer.members : [];
+        status.textContent = answer?.ok ? (found.length ? "" : "Nobody by that name has signed in.") : why(answer, "The search did not work.");
+        paint();
+      }), "friends-mod-lookup");
+      input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); go.click(); } });
+      box.append(input, go);
+      return section("Look someone up", "friends-mod-people", [box, ...found.map((person) => row(person.name, person.id, [button("Review", () => { void open(person.id); })]))], "");
+    }
+
+    function reviewPanel() {
+      if (!review) return null;
+      const who = review.member;
+      const parts = [];
+      const standing = who.standing.ok ? "Can give and earn credits." : `Earns nothing: ${HOLDS[who.standing.reason] ?? "not in good standing"}.`;
+      parts.push(node("p", "friends-mod-facts", `Discord account ${age(who.accountCreatedAt)} old · in the server ${age(who.joinedAt)} · ${review.credits.balance} credits, ${review.credits.lifetime} lifetime (${RANKS[review.credits.rank] ?? review.credits.rank}) · ${standing}`));
+      parts.push(node("p", "muted", review.total ? `${review.total} credits in the last ${review.days} days came from:` : `No credits in the last ${review.days} days.`));
+      for (const giver of review.givers) {
+        const tools = giver.id ? [confirmed(`Take back ${giver.amount}`, "Take them back?", `Take back the ${giver.amount} credits ${giver.name} gave in the last ${review.days} days?`, () => guard("Taking back…", async () => {
+          const answer = await call("modRevoke", who.id, { from: giver.id, days: review.days });
+          status.textContent = answer?.ok ? `Took back ${answer.revoked} credits from ${giver.name}.` : why(answer, "That did not go through.");
+          await open(who.id);
+        }))] : [];
+        parts.push(row(`${giver.name}: ${giver.amount} credits (${giver.share}%)`, `${giver.events} plays or stars${Number.isFinite(giver.accountCreatedAt) ? ` · Discord account ${age(giver.accountCreatedAt)} old` : ""}`, tools));
+      }
+      const tools = node("div", "friends-mod-actions");
+      if (review.total) tools.append(confirmed(`Take back all ${review.total}`, "Take all of them back?", `Take back every credit ${who.name} earned in the last ${review.days} days?`, () => guard("Taking back…", async () => {
+        const answer = await call("modRevoke", who.id, { days: review.days });
+        status.textContent = answer?.ok ? `Took back ${answer.revoked} credits.` : why(answer, "That did not go through.");
+        await open(who.id);
+      })));
+      for (const [label, minutes] of [["Suspend 1 day", 24 * 60], ["Suspend 7 days", 7 * 24 * 60], ["Lift a suspension", 0]]) {
+        tools.append(confirmed(label, minutes ? "Suspend them?" : "Lift it?", minutes ? `${label} for ${who.name}?` : `Lift ${who.name}'s suspension?`, () => guard(minutes ? "Suspending…" : "Lifting…", async () => {
+          const answer = await call("modSuspend", who.id, minutes);
+          status.textContent = answer?.ok ? (minutes ? `${who.name} is suspended.` : `${who.name}'s suspension is lifted.`) : why(answer, "That did not go through.");
+          await open(who.id);
+        })));
+      }
+      tools.append(button("Close", () => { review = null; paint(); }, "friends-mod-close-review"));
+      parts.push(tools);
+      return section(`Review: ${who.name}`, "friends-mod-review", parts, "");
+    }
+
+    function paint() {
+      body.replaceChildren(...[reviewPanel(), farming(), reportList(), lookup()].filter(Boolean));
+    }
+    root.dispose = () => { gone = true; };
+    void load();
+    return root;
+  }
+
+  window.MefiFriendsMod = { card, learn, isMod, subscribe };
 })();
 
 // Project-local decisions and reviewed task handoffs. Mefi interviews you here
@@ -84077,8 +84392,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
     { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
+    // renderer/friends-mod.js: shown only once the relay says this member is a moderator (it checks every action again).
+    { id: "mod", label: "Moderation", glyph: "g-flag", about: "Reports, credits that look farmed, and suspensions. Only moderators see this place.", modOnly: true },
   ]);
-  // A Friends target names one of these places (lobby, rooms, pcs, playground, hub).
+  // The places this member sees: Moderation only for moderators.
+  const shownPlaces = () => FRIENDS_PLACES.filter((place) => !place.modOnly || window.MefiFriendsMod?.isMod?.() === true);
+  // A Friends target names one of these places (lobby, rooms, pcs, playground, hub, mod).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
   const friendsPage = { place: null, root: null, body: null, title: null, about: null, room: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
@@ -84098,8 +84417,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const place of FRIENDS_PLACES) {
       const tab = button(place.label, () => window.MefiNav?.go?.("friends-page", { place: place.id }), "ghost friends-place-tab");
       tab.id = `friends-place-tab-${place.id}`; tab.dataset.place = place.id;
+      if (place.modOnly) tab.hidden = true;
       tabs.append(tab);
     }
+    // Moderation's tab and row appear once the relay says this member is a moderator.
+    window.MefiFriendsMod?.subscribe?.(() => {
+      const shown = new Set(shownPlaces().map((place) => place.id));
+      for (const tab of friendsPage.tabs?.children ?? []) tab.hidden = !shown.has(tab.dataset.place);
+      window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: friendsPage.place } }));
+    });
     const body = node("div", "friends-place-body"); body.id = "friends-place-body";
     sheet.append(head, tabs, body); overlay.append(sheet); document.body.append(overlay);
     Object.assign(friendsPage, { root: overlay, body, title, about, tabs });
@@ -84111,6 +84437,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (place.id === "lobby") card = window.MefiFriendsFront?.card?.();
     else if (place.id === "rooms") card = window.MefiRooms?.panel?.({ room: friendsPage.room });
     else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
+    else if (place.id === "mod") card = window.MefiFriendsMod?.card?.();
     else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
     else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
     const parts = [card ?? node("p", "muted", "This part of Friends is not in this build.")];
@@ -84145,6 +84472,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (moved) window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: place.id } }));
     window.MefiNav?.paintCurrent?.();
     window.MefiScroll?.scan?.(friendsPage.root);
+    // Whether this member moderates, asked again each time Friends opens (cheap: one /v1/me).
+    void Promise.resolve(window.MefiFriendsMod?.learn?.()).catch(() => {});
     return true;
   }
   function closePlace() {
@@ -84158,7 +84487,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function friendsPlaces() {
     if (!friendsLayout()) return null;
     const here = friendsOpen() ? friendsPage.place : null;
-    return FRIENDS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
+    return shownPlaces().map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
   }
   // Where you are in Friends ({ id, label }), for the breadcrumb and the tab; null when the page is not up.
   function friendsPlace() {

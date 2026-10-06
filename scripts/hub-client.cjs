@@ -36,6 +36,12 @@
 //     "online"): every member is in the Lobby; roomCode / newRoomCode hand
 //     out a room's short join code and link, joinCode joins with one, and
 //     online() lists who is in Studio now (setOnlineVisible hides you).
+//   - Moderators (relay /v1/admin/*, which checks the member is one):
+//     modFlags() lists credit patterns that look like farming, modReview()
+//     shows where a member's credits came from, modRevoke() takes them back,
+//     modReports() / modResolve() work through reports (messages and
+//     projects), and modSuspend() pauses a member. reportProject() is for
+//     everyone.
 //   - The Lobby front page (relay feature "front"): front() reads who is
 //     online and where, the rooms open now, the week's top and new projects,
 //     rank-ups and this member's week in one call.
@@ -69,7 +75,7 @@ const PRESENCE_EVERY_MS = 30_000;
 const KEEPALIVE_EVERY_MS = 30_000;
 const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
 // What this Studio tells the hub it can do (hello.features).
-const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive"]);
+const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online"]);
 // A historyReply must fit the hub's 16 KB frame limit.
 const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
@@ -594,6 +600,12 @@ function createHubClient(options = {}) {
           emit({ type: "historyRequest", roomId: frame.roomId, requestId: frame.requestId, before: SNOWFLAKE.test(String(frame.before ?? "")) ? String(frame.before) : null });
         }
         return;
+      // Someone this member shares a room with just opened Studio (feature "friend.online").
+      case "friendOnline": {
+        const who = user(frame.user);
+        if (who) emit({ type: "friendOnline", user: who });
+        return;
+      }
       // This member earned or spent credits (feature "credits").
       case "credits":
         if (Number.isFinite(frame.balance) && Number.isFinite(frame.delta)) {
@@ -867,6 +879,78 @@ function createHubClient(options = {}) {
       const answer = await authed("POST", "/v1/me/online", { visible });
       return answer.ok ? { ok: true, visible: answer.data.visible === true } : refused(answer);
     },
+    // ---- Reports and moderators (relay) -------------------------------------
+    reportProject(projectId, reason) {
+      const why = typeof reason === "string" ? reason.trim() : "";
+      if (!features.includes("projects") || !id(projectId) || !why || why.length > 500) return bad();
+      return simple("POST", `/v1/projects/${projectId}/report`, { reason: text(why, 500) });
+    },
+    async modFlags() {
+      const answer = await authed("GET", "/v1/admin/credits/flags");
+      if (!answer.ok) return refused(answer);
+      const flags = Array.isArray(answer.data.flags) ? answer.data.flags.map((item) => {
+        const who = user(item);
+        const top = user(item?.top);
+        if (!who || !top) return null;
+        return {
+          ...who, total: count(item.total, 1e9) ?? 0, why: item.why === "mutual" ? "mutual" : "one-giver",
+          top: { ...top, amount: count(item.top.amount, 1e9) ?? 0, share: count(item.top.share, 100) ?? 0, accountCreatedAt: Number.isFinite(item.top.accountCreatedAt) ? item.top.accountCreatedAt : null },
+          mutual: Array.isArray(item.mutual) ? item.mutual.map(user).filter(Boolean).slice(0, 5) : [],
+        };
+      }).filter(Boolean).slice(0, 50) : [];
+      return { ok: true, days: count(answer.data.days, 365) ?? 30, flags };
+    },
+    async modReview(userId) {
+      if (!SNOWFLAKE.test(String(userId ?? ""))) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/admin/credits/${userId}`);
+      if (!answer.ok) return refused(answer);
+      const data = answer.data;
+      const who = user(data.member);
+      if (!who) return { ok: false, error: "failed" };
+      const when = (value) => (Number.isFinite(value) ? value : null);
+      const standing = object(data.member.standing) ? { ok: data.member.standing.ok === true, reason: CREDIT_HOLDS.includes(data.member.standing.reason) ? data.member.standing.reason : null, until: when(data.member.standing.until) } : { ok: false, reason: null, until: null };
+      return {
+        ok: true,
+        member: { ...who, accountCreatedAt: when(data.member.accountCreatedAt), joinedAt: when(data.member.joinedAt), standing },
+        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, rank: RANK_KEY.test(String(data.credits?.rank ?? "")) ? data.credits.rank : "spark" },
+        days: count(data.days, 365) ?? 30,
+        total: count(data.total, 1e12) ?? 0,
+        givers: Array.isArray(data.givers) ? data.givers.map((item) => ({
+          id: SNOWFLAKE.test(String(item?.id ?? "")) ? String(item.id) : null,
+          name: text(item?.name, 100) || "member",
+          amount: count(item?.amount, 1e12) ?? 0, events: count(item?.events, 1e9) ?? 0, share: count(item?.share, 100) ?? 0,
+          accountCreatedAt: when(item?.accountCreatedAt), joinedAt: when(item?.joinedAt),
+        })).slice(0, 50) : [],
+      };
+    },
+    async modRevoke(userId, options = {}) {
+      const from = options?.from == null ? null : String(options.from);
+      const days = options?.days == null ? null : Number(options.days);
+      if (!SNOWFLAKE.test(String(userId ?? "")) || (from !== null && !SNOWFLAKE.test(from)) || (days !== null && (!Number.isSafeInteger(days) || days < 1 || days > 180))) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/admin/credits/${userId}/revoke`, { ...(from ? { from } : {}), ...(days ? { days } : {}) });
+      if (!answer.ok) return refused(answer);
+      return { ok: true, revoked: count(answer.data.revoked, 1e12) ?? 0, credits: { balance: count(answer.data.credits?.balance, 1e12) ?? 0, lifetime: count(answer.data.credits?.lifetime, 1e12) ?? 0, rank: RANK_KEY.test(String(answer.data.credits?.rank ?? "")) ? answer.data.credits.rank : "spark" } };
+    },
+    async modReports() {
+      const answer = await authed("GET", "/v1/admin/reports");
+      if (!answer.ok) return refused(answer);
+      const reports = Array.isArray(answer.data.reports) ? answer.data.reports.map((item) => {
+        if (!object(item) || !OPAQUE_ID.test(String(item.id))) return null;
+        return {
+          id: item.id, kind: item.kind === "project" ? "project" : "message",
+          roomId: OPAQUE_ID.test(String(item.roomId)) ? item.roomId : null, messageId: SNOWFLAKE.test(String(item.messageId)) ? String(item.messageId) : null,
+          projectId: OPAQUE_ID.test(String(item.projectId)) ? item.projectId : null,
+          author: user(item.author), reporter: user(item.reporter), reason: text(item.reason, 500), text: typeof item.text === "string" ? text(item.text, 2000) : null,
+          verified: item.verified === true, createdAt: Number.isFinite(item.createdAt) ? item.createdAt : null,
+        };
+      }).filter(Boolean).slice(0, 100) : [];
+      return { ok: true, reports };
+    },
+    modResolve(reportId) { return id(reportId) ? simple("POST", `/v1/admin/reports/${reportId}/resolve`) : bad(); },
+    modSuspend(userId, minutes) {
+      if (!SNOWFLAKE.test(String(userId ?? "")) || !Number.isSafeInteger(minutes) || minutes < 0 || minutes > 60 * 24 * 365) return bad();
+      return simple("POST", `/v1/admin/members/${userId}/suspend`, { minutes });
+    },
     async front() {
       if (!features.includes("front")) return { ok: false, error: "unsupported" };
       const answer = await authed("GET", "/v1/front");
@@ -885,6 +969,7 @@ function createHubClient(options = {}) {
         featureCost: count(data.featureCost, 1e6) ?? 0, canEarn: data.canEarn === true,
         // Why this member cannot give or earn credits yet, and until when (relay/src/credits.mjs GUARD).
         hold: object(data.hold) && CREDIT_HOLDS.includes(data.hold.reason) ? { reason: data.hold.reason, until: Number.isFinite(data.hold.until) ? data.hold.until : null } : null,
+        moderator: data.moderator === true,
         projects: Array.isArray(data.projects) ? data.projects.map(projectCard).filter(Boolean) : [],
       };
     },

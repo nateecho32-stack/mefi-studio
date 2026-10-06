@@ -136,6 +136,32 @@ test("a credits frame updates the balance and says why", async () => {
   assert.equal(card.find("project-hub-status").textContent, "Play counted: +2 credits for you.");
 });
 
+test("anyone can report someone else's project with a reason; a moderator can also take it off", async () => {
+  const env = environment();
+  const card = env.hub.card();
+  await flush();
+  card.find("project-hub-tab-new").click();
+  await flush();
+  const row = () => card.all().find((item) => item.dataset?.project === "proj_a");
+  const buttons = (label) => row().buttons(label);
+  assert.equal(buttons("Remove (moderator)").length, 0, "members see Report, not Remove");
+  buttons("Report")[0].click();
+  assert.equal(buttons("Cancel report").length, 1);
+  buttons("Not safe to open")[0].click();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "reportProject"), ["reportProject", "proj_a", "Not safe to open"]);
+  assert.equal(card.find("project-hub-status").textContent, "Thanks. A moderator will look at it.");
+  assert.equal(buttons("Report").length, 1, "the reasons close again");
+
+  const mod = environment({ replies: { me: me({ moderator: true }) } });
+  const modCard = mod.hub.card();
+  await flush();
+  modCard.find("project-hub-tab-new").click();
+  await flush();
+  const modRow = modCard.all().find((item) => item.dataset?.project === "proj_a");
+  assert.equal(modRow.buttons("Remove (moderator)").length, 1);
+});
+
 test("credits on hold say why and until when; credits taken back say so", async () => {
   const until = Date.UTC(2026, 9, 12);
   const day = new Date(until).toLocaleDateString([], { day: "numeric", month: "long" });
@@ -159,7 +185,7 @@ test("credits on hold say why and until when; credits taken back say so", async 
 });
 
 test("main lets the renderer call only the hub's project methods, and plays only https links", () => {
-  assert.match(main, /const HUB_PROJECT_METHODS = Object\.freeze\(\{ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1 \}\);/);
+  assert.match(main, /const HUB_PROJECT_METHODS = Object\.freeze\(\{ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1, reportProject: 2 \}\);/);
   assert.match(main, /ipcMain\.handle\("hub:projects", async \(_event, payload\) => hubProjects\(String\(payload\?\.method \?\? ""\), Array\.isArray\(payload\?\.args\) \? payload\.args : \[\]\)\);/);
   assert.match(main, /if \(link\?\.protocol !== "https:"\) return \{ ok: false, error: "bad-link" \};/);
   assert.ok(!/innerHTML/.test(source), "text only, never markup");

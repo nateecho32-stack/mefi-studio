@@ -67,6 +67,25 @@ a worker keeps its own for the run). The review's fixes are pinned: an online co
 are swept after six hours, `/name` counts only in the owner's own words. Kill switches MEFI_STUDIO_NO_SKILL_USE,
 MEFI_STUDIO_NO_CONNECTORS, MEFI_STUDIO_NO_MCP_POOL and MEFI_STUDIO_SERIAL_TOOLS, each pinned.
 
+## 2026-10-06 Friends › Moderation, Report on projects and pop-ups from friends land on main
+
+Branch `wip/friends-mod` in `C:\wt\mod` (9e2d43d Moderation and project reports; 1679ae6 pop-ups and the relay's
+friendOnline frame), main 33c3c4e merged (b433532, clean; booklet.html regenerated).
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) runs on the landing commit and is
+green before the fast-forward. This PC was shared with other sessions' suites the whole time, so the full local gate
+was left to CI, as for 33c3c4e.
+
+Run alone here after the merge: friends_front_ui 10/10 (pop-ups grouped, invites, requests, plays and stars, the off
+switch), friends_mod_ui 4/4 (new: moderators only, farming list, reports with Resolve, Remove project and Suspend,
+lookup, Take back from one giver or all, nothing without a yes), friends_navigation 8/8 (Moderation hidden unless a
+moderator), project_hub_ui 7/7 (Report), relay_credits 11/11 (flags: one giver and mutual trading, project reports
+once each and never your own, me().moderator), relay_connect 5/5 (friendOnline to room co-members only, not the
+Lobby, not twice in 30 minutes, never when hidden), relay_core 9/9, relay_e2e 9/9, hub_client 16/16 (hello lists
+friend.online), hub_host 13/13, rooms_ui 13/13, app_rail 40/40, onboarding 43/43, module_purity 61/61,
+booklet_build 5/5; friends_render and companion_hub_render 1/1. `npm run check` ok, lint clean on the changed files.
+The relay is redeployed (version 1fe8cfc5) and `relay/scripts/smoke.mjs` passes against it.
+
 ## 2026-10-06 The Lobby, one sign-in, online at launch, credits that cannot be farmed, and no Discord roles land on main
 
 Branch `wip/credits-guard` in `C:\wt\credits` (bcc51f3 the Lobby front page, Sign in with Discord and online at launch;
@@ -510,33 +529,6 @@ same picture apart from attempt_review_host "a shot that is slow" (28/28
 alone). A first run was stopped and its children kept running into a second
 one: overlapping runs failed to start processes (0xC0000142) and wrote one
 log; neither is counted here. `cargo test --lib` 26 pass.
-
-## 2026-10-04 The Studio Daily lands: DevDay branch merged with main, Since you were away
-
-Branch `land/devday` in `C:\wt\devday-land`: origin/wip/feat/devday-2026 (the
-daily paper, GPT-6.1 Sol defaults, Codex over app-server, ChatGPT plan
-sign-in, Catalog/Performance face lift) with origin/main b98fad5 merged file
-by file (main.cjs app-wide channels and the picture-aware assistant body,
-agent-profiles FIELDS/providers/vision, main's BOOKLET_INPUTS with the paper's
-two files, booklet regenerated, TESTRUNS and archives rebuilt from both
-sides' rows with none missing). Two fixes the merge needed: the catalog
-toolbar reads --shell-y0 (layout_contract_css), and the catalog folds by its
-own width with a container query (size_render: "1100x720@1: the page
-overflows", the six columns pushed the document to 1157px). New: "Since you
-were away" above the news (scripts/front-page.cjs, main.cjs news:away,
-renderer/daily-paper.js band, MefiStartup.pick).
-
-Full `npm test` after the last commit: Node 6882 tests, 6867 pass, 14
-skipped, 1 fail (attempt_review_host "a shot that is slow", ENOENT under
-load: 28/28 alone); Electron lane 75: 71 pass, 4 fail: layout_contract_render
-and shell_render (fail identically on clean main on this PC, viewport
-1921x1081), command_render and planning_render (each passes alone); Python
-248 OK; path lock ok; `npm run audit` 0 findings; `npm run check` ok (271
-targets). The earlier test:fast run on this branch lost 5 git suites to
-memory pressure (0.68 GB free; push to a local bare repo failed): sync and
-rust_parity_repo 25/25 alone. New suites: front_page 7, news_away_host 5,
-daily_paper 10 (3 new). Before/after launch captures at 1920x1080 with a fake
-bridge: `C:\wt\shots\launch-before.png`, `launch-after.png`.
 
 ## Read Before Any Tests
 

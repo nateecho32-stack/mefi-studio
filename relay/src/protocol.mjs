@@ -84,6 +84,7 @@ export const FEATURES = Object.freeze({
   credits: 'credits', // GET /v1/me, member cards, the credits frame
   projects: 'projects', // the project hub: share, play, star, feature
   front: 'front', // GET /v1/front: the Lobby front page in one read
+  friendOnline: 'friend.online', // friendOnline: someone you share a room with just opened Studio (to clients that list it)
 });
 
 /** listen{action}: a room's shared player. */
@@ -471,6 +472,8 @@ export const HUB_FRAMES = Object.freeze({
   historyRequest: { roomId: opaqueId(), requestId: opaqueId(), before: optional(snowflake()) },
   // To the asker: the messages a peer held, each with a checked sig, newest last.
   history: { roomId: opaqueId(), messages: list(roomMessage(), LIMITS.historyMessages), hasMore: boolean() },
+  // To the people a member shares a room with, when that member opens Studio (feature "friend.online").
+  friendOnline: { user: user() },
   // To the member who earned or spent credits (feature "credits"): the new totals and why.
   credits: {
     balance: integer(0, Number.MAX_SAFE_INTEGER),
@@ -581,6 +584,8 @@ export const HTTP_BODIES = Object.freeze({
   // POST /v1/reports
   // message: the reporter's own copy with its sig, kept as evidence only when the sig checks out.
   report: { messageId: snowflake(), roomId: opaqueId(), reason: string(1, LIMITS.reasonChars, { pattern: TEXT, nonBlank: true }), message: optional(roomMessage()) },
+  // POST /v1/projects/:id/report
+  reportProject: { reason: string(1, LIMITS.reasonChars, { pattern: TEXT, nonBlank: true }) },
   // POST /v1/rooms/:id/claims
   claim: {
     machineId: string(1, 64, { pattern: MACHINE_ID }),

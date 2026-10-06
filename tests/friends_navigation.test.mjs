@@ -82,7 +82,8 @@ for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", 
     assert.equal(loaded.document.querySelector("#friends-place-title").textContent, title);
     assert.deepEqual(loaded.made, [kind], "only the place's own card is built");
     const tabs = [...loaded.document.querySelector("#friends-place-tabs").children];
-    assert.deepEqual(tabs.map((tab) => tab.textContent), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub"]);
+    assert.deepEqual(tabs.filter((tab) => !tab.hidden).map((tab) => tab.textContent), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub"], "Moderation shows only to moderators");
+    assert.deepEqual(tabs.filter((tab) => tab.hidden).map((tab) => tab.textContent), ["Moderation"]);
     assert.deepEqual(tabs.filter((tab) => tab.getAttribute("aria-current") === "page").map((tab) => tab.dataset.place), [target]);
   });
 }

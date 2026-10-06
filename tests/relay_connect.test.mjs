@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ALICE, BOB, CARA, connectAll, makeRelay, member, until } from "./fixtures/relay-harness.mjs";
+import { ALICE, BOB, CARA, connectAll, makeRelay, member, until, wait } from "./fixtures/relay-harness.mjs";
 
 // Connecting made simple on the relay: everyone signed in is in the Lobby,
 // a room's short join code lets a friend in without an approval step, and
@@ -123,6 +123,37 @@ test("the Lobby front page: who is online and where, rooms open now, the week's 
   assert.equal(hers.visible, true);
   assert.equal((await cara.client.front()).visible, false);
   for (const one of [alice, bob, cara]) await one.client.disconnect();
+});
+
+test("opening Studio tells the people you share a room with, once in a while, never the Lobby, never when hidden", async () => {
+  const relay = makeRelay();
+  const alice = member(relay, "tok-alice");
+  const bob = member(relay, "tok-bob");
+  const cara = member(relay, "tok-cara");
+  await connectAll(alice, bob, cara);
+  const made = await alice.client.createRoom({ kind: "hangout", name: "Friday jam", policy: "invite", listed: false });
+  const code = await alice.client.roomCode(made.room.id);
+  assert.equal((await bob.client.joinCode(code.code)).ok, true);
+  await alice.client.disconnect();
+  const back = member(relay, "tok-alice");
+  await connectAll(back);
+  await until(() => bob.of("friendOnline").length === 1, "bob hears that alice opened Studio");
+  assert.deepEqual(bob.of("friendOnline")[0].user, { id: ALICE.id, name: "Alice" });
+  await wait(30);
+  assert.equal(cara.of("friendOnline").length, 0, "Cara only shares the Lobby with her");
+  // Again within 30 minutes: quiet. Hidden: never.
+  await back.client.disconnect();
+  const again = member(relay, "tok-alice");
+  await connectAll(again);
+  await wait(30);
+  assert.equal(bob.of("friendOnline").length, 1, "not twice in half an hour");
+  await bob.client.setOnlineVisible(false);
+  await bob.client.disconnect();
+  const hidden = member(relay, "tok-bob");
+  await connectAll(hidden);
+  await wait(30);
+  assert.equal(again.of("friendOnline").length, 0, "someone hidden is never announced");
+  for (const one of [again, hidden, cara]) await one.client.disconnect();
 });
 
 test("Who's online lists the people in Studio now, and anyone can hide", async () => {

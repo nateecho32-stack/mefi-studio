@@ -39,7 +39,10 @@ that comes back has to match what was actually said.
 Forget me (`POST /v1/me/forget`) deletes every row about you and closes the
 rooms you own. Observability is off in `wrangler.toml`. Who's online and The
 Lobby's front page (`GET /v1/front`) are read from the live connections when a
-member asks; nothing about who was online, or when, is written. An unlisted
+member asks; nothing about who was online, or when, is written. When a member
+opens Studio, the people they share a room with (not the Lobby) hear it as a
+`friendOnline` frame, unless they hide, at most once in 30 minutes per pair;
+that is kept in memory only. An unlisted
 room's name never appears on anyone else's front page.
 
 ## Credits that cannot be farmed
@@ -70,12 +73,16 @@ alt accounts, trading and replays:
 - Ranks unlock one thing: a room in the public list opens at Flame (200
   credits), which the limits above make slow to reach with second accounts.
   Moderation is never a rank: moderators are named accounts (`OWNER_IDS`).
-- Moderators: `GET /v1/admin/credits/:id` shows where a member's credits
-  came from in the last 30 days, by who caused them and with their account
-  ages; `POST /v1/admin/credits/:id/revoke` (`{ "from": "<id>", "days": 30 }`,
-  both optional) takes them back off the balance and the lifetime total, and
-  the same plays and stars can never pay again. Suspending a member stops
-  their credits too.
+- Moderators (Studio's Friends › Moderation): `GET /v1/admin/credits/flags`
+  lists who looks like they are farming (at least 30 credits in 30 days with
+  60% from one member, or two members who each made the other earn 10);
+  `GET /v1/admin/credits/:id` shows where a member's credits came from in the
+  last 30 days, by who caused them and with their account ages;
+  `POST /v1/admin/credits/:id/revoke` (`{ "from": "<id>", "days": 30 }`, both
+  optional) takes them back off the balance and the lifetime total, and the
+  same plays and stars can never pay again. Suspending a member stops their
+  credits too. `POST /v1/projects/:id/report` (anyone, not their own, once
+  each, 10 an hour) puts a project in `GET /v1/admin/reports` with its card.
 
 ## Layout
 
