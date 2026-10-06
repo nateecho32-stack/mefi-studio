@@ -126,8 +126,8 @@
   const teamLayout = () => document.documentElement?.dataset?.layout === "v2";
   const TEAM_PLACES = Object.freeze([
     { id: "overview", label: "Overview", glyph: "g-home", panes: ["overview", "behavior"], draft: true, about: "Who does the work, how many can work at once, and how much they can do without asking." },
-    { id: "providers", label: "Providers", glyph: "g-key", panes: ["connections"], about: "Where the models come from. Connect what you already pay for, or add a key. Seats choose from what is connected here." },
-    { id: "seats", label: "Seats and models", glyph: "g-agents", panes: ["team", "routing"], draft: true, about: "Each seat keeps its place on the team when the agent behind it changes. Changes apply when you press Apply changes." },
+    { id: "providers", label: "Providers", glyph: "g-key", panes: ["connections"], about: "Where the models come from. Connect what you already pay for, then choose who uses it." },
+    { id: "seats", label: "Seats and models", glyph: "g-agents", panes: ["team", "routing"], draft: true, about: "Who does each job, which model it uses, and how hard it thinks." },
     { id: "perms", label: "Permissions", glyph: "g-flag", panes: ["perms"], about: "How much Mefi can decide without asking you. Every mode leaves the same things to you." },
     { id: "rules", label: "Rules", glyph: "g-booklet", group: "Context for agents", panes: ["rules"], scoped: true, about: "Standing rules every model on this project reads. Write what you would tell a new teammate on their first day." },
     { id: "skills", label: "Skills", glyph: "g-skills", group: "Context for agents", views: [["Skills", "skills"]] },
@@ -427,7 +427,7 @@
     for (const [id, title] of items) { const option = node("option", "", title); option.value = id; el.append(option); }
     el.value = value; el.addEventListener("change", () => change(el.value)); return el;
   }
-  function dirty() { if (!draft()) return; draft().dirty = true; say("Draft · applies to new work after you choose Apply."); }
+  function dirty() { if (!draft()) return; draft().dirty = true; say("Draft · applies to new work after you choose Apply."); $("agents-save-bar")?.setAttribute("data-dirty", "true"); }
   function buildRoles() {
     const intro = node("div", "agents-team-intro"); intro.append(node("h2", "", "A model for every role"), node("p", "muted", "Choose a provider in the corner of each agent. Use + to add skills or tools."));
     const roles = node("div", "agents-role-grid"); roles.id = "agents-role-grid"; $("agents-team").prepend(intro, roles);
@@ -835,6 +835,78 @@
     $("agents-overlay")?.setAttribute("data-places", "v2");
     return true;
   }
+  // ---- Seats and models, made simple (renderer/team-models.js) ----
+  // In the 0.5 layout Seats and models opens on a plain page (right now, how Studio decides, who does what, the report
+  // card, how thinking works) and the detailed cards it grew from fold under More settings: the role grid, the routing
+  // and coding-worker cards and team coordination move there with their ids, bindings and Search entries, and go back
+  // where they were when the classic layout opens the page. Providers gains the setup helper's one-provider and
+  // several-logins flows on top. The plain page edits this page's draft (teamContext.changed marks it dirty and
+  // repaints both), so Apply changes applies everything; openTeam opens More settings for a target inside it.
+  let seatsMade = false;
+  const seatHomes = new Map();
+  const teamContext = {
+    draft: () => draft() || null,
+    projectId,
+    go,
+    changed: () => { dirty(); refreshRows(); },
+    reveal: (id) => revealSeat(id),
+    // The team changed on the host (Use for everything): a draft without edits is read again.
+    reload: () => { const item = draft(); if (!item || item.dirty || rulesChanged(item)) return false; drafts.delete(draftKey()); void load(); return true; },
+    kindsChanged: () => adoptKinds(),
+  };
+  function fileSeats(on) {
+    if (!seatsMade) {
+      if (!on || !$("agents-team") || !$("agents-connections")) return;
+      seatsMade = true;
+      const page = node("div", "team-models"); page.id = "team-models";
+      const more = node("details", "agents-more"); more.id = "agents-more";
+      const summary = node("summary"); summary.append(node("span", "agents-more-title", "More settings"), node("span", "agents-more-hint", "Provider order · Jev · coding tiers · subtask builders · each seat in detail"));
+      const inside = node("div", "agents-more-body"); inside.id = "agents-more-body";
+      more.append(summary, inside); $("agents-team").prepend(page, more);
+      const providers = node("div", "team-providers"); providers.id = "team-providers"; $("agents-connections").prepend(providers);
+      window.MefiTeamModels?.mount?.(page, teamContext); window.MefiTeamModels?.providers?.(providers, teamContext);
+    }
+    const inside = $("agents-more-body");
+    for (const el of [document.querySelector("#agents-team .agents-team-intro"), $("agents-role-grid"), $("settings-routing"), $("settings-workers"), $("agents-model-skills"), $("agents-team-behavior")]) {
+      if (!el) continue;
+      if (on) {
+        if (el.parentNode === inside) continue;
+        // A marker where the card was, so the classic layout puts it back in its place.
+        if (!seatHomes.has(el)) { const home = document.createComment(` ${el.id || "agents-team-intro"} `); el.before(home); seatHomes.set(el, home); }
+        inside.append(el);
+      } else if (el.parentNode === inside && seatHomes.get(el)?.parentNode) seatHomes.get(el).after(el);
+    }
+    for (const id of ["team-models", "agents-more", "team-providers"]) { const el = $(id); if (el) el.hidden = !on; }
+  }
+  // Change on a job's line: More settings opens at that job's card, its model picker focused.
+  function revealSeat(id) {
+    const more = $("agents-more"); if (more) more.open = true;
+    const row = $("agents-role-grid")?.querySelector(`.agents-model-row[data-agent="${id}"]`);
+    if (!row) return false;
+    row.scrollIntoView?.({ block: "center" });
+    const select = $(`agent-${id}-model`), shown = select?.nextElementSibling?.classList.contains("studio-select") ? select.nextElementSibling : select;
+    (shown && !shown.disabled && !shown.hidden ? shown : $(`agent-${id}-provider`))?.focus?.({ preventScroll: true });
+    row.dataset.found = "true"; setTimeout(() => { delete row.dataset.found; }, 2400);
+    return true;
+  }
+  // Try it and Stop in the report card write the team's kind-of-job routes on the host at once (team:kind-route), and
+  // that moves the team's revision. A draft without edits is read again. A draft with edits takes the new routes and
+  // revision only when nothing else changed under it, so Apply neither drops the route nor overwrites another writer
+  // (that case still meets the stale-draft refusal, as before).
+  async function adoptKinds() {
+    const item = draft(); if (!item) return;
+    const key = draftKey();
+    let fresh = null;
+    try { fresh = await api()?.agentsState?.({ projectId: projectId(), scope }); } catch { return; }
+    if (!fresh?.ok || key !== draftKey() || draft() !== item) return;
+    const others = (configuration) => { const { agentKinds, ...rest } = configuration || {}; return JSON.stringify(rest); };
+    if (!item.dirty && !rulesChanged(item)) drafts.set(key, { saved: fresh, configuration: clone(fresh.configuration), name: fresh.name, dirty: false });
+    else if (others(fresh.configuration) === others(item.saved.configuration)) {
+      item.saved = fresh;
+      if (fresh.configuration?.agentKinds) item.configuration.agentKinds = clone(fresh.configuration.agentKinds); else delete item.configuration.agentKinds;
+    } else return;
+    renderConfiguration(); window.dispatchEvent(new CustomEvent("mefi:agent-draft"));
+  }
   // Connectors: the stdio servers Studio already runs for an agent (~/.mefi-studio/mcp.json, read with the team), each
   // with its tools, and where each agent is allowed to use them. What the prototype adds (adding, approving, testing and
   // importing a connector from here) does not exist yet, and the page says so.
@@ -944,9 +1016,12 @@
     const blank = node("option", "", "Choose a saved team"); blank.value = ""; picker.append(blank);
     for (const preset of item.saved.presets || []) { const option = node("option", "", preset.name); option.value = preset.id; picker.append(option); }
     picker.value = selected;
+    // Apply changes lights up while the draft holds edits (agents.css).
+    $("agents-save-bar")?.setAttribute("data-dirty", String(Boolean(item.dirty)));
     say(item.dirty ? "Draft · applies to new work after you choose Apply." : `${scope === "defaults" ? "Studio defaults" : item.saved.inherited ? "Inheriting Studio defaults" : "Independent project team"} · Saved`);
     paintRules();
     paintConnectors();
+    if (teamLayout()) window.MefiTeamModels?.render?.();
     window.MefiScroll?.scan($("agents-overlay"));
   }
   function stageRouting(patch) {
@@ -1017,7 +1092,7 @@
   // section and pane beside the place, so routing's staging (stageRouting, routingView) reads the page as it did.
   let teamPlaceSaid = null;
   async function openTeam(options = {}) {
-    fileTeamV2();
+    fileTeamV2(); fileSeats(true);
     const place = teamPlaceById(teamPlaceFromParams(options)) ?? TEAM_PLACES[0];
     const pane = place.id === "seats" ? (options.pane === "routing" || $(options.target)?.closest?.("#agents-routing") ? "routing" : "team") : place.id === "providers" ? "connections" : place.panes[0];
     const moved = params.place !== place.id;
@@ -1035,6 +1110,8 @@
     if (moved && !options.target) $("agents-body").scrollTop = 0;
     if (teamPlaceSaid !== place.id) { teamPlaceSaid = place.id; window.dispatchEvent(new CustomEvent("mefi:team-place", { detail: { place: place.id } })); }
     await Promise.all([load(), refreshQueue()]); syncQueue();
+    // The report card and the logins are read each time their place opens (renderer/team-models.js).
+    if (place.id === "seats") window.MefiTeamModels?.open?.(); else if (place.id === "providers") window.MefiTeamModels?.openProviders?.();
     window.MefiNav?.paintCurrent(); window.MefiScroll?.refresh();
     if (options.target) {
       const target = $(options.target); if (target && $("agents-overlay").contains(target)) { for (let el = target; el && el !== $("agents-body"); el = el.parentElement) if (el.tagName === "DETAILS") el.open = true; target.scrollIntoView?.({ block: "nearest" }); (target.nextElementSibling?.classList.contains("studio-select") ? target.nextElementSibling : target).focus?.({ preventScroll: true }); }
@@ -1043,6 +1120,8 @@
   async function open(options = {}) {
     mount();
     if (teamLayout()) return openTeam(options);
+    // The classic layout: the cards More settings held go back to their panes.
+    fileSeats(false);
     params = { section: options.section === "setup" ? "setup" : "overview", pane: ["connections", "team", "routing", "behavior"].includes(options.pane) ? options.pane : "team" };
     window.MefiNav?.claim("agents"); $("agents-overlay").hidden = false; paintOverview();
     $("agents-title").textContent = params.section === "overview" ? "Agents" : `Agent setup · ${children.setup.find(([, , value]) => value.pane === params.pane)?.[0] || "Team"}`;
