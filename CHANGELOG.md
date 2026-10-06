@@ -7,6 +7,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Lighter background work.** Studio's background git reads (sync, Your
+  PCs, the Git chip, worker checkouts, the project inventory) no longer leave
+  git's file-system monitor running in every worktree they look at (one daemon
+  of about 44 MB each, which never exited). Claude Code workers start only the
+  MCP servers Studio gives them, as OpenCode runs already did, instead of
+  also starting your own Claude Code servers (about 380 MB together). Set
+  `MEFI_STUDIO_WORKER_OWN_MCP=1` to give workers your own servers back.
 - **A test that hangs no longer holds the PC.** A stage of `npm test` that runs
   far past its time (two hours for the quick suites, 90 minutes for the live
   test windows) is stopped together with everything it started, and the run

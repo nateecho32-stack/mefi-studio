@@ -46,10 +46,14 @@ impl Default for Options<'_> {
 const REDIRECTS: &[&str] = &["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE"];
 
 /// The child's environment: the engine's, without redirects or Studio's keys, with prompts off.
-pub fn child_env(env: &Value, reads: bool) -> Vec<(String, String)> {
+/// A git child also gets core.fsmonitor=false through the environment, as git-actions' run.
+pub fn child_env(env: &Value, reads: bool, git: bool) -> Vec<(String, String)> {
     let mut set: Vec<(&str, &str)> = vec![("GIT_TERMINAL_PROMPT", "0"), ("GCM_INTERACTIVE", "never"), ("GH_PROMPT_DISABLED", "1"), ("GH_NO_UPDATE_NOTIFIER", "1"), ("NO_COLOR", "1"), ("LC_ALL", "C")];
     if reads {
         set.push(("GIT_OPTIONAL_LOCKS", "0"));
+    }
+    if git {
+        set.extend([("GIT_CONFIG_COUNT", "1"), ("GIT_CONFIG_KEY_0", "core.fsmonitor"), ("GIT_CONFIG_VALUE_0", "false")]);
     }
     let mut out: Vec<(String, String)> = Vec::new();
     if let Value::Object(map) = env {
@@ -172,7 +176,7 @@ pub fn run(command: &str, args: &[String], options: &Options, env: &Value, kill_
 /// `GIT_INDEX_FILE`: the redirect filter applies to inherited ones only), and
 /// the answer as bytes with its exit code.
 pub fn run_raw(command: &str, args: &[String], options: &Options, env: &Value, extra: &[(String, String)], kill_grace_ms: u64, clean: &dyn Fn(&str) -> String) -> Raw {
-    let mut child_env = child_env(env, options.reads);
+    let mut child_env = child_env(env, options.reads, command == "git");
     child_env.retain(|(key, _)| !extra.iter().any(|(name, _)| name.eq_ignore_ascii_case(key)));
     child_env.extend(extra.iter().cloned());
     let missing = |message: String| Raw { ok: false, code: None, stdout: Vec::new(), stderr: clean(&message), timed_out: false, overflow: false, missing: true };

@@ -458,3 +458,14 @@ test("a session hook only reports recent lost work, and never fails or pushes", 
   assert.match(describe(hook, { hook: true }), /left out 520 lines/);
   assert.equal(atRisk(hook.pending).length, 0, "it is history on GitHub, not work only this PC holds");
 });
+
+// A repository that turns the file-system monitor on would otherwise get a
+// daemon per worktree looked at, which never exits. git reports the setting
+// the command ran with, so no daemon has to start for the test.
+test("a look runs git with core.fsmonitor off, even where the repository turns it on", async (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), "mefi-sync-fsmonitor-"));
+  t.after(() => rmSync(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 }));
+  await run(root, "init", "-q", "-b", "main", ".");
+  await run(root, "config", "core.fsmonitor", "true");
+  assert.equal(await run(root, "config", "--get", "core.fsmonitor"), "false");
+});

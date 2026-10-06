@@ -111,7 +111,9 @@ pub fn run_git(cwd: &str, args: &[String], timeout_ms: u64) -> Git {
         return failed("spawn git ENOENT".into());
     }
     let mut command = Command::new("git");
+    // core.fsmonitor=false, as sync.mjs's runGit: no daemon left in each worktree looked at.
     command
+        .args(["-c", "core.fsmonitor=false"])
         .args(args)
         .current_dir(cwd)
         .env("GIT_TERMINAL_PROMPT", "0")

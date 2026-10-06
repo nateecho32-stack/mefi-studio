@@ -11126,14 +11126,15 @@ let outsideWorkSoonTimer = null;
 const outsideWorkOff = () => SMOKE || CAPTURE || CLI_MODE;
 
 // One git call in the project folder: never throws, never takes the index
-// lock a worker may need, and never sees Studio's own keys.
+// lock a worker may need, never starts an fsmonitor daemon, and never sees
+// Studio's own keys.
 function outsideGit(root, args, timeoutMs = OUTSIDE_GIT_TIMEOUT_MS) {
   return new Promise((resolve) => {
     try {
       const { execFile } = require("node:child_process");
       let options = { cwd: root, timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, windowsHide: true, encoding: "utf8" };
       try { options = require("./scripts/platform.cjs").withholdCredentials(options, process.env); } catch {}
-      execFile("git", ["-C", root, "--no-optional-locks", ...args], options, (error, stdout) => resolve({ ok: !error, code: error ? (typeof error.code === "number" ? error.code : null) : 0, stdout: String(stdout ?? "") }));
+      execFile("git", ["-C", root, "--no-optional-locks", "-c", "core.fsmonitor=false", ...args], options, (error, stdout) => resolve({ ok: !error, code: error ? (typeof error.code === "number" ? error.code : null) : 0, stdout: String(stdout ?? "") }));
     } catch {
       resolve({ ok: false, code: null, stdout: "" });
     }
@@ -15565,7 +15566,7 @@ async function readProjectInventory() {
   if (existsSync(path.join(root, ".git"))) {
     const { execFile } = require("node:child_process");
     const listed = await new Promise((resolve) => {
-      execFile("git", ["-C", root, "ls-files", "--cached", "--others", "--exclude-standard", "-z"], { timeout: 10000, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (error, out) => resolve(error ? null : String(out ?? "")));
+      execFile("git", ["-C", root, "-c", "core.fsmonitor=false", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], { timeout: 10000, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (error, out) => resolve(error ? null : String(out ?? "")));
     });
     if (listed !== null) {
       const files = listed.split("\0").filter(Boolean);
@@ -19807,6 +19808,7 @@ async function spawnNextJob(options) {
       platform: process.platform, shim: (name) => typeof windowsShim === "function" ? windowsShim(name, process.env) : null, promptFile: entry.promptFile ?? null,
       codexHarness: cli === "codex" && harness === "app-server" && !entry.codexExecOnly ? "app-server" : "exec",
       live: entry.liveProgress === true, sessionId: entry.liveProgress === true && cli === "claude" ? crypto.randomUUID() : null,
+      ownMcp: process.env.MEFI_STUDIO_WORKER_OWN_MCP === "1",
     });
     // With live progress, Claude Code streams its events under a session id
     // chosen here and `codex exec` prints its --json events; `entry.liveStream`
