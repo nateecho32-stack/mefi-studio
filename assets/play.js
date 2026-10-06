@@ -512,9 +512,11 @@
             '<li><b>Your friends were there the whole time,</b> and saw it the moment you shared it.</li>' +
           '</ol>' +
           '<p class="pl-end-fine">In Studio a real build takes a few minutes and runs on the AI you choose. This one was sped up and made up.</p>' +
+          '<p class="pl-end-fine" data-until="0.5">It shows Studio 0.5, out soon. Until then the download is 0.4.4.</p>' +
           '<div class="pl-end-acts"><button type="button" class="pl-enter">See the site</button><a class="pl-get" href="download.html">Download for Windows</a></div>' +
         '</div>';
       root.appendChild(card);
+      if (window.SITE && window.SITE.applyRelease) window.SITE.applyRelease();
       requestAnimationFrame(function () { card.classList.add("in"); });
       var enter = card.querySelector(".pl-enter");
       enter.addEventListener("click", function () { leave("done"); });

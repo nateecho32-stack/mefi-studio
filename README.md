@@ -55,9 +55,11 @@ Every feature and roadmap item says where it stands. Keep the labels honest:
 
 The download stays on the latest published release.
 
+Copy meant only for before a release, or only for after it, carries `data-until="0.5"` or `data-from="0.5"` (`SITE.applyRelease` in `assets/site.js`, on every page). The static HTML shows the before copy, and once GitHub's latest release reaches that version the after copy takes its place, so release day needs no edit for it. Home uses it for its "Coming in 0.5" labels and its "until then the download is 0.4.4" lines (the demo's end card too), and the download page for its 0.5 notes. Without an answer from GitHub a page keeps the before copy.
+
 ## Editing the roadmap
 
-`assets/roadmap.json` holds every roadmap item; the comment field at the top of the file explains the fields. To move an item, change its status there. The roadmap page and its timeline read that file. The Home page shows a few items as plain HTML, so update them there too.
+`assets/roadmap.json` holds every roadmap item; the comment field at the top of the file explains the fields. To move an item, change its status there. The roadmap page and its timeline read that file. Home doesn't list roadmap items.
 
 ## Adding to the Made with Studio wall
 

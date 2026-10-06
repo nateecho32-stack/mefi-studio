@@ -94,7 +94,7 @@ html.page-lock { overflow: hidden; }
   transition: border-color .25s, background .25s;
 }
 .hero-pill:hover { text-decoration: none; border-color: rgb(255 255 255 / 0.22); background: rgb(255 255 255 / 0.07); }
-.hero-pill b { padding: 3px 10px; border-radius: var(--r-pill); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); background: linear-gradient(100deg, var(--accent-bright), rgb(var(--accent-2-rgb)), rgb(var(--accent-3-rgb))); }
+.hero-pill b { flex: none; white-space: nowrap; padding: 3px 10px; border-radius: var(--r-pill); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink); background: linear-gradient(100deg, var(--accent-bright), rgb(var(--accent-2-rgb)), rgb(var(--accent-3-rgb))); }
 .hero-pill svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .4s var(--ease-out); }
 .hero-pill:hover svg { transform: translateX(3px); }
 .hero-title { font-size: clamp(3rem, 6.1vw, 6.2rem); line-height: 0.95; letter-spacing: -0.052em; margin: 26px 0 24px; outline: none; text-shadow: 0 2px 30px rgb(var(--bg-rgb) / 0.6); }
@@ -112,6 +112,7 @@ html.page-lock { overflow: hidden; }
 .hero-live .pulse { margin: 0; }
 .hero-release { margin: 0; font-size: 0.88rem; color: var(--dim); }
 .hero-release a { color: var(--muted); }
+.hero-soon { margin-top: 14px; }
 
 .hero-stage { --size: min(50vw, 740px); position: absolute; right: -5%; top: 50%; width: var(--size); height: var(--size); margin-top: calc(var(--size) / -2); }
 .orb { position: absolute; inset: -6%; }
@@ -763,7 +764,7 @@ html.page-lock { overflow: hidden; }
   .hero-stage { --size: min(84vw, 420px); position: relative; order: -1; right: auto; top: auto; margin: -10px auto -36px; }
   .hero-copy { max-width: none; text-align: center; }
   .hero-lede { margin-inline: auto; }
-  .hero .cta-row, .hero-meta, .hero-live { justify-content: center; }
+  .hero .cta-row, .hero-meta, .hero-live, .hero-soon { justify-content: center; }
   .friends-grid, .themes-grid, .final-grid { grid-template-columns: 1fr; }
   .friends-stage { max-width: 600px; width: 100%; margin: 0 auto; }
   .mode-panel { grid-template-columns: 1fr; }
@@ -772,7 +773,7 @@ html.page-lock { overflow: hidden; }
   .jam-main { grid-row: auto; }
   .final-orb { max-width: 340px; }
   .final-copy { text-align: center; }
-  .final-copy .cta-row { justify-content: center; }
+  .final-copy .cta-row, .final-copy .soon-line { justify-content: center; }
   .final-steps { text-align: left; }
   /* the walkthrough: the stage on top, the step under it */
   .journey { height: 600vh; }

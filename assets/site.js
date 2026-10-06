@@ -85,6 +85,25 @@
     return latestPromise;
   };
 
+  // "v0.5.0" against "0.5": below zero when a is older, zero when it is the same, above zero when newer.
+  SITE.compareVersions = function (a, b) {
+    const parts = (v) => String(v || "").trim().replace(/^v/i, "").split(/[.+-]/).slice(0, 3).map((n) => parseInt(n, 10) || 0);
+    const x = parts(a), y = parts(b);
+    for (let i = 0; i < 3; i += 1) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
+    return 0;
+  };
+
+  // Copy written for before a release (data-until="0.5") or after it (data-from="0.5"). Static HTML keeps the
+  // before copy; once GitHub's latest release reaches the version, the after copy takes its place. Call it again
+  // after adding such copy to the page: it remembers the last release it was given.
+  let releaseSeen = "";
+  SITE.applyRelease = function (tag) {
+    if (tag) releaseSeen = String(tag);
+    if (!releaseSeen) return;
+    document.querySelectorAll("[data-until]").forEach((el) => { el.hidden = SITE.compareVersions(releaseSeen, el.dataset.until) >= 0; });
+    document.querySelectorAll("[data-from]").forEach((el) => { el.hidden = SITE.compareVersions(releaseSeen, el.dataset.from) < 0; });
+  };
+
   // Repository facts the community page adapts to (Discussions on or off).
   let repoPromise = null;
   SITE.fetchRepo = function () {
@@ -271,6 +290,11 @@
       }).catch(() => {
         hints.forEach((el) => { el.innerHTML = `See <a href="${SITE.urls.releases}">releases on GitHub</a>.`; });
       });
+    }
+
+    // Before-and-after copy follows the latest release (SITE.applyRelease); without an answer it stays as written.
+    if (document.querySelector("[data-until], [data-from]")) {
+      SITE.fetchLatestRelease().then((rel) => { if (!rel.none) SITE.applyRelease(rel.tag || rel.name); }).catch(() => {});
     }
   });
 })();
