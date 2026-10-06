@@ -41,7 +41,17 @@
 /* ---- Vibe's Home in v2: the front door's own stage and dock step aside (its top bar stays: the project, New app, the conversation, Settings) ---- */
 #vibe-layer[data-today="on"] > :is(.vibe-stage, .vibe-dock) { display: none; }
 #vibe-layer[data-today="on"] > .vibe-top { grid-row: 1; grid-column: 1; }
+/* Its row lines up with the page's column (the project picker over the greeting, the conversation and Settings over the chips), so the
+   page reads as one column on a wide window rather than a bar across it with a column under it. */
+#vibe-layer[data-today="on"] > .vibe-top { padding: 12px max(clamp(14px, 3vw, 28px), calc((100% - 1180px) / 2)) 0; }
+@media (min-width: 1400px) {
+  #vibe-layer[data-today="on"]:has(> .vibe-chat:not([hidden])) > .vibe-top { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
+}
 #vibe-layer[data-today="on"] .vibe-project-text small { font-size: max(12px, calc(12px * var(--text-scale, 1))); }
+/* The project picker on one line ("Project  Sunrise"), the height of the buttons beside it, so its row is no taller than they are. */
+#vibe-layer[data-today="on"] .vibe-project { min-height: 36px; gap: 8px; padding: 3px 10px 3px 4px; border-radius: 12px; }
+#vibe-layer[data-today="on"] .vibe-project-mark { width: 28px; height: 28px; border-radius: 8px; }
+#vibe-layer[data-today="on"] .vibe-project-text { display: flex; align-items: baseline; gap: 6px; }
 .today { grid-row: 2; grid-column: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .today-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--t-gap) clamp(14px, 3vw, 28px) 28px; overscroll-behavior: contain; }
 /* minmax(0, 1fr): an automatic column is as wide as its widest item's smallest size, which at 400px pushed every row past the window. */
@@ -57,11 +67,11 @@
 .today .vibe-hero { flex: 1 1 280px; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; row-gap: 2px; align-items: center; justify-items: start; text-align: left; animation: none; }
 /* Vibe's own rules for a board with cards (#vibe-layer[data-cards="some"], in short windows too) shrink the orb, hide the greeting and set
    the title in vw; here they lose to the same names under #vibe-layer[data-today="on"], so the page keeps one greeting at every height. */
-#vibe-layer[data-today="on"] .today .vibe-orb { grid-row: 1 / span 2; width: 46px; height: 46px; margin: 0; }
+#vibe-layer[data-today="on"] .today .vibe-orb { grid-row: 1 / span 2; width: 40px; height: 40px; margin: 0; }
 .today .vibe-orb i:nth-child(2) { inset: -8px; }
 .today .vibe-orb i:nth-child(3) { inset: -16px; }
 #vibe-layer[data-today="on"] .today .vibe-kicker { display: block; font-size: var(--t-f13); }
-#vibe-layer[data-today="on"] .today .vibe-hero h1 { max-width: none; font-size: max(20px, calc(clamp(22px, 2vw, 30px) * var(--text-scale, 1))); line-height: 1.2; }
+#vibe-layer[data-today="on"] .today .vibe-hero h1 { max-width: none; font-size: max(20px, calc(clamp(21px, 1.5vw, 26px) * var(--text-scale, 1))); line-height: 1.2; }
 @media (max-height: 600px) { #vibe-layer[data-today="on"] .today .vibe-kicker { display: none; } }
 .today-summary { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .today-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 12px; border: 1px solid var(--t-edge); border-radius: 999px; background: var(--t-card); color: var(--t-soft); font: 600 var(--t-f13)/1 var(--font-ui); white-space: nowrap; }
@@ -85,6 +95,9 @@
 .today .vibe-last { width: 100% !important; margin-top: 0; animation: none; }
 .today .vibe-last-open { font-size: var(--t-f12); }
 #today-decisions, .today #vibe-decisions { justify-self: start; }
+.today-top > #vibe-decisions { display: inline-flex; align-items: center; min-height: 30px; margin: 0; padding: 0 12px; border: 1px solid var(--t-edge); border-radius: 999px; background: var(--t-card); color: var(--t-soft); font: 600 var(--t-f13)/1 var(--font-ui); white-space: nowrap; text-decoration: none; cursor: pointer; }
+.today-top > #vibe-decisions:hover { color: var(--t-ink); border-color: color-mix(in srgb, var(--ivory) 22%, transparent); }
+.today-top > #vibe-decisions[hidden] { display: none; }
 /* Starting points as chips: the four approaches and Suggest a next step in one row. */
 .today .vibe-sparks { width: 100% !important; margin: 0; padding: 0; border: 0; background: none; backdrop-filter: none; box-shadow: none; animation: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-start; }
 .today .vibe-evolution-head, .today .vibe-evolution-intents, .today .vibe-evolution-foot { display: contents; }
@@ -123,7 +136,15 @@
 #vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { margin-left: auto; }
 #vibe-layer[data-today="on"] .today .vibe-compose :is(#vibe-talk, #vibe-build) { min-height: 32px; height: 32px; padding: 0 13px; border-radius: 10px; font-size: var(--t-f13); }
 #vibe-layer[data-today="on"] .today #vibe-build .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
-#vibe-layer[data-today="on"] .today-box > .vibe-hint { display: block; margin: -2px 2px 0; color: var(--t-soft); font-size: var(--t-f125); line-height: 1.6; }
+#vibe-layer[data-today="on"] .today-box > .vibe-hint { display: none; }
+#vibe-layer[data-today="on"] .today #vibe-talk .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
+#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > [role="status"][data-idle] { display: none; }
+#vibe-layer[data-today="on"] .today .vibe-evolution-scope[data-whole] { display: none; }
+/* Nothing floats between the box and the board: the starting points sit right under the box, and a status line with nothing to say
+   takes no room (it stays in the page, at no height, so what it says later is still announced). */
+#vibe-layer[data-today="on"] .today .vibe-sparks { margin: 0; }
+#vibe-layer[data-today="on"] .today .vibe-feedback:empty { min-height: 0; height: 0; margin: 0 0 -8px; overflow: hidden; }
+#vibe-layer[data-today="on"] .today .vibe-last { margin: 2px 0 0; padding: 8px 10px 8px 14px; border-radius: 12px; }
 #vibe-layer[data-today="on"] .today-box > .vibe-hint .key { min-width: 0; height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font: inherit; }
 /* A card that waits on you: the question in its own warm box (the prototype's .bq), the answers under it. */
 .today-card-q { margin: 0; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--warn) 7%, transparent); color: var(--t-ink); font-size: var(--t-f13); line-height: 1.45; overflow-wrap: anywhere; }
@@ -151,7 +172,8 @@
 .today-card-head { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
 .today-card-head .today-dot { margin-top: 6px; }
 /* A button centres its content and never wraps it: the title is a flex item that takes the row and wraps to two lines. */
-.today-card-open { display: flex; align-items: flex-start; flex: 1 1 auto; min-width: 0; padding: 0; border: 0; background: none; color: var(--t-ink); text-align: left; white-space: normal; cursor: pointer; }
+/* A title, not a control row: no inherited 36 px minimum (styles.css button), so a one-line title leaves no empty row under it. */
+.today-card-open { display: flex; align-items: flex-start; flex: 1 1 auto; min-width: 0; min-height: 0; padding: 0; border: 0; background: none; color: var(--t-ink); text-align: left; white-space: normal; cursor: pointer; }
 .today-card-open:disabled { cursor: default; }
 .today-card-title { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font: 600 var(--t-f14)/1.35 var(--font-ui); text-align: left; white-space: normal; }
 .today-wt { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; color: var(--t-soft); }
@@ -435,6 +457,25 @@
   .today-b-hero { padding-top: 4px; }
   .today-b-orb { width: 40px; height: 40px; margin-bottom: 8px; }
   .today-b-box { margin-top: 12px; }
+}
+/* Compact as an app (Social's Today does the same): the greeting beside its orb rather than under it, the box right below and as wide as
+   the column, no line of keys (each button carries its own), the starting points under the box's left edge, and tighter sections. */
+.today-b-hero { grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; align-items: center; justify-items: start; padding-top: 2px; text-align: left; }
+.today-b-orb, .today-b-hero .today-b-orb { grid-row: 1 / span 2; width: 34px; height: 34px; margin: 0; }
+.today-b-kicker, .today-b-title { grid-column: 2; }
+.today-b-title { margin: 0; font-size: max(20px, calc(24px * var(--text-scale, 1))); }
+/* The column is the box's own width (the prototype's 780 px), so the greeting, the box and the sections share one left edge. */
+.today-b-col { width: min(780px, 100%); }
+.today-b-box, .today-b-col > .today-b-box { width: 100%; margin-top: 12px; }
+.today-b-hint { display: none; }
+.today-b-note { text-align: left; }
+#workspace-layer .today-b .ws-feedback-row { justify-content: flex-start; }
+#workspace-layer .today-b .ws-feedback { text-align: left; }
+.today-b-starts { justify-content: flex-start; margin-top: 10px; }
+.today-b-sect, .today-b-two { margin-top: 14px; }
+#workspace-layer .today-b .today-b-talk .today-key { color: var(--t-soft); }
+@container today-box (max-width: 560px) {
+  #workspace-layer .today-b .today-b-tools .today-b-talk .today-key { display: none; }
 }
 @media (max-width: 680px) {
   #workspace-layer .today-b .today-b-talk { margin-left: 0; }

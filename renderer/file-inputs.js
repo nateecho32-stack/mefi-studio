@@ -10,7 +10,9 @@
     const bar = document.createElement("div"); bar.className = "file-input-tools";
     const pick = document.createElement("button"); pick.type = "button"; pick.className = "ghost mini"; pick.textContent = "Add files";
     const picker = document.createElement("input"); picker.type = "file"; picker.multiple = true; picker.hidden = true;
-    const status = document.createElement("span"); status.setAttribute("role", "status"); status.textContent = "Drop text or code files into the box";
+    const status = document.createElement("span"); status.setAttribute("role", "status"); status.textContent = "Drop text or code files into the box"; status.setAttribute("data-idle", "1");
+    // Anything it says after the idle hint is news (reading, added, refused): the marker goes, and a page that hides the hint shows it.
+    const say = (text) => { status.textContent = text; status.removeAttribute?.("data-idle"); };
     bar.append(pick, picker, status); input.insertAdjacentElement("afterend", bar);
     const state = { reading: false, add: null }; bindings.set(input, state);
     const unavailable = () => input.disabled || input.readOnly || blocked();
@@ -18,8 +20,8 @@
       if (unavailable() || state.reading) return;
       const selected = Array.from(files || []);
       if (!selected.length) return;
-      if (selected.length > 8) { status.textContent = "Choose up to 8 files at a time."; return; }
-      state.reading = true; pick.disabled = true; status.textContent = "Reading files…";
+      if (selected.length > 8) { say("Choose up to 8 files at a time."); return; }
+      state.reading = true; pick.disabled = true; say("Reading files…");
       const blocks = [], errors = [];
       const cap = Math.min(limit, input.maxLength > 0 ? input.maxLength : limit);
       let used = input.value.length;
@@ -38,11 +40,11 @@
             used += block.length; blocks.push(block);
           } catch (error) { errors.push(`${name}: ${error.message}.`); }
         }
-        if (scope() !== selectedScope || !input.isConnected || unavailable()) { status.textContent = "The draft changed. Add the files again in the intended box."; return; }
+        if (scope() !== selectedScope || !input.isConnected || unavailable()) { say("The draft changed. Add the files again in the intended box."); return; }
         const addition = blocks.join("");
-        if (input.value.length + addition.length > cap) { status.textContent = "The draft grew while reading. Add a smaller excerpt."; return; }
+        if (input.value.length + addition.length > cap) { say("The draft grew while reading. Add a smaller excerpt."); return; }
         if (addition) { input.value += addition; input.dispatchEvent(new Event("input", { bubbles: true })); input.focus(); }
-        status.textContent = [blocks.length ? `${blocks.length} file${blocks.length === 1 ? "" : "s"} added to the draft. Review before sending.` : "No files added.", ...errors].join(" ");
+        say([blocks.length ? `${blocks.length} file${blocks.length === 1 ? "" : "s"} added to the draft. Review before sending.` : "No files added.", ...errors].join(" "));
       } finally { state.reading = false; pick.disabled = false; picker.value = ""; }
     }
     state.add = (files) => add(files);

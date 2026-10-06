@@ -57,10 +57,12 @@ test("Today is drawn inside Vibe's own layer, after its sky, with the pieces in 
   assert.equal(page.querySelector(".today-head"), null, "no second top bar: Vibe's own keeps the project, New app and the conversation toggle");
   assert.deepEqual(t.front.order(t.front.top), ["vibe-top-left", "mode-switch", "vibe-top-actions"], "and is left exactly as it was");
   assert.equal(byId(t, "vibe-chat-toggle").parentNode.className.includes("vibe-top-actions"), true);
-  assert.deepEqual(page.querySelector(".today-top").children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-hero", "today-summary"], "the greeting, and the chips beside it");
-  assert.deepEqual(page.querySelector(".today-box").children.map((child) => child.id || child.className.split(" ")[0]).filter((id) => id.startsWith("vibe-")), ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-decisions", "vibe-gate", "vibe-last"], "the box that builds or talks, the line that says its keys (under it, as the prototype's), its wait, its answer, the starting points, what decided, what holds the agents back");
+  assert.deepEqual(page.querySelector(".today-top").children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-hero", "today-summary", "vibe-decisions"], "the greeting, the chips beside it, and what Mefi decided for you as one more count");
+  assert.deepEqual(page.querySelector(".today-box").children.map((child) => child.id || child.className.split(" ")[0]).filter((id) => id.startsWith("vibe-")), ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-gate", "vibe-last"], "the box that builds or talks, the line of keys (kept for the front door; today.css leaves it out, the buttons carry the keys), its wait, its answer, the starting points, what holds the agents back");
   assert.equal(byId(t, "vibe-build").querySelector(".today-key").textContent, "Ctrl Enter", "Build it carries its key, as the prototype's");
   assert.equal(byId(t, "vibe-build").getAttribute("aria-keyshortcuts"), "Control+Enter");
+  assert.equal(byId(t, "vibe-talk").querySelector(".today-key").textContent, "Enter", "and Talk it over carries its own, so no line of keys is needed under the box");
+  assert.equal(byId(t, "vibe-talk").getAttribute("aria-keyshortcuts"), "Enter");
   // The box is still Vibe's own element: Build it, Suggest a next step and the drafts keep working through vibe.js.
   assert.equal(byId(t, "vibe-compose").parentNode, page.querySelector(".today-box"));
   // The layer that is left behind holds what v1 had in it, minus what moved.

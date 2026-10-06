@@ -7,7 +7,8 @@ const source = await readFile(new URL("../renderer/file-inputs.js", import.meta.
 class Element {
   constructor(tag = "textarea") { this.tagName = tag; this.value = ""; this.children = []; this.events = {}; this.isConnected = true; this.maxLength = -1; this.classList = { add() {}, remove() {} }; }
   append(...children) { this.children.push(...children); }
-  setAttribute() {}
+  setAttribute(name, value) { (this.attrs ||= {})[name] = String(value); }
+  removeAttribute(name) { if (this.attrs) delete this.attrs[name]; }
   insertAdjacentElement(_position, child) { this.bar = child; }
   addEventListener(name, callback) { (this.events[name] ||= []).push(callback); }
   dispatchEvent(event) { for (const callback of this.events[event.type] || []) callback(event); }
@@ -36,6 +37,16 @@ test("multiple dropped files become editable unsent draft content in order", asy
   assert.match(f.input.value, /- \[ \] Continue/);
   assert.equal(f.edits(), 1, "draft persistence receives one input event, no submit");
   assert.match(f.status(), /2 files added/);
+});
+
+test("the idle hint is marked, so a page can leave it out, and anything said after it is news", async () => {
+  const f = fixture();
+  const status = f.input.bar.children[2];
+  assert.equal(status.attrs["data-idle"], "1", "the drop hint, before anything happened");
+  f.drop([new File(["# Notes"], "notes.md")]);
+  await f.settle();
+  assert.equal(status.attrs["data-idle"], undefined, "reading and adding are news: the marker goes");
+  assert.match(f.status(), /1 file added/);
 });
 
 test("picker shares the import path and bounds bytes, formats, binary content and draft length", async () => {

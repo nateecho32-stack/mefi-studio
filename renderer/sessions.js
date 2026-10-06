@@ -551,7 +551,8 @@
     panel.project.title = data.project?.path ? `${data.project.path} · switch project` : "Switch project";
     panel.project.setAttribute("aria-expanded", String(S.projMenu));
     panel.trees.hidden = !trees.count;
-    panel.trees.replaceChildren(glyph("g-worktree"), el("span", "", plural(trees.count, "worktree")));
+    // The count beside the mark, so the chip shares the Git chip's row; the word stays for a screen reader (sessions.css) and the tooltip.
+    panel.trees.replaceChildren(glyph("g-worktree"), el("span", "", String(trees.count)), el("span", "sx-trees-word", ` ${trees.count === 1 ? "worktree" : "worktrees"}`));
     panel.trees.title = `${trees.headline || plural(trees.count, "worktree")} Open Work › Worktrees.`;
     panel.gitRow.hidden = !data.projectId;
     for (const tab of panel.tabs.querySelectorAll("[data-tab]")) {

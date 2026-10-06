@@ -73,11 +73,12 @@
   function paintSettings(current) {
     const vibe = current === "vibe";
     const label = document.getElementById("idle-home-label");
-    if (label) label.textContent = vibe ? "Open Today on launch" : "Open Home on launch";
+    // Both modes' home is Today in the 0.5 layout (Studio's Home route shows its Today page), so the switch says Today in both.
+    if (label) label.textContent = "Open Today on launch";
     const hint = document.getElementById("idle-home-hint");
     if (hint) hint.textContent = vibe ? "When disabled, Studio reopens the last page you used after the project chooser." : "When disabled, Studio reopens the last tab page you used after the project chooser.";
     const toggle = document.getElementById("idle-home-switch");
-    if (toggle) toggle.title = vibe ? "On: every launch lands on Today. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Home. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
+    if (toggle) toggle.title = vibe ? "On: every launch lands on Today. Off: Studio reopens the last page you used. The project chooser comes first either way." : "On: every launch lands on Today. Off: Studio reopens the last tab page you used. The project chooser comes first either way.";
     const modeHint = document.getElementById("settings-mode-hint");
     if (modeHint) modeHint.textContent = vibe ? "Social: friends, and a light eye on your agents, and every page opens in Social's rail." : "Studio: in-depth building, with Home, the menu and every tool.";
   }
@@ -676,7 +677,12 @@
     const decisionState = permission?.projectId === projectId() ? permission : state.assistant;
     const decisions = (decisionState.decisions || []).filter((row) => !row.undone && !row.failed && !row.pending);
     const todos = (decisionState.todos || []).filter((row) => !row.doneAt);
-    if ($("decisions")) { $("decisions").hidden = !decisions.length && !todos.length; $("decisions").textContent = `Decided for you (${decisions.length}) · For you (${todos.length})`; }
+    // What Mefi decided on its own and what it left for you, as counts (Today shows it as a chip beside the greeting's).
+    if ($("decisions")) {
+      $("decisions").hidden = !decisions.length && !todos.length;
+      $("decisions").textContent = [decisions.length ? `${decisions.length} decided for you` : "", todos.length ? `${todos.length} left for you` : ""].filter(Boolean).join(" · ");
+      $("decisions").title = "What Mefi decided on its own, with Undo, and what it left for you to do";
+    }
     $("title").textContent = headline(project);
   }
   // The greeting's question, in one place: the front door says it, and so does Build's Today (renderer/today.js, through data()).
@@ -859,6 +865,8 @@
     for (const button of evolutionView.choices) button.setAttribute("aria-pressed", String(button.dataset.intent === evolution.intent));
     const where = evolution.context?.system || evolution.context?.files[0];
     evolutionView.scope.textContent = where ? `Scope: ${where}` : "Scope: the whole project. Pick an approach, or let Mefi suggest one.";
+    // Today shows the scope only once it is narrowed to an area (renderer/today.css): the whole project is what the chips already say.
+    if (where) delete evolutionView.scope.dataset.whole; else evolutionView.scope.dataset.whole = "1";
     evolutionView.suggestLabel.textContent = evolution.loading ? "Looking…" : evolution.result ? "Suggest again" : "Suggest a next step";
     evolutionView.suggest.disabled = evolution.loading || state.pending || !projectId();
     evolutionView.suggest.dataset.busy = evolution.loading ? "yes" : "no";

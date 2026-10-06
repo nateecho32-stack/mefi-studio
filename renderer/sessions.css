@@ -27,8 +27,8 @@
 .sx-panel :is(input, textarea):not([type="range"]) { font-family: var(--font-ui); }
 
 /* ---- the list ------------------------------------------------------------------------------------------------------------------------- */
-.sx-list { gap: 8px; padding: 10px 10px 0; border-right: 1px solid var(--hairline); }
-.sx-proj { justify-content: flex-start; gap: 10px; width: 100%; min-height: 46px; padding: 6px 8px; border-color: transparent; background: transparent; text-align: left; }
+.sx-list { gap: 6px; padding: 8px 10px 0; border-right: 1px solid var(--hairline); }
+.sx-proj { justify-content: flex-start; gap: 10px; width: 100%; min-height: 40px; padding: 4px 8px; border-color: transparent; background: transparent; text-align: left; }
 .sx-proj-av { display: grid; flex: none; place-items: center; width: 32px; height: 32px; border-radius: var(--r-md); background: var(--tint-gold-3); color: var(--gold-bright); font: 700 var(--x14)/1 var(--font-ui); }
 .sx-proj-words { display: flex; flex: 1 1 auto; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; }
 .sx-proj-words :is(b, small) { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -44,6 +44,8 @@
 .sx-trees { min-height: 28px; height: 28px; padding: 0 10px 0 8px; gap: 6px; border-radius: var(--r-pill); background: transparent; color: var(--muted); font-size: var(--x125); }
 .sx-trees:hover { color: var(--ivory); }
 .sx-trees .glyph { width: 14px; height: 14px; }
+/* The chip shows the mark and the count on the Git chip's row; "worktrees" is for a screen reader and the tooltip says the rest. */
+.sx-trees-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .sx-projmenu { left: 10px; right: auto; width: min(300px, calc(100% - 20px)); }
 .sx-projmenu .sx-menu-item { min-height: 40px; gap: 10px; }
 .sx-menu-words { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; text-align: left; }
