@@ -17,8 +17,9 @@ import adapter from "../scripts/paired-worker-host.cjs";
 const spec={repo:"owner/mefi-studio",commit:"a".repeat(40),profile:"studio-check"};
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 // Waits for a condition rather than a fixed time: these run over real HTTP on
-// a PC that is often busy with other suites.
-async function until(check,what,ms=5000){const end=Date.now()+ms;while(!check()){if(Date.now()>end)throw new Error(`timed out waiting: ${what}`);await pause(5);}}
+// a PC that is often busy with other suites. The check may be async, as a
+// paired host's status() is.
+async function until(check,what,ms=5000){const end=Date.now()+ms;while(!(await check())){if(Date.now()>end)throw new Error(`timed out waiting: ${what}`);await pause(5);}}
 const network=()=>Object.assign(new Error("fetch failed"),{status:undefined});
 const stale=()=>Object.assign(new Error("Assignment fence is stale."),{status:409});
 
@@ -81,13 +82,15 @@ test("an unreachable coordinator is retried with backoff; wake() tries at once; 
 test("a check rides out missed heartbeats while its lease lasts and stops when the coordinator says the assignment is gone",async t=>{
   const h=await setup(t);await h.coordinator.enqueue({key:"request-one",spec});
   const send=transport.client({url:h.server.url,...h.paired,instanceId:"tolerant-instance"});
-  let beats=null,now=0,signal=null,finish=null;
-  const request=async(action,payload)=>{if(action==="heartbeat"&&beats)throw beats();if(action==="progress"&&beats)throw beats();return send(action,payload);};
+  let beats=null,missed=0,now=0,signal=null,finish=null;
+  const request=async(action,payload)=>{if(action==="heartbeat"&&beats){missed++;throw beats();}if(action==="progress"&&beats)throw beats();return send(action,payload);};
   const run=async options=>{signal=options.signal;await options.onProgress("working");await new Promise(resolve=>{finish=resolve;options.signal.addEventListener("abort",resolve);});return {ok:true,summary:"done"};};
   const worker=await workerModule.createWorker({directory:path.join(h.directory,"worker"),request,run,heartbeatMs:5,leaseMs:30_000,clock:()=>now});
-  const ticking=worker.tick();await until(()=>signal&&worker.status().busy,"the check starts");
+  // finish is set once the check waits for its abort, after its first progress
+  // line went out; an abort before that would leave it waiting forever.
+  const ticking=worker.tick();await until(()=>finish&&worker.status().busy,"the check starts");
   assert.equal(worker.status().busy,true,"the check is running");
-  beats=network;await pause(40);
+  beats=network;await until(()=>missed>=3,"three missed heartbeats");
   assert.equal(signal.aborted,false,"a dropped connection inside the lease does not stop the check");
   now=30_000;await until(()=>signal.aborted,"the lease runs out");
   assert.equal(signal.aborted,true,"once the lease would run out it stops");
@@ -134,7 +137,7 @@ test("a started worker and coordinator come back by themselves after a restart; 
   assert.deepEqual(resumed.started,["coordinator","worker"]);assert.equal(second.dialogs.length,0,"nothing is asked at launch");
   assert.equal(resumed.coordinator.url,`http://127.0.0.1:${port}`);
   assert.equal(second.host.inFlight(),false,"idle services never hold an update");
-  await pause(50);
+  await until(async()=>(await second.host.status()).worker.link==="connected","the resumed worker's first poll");
   assert.equal((await second.host.status()).worker.link,"connected");
   assert.equal((await coordinator.status()).workers[0].app,"0.5.0","the coordinator sees this PC's Studio version");
 
