@@ -315,11 +315,13 @@
 .today-b-title { max-width: 100%; margin: 2px 0 0; color: var(--t-ink); font: 650 max(20px, calc(30px * var(--text-scale, 1)))/1.2 var(--font-ui); letter-spacing: -.02em; text-wrap: balance; overflow-wrap: anywhere; }
 
 /* The box: the words first, then one row of controls, as the prototype's .big and .ctools. */
-.today-b-box { width: min(780px, 100%); margin: 20px auto 0; }
-#workspace-layer .today-b .ws-composer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 0; padding: 14px 16px 12px; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--surface-raised); box-shadow: none; overflow: visible; transition: border-color var(--motion-fast, 140ms), box-shadow var(--motion-fast, 140ms); }
-#workspace-layer .today-b .ws-composer:focus-within { border-color: var(--gold-bright); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 12%, transparent); }
-#workspace-layer .today-b .ws-composer :is(.ws-compose-top, .ws-compose-bottom) { display: none; }
-#workspace-layer .today-b .ws-composer textarea { display: block; width: 100%; min-height: 56px; max-height: 40vh; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--t-ink); font: 400 var(--t-f16)/1.5 var(--font-ui); resize: none; }
+.today-b-box { width: min(780px, 100%); margin: 20px auto 0; container: today-box / inline-size; }
+/* The box's own rules name #today-build, so the sessions layout's composer row (builder.css, html[data-home-layout="sessions"]) never
+   lays Home's classic controls out inside it: Today draws its own row. */
+#workspace-layer > #today-build .ws-composer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 0; padding: 14px 16px 12px; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--surface-raised); box-shadow: none; overflow: visible; transition: border-color var(--motion-fast, 140ms), box-shadow var(--motion-fast, 140ms); }
+#workspace-layer > #today-build .ws-composer:focus-within { border-color: var(--gold-bright); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 12%, transparent); }
+#workspace-layer > #today-build .ws-composer :is(.ws-compose-top, .ws-compose-bottom) { display: none; }
+#workspace-layer > #today-build .ws-composer textarea { display: block; width: 100%; min-height: 56px; max-height: 40vh; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--t-ink); font: 400 var(--t-f16)/1.5 var(--font-ui); resize: none; }
 #workspace-layer .today-b .ws-composer textarea::placeholder { color: var(--t-soft); }
 /* Home's own Attach picture and Add files buttons are this row's one "Add files or an image"; their thumbnails and what they say stay under the words. */
 #workspace-layer .today-b .ws-composer :is(.composer-attach-button, .file-input-tools > button) { display: none; }
@@ -330,6 +332,12 @@
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip) { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip):hover:not(:disabled) { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); }
 #workspace-layer .today-b .today-b-cc .glyph { width: 14px; height: 14px; }
+/* Where the frame's columns leave the box narrow (1440x900 with the session list and the inspector open), Add files keeps its icon,
+   its tooltip and its name for a screen reader, so the controls stay one row and Build it never drops to a line of its own. */
+@container today-box (max-width: 560px) {
+  #workspace-layer .today-b .today-b-cc { padding: 0 7px; }
+  #workspace-layer .today-b .today-b-cc > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .today-b-autonomy { position: relative; display: inline-flex; align-items: center; min-width: 0; }
 #workspace-layer .today-b .today-b-autonomy .autonomy-note:empty { display: none; }
 #workspace-layer .today-b .today-b-autonomy :is(.autonomy-note, .autonomy-popover, .autonomy-popover button) { font-size: var(--t-f12); }

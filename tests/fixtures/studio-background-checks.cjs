@@ -65,9 +65,15 @@ module.exports = async function backgroundChecks({ session, window, contents, ru
   await run("await window.MefiNav.go('ideas');document.getElementById('ideas-tools').open=true;");
   for (const selector of ['#ideas-scan','#ideas-clean']) assert.ok(await reachable(selector), `${selector} fits in the open Tools menu`);
   await capture('background-ideas-tools-narrow.png');
-  await run("await window.MefiNav.go('studio',{category:'general'});window.scrollTo(0,document.body.scrollHeight);");
-  assert.ok(await reachable('#settings-find'), 'sticky Settings search stays below the navigation');
-  assert.ok(await run("return document.querySelector('.settings-nav').getBoundingClientRect().top>=document.getElementById('app-local-nav').getBoundingClientRect().bottom-1;"), 'sticky category strip clears the fixed bar');
+  // A narrow Settings page puts its places in a strip over the page. Where the window has the height for it the strip sticks, under
+  // the 0.5 frame's fixed bars (MefiNav.usable().top); in the shortest window it scrolls away with the page (it would cover most of it).
+  for (const zoom of [1, 1.5]) {
+    contents.setZoomFactor(zoom);
+    await run("await window.MefiNav.go('studio',{category:'general'});window.scrollTo(0,document.body.scrollHeight);await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));");
+    assert.ok(await reachable('#settings-find'), `Settings search can be reached below the navigation at ${zoom}`);
+    const strip = await run("const nav=document.querySelector('.settings-nav'),r=nav.getBoundingClientRect();return {position:getComputedStyle(nav).position,top:r.top,bar:window.MefiNav.usable().top,inner:innerHeight};");
+    assert.ok(strip.position === 'sticky' ? strip.top >= strip.bar - 1 : strip.inner <= 480, `sticky category strip clears the fixed bar at ${zoom}: ${JSON.stringify(strip)}`);
+  }
   await capture('background-settings-scrolled.png');
   // Resolve the actual CSS fills, then composite against the two extreme
   // video frames. Blur cannot improve contrast against a uniform white frame.
@@ -81,7 +87,9 @@ module.exports = async function backgroundChecks({ session, window, contents, ru
       const rgba=color=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=color;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data].map(x=>x/255);};
       const lum=rgb=>rgb.slice(0,3).map(x=>x<=.04045?x/12.92:((x+.055)/1.055)**2.4).reduce((s,x,i)=>s+x*[.2126,.7152,.0722][i],0);
       const rows=[];
-      for(const fill of ['studio-panel-bg','studio-shell-fill','studio-float-fill','studio-page-fill','v-glass','v-glass-hi','#app-rail','#app-local-nav','#vibe-panel','.settings-nav','#workspace-layer','.agents-card']) for(const ink of ['ivory','muted','dim']) {
+      // #shell-top is the 0.5 frame's fixed top bar (the classic page bar, #app-local-nav, is gone).
+      for(const fill of ['studio-panel-bg','studio-shell-fill','studio-float-fill','studio-page-fill','v-glass','v-glass-hi','#app-rail','#shell-top','#vibe-panel','.settings-nav','#workspace-layer','.agents-card']) for(const ink of ['ivory','muted','dim']) {
+        if(/^[#.]/.test(fill)&&!document.querySelector(fill)){rows.push({fill,ink,missing:true,alpha:1,contrast:0});continue;}
         probe.style.backgroundColor=/^[#.]/.test(fill)?getComputedStyle(document.querySelector(fill)).backgroundColor:'var(--'+fill+')';probe.style.color='var(--'+ink+')';
         const css=getComputedStyle(probe),bg=rgba(css.backgroundColor),fg=rgba(css.color);
         const ratios=[0,1].map(video=>{const a=lum(bg.slice(0,3).map(x=>x*bg[3]+video*(1-bg[3]))),b=lum(fg);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);});

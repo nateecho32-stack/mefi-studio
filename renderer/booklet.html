@@ -4189,6 +4189,11 @@ body.appearance-settings-active #tab-studio[data-places="v2"] .settings-nav-item
   /* the strip sticks over the page as it scrolls, so it is solid */
   html #tab-studio[data-places="v2"] .settings-nav { padding: 8px 12px; background: var(--panel-solid); box-shadow: var(--shadow-1); }
 }
+/* A short window (600x560 at 150% leaves the page about 250 px under the frame's bars): stuck, the wrapped strip would cover
+   most of the page, Find a setting included, so there it scrolls away with the page. */
+@media (max-height: 480px) {
+  html[data-shell="rail"] #tab-studio[data-places="v2"] .settings-nav { position: static; }
+}
 /* Sound and music: the sound effects first, then music and video, its words beside its button. */
 #tab-studio[data-places="v2"] #settings-category-audio > .settings-category-head { order: -2; }
 #tab-studio[data-places="v2"] #settings-audio-effects { order: -1; }
@@ -6566,6 +6571,10 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
    library and the sheet's own head step aside; Open the full plan brings every
    step back. Text is at least 12 px and follows the 0.5 text size. */
 #plans-sheet[data-view="draft"] :is(.planning-sidebar, .planning-head) { display: none; }
+/* In the 0.5 frame the top bar's trail and the tab strip already name the page, and the tab's close and Esc leave it, so the
+   full plan's sheet head steps aside too: its band would cost the first step's form the room it needs to fit a desktop window
+   (Create plan in view at 1440x1000 under the frame's bars). */
+html[data-frame] #plans-sheet .planning-head { display: none; }
 #plans-sheet[data-view="draft"] .planning-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
 #plans-sheet[data-view="draft"] .planning-detail { min-height: 0; padding: 28px 24px 40px; overflow-y: auto; overflow-x: hidden; }
 .planning-page { display: grid; gap: 14px; width: min(780px, 100%); margin: 0 auto; }
@@ -10546,11 +10555,13 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .today-b-title { max-width: 100%; margin: 2px 0 0; color: var(--t-ink); font: 650 max(20px, calc(30px * var(--text-scale, 1)))/1.2 var(--font-ui); letter-spacing: -.02em; text-wrap: balance; overflow-wrap: anywhere; }
 
 /* The box: the words first, then one row of controls, as the prototype's .big and .ctools. */
-.today-b-box { width: min(780px, 100%); margin: 20px auto 0; }
-#workspace-layer .today-b .ws-composer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 0; padding: 14px 16px 12px; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--surface-raised); box-shadow: none; overflow: visible; transition: border-color var(--motion-fast, 140ms), box-shadow var(--motion-fast, 140ms); }
-#workspace-layer .today-b .ws-composer:focus-within { border-color: var(--gold-bright); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 12%, transparent); }
-#workspace-layer .today-b .ws-composer :is(.ws-compose-top, .ws-compose-bottom) { display: none; }
-#workspace-layer .today-b .ws-composer textarea { display: block; width: 100%; min-height: 56px; max-height: 40vh; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--t-ink); font: 400 var(--t-f16)/1.5 var(--font-ui); resize: none; }
+.today-b-box { width: min(780px, 100%); margin: 20px auto 0; container: today-box / inline-size; }
+/* The box's own rules name #today-build, so the sessions layout's composer row (builder.css, html[data-home-layout="sessions"]) never
+   lays Home's classic controls out inside it: Today draws its own row. */
+#workspace-layer > #today-build .ws-composer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; margin: 0; padding: 14px 16px 12px; border: 1px solid var(--hairline-strong); border-radius: 18px; background: var(--surface-raised); box-shadow: none; overflow: visible; transition: border-color var(--motion-fast, 140ms), box-shadow var(--motion-fast, 140ms); }
+#workspace-layer > #today-build .ws-composer:focus-within { border-color: var(--gold-bright); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold-bright) 12%, transparent); }
+#workspace-layer > #today-build .ws-composer :is(.ws-compose-top, .ws-compose-bottom) { display: none; }
+#workspace-layer > #today-build .ws-composer textarea { display: block; width: 100%; min-height: 56px; max-height: 40vh; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--t-ink); font: 400 var(--t-f16)/1.5 var(--font-ui); resize: none; }
 #workspace-layer .today-b .ws-composer textarea::placeholder { color: var(--t-soft); }
 /* Home's own Attach picture and Add files buttons are this row's one "Add files or an image"; their thumbnails and what they say stay under the words. */
 #workspace-layer .today-b .ws-composer :is(.composer-attach-button, .file-input-tools > button) { display: none; }
@@ -10561,6 +10572,12 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip) { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
 #workspace-layer .today-b :is(.today-b-cc, .today-b-autonomy .autonomy-chip):hover:not(:disabled) { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--t-ink); }
 #workspace-layer .today-b .today-b-cc .glyph { width: 14px; height: 14px; }
+/* Where the frame's columns leave the box narrow (1440x900 with the session list and the inspector open), Add files keeps its icon,
+   its tooltip and its name for a screen reader, so the controls stay one row and Build it never drops to a line of its own. */
+@container today-box (max-width: 560px) {
+  #workspace-layer .today-b .today-b-cc { padding: 0 7px; }
+  #workspace-layer .today-b .today-b-cc > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 .today-b-autonomy { position: relative; display: inline-flex; align-items: center; min-width: 0; }
 #workspace-layer .today-b .today-b-autonomy .autonomy-note:empty { display: none; }
 #workspace-layer .today-b .today-b-autonomy :is(.autonomy-note, .autonomy-popover, .autonomy-popover button) { font-size: var(--t-f12); }
@@ -12169,6 +12186,11 @@ html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:
 }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 54px; border-radius: 10px; }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot-item { min-height: 50px; border-radius: 10px; }
+/* The smallest window at 150% zoom is about 373 CSS px tall: a tile keeps its icon and its word but not the tall minimum, so
+   Work, Map, Team and Friends all stay in view (studio-ui.css's short-window rail, which the two rules above out-rank). */
+@media (max-height: 440px) {
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 32px; }
+}
 html[data-frame] #app-rail .app-rail-search { margin-bottom: 0; }
 html[data-frame] #app-rail .app-rail-section.current > .app-rail-head,
 html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); }
@@ -79332,6 +79354,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }, { passive: true });
     const endDrag = () => { if (!dragging) return; dragging = null; if (dragged) preference({ pinned: true, anchor: anchor() }); };
     orb.addEventListener("pointerup", endDrag); orb.addEventListener("pointercancel", endDrag); orb.addEventListener("lostpointercapture", endDrag);
+    // Dragging the orb out of the rail's dock (the 0.5 frame) moves it to the page, which drops its pointer capture: the release
+    // is heard on the document too, or the orb would stay on the pointer and its new place would never be saved.
+    document.addEventListener("pointerup", endDrag, true); document.addEventListener("pointercancel", endDrag, true);
     panel.addEventListener("keydown", () => { keyboard = true; });
     document.addEventListener("keydown", (event) => { if (event.key === "Escape" && !panel.hidden && !window.MefiCompanionHub?.isOpen()) { event.preventDefault(); event.stopImmediatePropagation(); host.toggle(false); orb.focus({ preventScroll: true }); } }, true);
     panel.addEventListener("pointerdown", () => { keyboard = false; });
@@ -89053,11 +89078,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const choices = el("div", "today-need-options");
     choices.setAttribute("role", "group"); choices.setAttribute("aria-label", item.options.length ? "Your answer" : "What to do");
     const lock = busy;
-    if (item.options.length) {
+    // A question is always answerable here, with options or without: one that has none is answered in words.
+    if (item.options.length || item.need.kind === "question") {
       let typed = null;
       const form = el("form", "today-need-free");
       const input = el("input", "today-need-input"); input.type = "text"; input.autocomplete = "off";
-      input.placeholder = item.options.some((option) => option.text) ? "Your one-line answer, or an option above…" : "Or say it in your own words…";
+      input.placeholder = item.options.some((option) => option.text) ? "Your one-line answer, or an option above…" : item.options.length ? "Or say it in your own words…" : "Your answer…";
       input.setAttribute("aria-label", "Write your own answer");
       const kept = state.drafts.get(item.key);
       if (kept) { input.value = kept.text; typed = item.options.find((option) => option.id === kept.optionId) ?? null; }
@@ -89087,10 +89113,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       });
       // The owner's choice (2026-10-04): the box for your own words waits behind a small link, so a card reads as its
       // options first. It opens on the link, on an option that asks for words, and stays open while it holds a draft.
+      // A question with no options has nothing to read first: its box is open from the start, and there is no link.
       const own = button("Answer in my own words", "today-link today-own-words", () => { openOwnWords(); input.focus?.(); }, { title: "Write your own answer instead of picking one", disabled: lock });
       function openOwnWords() { state.ownWords.add(item.key); form.hidden = false; own.hidden = true; }
-      if (kept?.text || state.ownWords.has(item.key)) openOwnWords(); else form.hidden = true;
-      node.append(choices, own, form);
+      if (kept?.text || state.ownWords.has(item.key)) openOwnWords();
+      else if (!item.options.length) { form.hidden = false; own.hidden = true; }
+      else form.hidden = true;
+      if (item.options.length) node.append(choices);
+      node.append(own, form);
     } else {
       for (const action of actionsOf(item, state.data || {})) {
         // A way to look (Review changes) only goes somewhere; everything else is a decision, through perform().
