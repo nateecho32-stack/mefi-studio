@@ -1030,12 +1030,12 @@ class VerifiedWindow extends NativeWindow {
     report.pageReturn = header;
     assert.equal(header.title, "Settings", "the page header names the page it shows");
     assert(header.back && !header.back.hidden && header.back.shown && header.back.hit, "Settings opened from Command offers a visible way back");
-    assert.equal(header.back.nav, "command", "the way back goes to Command view");
-    assert(header.back.text.includes("Command view"), "the way back reads ← Command view");
+    assert.equal(header.back.nav, "command", "the way back goes to the Map");
+    assert(header.back.text.includes("Map"), "the way back reads ← Map");
     await this.capture("00h-settings-way-back");
     await this.click("#page-return");
     // Command is a layer over the page, so the tab underneath may stay unhidden.
-    await this.until("window.MefiIdle?.isActive?.() && window.MefiNav.current?.() === 'command'", "← Command view returns to Command view");
+    await this.until("window.MefiIdle?.isActive?.() && window.MefiNav.current?.() === 'command'", "← Map returns to the Map");
     await this.run("window.MefiNav.go('workspace');");
     await this.until("window.MefiWorkspace?.isActive?.()", "the workspace opens before Settings");
     await this.run("window.MefiNav.go('studio');");

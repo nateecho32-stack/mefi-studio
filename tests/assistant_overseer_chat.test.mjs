@@ -229,7 +229,7 @@ test("Talk it over with no AI connected files nothing: it says so and offers the
   assert.deepEqual(h.effects.created, [], "no task is filed from a conversation");
   assert.deepEqual(h.effects.questions, [], "and no confirm card either");
   assert.match(reply.text, /^No AI is connected yet, so I can't talk this through\./);
-  assert.match(reply.text, /Agents › Setup › Connect an AI/);
+  assert.match(reply.text, /Connect one under Team › Providers\./);
   assert.deepEqual(plain(reply.offers), [{ title: "Add a search box" }], "a yes can still put it on the board");
   // The same words outside Talk it over are an instruction, as before.
   const g = host({ aiUsable: false });

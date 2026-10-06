@@ -194,7 +194,7 @@ app.whenReady().then(async () => {
   report.inspector = await run("const box = document.getElementById('fleet-inspector'); return { text: box.textContent.slice(0, 700), buttons: [...box.querySelectorAll('button')].map((button) => button.textContent) };");
   assert.match(report.inspector.text, /builder-1@fleet-fixture/);
   assert.match(report.inspector.text, /Editing main\.cjs/);
-  assert.ok(report.inspector.buttons.includes("Open task") && report.inspector.buttons.includes("Open in Command"));
+  assert.ok(report.inspector.buttons.includes("Open task") && report.inspector.buttons.includes("Open in Map"));
   assert.equal(await run("return document.querySelector('.fleet-stage').dataset.focus;"), "1", "selecting dims the other wires");
   await sleep(200);
   const drawer = await run("const card = document.querySelector('.fleet-seat[data-seat=\"builder-1\"]').getBoundingClientRect(), box = document.getElementById('fleet-inspector'), rect = box.getBoundingClientRect(); return { over: getComputedStyle(box).position === 'absolute', shown: rect.width > 0 && rect.height > 0, card: { l: card.left, r: card.right }, box: { l: rect.left, r: rect.right } };");

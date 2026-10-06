@@ -218,12 +218,12 @@
     window.MefiNav?.typeScope?.(panel, talkBox);
     window.MefiNav?.typeScope?.(orb, talkBox);
     const places = node("div", "companion-places");
-    for (const [label, route, options] of [["Tasks", "tasks"], ["Agents", "agents"], ["Live", "command"], ["Project map", "agent-brain", { tab: "map" }], ["Settings", "studio"]]) places.append(button(label, () => { host.toggle(false); window.MefiNav?.go(route, options); }));
+    for (const [label, route, options] of [["Tasks", "tasks"], ["Map", "command"], ["Team", "agents"], ["Project map", "agent-brain", { tab: "map" }], ["Settings", "studio"]]) places.append(button(label, () => { host.toggle(false); window.MefiNav?.go(route, options); }));
     const location = node("p", "ab-quiet"); location.dataset.companionLocation = "true";
     panes.ask.append(location, places);
     const nowLive = node("div", "companion-now-live"); nowLive.setAttribute("aria-live", "polite");
     const nowActivity = node("div", "companion-now-activity");
-    panes.now.append(nowLive, node("h3", "", "Recently"), nowActivity, button("Open live agent work", () => { host.toggle(false); window.MefiNav?.go("agents", { section: "live" }); }));
+    panes.now.append(nowLive, node("h3", "", "Recently"), nowActivity, button("Open the Map", () => { host.toggle(false); window.MefiNav?.go("command"); }));
     // Replies that land later, and the notices the team posts, appear while
     // the Ask tab is open instead of on its next visit.
     window.mefiStudio?.onAssistant?.(() => {

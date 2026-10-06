@@ -197,7 +197,7 @@
     if (card?.open && holds()) void load();
     api().onReportCrashed?.(() => whenVisible(() => whenBooted(crashed)));
     window.MefiNav?.register?.({
-      id: "settings:report", label: "Settings › System › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system",
+      id: "settings:report", label: "Settings › Report a problem", short: "Report a problem", kind: "action", layer: null, section: "settings", group: "system",
       glyph: "g-gauge", badge: null, desc: "Build a report you can read before you save it. Nothing is uploaded",
       searchTerms: "report a problem bug crash closed unexpectedly diagnostics zip support save log",
       showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },

@@ -150,7 +150,7 @@ test("aiRouteMissing names the resolver's own reason and never only the maintain
   const h = host();
   const text = h.context.aiRouteMissing("Drafting a brain", { ok: false, error: "LM Studio reported no loaded model - load one there" });
   assert.match(text, /^Drafting a brain needs a connected AI provider \(LM Studio reported no loaded model/);
-  assert.match(text, /Agents > Setup > Connections/);
+  assert.match(text, /Team > Providers/);
   assert.doesNotMatch(text, /z\.ai, OpenCode Go or OpenCode Zen key/);
   assert.doesNotMatch(h.context.aiRouteMissing("A pass"), /\(\)/, "no reason, no empty parentheses");
 });

@@ -434,7 +434,7 @@ test("a subscription, plan or payment refusal is read from the provider's own wo
 
 test("a refused route is named in the owner's words, with the fix, and keyed by what the plan covers", () => {
   const go = core.refusedRoute(goRoute, core.entitlementRefusal(GO_REFUSAL));
-  assert.equal(go.notice, "OpenCode Go says this login has no active Go subscription. Pick another coding model in Agents › Setup › Team & models, or renew the plan.");
+  assert.equal(go.notice, "OpenCode Go says this login has no active Go subscription. Pick another coding model in Team › Seats and models, or renew the plan.");
   assert.equal(go.short, "OpenCode Go says this login has no active Go subscription");
   assert.equal(go.key, "opencode-go", "a subscription covers every Go model, so the provider is parked");
   assert.deepEqual([...go.keys].sort(), ["opencode-go", "opencode-go|opencode-go/deepseek-v4.1-flash"]);

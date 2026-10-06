@@ -11902,7 +11902,7 @@
     const taskId = typeof params?.taskId === "string" || typeof params?.taskId === "number" ? String(params.taskId).trim() : "";
     if (taskId && (!selectedId || selectedId === `task:${taskId}`)) {
       if (selectTaskNode(taskId)) applied = true;
-      else window.MefiToast?.("That task is not on the Command board right now", "info");
+      else window.MefiToast?.("That task is not on the Map right now", "info");
     } else if (selectedId) {
       const workId = /^(builder|task):/.test(selectedId) ? selectedId.slice(selectedId.indexOf(":") + 1) : "";
       if (select(selectedId) || (workId && selectTaskNode(workId))) applied = true;
@@ -12988,7 +12988,7 @@
       state.idleEnter = el.idleCommand.checked;
       state.lastInput = Date.now();
       window.mefiStudio?.prefsSet?.({ idleCommand: state.idleEnter });
-      window.MefiToast?.(state.idleEnter ? "Command view opens after 5 quiet minutes" : "Command view opens only when you choose it", "info");
+      window.MefiToast?.(state.idleEnter ? "The Map opens after 5 quiet minutes" : "The Map opens only when you choose it", "info");
     });
   }
 

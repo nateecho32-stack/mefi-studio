@@ -257,7 +257,7 @@ test("with no key saved, a signed-in subscription CLI leads; otherwise Claude Co
   assert.equal(planAutoSetup({ settings: {}, keys: {}, clis: [login("claude", false), login("codex", null)] }).active.provider, "codex", "an unknown login outranks a missing one");
   const out = planAutoSetup({ settings: {}, keys: {}, clis: [login("claude", false), login("codex", false)] });
   assert.equal(out.active.provider, "claude");
-  assert.match(out.notes.join(" "), /Claude Code is installed but not signed in yet: sign in under Agents › Setup › Connect an AI/);
+  assert.match(out.notes.join(" "), /Claude Code is installed but not signed in yet: sign in under Team › Providers/);
   assert.equal(planAutoSetup({ settings: {}, keys: { zai: true }, clis: [login("claude", true)] }).active.provider, "zai", "a saved key still outranks every CLI");
 });
 

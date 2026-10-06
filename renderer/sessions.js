@@ -1501,7 +1501,7 @@
     cli.addEventListener("change", () => void B.chips.saveRouting({ executorCli: cli.value }, `${B.chips.CLI_NAMES[cli.value] || cli.value} builds your tasks now.`));
     tier.addEventListener("change", () => void B.chips.saveRouting({ executorTier: tier.value }, `${(B.chips.TIERS.find(([id]) => id === tier.value) || ["", tier.value])[1]} saved.`));
     worker.append(cli, tier);
-    section("Coding worker", el("small", "sx-runnote", "Builds this project's tasks. Agents › Setup has the rest.")).append(worker);
+    section("Coding worker", el("small", "sx-runnote", "Builds this project's tasks. Team › Seats and models has the rest.")).append(worker);
     const folder = el("span", "sx-folder"); folder.id = "sessions-folder";
     const folderRow = section("Folder", el("small", "sx-runnote", "Where the next run works."));
     folderRow.append(folder); folderRow.id = "sessions-run-folder";
@@ -1748,7 +1748,7 @@
     const projectTabs = el("div", "sx-ptabs");
     const here = el("span", "sx-ptab on", "Project"); here.setAttribute("aria-current", "true");
     projectTabs.append(here,
-      button("Team", "sx-ptab", () => window.MefiNav?.go?.("agents", { section: "overview" }), { title: "Open Agents: the team, its seats and models" }),
+      button("Team", "sx-ptab", () => window.MefiNav?.go?.("agents", { section: "overview" }), { title: "Open Team: who does the work, its seats and models" }),
       button("Usage", "sx-ptab", () => window.MefiNav?.go?.("usage"), { title: "Open Usage: recorded calls and provider accounts" }));
     const projectBody = el("div", "sx-ibody"); projectBody.id = "sessions-project-scroll";
     const projectOwn = el("div", "sx-own");

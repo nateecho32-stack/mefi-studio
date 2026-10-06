@@ -187,9 +187,9 @@
     mounted = true;
     window.MefiBooklet?.initStudio?.();
     const overlay = node("div", "overlay agents-overlay"); overlay.id = "agents-overlay"; overlay.hidden = true;
-    const sheet = node("section", "sheet agents-sheet"); sheet.tabIndex = -1; sheet.setAttribute("role", "region"); sheet.setAttribute("aria-label", "Agents workspace");
+    const sheet = node("section", "sheet agents-sheet"); sheet.tabIndex = -1; sheet.setAttribute("role", "region"); sheet.setAttribute("aria-label", "Team");
     const head = node("header", "agents-head");
-    const title = node("div"); title.append(node("p", "agents-eyebrow", "YOUR STUDIO / AGENTS")); const h = node("h1", "", "Agents"); h.id = "agents-title"; title.append(h, node("p", "muted", "One team, one place to set it up and follow its work."));
+    const title = node("div"); title.append(node("p", "agents-eyebrow", "YOUR STUDIO / TEAM")); const h = node("h1", "", "Team"); h.id = "agents-title"; title.append(h, node("p", "muted", "One team, one place to set it up and follow its work."));
     const settings = button("Studio appearance", () => go("studio", { category: "appearance" }), "ghost mini");
     const headActions = node("div", "agents-head-actions"); headActions.append(button("Reload saved settings", discard, "ghost mini"), settings);
     head.append(title, headActions); sheet.append(head);
@@ -217,7 +217,7 @@
       const help = (el.closest("label")?.querySelector("small") || el.querySelector("summary small, summary .settings-summary-text > span"))?.textContent?.trim() || "";
       // In the 0.5 layout Search names the control by the Team place that holds it now (read when Search reads it).
       const words = label?.trim().slice(0, 100);
-      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", get label() { const place = teamPlaceOfElement(el); return place ? `Team › ${place.label} › ${words}` : `Agents › ${words}`; }, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
+      if (label) window.MefiNav?.register({ id: `settings:${el.id}`, kind: "action", section: "agents", group: "tools", get label() { const place = teamPlaceOfElement(el); return place ? `Team › ${place.label} › ${words}` : `Team › ${words}`; }, desc: help.slice(0, 160), glyph: "g-agents", showIn: { palette: true }, run: () => go("agents", { section: "setup", pane: pane.dataset.agentsPane, target: el.id }) });
     }
     $("agents-team").append(buildRules());
     buildSetupHeader(); buildOverview(); buildRoles(); buildBehavior();

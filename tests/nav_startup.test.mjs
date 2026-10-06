@@ -260,6 +260,6 @@ test("the one-time keyboard tip waits for 30 quiet seconds with no sheet or tran
   assert.deepEqual(toasts, [], "nor in the first moments after it closes");
   run(closedAt + 45000);
   assert.equal(toasts.length, 1);
-  assert.match(toasts[0], /^Tip: outside a text field, single keys move around Studio\. H Social/);
+  assert.match(toasts[0], /^Tip: outside a text field, single keys move around Studio\. H Social, D the Map, T task board\./);
   assert.equal(store.get("mefiStudio.keyHint.v1"), "1");
 });
