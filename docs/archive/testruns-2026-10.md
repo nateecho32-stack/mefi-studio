@@ -6,6 +6,25 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-03 Weak-drive check without administrator rights
+
+`fsutil fsinfo volumeinfo C:\` refuses a normal user on the owner's PC
+("Error 3", and "Error 5: Access is denied" for `C:`), so the Publish
+dialog's weak-drive warning and Set up this PC's exFAT/FAT checks could never
+show. Both now ask PowerShell for `[IO.DriveInfo]::new('C:').DriveFormat`,
+falling back to CIM `Win32_LogicalDisk` under constrained language mode, with
+the 10 s timeout kept. Timed from Node's execFile (4 runs each): DriveInfo
+194-315 ms, CIM 369-784 ms, Get-Volume 1139-1667 ms; the CIM fallback under
+constrained language 327-362 ms; a missing drive prints nothing (unknown).
+
+`npm run check`, `npm run lint` (no new warnings) and `npm run audit` pass.
+`tests/pc_setup.test.mjs` 8/8, including a live query of the system drive
+without elevation; `tests/git_actions.test.mjs` plus `tests/git_host.test.mjs`
+118/118; `npm run test:fast` 6745 pass, 0 fail, 14 skipped (365 s). Not run
+against a real exFAT drive (none on this PC). The Rust port on
+`wip/rust-host` (`drive_of`, `rules::filesystem_of`, parity cases) still
+runs fsutil and must follow.
+
 ## 2026-10-03 Paired restart boundary review follow-up
 
 All three Windows push/PR and Linux PR checks pass at first milestone commit

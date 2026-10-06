@@ -39,6 +39,27 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Board pushes carry the rows that changed (S3) land on main
+
+Branch `wip/s3-row-push` in a cloud session (Linux, Node 24.21.0) over main 24d6756: the parked slice c682642
+re-applied (conflicts in main.cjs mutateBoard/HELD_WHILE_HIDDEN and module_purity, both sides kept), plus the bridge
+re-delivering the held board to onTasks when eyes:progress moves a card, so live progress in Tasks, Sessions and
+Build is unchanged (722e009).
+
+Bytes per board change (tests/row_push.test.mjs, a seeded 134-card board and 104-session checkpoint store, JSON
+bytes over IPC): eyes:tasks with one card changed 688,319 B before, 5,211 B after; an executor checkpoint 688,319 B
+before, 665 B after (eyes:progress, no list); eyes:checkpoints with one session changed 760,443 B before, 7,433 B
+after; a write that changes nothing sent the list before and sends nothing now. Kill switch MEFI_STUDIO_FULL_PUSHES=1
+(whole lists, pinned by host_push_batching and preload_fanout).
+
+`npm run check` ok, `npm run audit` 0 findings, `npm run lint` 0 errors and 45 warnings (as clean main).
+`npm run test:fast`: 7064 tests, 7005 pass, 58 skipped, 1 fail: rust_modules "the image-store factory ... keeps
+folder the engine's", as on clean main (the Rust chat has it). row_push, board_gateway, host_push_batching,
+module_purity, preload_fanout 114/114 together; preload_fanout 17/17 after the onTasks re-delivery (new pins: live
+progress delivers the board at once, untouched cards keep their objects, progress that moves no card delivers
+nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
+(no Electron in the container); judged on the Windows "Studio checks" run of this commit.
+
 ## 2026-10-05 The Mefi Studio relay, the Project hub, the Lobby and one Friends page land on main
 
 Branch `wip/friends-ux` in `C:\wt\fux`: wip/relay (the Cloudflare relay under `relay/`, hub-client, room history,
@@ -539,25 +560,6 @@ assistant tick 1); `MEFI_HOST_SELFTEST` recorded a 1825x1175 page capture, 40
 invokes, 29 channels listened to, live pushes and an accepted toast. Electron
 44.4.1 safeStorage round trip verified both ways on synthetic data in a scratch
 app folder. No change to what the Electron build does.
-
-## 2026-10-03 Weak-drive check without administrator rights
-
-`fsutil fsinfo volumeinfo C:\` refuses a normal user on the owner's PC
-("Error 3", and "Error 5: Access is denied" for `C:`), so the Publish
-dialog's weak-drive warning and Set up this PC's exFAT/FAT checks could never
-show. Both now ask PowerShell for `[IO.DriveInfo]::new('C:').DriveFormat`,
-falling back to CIM `Win32_LogicalDisk` under constrained language mode, with
-the 10 s timeout kept. Timed from Node's execFile (4 runs each): DriveInfo
-194-315 ms, CIM 369-784 ms, Get-Volume 1139-1667 ms; the CIM fallback under
-constrained language 327-362 ms; a missing drive prints nothing (unknown).
-
-`npm run check`, `npm run lint` (no new warnings) and `npm run audit` pass.
-`tests/pc_setup.test.mjs` 8/8, including a live query of the system drive
-without elevation; `tests/git_actions.test.mjs` plus `tests/git_host.test.mjs`
-118/118; `npm run test:fast` 6745 pass, 0 fail, 14 skipped (365 s). Not run
-against a real exFAT drive (none on this PC). The Rust port on
-`wip/rust-host` (`drive_of`, `rules::filesystem_of`, parity cases) still
-runs fsutil and must follow.
 
 ## Read Before Any Tests
 
