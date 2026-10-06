@@ -132,7 +132,7 @@
       for (let attempt = 0; attempt < 10; attempt += 1) {
         let x, y;
         // Mostly the edges of the window, where it covers the least.
-        if (random() < 0.72) {
+        if (random() < 0.85) {
           const side = Math.floor(random() * 4);
           const band = 0.2;
           x = side === 0 ? pick(margin, w * band) : side === 1 ? pick(w * (1 - band), w - margin) : pick(margin, w - margin);

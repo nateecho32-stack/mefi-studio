@@ -14432,6 +14432,12 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 .studio-pet { z-index: 2147482600; }
 .studio-pet[hidden] { display: none; }
 .exit-effect-dust { z-index: 2147482500; }
+/* Settings › Appearance › Interface: the pet and menu effect card (pets.js). */
+.settings-flair-body { display: grid; gap: 16px; }
+.settings-flair-body > .field { display: grid; gap: 8px; }
+.settings-flair-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.settings-flair-name { width: min(200px, 100%); }
+.settings-flair-shop { justify-self: start; }
 @media print {
   .studio-pet, .exit-effect-dust { display: none; }
 }
@@ -94862,7 +94868,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const LOOK_TIP_KEY = "mefiStudio.lookTip.v1";
   const lookNote = { el: null, tries: 0 };
   function lookTipAnchor() {
-    for (const selector of ['#app-rail-foot [data-nav="studio"]', '#app-rail [data-nav="studio"]', '[data-nav="studio"]']) {
+    for (const selector of ['#app-rail-foot [data-nav="studio"]', '#app-rail [data-nav="studio"]', '#vibe-rail [data-vibe-place="settings"]', '[data-nav="studio"]']) {
       for (const candidate of document.querySelectorAll?.(selector) ?? []) {
         const rect = candidate.getBoundingClientRect?.();
         if (rect && rect.width > 0 && rect.height > 0) return candidate;
@@ -94905,7 +94911,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const anchor = lookTipAnchor();
     const rect = anchor?.getBoundingClientRect?.();
     const width = window.innerWidth || 1280, height = window.innerHeight || 800;
-    if (!rect) { tip.dataset.side = "none"; tip.style.left = `${Math.max(16, width / 2 - 170)}px`; tip.style.top = `${Math.max(16, height - 220)}px`; return; }
+    // No Settings button on screen (Social's Today has no rail): the top right,
+    // under the top bar, clear of the toasts along the bottom.
+    if (!rect) { const box = tip.getBoundingClientRect?.() || { width: 340 }; tip.dataset.side = "none"; tip.style.left = `${Math.max(16, width - (box.width || 340) - 20)}px`; tip.style.top = "72px"; return; }
     // Beside the button, its arrow pointing at it; kept inside the window.
     const box = tip.getBoundingClientRect?.() || { width: 320, height: 150 };
     const top = Math.min(Math.max(12, rect.top + rect.height / 2 - box.height / 2), height - box.height - 12);
@@ -111086,7 +111094,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       for (let attempt = 0; attempt < 10; attempt += 1) {
         let x, y;
         // Mostly the edges of the window, where it covers the least.
-        if (random() < 0.72) {
+        if (random() < 0.85) {
           const side = Math.floor(random() * 4);
           const band = 0.2;
           x = side === 0 ? pick(margin, w * band) : side === 1 ? pick(w * (1 - band), w - margin) : pick(margin, w - margin);

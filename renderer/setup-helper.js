@@ -1802,7 +1802,7 @@
   const LOOK_TIP_KEY = "mefiStudio.lookTip.v1";
   const lookNote = { el: null, tries: 0 };
   function lookTipAnchor() {
-    for (const selector of ['#app-rail-foot [data-nav="studio"]', '#app-rail [data-nav="studio"]', '[data-nav="studio"]']) {
+    for (const selector of ['#app-rail-foot [data-nav="studio"]', '#app-rail [data-nav="studio"]', '#vibe-rail [data-vibe-place="settings"]', '[data-nav="studio"]']) {
       for (const candidate of document.querySelectorAll?.(selector) ?? []) {
         const rect = candidate.getBoundingClientRect?.();
         if (rect && rect.width > 0 && rect.height > 0) return candidate;
@@ -1845,7 +1845,9 @@
     const anchor = lookTipAnchor();
     const rect = anchor?.getBoundingClientRect?.();
     const width = window.innerWidth || 1280, height = window.innerHeight || 800;
-    if (!rect) { tip.dataset.side = "none"; tip.style.left = `${Math.max(16, width / 2 - 170)}px`; tip.style.top = `${Math.max(16, height - 220)}px`; return; }
+    // No Settings button on screen (Social's Today has no rail): the top right,
+    // under the top bar, clear of the toasts along the bottom.
+    if (!rect) { const box = tip.getBoundingClientRect?.() || { width: 340 }; tip.dataset.side = "none"; tip.style.left = `${Math.max(16, width - (box.width || 340) - 20)}px`; tip.style.top = "72px"; return; }
     // Beside the button, its arrow pointing at it; kept inside the window.
     const box = tip.getBoundingClientRect?.() || { width: 320, height: 150 };
     const top = Math.min(Math.max(12, rect.top + rect.height / 2 - box.height / 2), height - box.height - 12);

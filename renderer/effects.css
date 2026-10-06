@@ -14,6 +14,12 @@
 .studio-pet { z-index: 2147482600; }
 .studio-pet[hidden] { display: none; }
 .exit-effect-dust { z-index: 2147482500; }
+/* Settings › Appearance › Interface: the pet and menu effect card (pets.js). */
+.settings-flair-body { display: grid; gap: 16px; }
+.settings-flair-body > .field { display: grid; gap: 8px; }
+.settings-flair-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.settings-flair-name { width: min(200px, 100%); }
+.settings-flair-shop { justify-self: start; }
 @media print {
   .studio-pet, .exit-effect-dust { display: none; }
 }
