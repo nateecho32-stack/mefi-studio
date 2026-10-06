@@ -39,6 +39,23 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The social review's fixes land with the polish: say what helps, why a play earned nothing, one vocabulary
+
+Branch `wip/social-polish-2` in `C:\wt\polish2`: wip/social-polish (a676b05, Windows CI green) + 67e5898, the fixes from
+the "Engine optimization and social features" session's review of the social side (string ids in hub-client; one
+hubState() so Connect shows only when it can help; a play's why from the relay to the Project hub; private first
+rooms; The Lobby's own nudges, focus kept across reads, calendar days, this week's events row; one vocabulary; 12 px
+bubble labels; Play/Star labels; arrow keys in the tab rows; Search words), with main 0661f8c merged (119bc83:
+CHANGELOG keeps both sides, TESTRUNS rows from both and main's archived row, rotated; booklet.html regenerated).
+
+Run through `npm run test:one` (the machine-wide test lease) on 119bc83: companion_hub_render, friends_render and
+friends_two_render (the two Studios meeting end to end) 1/1 each, rooms_ui, friends_front_ui (13, new: the connection
+sentences, the nudges, the events row), project_hub_ui (play reasons), hub_client (17, new: missing ids refused),
+hub_host, relay_credits (the play's why), relay_connect, relay_e2e, booklet_build and module_purity: 165 tests, 165
+pass. Also pc_remote_ui, pc_sync_ui, together_ui, friends_mod_ui, friends_navigation, relay_core, app_rail,
+onboarding and palette_layout_v2 on 67e5898. `npm run check` ok. Windows CI runs the full gate on the landing commit
+before the fast-forward; the relay is redeployed with it (front().you.projects and hold, the play's why).
+
 ## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
 
 Branch `wip/social-polish` in `C:\wt\polish` (bea5ec9 an open room like a chat app, rooms as cards, Friends icons,
@@ -502,34 +519,6 @@ tree_dynamics_render, which fails now and then on this PC (failed once alone
 here, then passed 3 times alone; the branch's own run saw it fail on c01604e
 too). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run
 check` ok. Side-by-sides: `C:\wt\gap\after-settings\compare\`.
-
-## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
-
-Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,
-node_modules junctioned), three commits: 70bc565 Settings filed into the
-prototype's places (booklet.js, styles.css, template wrappers, report.js),
-4ac04f8 the three-step first run (setup-helper.js/.css), 7d268b0 a Backlog
-plan opens as its own draft page (planning.js/.css, one line of sessions.js).
-New Electron fixture `settings_render` (MEFI_SETTINGS_CAPTURE_DIR); the
-setup_helper_render and planning_render fixtures gained a v2 phase each; new
-shared `tests/fixtures/text-probe.cjs` (no text under 12 px, 4.5:1 against
-what is painted behind it).
-
-`npm run check` ok (271 targets), `npm run audit` 0 findings, lint: no
-warning in a changed file. `npm run test:fast` before each commit: 6923/6909
-pass/0 fail; 6929/6913 pass/2 fail (attempt_review_host and
-attempt_snapshots_host under load: 55 tests, 52 pass, 0 fail alone); 6933/6919
-pass/0 fail (14 skipped each). Full `npm test` on 7d268b0: Node 6933 tests,
-6917 pass, 14 skipped, 2 fail under load (update_host_bridge 8/8 and
-rust_parity_snapshots 3/3 alone); Electron lane 76: 72 pass, 1 skipped, 3
-fail: layout_contract_render (viewport 1921x1081) and shell_render (as on
-clean main on this PC), tree_dynamics_render (fails alone, and on c01604e
-too); command_render 1/1; eyes_toggle_electron 0/1 (fails on c01604e too);
-occlusion_probe 2/2; Python 248 OK (1 skipped); path lock ok.
-settings_render, setup_helper_render and planning_render pass in the run.
-Captures in `C:\wt\gap\after-settings\v2\` (settings, first-run,
-plan-draft); prototype captures in `C:\wt\gap\after-settings\proto\`; the
-prototype beside v2 in `C:\wt\gap\after-settings\compare\`.
 
 ## Read Before Any Tests
 
