@@ -606,6 +606,18 @@ settings and per-model work-kind summaries for the shared controls.
   not in the build says "Comes with the next Studio update." Settings ›
   Appearance's Theme section has a way in (**Open the Shop**), and Search
   finds it.
+- **Ember and friends' pets** (`renderer/pets.js`, `window.MefiPets`; main's
+  `hub:pet`; the relay's `relay/src/pets.mjs`). Ember, the dragon every Studio
+  comes with, flies on its own small canvas above the page and never takes
+  the pointer (Settings › Appearance › Interface, **Pet and menu effects**;
+  a new profile's first run switches it on). Studio tells the relay which pet
+  you have (`hubPet`: kind, skin and name, or none) and the relay keeps it on
+  your live connection only. While a room is open in Friends › Rooms, the
+  relay's `roomPets` for that room brings the other members' pets in
+  (`MefiPets.guests`): each flies in from an edge with its owner's name above
+  it, plays with your Ember, and flies out when its owner leaves or you leave
+  the room. Visitors come only while your own pet is on, never with motion
+  Off, five at most.
 - **Share between my PCs** (renderer/pc-vault.js; main.cjs "Your PCs vault";
   scripts/pc-vault.cjs, vault-crypto.cjs, vault-shelves.cjs, share-review.cjs).
   A private `<account>/mefi-studio-vault` repository, every file sealed
