@@ -19,6 +19,48 @@ Routing*.
 When it closes, the walkthrough below takes over. If the helper already
 connected an AI, the walkthrough skips its scan and starts at Your workspace.
 
+## Stuck? Ask Claude Code or Codex
+
+If you already use Claude Code, Codex or another AI helper, it can walk you
+through setup. In Studio, **Copy setup prompt** (on the setup helper's first
+page, and in **Settings › Other apps**) copies a prompt that says where Studio
+is on this PC (its folder, its app files, its settings and data folder, the
+open project), what to read first and what to leave alone. Paste it into the
+helper. It holds no keys.
+
+If Studio isn't running yet, open a terminal in Studio's folder (the one with
+`Mefi Studio AI+.exe`, or the source checkout with `main.cjs`), start the
+helper there (`claude` or `codex`) and paste this:
+
+```text
+I'm setting up Mefi's Studio AI+ on this PC and I'd like your help. Studio's
+folder is the current folder: check that it holds README.md and either
+"Mefi Studio AI+.exe" (the portable app; its app files are in
+resources/app) or main.cjs (a source checkout). If it doesn't, ask me where I
+put Studio.
+
+Read README.md and GETTING_STARTED.md first (in resources/app for the portable
+app), then walk me through setup one step at a time, in plain words:
+1. Check what Studio needs: `git --version`, `node --version`,
+   `gh auth status`, and the coding tools I might use (`claude --version`,
+   `codex --version`, `opencode --version`). Tell me what is missing.
+2. Help me start Studio: the .exe for the portable app, or `npm ci`, then
+   `npm run build-booklet`, then `npm start` for a source checkout.
+3. Get one AI and one builder connected in Studio, and tell me which screen to
+   use for each.
+4. If something fails, read the docs and Studio's log and tell me what went
+   wrong.
+
+Ground rules: never open, print, copy or edit my keys (auth.json, any .env
+file, API keys or tokens): tell me where to paste them in Studio instead.
+Change Studio's settings in Studio's own screens, not in its files. Ask me
+before you install anything.
+```
+
+Once Studio runs, **Settings › Other apps** can also let those helpers talk to
+Studio directly: see what the agents are doing, message Mefi and hand Studio
+tasks (which wait for your OK). See [Other apps](docs/studio-api.md).
+
 ## The walkthrough
 
 The in-app walkthrough opens automatically on your first launch, once the

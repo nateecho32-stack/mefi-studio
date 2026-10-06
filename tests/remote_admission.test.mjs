@@ -60,6 +60,20 @@ test("a card filed from Discord keeps its remote origin on the board and waits f
   assert.equal(approval(own, board.tasks, "auto"), "ready", "and builds under Auto as before");
 });
 
+test("a card another app on this PC filed (docs/studio-api.md) keeps via app and waits for the owner's OK in every mode, and so do its slices", async () => {
+  const { board, chat } = studio();
+  const fromApp = await chat({ kind: "create_task", title: "Add search", ownerText: "Add search" }, { remote: true, from: "app" });
+  const saved = board.tasks.find((task) => task.id === fromApp.created.id);
+  assert.deepEqual({ ...saved.origin }, { kind: "chat", by: "owner", via: "app" });
+  for (const level of autonomy.LEVELS) assert.equal(approval(saved, board.tasks, level), "approval", `${level}: it waits for approval`);
+  // The Studio API's own task route stamps the same origin (studio-api.ORIGIN).
+  const { created } = workAdmission.admitTask({ tasks: [], requests: [] }, { title: "Add tags", prompt: "Add tags" }, { origin: { ...require("../scripts/studio-api.cjs").ORIGIN }, now: 1, allocateId: () => "t2" });
+  assert.equal(created.origin.via, "app");
+  const split = { id: "s1", projectId: created.projectId, title: "Part 1", splitFrom: created.id };
+  assert.equal(autonomy.needsApproval(split, { level: "auto", tasks: [created, split] }), true, "its slices wait too");
+  assert.equal(workAdmission.taskRow({ title: "x" }, { now: 1, id: "x", origin: { kind: "chat", by: "owner", via: "app" } }).origin.via, "app", "promotion keeps it");
+});
+
 test("the admission gate keeps where work came from, and an inbox row carries it onto its card", () => {
   const origin = { ...remote.ORIGIN };
   assert.deepEqual({ ...workAdmission.taskRow({ title: "x" }, { now: 1, id: "t", origin }).origin }, origin);

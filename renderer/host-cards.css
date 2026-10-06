@@ -1,6 +1,7 @@
 /* Settings cards and small sheets for what the host tells you: Notifications
    (renderer/alerts.js), Report a problem and the crash prompt
-   (renderer/report.js) and What's new (renderer/whats-new.js). Theme tokens
+   (renderer/report.js), What's new (renderer/whats-new.js) and Other apps
+   (renderer/studio-api.js). Theme tokens
    only, nothing under 12px, no scroll gutters: the app hides scrollbars and
    draws its own indicator. */
 
@@ -70,3 +71,19 @@
 .alerts-sample span { color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; overflow-wrap: anywhere; }
 .alerts-sample .alerts-sample-from { color: var(--dim); font-size: var(--fs-sm); }
 .alerts-actions { align-items: center; flex-wrap: wrap; }
+
+/* ---- Other apps: Settings › Other apps ------------------------------------- */
+.apps-prompt-row { align-items: center; flex-wrap: wrap; }
+.apps-prompt { display: block; width: 100%; min-height: 220px; margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: color-mix(in srgb, var(--surface-sunk) 70%, transparent); color: var(--ivory); font: var(--fs-sm)/1.5 var(--font-mono); resize: vertical; }
+.apps-prompt[hidden] { display: none; }
+.apps-connect { display: grid; gap: 10px; margin: 10px 0 12px; }
+.apps-connect[hidden] { display: none; }
+.apps-connect-row { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: var(--r-md); background: color-mix(in srgb, var(--surface-sunk) 50%, transparent); }
+.apps-connect-head { display: flex; align-items: flex-start; gap: var(--s3); }
+.apps-connect-words { display: grid; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.apps-connect-words b { color: var(--ivory); font-size: var(--fs-md); font-weight: 600; }
+.apps-connect-words small { color: var(--muted); font-size: var(--fs-sm); line-height: 1.45; overflow-wrap: anywhere; }
+.apps-connect-actions { display: flex; flex: none; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.apps-code { margin: 0; padding: 8px 10px; border-radius: var(--r-sm, 6px); background: color-mix(in srgb, var(--bg-deep) 55%, transparent); color: var(--ivory); font: var(--fs-sm)/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.apps-log { display: grid; gap: 2px; margin: 4px 0 0; padding: 0; list-style: none; color: var(--muted); font-size: var(--fs-sm); }
+.apps-log[hidden], #apps-log-head[hidden], #apps-key-row[hidden] { display: none; }

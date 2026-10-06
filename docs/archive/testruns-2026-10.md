@@ -6,6 +6,53 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
+
+Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
+answer styles with ELI5 the default, `use_skill`, Team › Connectors, the parallel tool loop, the MCP pool and
+Streamable HTTP; 6318720 the twelve fixes an independent review found), landed from `land/skills` in
+`C:\wt\skills-land` with main merged twice (648e6ea over 00d32ca, 6e11811 over 33c3c4e: no conflicts beyond
+CHANGELOG, booklet.html rebuilt) and the release scope updated (1d5334a: Connectors move from 0.5.x into 0.5.0).
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on every step of the
+branch: fef2aef (run 37395870981), 6318720 (37397466087), 1d5334a (37397753111) and the landing commit 6e11811
+(37398222559). On this PC, on the landing tree: `npm run check` ok, `npm run audit` 0 errors and 0 warnings,
+`npm run lint` 0 errors and 45 warnings (as main). The suites this change touches or the merges brought in, run
+together on 6e11811: 321 tests, 320 pass, 1 skipped (skill_use, connectors, connectors_ui, chat_tools_ui,
+agent_tools_skills, skills_connectors_host, agent_rules, agent_rules_host, mentions_host, today_home,
+module_purity, skills_ipc, app_wide_ipc, booklet_build, size_page, friends_front_ui, friends_navigation, hub_host,
+project_hub_ui, rooms_ui, app_rail, relay_credits, relay_connect). Before the second merge, 568 tests on the touched
+suites: 567 pass, 1 skipped. Real windows, one at a time while no other session's window suite ran: team_render 1/1 (84 s) and sessions_render 1/1
+(134 s), the two fixtures this change edits; today_render, skills_render, composer_render, autonomy_render,
+agent_setup_render and unified_studio_render were still queued behind other sessions' window suites at landing.
+
+Measured: offering skills to a role (`autoSkills`, 30 skills in project and home) costs about 11 ms a call warm and
+114 ms cold; a second call to a connector reuses its open session (the pool keeps it 3 minutes, four servers at most;
+a worker keeps its own for the run). The review's fixes are pinned: an online connector gets only its saved values
+(never the PC's environment or the GitHub sign-in), one connector's calls keep their order, a bare `null` line, a
+404'd session and a server still starting at quit are handled, the values file is never wiped, `%TEMP%` tool folders
+are swept after six hours, `/name` counts only in the owner's own words. Kill switches MEFI_STUDIO_NO_SKILL_USE,
+MEFI_STUDIO_NO_CONNECTORS, MEFI_STUDIO_NO_MCP_POOL and MEFI_STUDIO_SERIAL_TOOLS, each pinned.
+
+## 2026-10-06 Friends › Moderation, Report on projects and pop-ups from friends land on main
+
+Branch `wip/friends-mod` in `C:\wt\mod` (9e2d43d Moderation and project reports; 1679ae6 pop-ups and the relay's
+friendOnline frame), main 33c3c4e merged (b433532, clean; booklet.html regenerated).
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) runs on the landing commit and is
+green before the fast-forward. This PC was shared with other sessions' suites the whole time, so the full local gate
+was left to CI, as for 33c3c4e.
+
+Run alone here after the merge: friends_front_ui 10/10 (pop-ups grouped, invites, requests, plays and stars, the off
+switch), friends_mod_ui 4/4 (new: moderators only, farming list, reports with Resolve, Remove project and Suspend,
+lookup, Take back from one giver or all, nothing without a yes), friends_navigation 8/8 (Moderation hidden unless a
+moderator), project_hub_ui 7/7 (Report), relay_credits 11/11 (flags: one giver and mutual trading, project reports
+once each and never your own, me().moderator), relay_connect 5/5 (friendOnline to room co-members only, not the
+Lobby, not twice in 30 minutes, never when hidden), relay_core 9/9, relay_e2e 9/9, hub_client 16/16 (hello lists
+friend.online), hub_host 13/13, rooms_ui 13/13, app_rail 40/40, onboarding 43/43, module_purity 61/61,
+booklet_build 5/5; friends_render and companion_hub_render 1/1. `npm run check` ok, lint clean on the changed files.
+The relay is redeployed (version 1fe8cfc5) and `relay/scripts/smoke.mjs` passes against it.
+
 ## 2026-10-06 The Lobby, one sign-in, online at launch, credits that cannot be farmed, and no Discord roles land on main
 
 Branch `wip/credits-guard` in `C:\wt\credits` (bcc51f3 the Lobby front page, Sign in with Discord and online at launch;

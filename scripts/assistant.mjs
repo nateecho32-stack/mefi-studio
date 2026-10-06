@@ -402,6 +402,8 @@ function normalizeMessage(entry, index) {
   // notice's identity: a notice is the assistant reporting on a task the owner
   // cares about, never an answer to what the owner said.
   if (str(entry.projectId)) message.projectId = clip(str(entry.projectId), 80);
+  // Sent by another app on this PC (main.cjs "Other apps"): the thread names it instead of "You".
+  if (message.role === "user" && str(entry.app)) message.app = clip(str(entry.app), 40);
   if (message.role === "assistant" && entry.kind === "notice") {
     message.kind = "notice";
     if (str(entry.taskId)) message.taskId = clip(str(entry.taskId), 80);

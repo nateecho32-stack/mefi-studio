@@ -51,6 +51,14 @@ connection; the relay shows it on friends' front pages and forgets it when
 the connection closes. An unlisted
 room's name never appears on anyone else's front page.
 
+My PCs (feature `pcs`, [docs/my-pcs.md](../docs/my-pcs.md)) keeps a PC's id,
+name, kind, two public keys and whom it lends itself to on its own connection
+only, and forgets them when it closes. Status lines (`pcState`) and envelopes
+(`pcSend`) are passed to the member's other PCs, or a friend's, and never
+written; the envelopes are signed and sealed between the PCs, so the relay
+cannot read them. A PC can lend itself only to someone its member shares a
+room with (not the Lobby).
+
 ## Credits that cannot be farmed
 
 Credits are earned only by playing and starring other members' projects, and
@@ -149,12 +157,13 @@ a one-line summary.
 | `src/worker.mjs` | The Worker: answers `/v1/health`, refuses anything outside `/v1/` or over 16 KB, routes the rest to the one Hub object. |
 | `src/hub-object.mjs` | The Hub Durable Object: every socket (Hibernation API, with the keepalive ping answered by Cloudflare) and the SQLite database, handed to the core. A plain class, so Node can load it too. |
 | `src/relay.mjs` | The core: every HTTP route and WebSocket frame, rooms, chat, presence, companions, peer history, moderation, retention. Platform-free. |
-| `src/protocol.mjs` | Frame and body shapes (the hub's v1, plus `companion`, `historyRequest` / `historyReply` / `history`, `hello.features`, `message.sig`). `checkVersion` is the protocol window: a hello may name any protocol from `OLDEST_PROTOCOL` to `PROTOCOL_VERSION` (or send its own `oldest`), and only a Studio below the window is closed with 4002 "protocol version"; a Studio whose oldest is above the relay's newest gets 4002 "relay version" and retries by itself. Keep both numbers equal to `LINKS.friends` in Studio's `scripts/link-compat.cjs`. |
+| `src/protocol.mjs` | Frame and body shapes (the hub's v1, plus `companion`, `historyRequest` / `historyReply` / `history`, `hello.features`, `message.sig`, and My PCs' `pcHello` / `pcState` / `pcSend` with `pcs` / `pcState` / `pcMsg`). `checkVersion` is the protocol window: a hello may name any protocol from `OLDEST_PROTOCOL` to `PROTOCOL_VERSION` (or send its own `oldest`), and only a Studio below the window is closed with 4002 "protocol version"; a Studio whose oldest is above the relay's newest gets 4002 "relay version" and retries by itself. Keep both numbers equal to `LINKS.friends` in Studio's `scripts/link-compat.cjs`. |
 | `src/sessions.mjs` | Sign-in with the member's own Discord token, and the relay's 15-minute session tokens. |
 | `src/chat.mjs` | Message ids that prove their author, and message signatures. |
 | `src/listen.mjs` · `src/media.mjs` | Listen together, and which links are allowed (`publicHost`). |
 | `src/leases.mjs` · `src/paths.mjs` | Cowork claims, carried over from the hub. |
 | `src/events.mjs` · `src/economy.mjs` | Community events the relay runs by itself, and the daily community budget they draw on. |
+| `src/pcs.mjs` | My PCs: which PCs see each other, status lines and envelopes passed between them, kept on the sockets only. |
 | `src/store.mjs` | The schema and its migrations. |
 | `node/adapter.mjs` | The real Worker and Hub under Node with in-memory sockets and a scripted Discord, for Studio's tests. |
 | `scripts/smoke.mjs` | A real-network check of a running relay. |

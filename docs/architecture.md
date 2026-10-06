@@ -243,6 +243,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Size and density** | The 0.5 layout's four size settings on one page, with a live miniature of the window beside the controls: **interface scale** (the window's zoom), **text size**, **density** (Compact, Comfortable, Spacious) and **detail** (Titles, Titles and status, Everything). Only in `html[data-layout="v2"]`; components size themselves with `--text-scale`, `--d-*` and `--dt-*`, and `window.MefiSize` is the model. See "Size and density (layout v2)" under Workspace and work. |
 | **Diagnostics** | Settings › System: speed probe, profiler, auditor, machine tools, connection log and Report a problem. Auditor and machine links reveal Sessions' Diagnostics panel. |
 | **Notifications** | Settings › General: Windows alerts for what waits on you (only while Studio is not in front), the taskbar flash and count, and quiet hours shared with the Discord remote. |
+| **Other apps** | Settings › Other apps: **Copy setup prompt** for Claude Code, Codex or another AI helper, and the switch that lets apps on this PC reach Studio through its local API and MCP server (`scripts/studio-link.mjs`). Work an app files waits for your OK. See [studio-api.md](studio-api.md). |
 | **Search Studio** | The palette (`Ctrl K`), once called Key commands. It finds any page, tool, Settings card, action, task, node or model by familiar terms, and groups its results by menu section. Empty, it lists what you last opened (**Recent**); `task …` or `idea …` adds one on Enter. |
 | **Help** | The menu-foot popover containing onboarding, shortcuts and Community. These destinations are also available through Search; late-registered Community remains supported by the navigation registry. |
 | **Task** | One unit of work on the project board, with a brief, acceptance checks, prerequisites, attempts and evidence. New cards gather local references automatically when Automatic references is on; the configurable scout can use GPT-6 Luna on the fast tier to choose one verified starting file. A scout whose route is a coding CLI makes no call (no CLI answers within its 8 s), and the card keeps its local matches. |
@@ -599,6 +600,22 @@ settings and per-model work-kind summaries for the shared controls.
   hub or link nothing waits. Alongside it, syncFollow asks GitHub every
   minute (sync.mjs remoteMoved, one ls-remote) and fast-forwards when this
   PC has nothing in the way and no builder is running.
+- **My PCs** (main.cjs "My PCs", scripts/pc-trust.cjs, pc-fleet.cjs,
+  pc-power.cjs, pc-handoff.cjs, relay/src/pcs.mjs, renderer/pc-fleet.js;
+  [my-pcs.md](my-pcs.md)). Each PC signed in to the Friends relay says who
+  it is (the cowork machine id, its public keys, who it lends itself to) and
+  how it is doing about once a minute. PCs pair by the six numbers both
+  screens show and then send each other sealed bodies through the relay:
+  offers of ready cards when one is short (a low battery, or memory held for
+  two minutes), work started from another PC, done notes, recalls and
+  handoff news. A moved card waits on its first board (`movedTo`, a
+  "waiting" stage in backlog.workState) and is never copied; a received one
+  remembers where it came from (`fromPc`) and sends its done note home. The
+  battery holds new starts at the low line (spawnNextJob's "battery" stop)
+  and at the stop line stops the running work with an ownerHold of kind
+  "battery", parks it as a handoff branch and waits for Continue. Keep this
+  PC on's Always keeps a plugged-in PC awake (applyKeepAwake). A friend's
+  lent PC holds their tasks for its owner (an ownerHold of kind "friend").
 - **Reach this PC from Discord** (main.cjs "Discord remote", scripts/remote.cjs,
   the hub client's `remote` frames; [remote.md](remote.md)). Off until the
   owner turns it on per PC. On, Studio keeps its outbound hub socket open and
@@ -617,6 +634,22 @@ settings and per-model work-kind summaries for the shared controls.
   `backlogControl` with that scope. A look once a minute
   turns changes into alerts (`remote.alerts`). Everything sent passes
   `shareReview.scrub` first.
+- **Other apps** (main.cjs "Other apps", scripts/studio-api.cjs,
+  scripts/studio-api-server.cjs, scripts/studio-link.mjs;
+  [studio-api.md](studio-api.md)). Settings › Other apps. **Copy setup prompt**
+  copies a prompt for Claude Code, Codex or another AI helper with this PC's
+  Studio folder, app files, data folder, open project, version and docs, and
+  ground rules about keys; it needs nothing switched on, and the setup
+  helper's first page offers it too. **Let apps on this PC talk to Studio**
+  (off until turned on) opens a `127.0.0.1` endpoint with a key in
+  `~/.mefi-studio/studio-api.json`. Apps run `studio-link.mjs` as an MCP
+  server or command line. An app is treated like a Discord DM: a message is
+  `assistantMessage(text, { app })`, which sets `user.remote` and
+  `user.from = "app"`, so the same chat gate narrows it, and the work it files
+  (or `POST /v1/tasks` files) carries `origin.via = "app"`, which
+  `autonomy.remoteWork` holds for the owner's OK in every mode. The thread
+  names the app instead of "You". Web pages are refused (Origin,
+  Sec-Fetch-Site, a rebinding Host), and the log keeps no words.
 - The same glowing wisp wakes in the launch box, responds to pointer play with
   floating ASCII expressions and a few sparks, and accompanies the first-run
   guide. During setup, a pending chat reply or reported agent work, little lights

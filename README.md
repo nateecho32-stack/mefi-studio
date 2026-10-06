@@ -54,6 +54,7 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
 - **Agents do the work, visibly.** Coding workers (OpenCode, Claude Code, Codex, Grok or Antigravity CLIs) build tasks while an always-on service loop organises, audits and briefs. You see every run, step and question as it happens.
 - **"Done" means verified.** A finished attempt waits in *Review* with its evidence until checks pass or you confirm it.
 - **Your call, every time.** Permission modes from *Always ask* to *Auto*, questions that wait in one place, and an *Undo* for automatic choices.
+- **Works with the tools you already use.** Claude Code, Codex, Cursor or a script on the same PC can check on Studio, message Mefi and hand it tasks (they wait for your OK), through an MCP server and a local API that are off until you turn them on. **Copy setup prompt** hands those helpers everything they need to walk you through setup.
 - **Local storage, your choice of AI.** Project records and settings stay on your machine, keys are encrypted with the OS keystore, and Studio has no usage telemetry or required hosted account. Connected AI providers and coding tools may receive prompts and project context.
 
 ## Coming in 0.5
@@ -273,6 +274,7 @@ npm run host:test        # the Rust host's unit tests (needs Rust)
 | [docs/your-pcs.md](docs/your-pcs.md) | Your PCs, Share between my PCs and Share with friends |
 | [docs/community.md](docs/community.md) | The Void Engine Discord link: the weekly card, the login, what is stored, unlinking and the fork switch |
 | [docs/remote.md](docs/remote.md) | Reach your PCs from Discord: what a DM can and cannot do, the PIN, alerts, and the hub protocol |
+| [docs/studio-api.md](docs/studio-api.md) | Other apps: the setup prompt for Claude Code or Codex, and the Studio API, MCP server and command line apps on this PC use to reach Studio |
 | [docs/fleet-overhaul-plan.md](docs/fleet-overhaul-plan.md) | The fleet overhaul: seats, pods, missions and Refocus, Live › Fleet, and the phase plan |
 | [docs/ux-audit.md](docs/ux-audit.md) · [docs/pi-provider-storage.md](docs/pi-provider-storage.md) | The UX audit and its phased plan · how pi's coding agent stores provider config |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Check gates, test-file rules, parallel-session etiquette |

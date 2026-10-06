@@ -45,6 +45,8 @@ const PROMISES = [
   { file: "scripts/desk.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The Discord remote's rules (docs/remote.md); main.cjs "Discord remote" owns the I/O.
   { file: "scripts/remote.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The Studio API's rules (docs/studio-api.md); studio-api-server.cjs listens and main.cjs "Other apps" owns the I/O.
+  { file: "scripts/studio-api.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // Windows notifications, the taskbar flash and the count on the taskbar icon: when Studio may speak, what it says and the picture of the count; alerts-host.cjs and main.cjs "Notifications" own the window, the Notification and the clock.
   { file: "scripts/alerts.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/badge-icon.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
@@ -105,6 +107,9 @@ const PROMISES = [
   { file: "scripts/prompt-cache.cjs", says: "Pure module: no Electron, filesystem, network, processes, timers or clock", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // Where this PC's own files live (never inside OneDrive); main.cjs's "Log core" block makes the folders.
   { file: "scripts/local-dirs.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // My PCs (docs/my-pcs.md): the keys and envelopes, and the rules for moving work; main.cjs "My PCs" owns the relay, the boards and the clock.
+  { file: "scripts/pc-trust.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  { file: "scripts/pc-fleet.cjs", says: "Pure module: no Electron, no filesystem, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

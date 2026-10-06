@@ -405,6 +405,39 @@ const api = {
     ...(payload.clear === true ? { clear: true } : {}), ...(payload.unlock === true ? { unlock: true } : {}),
   } : {}),
   onRemoteEvent: (callback) => ipcRenderer.on("remote:event", (_event, status) => callback(status)),
+  // Friends › Your PCs › My PCs (docs/my-pcs.md, main.cjs "My PCs"): the
+  // owner's PCs live, pairing by the six numbers, sending work, the battery's
+  // Continue and handoffs. Plain fields only; keys never reach the page.
+  pcsStatus: (watch) => ipcRenderer.invoke("pcs:status", { watch: watch === true }),
+  pcsSet: (patch) => ipcRenderer.invoke("pcs:set", patch && typeof patch === "object" ? {
+    ...(typeof patch.name === "string" ? { name: patch.name.slice(0, 40) } : {}),
+    ...(["working", "always"].includes(patch.stayOn) ? { stayOn: patch.stayOn } : {}),
+    ...(patch.battery && typeof patch.battery === "object" ? { battery: { low: Number(patch.battery.low), stop: Number(patch.battery.stop) } } : {}),
+    ...(patch.share && typeof patch.share === "object" ? { share: { projectId: String(patch.share.projectId ?? "").slice(0, 120), on: patch.share.on === true } } : {}),
+    ...(Array.isArray(patch.lend) ? { lend: patch.lend.slice(0, 8).map((row) => ({ id: String(row?.id ?? "").slice(0, 20), name: String(row?.name ?? "").slice(0, 40), auto: row?.auto === true })) } : {}),
+  } : {}),
+  pcsPair: (pcId) => ipcRenderer.invoke("pcs:pair", { pcId: String(pcId ?? "").slice(0, 64) }),
+  pcsPairAnswer: (pcId, yes) => ipcRenderer.invoke("pcs:pair-answer", { pcId: String(pcId ?? "").slice(0, 64), yes: yes === true }),
+  pcsForget: (pcId) => ipcRenderer.invoke("pcs:forget", { pcId: String(pcId ?? "").slice(0, 64) }),
+  pcsStart: (payload) => ipcRenderer.invoke("pcs:start", { pcId: String(payload?.pcId ?? "").slice(0, 64), title: String(payload?.title ?? "").slice(0, 90), prompt: String(payload?.prompt ?? "").slice(0, 6000) }),
+  pcsMove: (taskId, pcId) => ipcRenderer.invoke("pcs:move", { taskId: String(taskId ?? "").slice(0, 80), pcId: String(pcId ?? "").slice(0, 64) }),
+  pcsRecall: (taskId, force) => ipcRenderer.invoke("pcs:recall", { taskId: String(taskId ?? "").slice(0, 80), force: force === true }),
+  pcsContinue: () => ipcRenderer.invoke("pcs:continue"),
+  pcsHandoffs: () => ipcRenderer.invoke("pcs:handoffs"),
+  pcsPickUp: (branch, sha) => ipcRenderer.invoke("pcs:pick-up", { branch: String(branch ?? "").slice(0, 120), sha: String(sha ?? "").slice(0, 40) }),
+  pcsDrop: (branch, sha) => ipcRenderer.invoke("pcs:drop", { branch: String(branch ?? "").slice(0, 120), sha: String(sha ?? "").slice(0, 40) }),
+  onPcsEvent: (callback) => ipcRenderer.on("pcs:event", (_event, status) => callback(status)),
+  // Settings › Other apps (main.cjs "Other apps", docs/studio-api.md): the
+  // switch that lets Claude Code, Codex and other apps on this PC reach Studio,
+  // a new key, the setup prompt and the Claude Code skill. The key itself
+  // never comes to the page; it stays in the key file.
+  studioApiStatus: () => ipcRenderer.invoke("studio-api:status"),
+  studioApiSet: (patch) => ipcRenderer.invoke("studio-api:set", patch && typeof patch === "object" && typeof patch.on === "boolean" ? { on: patch.on } : {}),
+  studioApiRekey: () => ipcRenderer.invoke("studio-api:rekey"),
+  studioApiPrompt: () => ipcRenderer.invoke("studio-api:prompt"),
+  studioApiSkill: (options) => ipcRenderer.invoke("studio-api:skill", { save: options?.save === true }),
+  onStudioApiEvent: (callback) => ipcRenderer.on("studio-api:event", (_event, status) => callback(status)),
+  onStudioApiNotice: (callback) => ipcRenderer.on("studio-api:notice", (_event, notice) => callback(notice)),
   // Friends › Your PCs (main.cjs "Multi-PC sync"): the open project against
   // its default branch on GitHub. Main picks the folder; the renderer can only
   // ask for a rebase onto GitHub's commits. onSyncEvent carries every answer,

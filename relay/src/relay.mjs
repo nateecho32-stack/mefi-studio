@@ -27,6 +27,7 @@ import { createEvents } from './events.mjs';
 import { createLeases } from './leases.mjs';
 import { createListen } from './listen.mjs';
 import { createOembed, publicLink } from './media.mjs';
+import { createPcs } from './pcs.mjs';
 import { CLOSE_CODES, FEATURES, LIMITS, NOW_PLAYING_PROVIDERS, OLDEST_PROTOCOL, PROTOCOL_VERSION, checkVersion, hubFrame, parseClientFrame, validateBody, validateQuery } from './protocol.mjs';
 import { createSessions, readConfig, describeMember } from './sessions.mjs';
 import { createStore } from './store.mjs';
@@ -147,6 +148,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   let credits = null;
   let economy = null;
   let events = null;
+  let pcs = null;
   let alarmAt = undefined; // unknown after a wake
   const oembed = createOembed({ fetch: fetchImpl, now });
 
@@ -188,6 +190,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     // Community events the relay runs by itself (events.mjs): the weekly Build Jam, co-work hours, building together.
     events = createEvents({ store, now, credits, economy, paused, rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
     events.routes(route);
+    // My PCs (pcs.mjs): kept on the sockets, never in the store.
+    pcs = createPcs({ readySockets, sendFrame, sockets, now, friendsOf });
     const at = now();
     store.run(
       `INSERT INTO rooms (id, kind, name, owner_id, policy, listed, max_members, status, member_count, created_at, updated_at)
@@ -216,7 +220,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const onlineHidden = (uid) => store.get('SELECT online_hidden FROM members WHERE user_id = ?', uid)?.online_hidden === 1;
 
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building, FEATURES.events];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building, FEATURES.events, FEATURES.pcs];
 
   // ---- rooms in the store --------------------------------------------------------
 
@@ -385,6 +389,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       a.s = 'closed';
       sockets.write(ws, a);
       sockets.close(ws, code, reason);
+      pcs?.gone(a);
     }
   }
 
@@ -478,6 +483,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       }
     }
     for (const bucket of [userCalls, mints, searches, reportsBucket, claimWrites, connects, frames, postsShort, postsLong, companions, historyAsks]) bucket.sweep();
+    pcs.sweep();
     await schedule();
   }
 
@@ -491,6 +497,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     }
     sockets.close(ws, code, reason);
     for (const roomId of rooms) publishPresence(roomId);
+    pcs?.gone(a);
   }
 
   /** A socket was accepted. -> false when it was turned away (the caller closes it). */
@@ -571,6 +578,12 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
         return answer(ws, frame.nonce, historyAsk(ws, a, frame));
       case 'historyReply':
         return historyReply(ws, a, frame);
+      case 'pcHello':
+        return pcs.hello(ws, a, frame);
+      case 'pcState':
+        return pcs.state(ws, a, frame);
+      case 'pcSend':
+        return answer(ws, frame.nonce, pcs.send(ws, a, frame));
       default:
         return sendFrame(ws, 'error', { code: 'badFrame', message: `${frame.type} is not carried by this relay` });
     }
@@ -607,6 +620,17 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     await schedule();
   }
 
+  /** The members `uid` shares an open room with, the Lobby aside (friendOnline, and whom a PC may lend itself to). */
+  function friendsOf(uid) {
+    return new Set(store.all(
+      `SELECT DISTINCT b.user_id AS id FROM room_members a JOIN room_members b ON b.room_id = a.room_id JOIN rooms r ON r.id = a.room_id
+        WHERE a.user_id = ? AND b.user_id <> ? AND a.room_id <> ? AND r.status <> 'closed'`,
+      uid,
+      uid,
+      LOBBY.id,
+    ).map((row) => row.id));
+  }
+
   // Someone just opened Studio (their first socket): told to the people they
   // share a room with, never the Lobby's whole crowd, never when they hide
   // from Who's online, at most once every 30 minutes per pair, and only to
@@ -614,13 +638,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const announced = new Map(); // "uid>friend" -> when
   function announceOnline(uid, name) {
     if (onlineHidden(uid)) return;
-    const friends = new Set(store.all(
-      `SELECT DISTINCT b.user_id AS id FROM room_members a JOIN room_members b ON b.room_id = a.room_id JOIN rooms r ON r.id = a.room_id
-        WHERE a.user_id = ? AND b.user_id <> ? AND a.room_id <> ? AND r.status <> 'closed'`,
-      uid,
-      uid,
-      LOBBY.id,
-    ).map((row) => row.id));
+    const friends = friendsOf(uid);
     if (!friends.size) return;
     const at = now();
     if (announced.size > 5000) announced.clear();
@@ -677,6 +695,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     a.s = 'closed';
     sockets.write(ws, a);
     for (const roomId of rooms) publishPresence(roomId);
+    pcs?.gone(a);
   }
 
   // ---- chat ----------------------------------------------------------------------

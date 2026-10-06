@@ -166,11 +166,17 @@ function request(frame, selfUserId) {
   return out;
 }
 
-/** The chat gate's answer for a message that came from Discord. */
-function gateActions(checked = {}) {
+/**
+ * The chat gate's answer for a message that came from Discord, or with
+ * `from: "app"` from another app on this PC (scripts/studio-api.cjs), which
+ * gets the same narrower chat.
+ */
+function gateActions(checked = {}, { from = "discord" } = {}) {
   const run = [], refused = [];
+  const app = from === "app";
   for (const action of Array.isArray(checked.run) ? checked.run : []) {
     if (RUN_KINDS.includes(action?.kind)) run.push(action);
+    else if (app) refused.push({ action, reason: action?.kind === "approve" ? "from another app, the owner approves in Studio" : "from another app this waits for the owner in Studio" });
     else refused.push({ action, reason: action?.kind === "approve" ? "from Discord, approve with the Approve button and your PIN, or in Studio" : "from Discord this waits for you in Studio" });
   }
   return { ...checked, run, rejected: [...(Array.isArray(checked.rejected) ? checked.rejected : []), ...refused] };

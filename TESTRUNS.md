@@ -41,7 +41,7 @@ five rows) and is the loop to use while editing; `npm test` is the gate.
 
 ## 2026-10-06 model_performance: the corrupt-ledger race, and the store's cache compares a fresh ledger's bytes
 
-Branch `fix/model-perf-race` (C:\wt\mperf), landed from `land/model-perf-race` (off main 86cfa93, main merged in up to c4b9e2e). Hosted Windows CI failed "corrupt ledger failures preserve the file and
+Branch `fix/model-perf-race` (C:\wt\mperf), landed from `land/model-perf-race` (off main 86cfa93, main merged in up to 89639b4). Hosted Windows CI failed "corrupt ledger failures preserve the file and
 do not poison subsequent operations" once (run 37455162395 on fx/scaling, attempt 1: "Missing expected rejection" at
 line 165; the re-run passed). The test's last outside edit rewrote the ledger in place, on the same inode, at the
 very length the store had written ("10" for "0" pays for the store's trailing newline: 1007 bytes both). The store
@@ -64,6 +64,59 @@ the store (model_performance, learning_host, model_routing, model_routing_eviden
 planning_routing, usage_tracker_host, task_cap_host, kind_routes_host, jev_model_routing_host,
 explicit_route_fallback, builder_thinking_host, build_home_host, ai_route_gate): 201/201. Not run: the full
 `npm test` (hosted CI runs the Node stage on the branch).
+
+## 2026-10-06 My PCs: the owner's PCs live, splitting the queue, and a laptop that hands off on low battery
+
+Branch `feat/my-pcs` (C:\wt\pcs, merged with main twice in C:\wt\pcs2: the CHANGELOG kept from both sides, the
+relay import line, its README row and hub_client's hello assertion kept from both, `renderer/booklet.html` rebuilt,
+not merged). New: scripts/pc-trust.cjs, pc-fleet.cjs, pc-power.cjs, pc-handoff.cjs, relay/src/pcs.mjs,
+renderer/pc-fleet.js, docs/my-pcs.md; main.cjs "My PCs" block plus small guarded hooks (spawnNextJob's "battery"
+stop, applyKeepAwake, hubInstance's onEvent, hubPresenceWanted, startPcs at boot, pcs:* IPC); backlog.workState's
+moved card and battery/friend/came-back holds. The push guard in attempt_snapshots_host now lets a branch be named in
+full (`refs/heads/`, the handoff branches) and still refuses every other ref. Kill switch `MEFI_STUDIO_NO_PCS=1`.
+
+Measured: the four modules take 18.6 ms to require, so they load on first use; one battery read is one PowerShell
+call (3.3 s wall on this laptop at 392 MB free; it read 61%, on battery), every 3 min above 40%, 1 min under, 30 s
+under 25%, 5 min on mains, 30 min without a battery.
+
+`npm run check` ok, `npm run audit` 0 findings, eslint on the changed files 0 new problems (main.cjs keeps its 5
+older warnings). New suites: pc_trust 7, pc_power 7, pc_fleet 12, pc_handoff 4 (real git: park leaves the tree,
+index and HEAD alone; pick-up claims once; a clash stays on GitHub), pcs_host 7 (several PCs in vms on a fake relay:
+pairing by the six numbers, a stranger refused, a low battery moving two cards that come back done, a full PC
+declining, work started elsewhere and refused for a closed project, an unpaired sender refused, the stop line and
+Continue, a friend's lent PC holding the task), pc_fleet_ui 7, relay_pcs 9, hub_client_pcs 7. On the merged tree
+through `npm run test:one`: 247/248 across hub_host, hub_client(_pcs, _remote), relay_core/e2e/connect/pcs/events/
+credits, pcs_host, pc_fleet_ui, pc_sync_ui, pc_remote_ui, paired_worker_ui, module_purity, booklet_build,
+remote_host, cowork_host, link_compat, paired_reconnect, hub_rooms; the one failure was pcs_host removing a PC's
+temp folder while a write was pending (fixed: cleanup waits; then 7/7 four runs in a row, after its waits became
+"until the delivery lands"). Electron, one at a time: companion_hub_render, friends_render (no text under 12 px at
+four sizes), paired_worker_render, friends_two_render 4/4. A first full `npm test` on the pre-merge tree was stopped
+in the Node stage after 91 min at 392 MB free: its one real failure was the push guard (fixed); rust_parity_*/sync
+suites ran 25-70 min each and failed on time limits under that load (the known pattern), not rerun here. Hosted CI
+(ci.yml, Windows) green on 69cf256 (8 min 12 s); then main moved (Resources, Other apps): merged with both
+sides' blocks kept, and 327/330 (3 skipped, 0 failed) here across app_wide_ipc, preload_fanout, module_purity,
+booklet_build, the pc_* and pcs_host suites, hub_host, remote_host/admission/gate, studio_api_*, resource_*,
+resources_ui, settings_nav, backlog_engine and attempt_snapshots_host. Not run here: a real two-PC or laptop-battery test (owner).
+
+## 2026-10-06 Other apps: the Studio API, MCP server and skill, and the setup prompt
+
+Branch `feat/studio-api` (C:\wt\apilink), merged with main twice (the CHANGELOG kept from both sides,
+`renderer/booklet.html` rebuilt, not merged). New `scripts/studio-api.cjs` (pure rules),
+`scripts/studio-api-server.cjs` (127.0.0.1 endpoint and key file), `scripts/studio-link.mjs` (the MCP server and command
+line apps run), `renderer/studio-api.js` (Settings › Other apps) and main.cjs "Other apps"; work an app files carries
+`origin.via = "app"` and waits for the owner's OK in every mode.
+
+`npm run check` ok, eslint on the changed files no new warnings, `npm run audit` 0 findings, booklet byte-identical to
+a fresh build. Through `npm run test:one` on the final tree: studio_api_rules 8, studio_api_server 9, studio_api_host 8,
+remote_gate, remote_admission, remote_host, module_purity, settings_nav, app_wide_ipc, preload_fanout, booklet_build and
+setup_helper, 191/191; settings_render (the new place at four window sizes, every theme) 1/1. Hosted Windows CI green on
+e35b1db. The full `npm test` here, run while other sessions held the PC, failed only in suites that fail under load or
+on clean main: the git-heavy attempt_review_host, attempt_snapshots_host and board_store passed alone (220/220 with the
+rest); shell_render and performance_render passed alone; task_overview_render and unified_studio_render fail the same
+way on clean main 593633a (C:\wt\apimain); rust_parity_git and the Python `electron . --smoke` launcher test (a 120 s
+timeout, clean main timed out too) and the real-OpenCode routing test (OpenCode itself timed out) are load. Live: the
+MCP server under `ELECTRON_RUN_AS_NODE=1` with Studio's own electron.exe answered initialize and tools/call; the
+card was checked in the browser pane (switch, five connect rows, Copy setup prompt, Show it, a note's toast).
 
 ## 2026-10-06 Resources: the resource manager for other apps, manual and auto, gated in C:\wt\resmgr
 
@@ -457,53 +510,6 @@ Seen in a browser preview of the real renderer files with a stub bridge: the fiv
 Make it yours, Share's text round trip (multi-line, one line, the YouTube link alone), Browse's box handing a shared
 list to Playlists, Save to a playlist from a Browse card (and Escape closing only it), Play putting 11 videos at the
 front of Up next with the playing row marked; no console errors.
-
-## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
-
-Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
-answer styles with ELI5 the default, `use_skill`, Team › Connectors, the parallel tool loop, the MCP pool and
-Streamable HTTP; 6318720 the twelve fixes an independent review found), landed from `land/skills` in
-`C:\wt\skills-land` with main merged twice (648e6ea over 00d32ca, 6e11811 over 33c3c4e: no conflicts beyond
-CHANGELOG, booklet.html rebuilt) and the release scope updated (1d5334a: Connectors move from 0.5.x into 0.5.0).
-
-Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on every step of the
-branch: fef2aef (run 37395870981), 6318720 (37397466087), 1d5334a (37397753111) and the landing commit 6e11811
-(37398222559). On this PC, on the landing tree: `npm run check` ok, `npm run audit` 0 errors and 0 warnings,
-`npm run lint` 0 errors and 45 warnings (as main). The suites this change touches or the merges brought in, run
-together on 6e11811: 321 tests, 320 pass, 1 skipped (skill_use, connectors, connectors_ui, chat_tools_ui,
-agent_tools_skills, skills_connectors_host, agent_rules, agent_rules_host, mentions_host, today_home,
-module_purity, skills_ipc, app_wide_ipc, booklet_build, size_page, friends_front_ui, friends_navigation, hub_host,
-project_hub_ui, rooms_ui, app_rail, relay_credits, relay_connect). Before the second merge, 568 tests on the touched
-suites: 567 pass, 1 skipped. Real windows, one at a time while no other session's window suite ran: team_render 1/1 (84 s) and sessions_render 1/1
-(134 s), the two fixtures this change edits; today_render, skills_render, composer_render, autonomy_render,
-agent_setup_render and unified_studio_render were still queued behind other sessions' window suites at landing.
-
-Measured: offering skills to a role (`autoSkills`, 30 skills in project and home) costs about 11 ms a call warm and
-114 ms cold; a second call to a connector reuses its open session (the pool keeps it 3 minutes, four servers at most;
-a worker keeps its own for the run). The review's fixes are pinned: an online connector gets only its saved values
-(never the PC's environment or the GitHub sign-in), one connector's calls keep their order, a bare `null` line, a
-404'd session and a server still starting at quit are handled, the values file is never wiped, `%TEMP%` tool folders
-are swept after six hours, `/name` counts only in the owner's own words. Kill switches MEFI_STUDIO_NO_SKILL_USE,
-MEFI_STUDIO_NO_CONNECTORS, MEFI_STUDIO_NO_MCP_POOL and MEFI_STUDIO_SERIAL_TOOLS, each pinned.
-
-## 2026-10-06 Friends › Moderation, Report on projects and pop-ups from friends land on main
-
-Branch `wip/friends-mod` in `C:\wt\mod` (9e2d43d Moderation and project reports; 1679ae6 pop-ups and the relay's
-friendOnline frame), main 33c3c4e merged (b433532, clean; booklet.html regenerated).
-
-Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) runs on the landing commit and is
-green before the fast-forward. This PC was shared with other sessions' suites the whole time, so the full local gate
-was left to CI, as for 33c3c4e.
-
-Run alone here after the merge: friends_front_ui 10/10 (pop-ups grouped, invites, requests, plays and stars, the off
-switch), friends_mod_ui 4/4 (new: moderators only, farming list, reports with Resolve, Remove project and Suspend,
-lookup, Take back from one giver or all, nothing without a yes), friends_navigation 8/8 (Moderation hidden unless a
-moderator), project_hub_ui 7/7 (Report), relay_credits 11/11 (flags: one giver and mutual trading, project reports
-once each and never your own, me().moderator), relay_connect 5/5 (friendOnline to room co-members only, not the
-Lobby, not twice in 30 minutes, never when hidden), relay_core 9/9, relay_e2e 9/9, hub_client 16/16 (hello lists
-friend.online), hub_host 13/13, rooms_ui 13/13, app_rail 40/40, onboarding 43/43, module_purity 61/61,
-booklet_build 5/5; friends_render and companion_hub_render 1/1. `npm run check` ok, lint clean on the changed files.
-The relay is redeployed (version 1fe8cfc5) and `relay/scripts/smoke.mjs` passes against it.
 
 ## Read Before Any Tests
 

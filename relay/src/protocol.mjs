@@ -11,7 +11,8 @@
 // Relay additions to the hub's v1: the companion frame (feature "companion",
 // "companion.direct"), relayed and never stored, and the peer history frames
 // (feature "history.peer") that let a member's own Studio fill a gap in
-// another member's room history, since the relay keeps none.
+// another member's room history, since the relay keeps none. My PCs (feature
+// "pcs", docs/my-pcs.md) adds the pc* frames, also relayed and never stored.
 //
 // Validators return normalised copies holding only known fields, so nothing
 // extra a client sends rides along into the hub. Strings are checked, never
@@ -71,6 +72,10 @@ export const LIMITS = Object.freeze({
   remoteButtonIdChars: 48,
   remoteButtonLabelChars: 40,
   remoteRequestTtlMs: 5 * 60_000, // a remote frame can be answered this long
+  pcsPerViewer: 16, // My PCs: the PCs one socket's roster lists (docs/my-pcs.md)
+  pcLendTo: 8, // the members one PC lends itself to
+  pcStateBytes: 3 * 1024, // a PC's status line as JSON
+  pcEnvBytes: 12 * 1024, // a pairing or sealed envelope as JSON; under frameBytes
   hubFeatures: 32, // ready.features
   companionCardBytes: 8 * 1024, // a companion card as JSON
   historyMessages: 100, // messages in one historyReply
@@ -93,6 +98,7 @@ export const FEATURES = Object.freeze({
   events: 'events', // GET /v1/events: the weekly Build Jam, co-work hours and building together (relay/src/events.mjs)
   friendOnline: 'friend.online', // friendOnline: someone you share a room with just opened Studio (to clients that list it)
   building: 'building', // building: what a member is making right now, with their say-so (The Lobby's Building now)
+  pcs: 'pcs', // My PCs: pcHello / pcState / pcSend, and the pcs / pcState / pcMsg frames (relay/src/pcs.mjs)
 });
 
 /** listen{action}: a room's shared player. */
@@ -110,6 +116,8 @@ export const REMOTE_COMMANDS = Object.freeze(['status', 'needs', 'made', 'digest
 export const REMOTE_NOTICE_KINDS = Object.freeze(['needs-you', 'done', 'failed', 'stuck', 'digest', 'info']);
 /** A remote button's style (Discord's button styles; the default is secondary). */
 export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'success', 'danger']);
+/** pcHello{pc.kind}: My PCs tells a laptop (it has a battery to watch) from a desktop. */
+export const PC_KINDS = Object.freeze(['desktop', 'laptop']);
 
 /** Project cards (feature "projects") and why a credits frame was sent (feature "credits"). */
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
@@ -158,6 +166,8 @@ export const NACK_REASONS = Object.freeze([
   'bad-link',
   'no-session',
   'bad-request',
+  'not-online', // My PCs: no PC with that id is connected
+  'not-allowed', // My PCs: that PC is neither yours nor lent to or by you
 ]);
 
 /** HTTP {ok:false, error}. */
@@ -206,6 +216,7 @@ const HTTPS_URL = /^https:\/\/[^\s\x00-\x1f\x7f]+$/; // the shape only; the hub 
 const BUTTON_ID = /^[A-Za-z0-9_.:-]{1,48}$/;
 const PIN = /^\d{4,12}$/;
 const FEATURE = /^[a-z][a-z0-9.-]{0,39}$/;
+const PC_KEY = /^[A-Za-z0-9+/]{43}=$/; // a raw 32-byte public key in base64
 
 const string = (min, max, extra = {}) => ({ kind: 'string', min, max, ...extra });
 const integer = (min, max) => ({ kind: 'integer', min, max });
@@ -402,6 +413,24 @@ const remoteButton = () =>
     pin: optional(boolean()), // true: Discord asks for the member's Studio PIN first
   });
 
+// My PCs (docs/my-pcs.md): a PC as its Studio names it (the same machine id
+// as the remote), and its two public keys (Ed25519 for signing, X25519 for
+// sealing), each raw 32 bytes in base64. The relay passes keys on and never
+// checks a signature or opens an envelope.
+const pcName = () => string(1, LIMITS.remotePcNameChars, { pattern: SINGLE_LINE, nonBlank: true });
+const pcKeys = () => object({ sign: string(44, 44, { pattern: PC_KEY }), box: string(44, 44, { pattern: PC_KEY }) });
+const pcView = () =>
+  object({
+    id: machineId(),
+    name: pcName(),
+    kind: oneOf(PC_KINDS),
+    owner: user(),
+    mine: boolean(), // another PC of this member's own
+    lends: boolean(), // another member's PC, lent to this member
+    keys: pcKeys(),
+    since: timestamp(), // when it said pcHello on this connection
+  });
+
 // ---- WebSocket frames ------------------------------------------------------------
 
 /** Client -> hub. Every frame is {type, ...fields}. */
@@ -442,6 +471,11 @@ export const CLIENT_FRAMES = Object.freeze({
   // Peer history (feature "history.peer"): ask the room for older messages, and answer a historyRequest the relay forwarded.
   historyRequest: { roomId: opaqueId(), before: optional(snowflake()), nonce: optional(nonce()) },
   historyReply: { requestId: opaqueId(), messages: list(roomMessage(), LIMITS.historyMessages), hasMore: boolean() },
+  // My PCs (feature "pcs"): this socket is one of the member's PCs (and whom it lends itself to), its status
+  // line for the PCs that see it, and an envelope for one PC, acked or nacked not-online / not-allowed.
+  pcHello: { pc: object({ id: machineId(), name: pcName(), kind: oneOf(PC_KINDS) }), keys: pcKeys(), lendTo: list(snowflake(), LIMITS.pcLendTo) },
+  pcState: { state: opaqueObject(LIMITS.pcStateBytes) },
+  pcSend: { to: machineId(), env: opaqueObject(LIMITS.pcEnvBytes), nonce: optional(nonce()) },
 });
 
 /** Hub -> client. */
@@ -497,6 +531,12 @@ export const HUB_FRAMES = Object.freeze({
     reason: oneOf(CREDIT_REASONS),
     rank: string(1, 20, { pattern: /^[a-z]+$/ }),
   },
+  // My PCs (feature "pcs"): the PCs this socket's PC sees, a status line from one of them (projects only from
+  // the member's own), and an envelope for this PC. pcMsg carries the sender's keys as it said them in pcHello,
+  // since a lent PC does not see the PCs of the member it lends to, yet checks their pairing ask and seals its answers.
+  pcs: { pcs: list(pcView(), LIMITS.pcsPerViewer) },
+  pcState: { from: machineId(), state: opaqueObject(LIMITS.pcStateBytes) },
+  pcMsg: { from: machineId(), fromUser: snowflake(), fromName: line(1, 100), keys: pcKeys(), env: opaqueObject(LIMITS.pcEnvBytes) },
 });
 
 function validateFrame(table, frame) {

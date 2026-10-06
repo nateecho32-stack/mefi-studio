@@ -479,18 +479,18 @@ test("the 0.5 layout files Settings into the prototype's places, in its order an
   const env = environment({ layout: "v2" });
   assert.deepEqual(placeRows(env), [
     [null, ["general", "notifications", "appearance", "nav:size", "looks", "audio"]],
-    ["Updates and help", ["updates", "problem"]],
+    ["Updates and help", ["updates", "problem", "apps"]],
     ["Advanced", ["system"]],
     // Categories the places do not name keep a row until renderer/agents.js takes them to Agents › Setup.
     [null, ["connections", "models", "automation"]],
   ]);
   const rows = env.el("settings-nav").querySelectorAll(".settings-nav-item");
-  assert.deepEqual(rows.map((row) => row.querySelector(".label").textContent).slice(0, 9), ["General", "Notifications", "Appearance", "Size and density", "Map look", "Sound and music", "Updates", "Report a problem", "System"]);
+  assert.deepEqual(rows.map((row) => row.querySelector(".label").textContent).slice(0, 10), ["General", "Notifications", "Appearance", "Size and density", "Map look", "Sound and music", "Updates", "Report a problem", "Other apps", "System"]);
   assert.ok(rows.find((row) => row.dataset.nav === "size").classList.contains("is-sub"), "Size and density sits under Appearance");
   assert.equal(env.el("settings-nav-list").dataset.places, "v2");
   assert.equal(env.el("tab-studio").getAttribute("data-places"), "v2");
   // The cards that become places of their own move, ids and all; nothing is copied.
-  for (const [card, place] of [["settings-notifications", "notifications"], ["settings-updates", "updates"], ["settings-report", "problem"], ["settings-studio", "general"], ["settings-community", "general"], ["settings-diagnostics", "system"], ["settings-integrations", "system"]]) assert.equal(paneOf(env, card), place, `${card} is in ${place}`);
+  for (const [card, place] of [["settings-notifications", "notifications"], ["settings-updates", "updates"], ["settings-report", "problem"], ["settings-studio", "general"], ["settings-community", "general"], ["settings-diagnostics", "system"], ["settings-integrations", "system"], ["settings-apps", "apps"]]) assert.equal(paneOf(env, card), place, `${card} is in ${place}`);
   for (const id of ["alerts-quiet", "release-check", "report-replace", "whats-new-on"]) assert.equal(env.body.querySelectorAll(`#${id}`).length, 1, `${id} exists once`);
   assert.equal(env.document.getElementById("settings-notifications").dataset.settingsPlaceCard, "notifications");
   assert.equal(env.document.getElementById("settings-category-notifications-heading").textContent, "Notifications");
@@ -499,7 +499,7 @@ test("the 0.5 layout files Settings into the prototype's places, in its order an
   // Find a setting moves to the page, beside its title.
   assert.equal(env.document.getElementById("settings-find").closest("#settings-nav"), null);
   assert.ok(env.document.getElementById("settings-find").closest("#settings-sections"));
-  assert.deepEqual(JSON.parse(JSON.stringify(env.booklet.settingsPlaces().map((place) => [place.id, place.group, place.sub, place.route]))), [["general", null, false, null], ["notifications", null, false, null], ["appearance", null, false, null], ["size", null, true, "size"], ["looks", null, false, null], ["audio", null, false, null], ["updates", "Updates and help", false, null], ["problem", "Updates and help", false, null], ["system", "Advanced", false, null]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(env.booklet.settingsPlaces().map((place) => [place.id, place.group, place.sub, place.route]))), [["general", null, false, null], ["notifications", null, false, null], ["appearance", null, false, null], ["size", null, true, "size"], ["looks", null, false, null], ["audio", null, false, null], ["updates", "Updates and help", false, null], ["problem", "Updates and help", false, null], ["apps", "Updates and help", false, null], ["system", "Advanced", false, null]]);
 });
 
 test("in the 0.5 layout Settings says where it is (settingsLocation) and says so once per change of place or of search (mefi:settings-place)", async () => {
@@ -525,7 +525,7 @@ test("asking for the places files Settings into them when the layout came on aft
   env.documentElement.dataset.layout = "v2";
   const byId = env.document.getElementById;
   env.document.getElementById = (id) => byId(id) ?? env.body.querySelector(`#${id}`);
-  assert.deepEqual(JSON.parse(JSON.stringify(env.booklet.settingsPlaces().map((place) => place.id))), ["general", "notifications", "appearance", "size", "looks", "audio", "updates", "problem", "system"]);
+  assert.deepEqual(JSON.parse(JSON.stringify(env.booklet.settingsPlaces().map((place) => place.id))), ["general", "notifications", "appearance", "size", "looks", "audio", "updates", "problem", "apps", "system"]);
   assert.equal(env.el("tab-studio").getAttribute("data-places"), "v2");
 });
 

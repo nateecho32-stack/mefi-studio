@@ -612,7 +612,8 @@
     for (const message of list) {
       const item = el("li", `vibe-msg is-${message.role}${message.kind === "notice" ? " is-notice" : ""}`);
       item.dataset.key = message.id || `${message.role}:${message.at ?? ""}:${String(message.text ?? "").slice(0, 40)}`;
-      item.append(el("span", "vibe-msg-who", message.role === "user" ? person() || "You" : companion()), el("p", "vibe-msg-text", message.text));
+      // A message another app on this PC sent (Settings › Other apps) carries that app's name.
+      item.append(el("span", "vibe-msg-who", message.role === "user" ? (message.app ? `${message.app} (app)` : person() || "You") : companion()), el("p", "vibe-msg-text", message.text));
       // The skills and tools a reply used (renderer/chat-tools.js).
       const used = window.MefiChatTools?.used?.(message);
       if (used) item.append(used);

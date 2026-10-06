@@ -62,12 +62,14 @@ function ownerWork(task, { tasks = [] } = {}, visited = new Set()) {
   return linked && ownerWork(parent, { tasks }, visited);
 }
 
-// Work asked for from Discord (origin.via "remote", docs/remote.md), or an
-// actual split or delegated slice of it: Discord is not this PC, so it waits
-// for the owner's OK in every mode, given in Studio or with their PIN.
+// Work asked for from Discord (origin.via "remote", docs/remote.md) or by
+// another app on this PC (origin.via "app", docs/studio-api.md), or an actual
+// split or delegated slice of it: neither is the owner at Studio, so it waits
+// for the owner's OK in every mode, given in Studio (or, from Discord, with
+// their PIN).
 function remoteWork(task, { tasks = [] } = {}, visited = new Set()) {
   if (!task || visited.has(task.id)) return false;
-  if (task.origin?.via === "remote") return true;
+  if (task.origin?.via === "remote" || task.origin?.via === "app") return true;
   visited.add(task.id);
   const parentId = task.splitFrom || task.parentTaskId;
   if (!parentId) return false;

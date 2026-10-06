@@ -428,7 +428,7 @@ function handleProjectIpc(channel, handler) {
 // the launch screen's newspaper (news:) is asked for before any project is
 // open; neither belongs to a project. (Declared beside the wrapper so the
 // tests that load it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "alerts:", "chatgpt-plan:", "news:", "connectors:"];
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "studio-api:","styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "alerts:", "chatgpt-plan:", "news:", "connectors:"];
 const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy", "release:whats-new", "release:whats-new-seen", "release:whats-new-set", "report:dismiss", "report:set"]);
 ipcMain.handle = handleProjectIpc;
 
@@ -2491,6 +2491,9 @@ function hubInstance() {
           if (typeof remoteHear === "function") remoteHear(event.command).catch((error) => logLine(`[remote] ${error?.message ?? error}`));
           return undefined;
         }
+        // My PCs: the relay's PC frames stay in main (the "My PCs" block),
+        // and a status change re-sends this PC's hello and line.
+        if (typeof pcsHear === "function" && pcsHear(event)) return undefined;
         if ((event?.type === "status" || event?.type === "remoteState") && typeof remotePush === "function") remotePush();
         if (event?.type === "status" && event.status?.error === "version") hubVersionBehind();
         return typeof friendsHear === "function" ? friendsHear(event) : send("hub:event", event);
@@ -2624,7 +2627,9 @@ let hubPresenceTimers = null;
 let hubPresenceHeld = false;
 async function hubPresenceWanted() {
   if (hubPresenceHeld || !community || !hubModule) return false;
-  if ((await readSettings())?.friends?.connectAtLaunch === false) return false;
+  // My PCs is a reason of its own (a paired or lent PC), whatever Friends' switch says.
+  const pcs = typeof pcsWantsRelay === "function" && await pcsWantsRelay().catch(() => false);
+  if (!pcs && (await readSettings())?.friends?.connectAtLaunch === false) return false;
   return Boolean((await communityRead()).state.link);
 }
 async function hubPresenceLook() {
@@ -4313,6 +4318,1478 @@ async function remotePin(payload = {}) {
   return { ...(await remoteStatus()), message: "PIN saved. Approve buttons in Discord ask for it." };
 }
 // ---- end of the Discord remote ---------------------------------------------------
+
+// ---- My PCs: the owner's PCs working as one --------------------------------------
+// docs/my-pcs.md. Every PC signed in to the Friends relay says who it is
+// (hub-client setPc: the cowork machine id, a name, desktop or laptop, its
+// public keys and who it lends itself to) and, about once a minute, how it is
+// doing (pcState: CPU, free memory, battery, slots, its projects). Paired PCs
+// (the six numbers both screens show, scripts/pc-trust.cjs) send each other
+// sealed bodies through the relay: offers of ready cards when this PC is short
+// (scripts/pc-fleet.cjs decides what and where), work started from another
+// PC, "done" notes, recalls and handoff news. The battery
+// (scripts/pc-power.cjs) holds new starts at the low line (spawnNextJob's
+// "battery" stop) and at the stop line stops the running work with its
+// progress saved, parks it as a handoff branch (scripts/pc-handoff.cjs) and
+// waits for the owner's Continue. Keep this PC on adds "Always" to the
+// keep-awake switch while plugged in. A moved card waits on this board
+// (movedTo) and is never copied; a received one remembers where it came from
+// (fromPc) and sends its "done" note home. Nothing here opens a port or reads
+// another PC's files.
+// The four modules load on first use, never at launch. MEFI_STUDIO_NO_PCS=1
+// switches My PCs off: nothing loads, connects, gates or reads the battery.
+let pcTrust = null, pcFleet = null, pcPower = null, pcHandoff = null, pcsLoaded = false;
+function pcsLibs() {
+  if (pcsLoaded) return Boolean(pcFleet && pcTrust && pcPower && pcHandoff);
+  pcsLoaded = true;
+  if (process.env.MEFI_STUDIO_NO_PCS === "1") return false;
+  pcTrust = optionalHelper("./scripts/pc-trust.cjs", () => require("./scripts/pc-trust.cjs"), null);
+  pcFleet = optionalHelper("./scripts/pc-fleet.cjs", () => require("./scripts/pc-fleet.cjs"), null);
+  pcPower = optionalHelper("./scripts/pc-power.cjs", () => require("./scripts/pc-power.cjs"), null);
+  pcHandoff = optionalHelper("./scripts/pc-handoff.cjs", () => require("./scripts/pc-handoff.cjs"), null);
+  if (!(pcFleet && pcTrust && pcPower && pcHandoff)) pcTrust = pcFleet = pcPower = pcHandoff = null;
+  return Boolean(pcFleet);
+}
+const PCS_TICK_MS = 30 * 1000;
+const PCS_STATE_EVERY_MS = 60 * 1000;
+const PCS_STATE_GAP_MS = 10 * 1000;
+const PCS_HANDOFF_EVERY_MS = 5 * 60 * 1000;
+const PCS_ASK_MS = 5 * 60 * 1000;
+const PCS_REMOTE_MS = 10 * 60 * 1000;
+const PCS_SENT_MAX = 30;
+const PCS_NOTES_MAX = 12;
+let pcsTimers = null;
+let pcsMemo = null;
+// Everything this block keeps between calls, made on first use.
+function pcsMem() {
+  pcsLibs();
+  pcsMemo ??= {
+    identity: null, identityLoad: null, peers: null, outbox: null, sent: null, files: Promise.resolve(),
+    roster: [], heard: new Map(), seen: pcTrust ? pcTrust.nonceMemory() : null, asks: new Map(), offers: new Map(),
+    power: { reading: undefined, stage: "ok", continuedAt: null, timer: null, at: 0, restored: false },
+    holdSince: null, fullSince: null, lastState: { key: null, at: 0 }, handoffs: { at: 0, projectId: null, list: [], error: null, meta: new Map() },
+    remotes: new Map(), stopping: null, always: false, notes: [], pushTimer: null, ticking: false, watchUntil: 0, received: null, keysOf: new Map(),
+  };
+  return pcsMemo;
+}
+const pcsHome = () => path.join(app.getPath("userData"), "pcs");
+const pcsNow = () => Date.now();
+function pcsNote(text) {
+  const mem = pcsMem();
+  mem.notes = [{ at: pcsNow(), text: String(text).slice(0, 200) }, ...mem.notes].slice(0, PCS_NOTES_MAX);
+  logLine(`[pcs] ${text}`);
+}
+
+async function pcsReadJson(name, fallback) {
+  try { return JSON.parse(await readFile(path.join(pcsHome(), name), "utf8")); } catch { return fallback; }
+}
+// One write at a time, each through a temporary file.
+function pcsWriteJson(name, value) {
+  const mem = pcsMem();
+  mem.files = mem.files.catch(() => {}).then(async () => {
+    await mkdir(pcsHome(), { recursive: true });
+    const file = path.join(pcsHome(), name), temp = `${file}.${process.pid}.tmp`;
+    await writeFile(temp, JSON.stringify(value));
+    await rename(temp, file);
+  });
+  return mem.files;
+}
+
+// git for handoffs: no prompt, no fsmonitor daemon holding the pipes open.
+function pcsGit(args, { cwd, env = {}, input } = {}) {
+  return new Promise((resolve) => {
+    let child;
+    try {
+      child = require("node:child_process").spawn("git", ["-c", "core.fsmonitor=false", ...args], { cwd, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GCM_INTERACTIVE: "never", ...env } });
+    } catch (error) {
+      resolve({ code: 1, stdout: "", stderr: String(error?.message ?? error) });
+      return;
+    }
+    let stdout = "", stderr = "";
+    const timer = setTimeout(() => { try { child.kill(); } catch {} }, 120000);
+    child.stdout.on("data", (chunk) => { if (stdout.length < 16 * 1024 * 1024) stdout += chunk; });
+    child.stderr.on("data", (chunk) => { if (stderr.length < 64 * 1024) stderr += chunk; });
+    child.on("error", (error) => { stderr += String(error?.message ?? error); });
+    child.on("close", (code) => { clearTimeout(timer); resolve({ code: code ?? 1, stdout, stderr }); });
+    child.stdin.on("error", () => {});
+    child.stdin.end(input ?? "");
+  });
+}
+
+// settings.pcs: { name, stayOn ("always" or unset), battery: { low, stop },
+// projects: { [projectId]: { share } }, lend: [{ id, name, auto }],
+// power: { stage, continuedAt } } (a battery stop survives a restart).
+async function pcsSettings() {
+  const raw = (await readSettings())?.pcs;
+  const saved = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const settings = {
+    name: String(saved.name ?? "").replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, 40) || String(os.hostname()).slice(0, 40) || "PC",
+    always: saved.stayOn === "always",
+    lines: pcPower ? pcPower.normalizeLines(saved.battery) : { low: 20, stop: 10 },
+    projects: saved.projects && typeof saved.projects === "object" && !Array.isArray(saved.projects) ? saved.projects : {},
+    lend: (Array.isArray(saved.lend) ? saved.lend : []).filter((row) => /^\d{17,20}$/.test(String(row?.id ?? ""))).slice(0, 8)
+      .map((row) => ({ id: String(row.id), name: String(row.name ?? "").replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, 40) || "friend", auto: row.auto === true })),
+    power: saved.power && typeof saved.power === "object" ? saved.power : null,
+  };
+  pcsMem().always = settings.always;
+  return settings;
+}
+// A project with a GitHub repository is shared unless the owner said no.
+const pcsShared = (settings, projectId) => settings.projects?.[projectId]?.share !== false;
+
+async function pcsPeers() {
+  const mem = pcsMem();
+  mem.peers ??= pcFleet ? pcFleet.cleanPeers(await pcsReadJson("peers.json", [])) : [];
+  return mem.peers;
+}
+async function pcsPeersSave(next) {
+  const mem = pcsMem();
+  mem.peers = pcFleet.cleanPeers(next);
+  await pcsWriteJson("peers.json", mem.peers);
+  return mem.peers;
+}
+async function pcsSent() {
+  const mem = pcsMem();
+  mem.sent ??= (await pcsReadJson("sent.json", [])).filter((row) => row && typeof row === "object").slice(0, PCS_SENT_MAX);
+  return mem.sent;
+}
+async function pcsSentSave(next) {
+  pcsMem().sent = next.slice(0, PCS_SENT_MAX);
+  await pcsWriteJson("sent.json", pcsMem().sent);
+}
+
+// This PC's keys: made on first use, the private halves kept with safeStorage.
+// Null when Windows cannot encrypt them; pairing then stays off.
+async function pcsIdentity() {
+  const mem = pcsMem();
+  if (mem.identity) return mem.identity;
+  mem.identityLoad ??= (async () => {
+    let encrypt = false;
+    try { encrypt = Boolean(pcTrust) && safeStorage.isEncryptionAvailable() === true; } catch { encrypt = false; }
+    if (!encrypt) return null;
+    const saved = await pcsReadJson("identity.json", null);
+    if (saved?.public && typeof saved.sealed === "string") {
+      try {
+        const loaded = pcTrust.loadIdentity({ public: saved.public, secret: JSON.parse(safeStorage.decryptString(Buffer.from(saved.sealed, "base64"))) });
+        if (loaded) return loaded;
+      } catch {}
+      pcsNote("this PC's keys could not be opened, so it made new ones; paired PCs must pair again");
+    }
+    const made = pcTrust.makeIdentity();
+    await pcsWriteJson("identity.json", { v: 1, public: made.public, sealed: safeStorage.encryptString(JSON.stringify(made.secret)).toString("base64") });
+    return pcTrust.loadIdentity(made);
+  })().then((identity) => { mem.identity = identity; return identity; }).finally(() => { mem.identityLoad = null; });
+  return mem.identityLoad;
+}
+
+// The project's GitHub remote, looked up at most every ten minutes.
+async function pcsProjectRemote(project) {
+  if (!project?.path) return null;
+  const mem = pcsMem();
+  const cached = mem.remotes.get(project.path);
+  if (cached && pcsNow() - cached.at < PCS_REMOTE_MS) return cached.value;
+  const out = await pcsGit(["-C", project.path, "remote", "get-url", "origin"]);
+  const value = out.code === 0 ? out.stdout.trim() : null;
+  mem.remotes.set(project.path, { at: pcsNow(), value });
+  return value;
+}
+async function pcsProjectKey(project) {
+  return pcFleet ? pcFleet.projectKey(await pcsProjectRemote(project)) : null;
+}
+
+const pcsMaxSlots = () => (autopilot.adaptiveParallel === true ? EXECUTOR_PARALLEL_CAP : Math.max(1, Number(autopilot.parallel) || 1));
+const pcsPaused = () => !autopilot.execute || assistantState?.status === "paused";
+const pcsRunning = () => autopilot.jobs.filter((job) => !job.finished || job.settlementPending).length;
+
+// This PC's status line (docs/my-pcs.md "State line").
+async function pcsStateNow() {
+  const settings = await pcsSettings();
+  const mem = pcsMem();
+  const open = projects.open();
+  const rows = [];
+  for (const project of (projects.list().projects ?? []).slice(0, pcFleet.LIMITS.projects)) {
+    const key = await pcsProjectKey(project);
+    if (!key) continue;
+    const isOpen = project.id === open?.id;
+    rows.push({ key, name: project.name, open: isOpen, share: pcsShared(settings, project.id), queued: isOpen ? Number(autopilot.queueDepth) || 0 : 0, running: isOpen ? pcsRunning() : 0 });
+  }
+  return pcFleet.stateLine({
+    now: pcsNow(), name: settings.name, kind: mem.power.reading ? "laptop" : "desktop", capacity: autopilot.capacity,
+    battery: mem.power.reading ?? null, stage: mem.power.stage,
+    stayOn: settings.always ? "always" : assistantState?.prefs?.keepAwake === false ? "off" : "working",
+    awake: typeof assistantBlocker !== "undefined" && assistantBlocker !== null, running: pcsRunning(), max: pcsMaxSlots(), paused: pcsPaused(),
+    projects: rows,
+  });
+}
+
+// ---- the relay -----------------------------------------------------------------
+
+// Who this PC is, for the relay: after each connect (hub-client re-sends it)
+// and whenever the name, the kind, the keys or the lending change.
+async function pcsHello() {
+  pcsLibs();
+  const client = hubClient;
+  if (!client || typeof client.setPc !== "function" || !pcFleet) return false;
+  const identity = await pcsIdentity();
+  if (!identity) return false;
+  const settings = await pcsSettings();
+  return client.setPc({ pc: { id: await coworkMachineId(), name: settings.name, kind: pcsMem().power.reading ? "laptop" : "desktop" }, keys: identity.public, lendTo: settings.lend.map((row) => row.id) });
+}
+
+// This PC's line to the others: on a change at most every ten seconds, and
+// once a minute regardless (CPU and memory alone never count as a change).
+async function pcsSendState({ force = false } = {}) {
+  pcsLibs();
+  const client = hubClient;
+  if (!client || client.status?.().state !== "ready" || typeof client.pcState !== "function" || !pcFleet) return false;
+  const state = await pcsStateNow();
+  const mem = pcsMem();
+  const { at: _at, cpu: _cpu, freeMB: _freeMB, ...steady } = state;
+  const key = JSON.stringify(steady);
+  const now = pcsNow();
+  if (!force && (now - mem.lastState.at < PCS_STATE_GAP_MS || (key === mem.lastState.key && now - mem.lastState.at < PCS_STATE_EVERY_MS))) return false;
+  mem.lastState = { key, at: now };
+  return client.pcState(state) === true;
+}
+
+// My PCs connects the relay at launch as its own reason when this PC is paired or lent.
+async function pcsWantsRelay() {
+  pcsLibs();
+  if (!pcFleet) return false;
+  if ((await pcsPeers()).length) return true;
+  return (await pcsSettings()).lend.length > 0;
+}
+
+// The relay's frames for My PCs (hubInstance's onEvent); a status change
+// re-sends hello and state. True when the frame was My PCs' own.
+function pcsHear(event) {
+  try {
+    return pcsHearNow(event);
+  } catch (error) {
+    logLine(`[pcs] a relay frame failed: ${error?.message ?? error}`);
+    return ["pcs", "pcState", "pcMsg"].includes(event?.type);
+  }
+}
+function pcsHearNow(event) {
+  if (!pcsLibs() || !event || typeof event !== "object") return false;
+  const mem = pcsMem();
+  if (event.type === "status") {
+    if (event.status?.state === "ready") pcsHello().then(() => pcsSendState({ force: true })).catch(() => {});
+    pcsPushSoon();
+    return false;
+  }
+  if (event.type === "pcs") {
+    mem.roster = Array.isArray(event.pcs) ? event.pcs.slice(0, 24) : [];
+    for (const id of mem.heard.keys()) if (!mem.roster.some((row) => row.id === id)) mem.heard.delete(id);
+    pcsSeen().catch(() => {});
+    pcsFlushOutbox().catch((error) => logLine(`[pcs] outbox: ${error?.message ?? error}`));
+    pcsPushSoon();
+    return true;
+  }
+  if (event.type === "pcState") {
+    const state = pcFleet.cleanState(event.state);
+    if (state && typeof event.from === "string" && mem.roster.some((row) => row.id === event.from)) mem.heard.set(event.from, { state, at: pcsNow() });
+    pcsPushSoon();
+    return true;
+  }
+  if (event.type === "pcMsg") {
+    if (typeof event.from === "string" && event.keys && typeof event.keys === "object") {
+      mem.keysOf.set(event.from, { sign: String(event.keys.sign ?? ""), box: String(event.keys.box ?? "") });
+      if (mem.keysOf.size > 64) mem.keysOf.delete(mem.keysOf.keys().next().value);
+    }
+    pcsReceive(event).catch((error) => logLine(`[pcs] message failed: ${error?.message ?? error}`));
+    return true;
+  }
+  return false;
+}
+
+// A paired PC seen on the relay: remember when, so an offline row can say so.
+async function pcsSeen() {
+  const peers = await pcsPeers();
+  const online = new Set(pcsMem().roster.map((row) => row.id));
+  if (!peers.some((peer) => online.has(peer.id))) return;
+  await pcsPeersSave(peers.map((peer) => (online.has(peer.id) ? { ...peer, lastSeen: pcsNow() } : peer)));
+}
+
+// A sealed body for one paired PC. -> { ok } or { ok: false, reason }.
+async function pcsSendTo(peerId, body) {
+  const client = hubClient;
+  const identity = await pcsIdentity();
+  const peer = (await pcsPeers()).find((row) => row.id === peerId);
+  if (!client || typeof client.pcSend !== "function" || !identity || !peer) return { ok: false, reason: "not-paired" };
+  const listed = pcsMem().roster.find((row) => row.id === peerId)?.keys ?? (peer.relation === "borrower" ? pcsMem().keysOf.get(peerId) ?? peer.keys : null);
+  if (!listed) return { ok: false, reason: "not-online" };
+  if (listed.sign !== peer.keys.sign || listed.box !== peer.keys.box) return { ok: false, reason: "keys-changed" };
+  let env;
+  try {
+    env = pcTrust.seal(identity, peer.keys, { from: await coworkMachineId(), to: peerId, body, now: pcsNow() });
+  } catch (error) {
+    return { ok: false, reason: String(error?.message ?? error).slice(0, 120) };
+  }
+  return (await client.pcSend(peerId, env)) ?? { ok: false, reason: "failed" };
+}
+
+// A note that must arrive (done, taken): now when the PC is online, else kept for 14 days.
+async function pcsDeliver(peerId, body) {
+  const sent = await pcsSendTo(peerId, body);
+  if (sent?.ok) return true;
+  const mem = pcsMem();
+  mem.outbox = pcFleet.outboxAdd(mem.outbox ?? (await pcsReadJson("outbox.json", [])), { to: peerId, body }, pcsNow());
+  await pcsWriteJson("outbox.json", mem.outbox);
+  return false;
+}
+async function pcsFlushOutbox() {
+  const mem = pcsMem();
+  mem.outbox ??= await pcsReadJson("outbox.json", []);
+  if (!mem.outbox.length) return;
+  // A borrower's PC is never on this list: its notes are simply tried.
+  const borrowers = (await pcsPeers()).filter((peer) => peer.relation === "borrower").map((peer) => peer.id);
+  const due = pcFleet.outboxDue(mem.outbox, new Set([...mem.roster.map((row) => row.id), ...borrowers]), pcsNow());
+  const kept = [...due.keep];
+  for (const row of due.send) if (!(await pcsSendTo(row.to, row.body))?.ok) kept.push(row);
+  mem.outbox = kept;
+  await pcsWriteJson("outbox.json", kept);
+}
+
+async function pcsReceive({ from, fromUser, fromName, keys, env }) {
+  pcsLibs();
+  if (!pcTrust || !env || typeof env !== "object" || typeof from !== "string") return;
+  const me = await coworkMachineId();
+  if (env.k === "pair") return pcsPairHear({ from, fromUser, fromName, keys, env, me });
+  const identity = await pcsIdentity();
+  if (!identity) return;
+  const peers = await pcsPeers();
+  const opened = pcTrust.open(identity, env, { me, peers: new Map(peers.map((peer) => [peer.id, peer.keys])), now: pcsNow(), seen: pcsMem().seen });
+  if (!opened.ok || opened.from !== from) {
+    logLine(`[pcs] refused a message from ${String(from).slice(0, 64)}: ${opened.reason ?? "sender mismatch"}`);
+    return;
+  }
+  const peer = peers.find((row) => row.id === from);
+  // A friend's PC answers only while it still lends or borrows as recorded.
+  if (peer.relation === "borrower" && !(await pcsSettings()).lend.some((row) => row.id === peer.uid)) return;
+  const body = opened.body;
+  switch (body.type) {
+    case "offer": return pcsOfferHear(peer, body);
+    case "offerReply": return pcsOfferReplyHear(peer, body);
+    case "start": return pcsStartHear(peer, body);
+    case "startReply": return pcsStartReplyHear(peer, body);
+    case "done": return pcsDoneHear(peer, body);
+    case "recall": return pcsRecallHear(peer, body);
+    case "recallReply": return pcsRecallReplyHear(peer, body);
+    case "handoff": return pcsHandoffLook({ force: true });
+    case "taken": return pcsTakenHear(peer, body);
+    default: return undefined;
+  }
+}
+
+// ---- pairing ---------------------------------------------------------------------
+
+// Pair with a PC on the relay's list: it shows the six numbers and its owner
+// chooses Pair there. Up to five minutes to answer.
+async function pcsPair(pcId) {
+  pcsLibs();
+  const mem = pcsMem();
+  const row = mem.roster.find((pc) => pc.id === pcId);
+  if (!row) return { ok: false, error: "That PC is not online." };
+  if (!row.mine && !row.lends) return { ok: false, error: "Only your own PCs, and PCs lent to you, can be paired." };
+  const identity = await pcsIdentity();
+  if (!identity) return { ok: false, error: "This PC cannot keep keys safely (Windows encryption is unavailable), so it cannot pair." };
+  const settings = await pcsSettings();
+  const relation = row.mine ? "mine" : "borrow";
+  const env = pcTrust.pairEnvelope(identity, { from: await coworkMachineId(), to: pcId, step: "ask", relation, name: settings.name, now: pcsNow() });
+  const sent = await hubClient?.pcSend?.(pcId, env);
+  if (!sent?.ok) return { ok: false, error: sent?.reason === "not-online" ? "That PC went offline." : "The relay did not pass it on. Try again." };
+  const numbers = pcTrust.pairNumbers(identity.public, row.keys);
+  mem.asks.set(pcId, { dir: "out", at: pcsNow(), relation, name: row.name, numbers, uid: row.owner?.id ?? null, keys: row.keys });
+  pcsPush();
+  return { ok: true, numbers };
+}
+
+async function pcsPairHear({ from, fromUser, fromName, keys, env, me }) {
+  const mem = pcsMem();
+  const listed = mem.roster.find((pc) => pc.id === from);
+  const peer = (await pcsPeers()).find((row) => row.id === from);
+  const sent = pcTrust.keysOf(keys);
+  const row = listed ?? (sent ? { id: from, name: String(env?.name || fromName || "PC").slice(0, 40), keys: sent, mine: false } : null);
+  if (!row?.keys) return;
+  const ask = mem.asks.get(from);
+  const signKey = env?.step === "forget" ? peer?.keys.sign : env?.step === "ok" || env?.step === "no" ? ask?.keys?.sign : row.keys.sign;
+  if (!signKey) return;
+  const opened = pcTrust.openPair(env, { me, signKey, now: pcsNow(), seen: mem.seen });
+  if (!opened.ok) { logLine(`[pcs] refused a pairing message: ${opened.reason}`); return; }
+  const identity = await pcsIdentity();
+  if (!identity) return;
+  const settings = await pcsSettings();
+  if (opened.step === "ask") {
+    // Your own PC (same account) or a friend you lend this PC to.
+    const lent = settings.lend.find((lend) => lend.id === String(fromUser));
+    if (opened.relation === "mine" ? row.mine !== true : !lent) return;
+    mem.asks.set(from, { dir: "in", at: pcsNow(), relation: opened.relation, name: opened.name || row.name, numbers: pcTrust.pairNumbers(identity.public, row.keys), uid: String(fromUser ?? ""), keys: row.keys });
+    pcsNote(`${opened.name || row.name} asks to pair with this PC`);
+    pcsPush();
+    return;
+  }
+  if (opened.step === "ok" && ask?.dir === "out" && pcsNow() - ask.at < PCS_ASK_MS) {
+    mem.asks.delete(from);
+    const added = pcFleet.addPeer(await pcsPeers(), { id: from, name: row.name, relation: ask.relation === "mine" ? "mine" : "lender", uid: String(fromUser ?? ""), keys: ask.keys, pairedAt: pcsNow() });
+    if (added.peers) { await pcsPeersSave(added.peers); pcsNote(`paired with ${row.name}`); }
+    else pcsNote(added.error);
+  } else if (opened.step === "no" && ask?.dir === "out") {
+    mem.asks.delete(from);
+    pcsNote(`${row.name} did not pair`);
+  } else if (opened.step === "forget") {
+    const peers = await pcsPeers();
+    if (peers.some((peer) => peer.id === from)) { await pcsPeersSave(peers.filter((peer) => peer.id !== from)); pcsNote(`${row.name} forgot this PC`); }
+  }
+  pcsPush();
+}
+
+// The owner's answer on this PC to another PC's ask.
+async function pcsPairAnswer(pcId, yes) {
+  pcsLibs();
+  const mem = pcsMem();
+  const ask = mem.asks.get(pcId);
+  if (!ask || ask.dir !== "in") return { ok: false, error: "That pairing request is gone." };
+  mem.asks.delete(pcId);
+  const identity = await pcsIdentity();
+  const settings = await pcsSettings();
+  if (pcsNow() - ask.at >= PCS_ASK_MS) { pcsPush(); return { ok: false, error: "That request is too old. Ask again from the other PC." }; }
+  const env = pcTrust.pairEnvelope(identity, { from: await coworkMachineId(), to: pcId, step: yes ? "ok" : "no", relation: ask.relation, name: settings.name, now: pcsNow() });
+  if (yes) {
+    const lent = settings.lend.find((lend) => lend.id === ask.uid);
+    const added = pcFleet.addPeer(await pcsPeers(), { id: pcId, name: ask.name, relation: ask.relation === "mine" ? "mine" : "borrower", uid: ask.uid || null, keys: ask.keys, pairedAt: pcsNow(), auto: lent?.auto === true });
+    if (added.error) { pcsPush(); return { ok: false, error: added.error }; }
+    await pcsPeersSave(added.peers);
+    pcsNote(`paired with ${ask.name}`);
+  }
+  await hubClient?.pcSend?.(pcId, env);
+  pcsPush();
+  return { ok: true };
+}
+
+// Forget a paired PC here at once, and there too when it is online.
+async function pcsForget(pcId) {
+  pcsLibs();
+  const peers = await pcsPeers();
+  const peer = peers.find((row) => row.id === pcId);
+  if (!peer) return { ok: false, error: "That PC is not paired." };
+  await pcsPeersSave(peers.filter((row) => row.id !== pcId));
+  const identity = await pcsIdentity();
+  if (identity && (peer.relation === "borrower" || pcsMem().roster.some((row) => row.id === pcId))) {
+    const env = pcTrust.pairEnvelope(identity, { from: await coworkMachineId(), to: pcId, step: "forget", relation: peer.relation === "mine" ? "mine" : "borrow", now: pcsNow() });
+    await hubClient?.pcSend?.(pcId, env);
+  }
+  pcsNote(`forgot ${peer.name}`);
+  pcsPush();
+  return { ok: true };
+}
+
+// ---- moving cards ----------------------------------------------------------------
+
+const pcsTaskState = (task, tasks, now) => backlog.workState(task, now, { tasks, autoBuild: autopilot.autoBuild, approve: autopilot.approve }).stage;
+
+// The paired PCs as pc-fleet reads them.
+async function pcsPeerViews() {
+  const mem = pcsMem();
+  const rows = pcFleet.pcRows({ me: { id: await coworkMachineId() }, roster: mem.roster, heard: mem.heard, peers: await pcsPeers(), now: pcsNow() });
+  return rows.filter((row) => !row.self && row.online);
+}
+
+// Offer these cards to one PC. The cards wait here (movedTo, pending) until it answers.
+async function pcsSendOffer({ to, toName, project, why, tasks }, localProject) {
+  const mem = pcsMem();
+  const offerId = `offer_${crypto.randomBytes(6).toString("hex")}`;
+  const ids = tasks.map((card) => card.id);
+  const at = pcsNow();
+  const marked = await projects.run(localProject, () => mutateBoard((board) => {
+    const rows = board.tasks.filter((task) => ids.includes(task.id) && !task.movedTo && !task.runId && !task.lease);
+    for (const row of rows) row.movedTo = { id: to, name: toName, at, pending: offerId };
+    return rows.length ? { tasks: board.tasks, marked: rows.map((row) => row.id) } : { marked: [] };
+  }));
+  const cards = tasks.filter((card) => marked.marked?.includes(card.id));
+  if (!cards.length) return { ok: false, reason: "nothing-to-offer" };
+  mem.offers.set(offerId, { at, to, toName, projectId: localProject.id, taskIds: cards.map((card) => card.id) });
+  const sent = await pcsSendTo(to, { type: "offer", offerId, project, why, tasks: cards });
+  if (!sent?.ok) await pcsOfferLapse(offerId);
+  else assistantLog("control", `offered ${cards.length} card${cards.length === 1 ? "" : "s"} to ${toName}${why === "battery" ? " (battery low)" : why === "memory" ? " (short of memory)" : why === "busy" ? " (every slot here is busy)" : ""}`);
+  return sent;
+}
+
+// An offer nobody answered (or that could not go): its cards come back here.
+async function pcsOfferLapse(offerId) {
+  const offer = pcsMem().offers.get(offerId);
+  pcsMem().offers.delete(offerId);
+  const project = offer ? projects.find(offer.projectId) : null;
+  if (!project) return;
+  await projects.run(project, () => mutateBoard((board) => {
+    const rows = board.tasks.filter((task) => task.movedTo?.pending === offerId);
+    for (const row of rows) delete row.movedTo;
+    return rows.length ? { tasks: board.tasks } : null;
+  }));
+}
+
+async function pcsOfferHear(peer, body) {
+  const ids = (Array.isArray(body.tasks) ? body.tasks : []).slice(0, pcFleet.LIMITS.offerTasks);
+  const reply = (taken, declined) => pcsSendTo(peer.id, { type: "offerReply", offerId: String(body.offerId ?? "").slice(0, 40), taken, declined });
+  if (peer.relation !== "mine") return reply([], ids.map((card) => ({ id: String(card?.id ?? "").slice(0, 80), reason: "not-taking" })));
+  const settings = await pcsSettings();
+  const open = projects.open();
+  const known = Boolean(open) && pcFleet.isProjectKey(body.project?.key) && (await pcsProjectKey(open)) === body.project.key;
+  const state = await pcsStateNow();
+  const tasks = known ? await (await getEyes()).readJson(TASKS_PATH, []) : [];
+  const decision = pcFleet.takeOffer({
+    tasks: ids, accepting: state.accepting, free: pcFleet.freeSlots(state), project: { known, open: known, share: known && pcsShared(settings, open.id) },
+    known: (card) => tasks.some((task) => task?.fromPc?.id === peer.id && task.fromPc.taskId === card.id && !["done", "archived"].includes(task.status)),
+  });
+  const taken = [];
+  if (decision.take.length) {
+    for (const result of await pcsAdmitCards(decision.take, { peer })) {
+      if (result.created) taken.push({ id: result.card.id, as: result.created.id });
+      else decision.decline.push({ id: result.card.id, reason: "already-here" });
+    }
+  }
+  await reply(taken, decision.decline);
+  if (taken.length) {
+    pcsNote(`took ${taken.length} card${taken.length === 1 ? "" : "s"} from ${peer.name}`);
+    assistantAskForWork(`work from ${peer.name}`);
+  }
+}
+
+// Cards from another PC, admitted in one board write. A friend's wait for
+// this PC's owner (an ownerHold of kind "friend") unless they run without asking.
+async function pcsAdmitCards(cards, { peer, held = false }) {
+  const now = pcsNow();
+  const project = { id: projects.current().id, path: projectRoot() };
+  const allocateId = () => "task_" + crypto.randomBytes(8).toString("hex");
+  const friend = peer.relation === "borrower";
+  pcsMem().received = true;
+  const written = await mutateBoard((board) => {
+    const results = [];
+    for (const card of cards) {
+      const candidate = {
+        title: card.title, prompt: card.prompt, source: "pc",
+        ...(card.details ? { details: card.details } : {}), ...(card.files?.length ? { files: card.files } : {}), ...(card.intent ? { intent: card.intent } : {}),
+        fromPc: { id: peer.id, name: peer.name, taskId: card.id, at: now, ...(friend ? { friend: true } : {}) },
+        ...(held ? { ownerHold: { kind: "friend", at: now, reason: `sent by ${peer.name}` } } : {}),
+      };
+      const admitted = workAdmission.admitTask(board, candidate, { origin: { kind: "chat", by: "owner" }, now, allocateId, project, log: `from ${peer.name}`, place: "back", inbox: false });
+      results.push({ card, created: admitted.created ?? null });
+    }
+    return results.some((row) => row.created) ? { tasks: board.tasks, results } : { results };
+  });
+  return written.results ?? [];
+}
+
+async function pcsOfferReplyHear(peer, body) {
+  const mem = pcsMem();
+  const offer = mem.offers.get(body.offerId);
+  const taken = (Array.isArray(body.taken) ? body.taken : []).filter((row) => typeof row?.id === "string");
+  if (!offer || offer.to !== peer.id) {
+    // Too late: the cards came back here already, so ask for them back there.
+    for (const row of taken) await pcsSendTo(peer.id, { type: "recall", taskId: row.id });
+    return;
+  }
+  mem.offers.delete(body.offerId);
+  const project = projects.find(offer.projectId);
+  if (!project) return;
+  const declined = (Array.isArray(body.declined) ? body.declined : []).filter((row) => typeof row?.id === "string");
+  await projects.run(project, () => mutateBoard((board) => {
+    let changed = false;
+    for (const row of board.tasks) {
+      if (row.movedTo?.pending !== body.offerId) continue;
+      const took = taken.find((item) => item.id === row.id);
+      if (took) {
+        row.movedTo = { id: peer.id, name: peer.name, at: pcsNow(), as: String(took.as ?? "").slice(0, 80) };
+        executorResume.appendLog(row, `moved to ${peer.name}: it runs there and reports back`);
+      } else {
+        delete row.movedTo;
+        const why = declined.find((item) => item.id === row.id)?.reason;
+        if (why) executorResume.appendLog(row, `${peer.name} did not take it: ${pcFleet.DECLINES[why] ?? why}`);
+      }
+      changed = true;
+    }
+    return changed ? { tasks: board.tasks } : null;
+  }));
+  if (taken.length) pcsNote(`${peer.name} took ${taken.length} card${taken.length === 1 ? "" : "s"}`);
+  pcsPushSoon();
+}
+
+// Every tick: lapse old offers, send "done" notes home, and when this PC is
+// short, offer the open project's ready cards to the best paired PC.
+async function pcsPlan() {
+  pcsLibs();
+  if (!pcFleet || !projects.open()) return;
+  const mem = pcsMem();
+  const now = pcsNow();
+  for (const [offerId, offer] of mem.offers) if (now - offer.at > pcFleet.LIMITS.offerTtlMs) await pcsOfferLapse(offerId);
+  const capacity = autopilot.capacity;
+  const memoryHold = capacity?.canStart === false && /^memory/.test(capacity?.resources?.holdKind ?? "");
+  mem.holdSince = memoryHold ? (mem.holdSince ?? now) : null;
+  // Every slot busy: the queue may be split with a PC that has room.
+  const full = pcsRunning() >= pcsMaxSlots();
+  mem.fullSince = full ? (mem.fullSince ?? now) : null;
+  const project = projects.open();
+  // The board is read only when there may be something to do: short of
+  // battery or memory, an offer out, or received cards that may have finished.
+  if (mem.power.stage === "ok" && !memoryHold && !full && !mem.offers.size && mem.received === false) return;
+  const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+  mem.received = tasks.some((task) => task?.fromPc && !task.fromPc.reported && !task.fromPc.recalled) || tasks.some((task) => task?.movedTo?.pending);
+  await pcsDoneNotes(tasks);
+  // An offer pending past its time (a restart lost the offer itself) comes back.
+  const stale = tasks.filter((task) => task?.movedTo?.pending && !mem.offers.has(task.movedTo.pending) && now - (task.movedTo.at ?? 0) > pcFleet.LIMITS.offerTtlMs);
+  if (stale.length) {
+    await mutateBoard((board) => {
+      for (const row of board.tasks) if (stale.some((task) => task.id === row.id) && row.movedTo?.pending) delete row.movedTo;
+      return { tasks: board.tasks };
+    });
+  }
+  const settings = await pcsSettings();
+  const key = await pcsProjectKey(project);
+  if (!key || !pcsShared(settings, project.id) || !(await pcsPeers()).some((peer) => peer.relation === "mine")) return;
+  const ready = tasks.filter((task) => pcFleet.movable(task, pcsTaskState(task, tasks, now)));
+  const why = pcFleet.strainedWhy({ stage: mem.power.stage, capacity, holdSince: mem.holdSince, fullSince: mem.fullSince, now, ready: ready.length });
+  if (!why) return;
+  const out = tasks.filter((task) => task?.movedTo && !["done", "archived"].includes(task.status)).length;
+  const pending = new Set([...mem.offers.values()].flatMap((offer) => offer.taskIds));
+  const offers = pcFleet.planOffers({ why, projects: [{ key, name: project.name, share: true, ready, out }], peers: await pcsPeerViews(), pending, now });
+  for (const offer of offers) await pcsSendOffer(offer, project);
+}
+
+// Received cards that finished here send their note home, once.
+async function pcsDoneNotes(tasks) {
+  const notes = tasks.filter((task) => task?.fromPc && !task.fromPc.reported && !task.fromPc.recalled).map((task) => ({ task, note: pcFleet.doneNote(task) })).filter((row) => row.note);
+  if (!notes.length) return;
+  for (const { note } of notes) await pcsDeliver(note.to, note.body);
+  const ids = new Set(notes.map((row) => row.task.id));
+  await mutateBoard((board) => {
+    for (const row of board.tasks) if (ids.has(row.id) && row.fromPc) row.fromPc = { ...row.fromPc, reported: pcsNow() };
+    return { tasks: board.tasks };
+  });
+}
+
+// The board, of whichever project holds this card.
+async function pcsOnCard(taskId, change) {
+  for (const project of projects.list().projects ?? []) {
+    const done = await projects.run(project, async () => {
+      const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+      if (!tasks.some((task) => task?.id === taskId)) return false;
+      await mutateBoard((board) => {
+        const row = board.tasks.find((task) => task.id === taskId);
+        return row && change(row) !== false ? { tasks: board.tasks } : null;
+      });
+      return true;
+    });
+    if (done) return true;
+  }
+  return false;
+}
+
+async function pcsDoneHear(peer, body) {
+  const taskId = String(body.taskId ?? "").slice(0, 80);
+  const outcome = pcFleet.OUTCOMES.includes(body.outcome) ? body.outcome : "done";
+  const sent = await pcsSent();
+  const row = sent.find((item) => item.reqId === taskId && item.to === peer.id);
+  if (row) {
+    row.status = outcome;
+    row.doneAt = pcsNow();
+    await pcsSentSave(sent);
+    pcsNote(`${peer.name} ${outcome === "done" ? "finished" : outcome === "dropped" ? "dropped" : "could not finish"} "${row.title}"`);
+    pcsPush();
+    return;
+  }
+  await pcsOnCard(taskId, (task) => {
+    if (task.movedTo?.id !== peer.id) return false;
+    if (outcome === "done") {
+      task.status = "done";
+      task.doneAt = pcsNow();
+      task.movedTo = { ...task.movedTo, doneAt: pcsNow() };
+      executorResume.appendLog(task, `done on ${peer.name}${body.note ? `: ${String(body.note).slice(0, 200)}` : ""}`);
+    } else {
+      // Back here, held: a card that did not finish there needs the owner's look first.
+      delete task.movedTo;
+      task.ownerHold = { kind: "pc", at: pcsNow(), reason: `${outcome} on ${peer.name}` };
+      executorResume.appendLog(task, `came back from ${peer.name}: it was ${outcome} there`);
+    }
+    return true;
+  });
+  pcsPushSoon();
+}
+
+// Bring back a card another PC has not started. `force` takes it back here
+// even when that PC is not online.
+async function pcsRecall(taskId, { force = false } = {}) {
+  const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+  const task = tasks.find((row) => row?.id === taskId);
+  if (!task?.movedTo) return { ok: false, error: "That card is not on another PC." };
+  if (!task.movedTo.id || force) {
+    await pcsOnCard(taskId, (row) => { delete row.movedTo; executorResume.appendLog(row, "taken back by you"); });
+    pcsPush();
+    return { ok: true };
+  }
+  const sent = await pcsSendTo(task.movedTo.id, { type: "recall", taskId });
+  if (!sent?.ok) return { ok: false, offline: true, error: `${task.movedTo.name} is not online. Take it back anyway?` };
+  return { ok: true, asked: true };
+}
+
+async function pcsRecallHear(peer, body) {
+  const taskId = String(body.taskId ?? "").slice(0, 80);
+  let answer = { ok: false, error: "It is not here any more." };
+  await mutateBoard((board) => {
+    const row = board.tasks.find((task) => task?.fromPc?.id === peer.id && task.fromPc.taskId === taskId && !["done", "archived"].includes(task.status));
+    if (!row) return null;
+    if (row.runId || row.lease || row.runProgress?.pending || ["active", "running", "verifying", "awaiting_verification"].includes(row.status)) {
+      answer = { ok: false, error: "It is already running here." };
+      return null;
+    }
+    row.status = "archived";
+    row.dropped = { at: pcsNow(), by: "pc", reason: `taken back by ${peer.name}` };
+    row.fromPc = { ...row.fromPc, recalled: pcsNow() };
+    executorResume.appendLog(row, `taken back by ${peer.name}`);
+    answer = { ok: true };
+    return { tasks: board.tasks };
+  });
+  await pcsSendTo(peer.id, { type: "recallReply", taskId, ...answer });
+}
+
+async function pcsRecallReplyHear(peer, body) {
+  const taskId = String(body.taskId ?? "").slice(0, 80);
+  if (body.ok === true) await pcsOnCard(taskId, (task) => { if (task.movedTo?.id !== peer.id) return false; delete task.movedTo; executorResume.appendLog(task, `back from ${peer.name}`); return true; });
+  else pcsNote(`${peer.name} kept a card: ${String(body.error ?? "it could not give it back").slice(0, 120)}`);
+  pcsPushSoon();
+}
+
+// Send one of the open project's ready cards to a PC now (the owner's choice).
+async function pcsMove(taskId, pcId) {
+  pcsLibs();
+  const project = projects.open();
+  if (!project) return { ok: false, error: "Open a project first." };
+  const peer = (await pcsPeerViews()).find((row) => row.id === pcId && row.paired && row.relation === "mine");
+  if (!peer) return { ok: false, error: "That PC is not one of your paired PCs online." };
+  const key = await pcsProjectKey(project);
+  if (!key) return { ok: false, error: "This project has no GitHub repository, so other PCs cannot have it." };
+  const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+  const task = tasks.find((row) => row?.id === taskId);
+  if (!task || !pcFleet.movable({ ...task, pin: false }, pcsTaskState(task, tasks, pcsNow()))) return { ok: false, error: "Only a ready card that has not started can move." };
+  const why = pcFleet.whyNotTaking(peer.heard, pcsNow(), { key, name: project.name });
+  if (why) return { ok: false, error: `${peer.name}: ${why}.` };
+  const sent = await pcsSendOffer({ to: peer.id, toName: peer.name, project: { key, name: project.name }, why: "you", tasks: [pcFleet.cardOf(task)] }, project);
+  return sent?.ok ? { ok: true } : { ok: false, error: "It could not be sent. Try again." };
+}
+
+// ---- starting work on another PC --------------------------------------------------
+
+async function pcsStart({ pcId, title, prompt }) {
+  pcsLibs();
+  const project = projects.open();
+  if (!project) return { ok: false, error: "Open the project the work is for first." };
+  const peer = (await pcsPeers()).find((row) => row.id === pcId && (row.relation === "mine" || row.relation === "lender"));
+  if (!peer) return { ok: false, error: "Pair with that PC first." };
+  const key = await pcsProjectKey(project);
+  if (!key) return { ok: false, error: "This project has no GitHub repository, so other PCs cannot have it." };
+  const card = pcFleet.cleanCard({ id: `sent_${crypto.randomBytes(6).toString("hex")}`, title, prompt });
+  if (!card) return { ok: false, error: "Give the work a title." };
+  const sent = await pcsSendTo(pcId, { type: "start", reqId: card.id, project: { key, name: project.name }, title: card.title, prompt: card.prompt });
+  if (!sent?.ok) return { ok: false, error: sent?.reason === "not-online" ? `${peer.name} is not online.` : "It could not be sent. Try again." };
+  const list = await pcsSent();
+  await pcsSentSave([{ reqId: card.id, to: pcId, toName: peer.name, title: card.title, project: project.name, at: pcsNow(), status: "sent" }, ...list]);
+  pcsPush();
+  return { ok: true, reqId: card.id };
+}
+
+async function pcsStartHear(peer, body) {
+  const reqId = String(body.reqId ?? "").slice(0, 80);
+  const reply = (fields) => pcsSendTo(peer.id, { type: "startReply", reqId, ...fields });
+  if (peer.relation !== "mine" && peer.relation !== "borrower") return reply({ ok: false, error: "This PC does not take work from you." });
+  const open = projects.open();
+  if (!open || !pcFleet.isProjectKey(body.project?.key) || (await pcsProjectKey(open)) !== body.project.key) {
+    return reply({ ok: false, error: `${String(body.project?.name ?? "That project").slice(0, 60)} is not open on this PC.` });
+  }
+  const card = pcFleet.cleanCard({ id: reqId, title: body.title, prompt: body.prompt });
+  if (!card) return reply({ ok: false, error: "The work had no title." });
+  const lent = peer.relation === "borrower" ? (await pcsSettings()).lend.find((row) => row.id === peer.uid) : null;
+  const held = peer.relation === "borrower" && lent?.auto !== true;
+  const [result] = await pcsAdmitCards([card], { peer, held });
+  if (!result?.created) return reply({ ok: false, error: "This PC already has that work on its board." });
+  pcsNote(`${peer.name} started "${card.title}" here${held ? "; it waits for your OK" : ""}`);
+  if (!held) assistantAskForWork(`work from ${peer.name}`);
+  pcsPush();
+  return reply({ ok: true, taskId: result.created.id, held });
+}
+
+async function pcsStartReplyHear(peer, body) {
+  const list = await pcsSent();
+  const row = list.find((item) => item.reqId === body.reqId && item.to === peer.id);
+  if (!row) return;
+  row.status = body.ok === true ? (body.held ? "held" : "queued") : "refused";
+  if (body.ok !== true) row.error = String(body.error ?? "").slice(0, 160);
+  await pcsSentSave(list);
+  pcsPush();
+}
+
+// ---- battery ---------------------------------------------------------------------
+
+// spawnNextJob's "battery" stop: no new start while the battery is low or stopped.
+function pcsHoldsStarts() {
+  return Boolean(pcsMemo) && pcsMemo.power.stage !== "ok";
+}
+function pcsHoldText() {
+  const level = pcsMemo?.power.reading?.level;
+  return pcsMemo?.power.stage === "stopped"
+    ? `Stopped at ${level ?? "low"}% battery: choose Continue in Friends › Your PCs`
+    : `Battery at ${level ?? "low"}%: finishing what runs, starting nothing new`;
+}
+// applyKeepAwake's view: "Always" keeps the PC awake while plugged in; a battery stop lets it sleep.
+function pcsAwakeWanted() {
+  if (!pcsMemo) return null;
+  const reading = pcsMemo.power.reading;
+  return { always: pcsMemo.always && !reading?.onBattery, release: pcsMemo.power.stage === "stopped" };
+}
+
+async function pcsPowerSave() {
+  const { stage, continuedAt } = pcsMem().power;
+  await updateSettings((settings) => {
+    settings.pcs = { ...(settings.pcs && typeof settings.pcs === "object" ? settings.pcs : {}), power: { stage, continuedAt, at: pcsNow() } };
+  });
+}
+
+async function pcsPowerLook() {
+  pcsLibs();
+  if (!pcPower) return;
+  const mem = pcsMem();
+  const settings = await pcsSettings();
+  if (!mem.power.restored) {
+    mem.power.restored = true;
+    if (settings.power?.stage === "stopped") mem.power.stage = "stopped";
+  }
+  let onBatteryPower = null;
+  try { onBatteryPower = powerMonitor?.isOnBatteryPower?.() === true; } catch {}
+  const reading = await pcPower.readBattery({ spawn: require("node:child_process").spawn, onBatteryPower, setTimer: setTimeout, clearTimer: clearTimeout });
+  const kindBefore = mem.power.reading ? "laptop" : "desktop";
+  const unpluggedBefore = Boolean(mem.power.reading?.onBattery);
+  if (!reading?.error) mem.power.reading = reading;
+  // Keep this PC on holds only while plugged in: a change of power says so at once.
+  if (Boolean(mem.power.reading?.onBattery) !== unpluggedBefore) applyKeepAwake();
+  const was = mem.power.stage;
+  const next = pcPower.nextStage({ stage: was, continuedAt: mem.power.continuedAt }, reading?.error ? (mem.power.reading ?? null) : reading, settings.lines);
+  Object.assign(mem.power, { stage: next.stage, continuedAt: next.continuedAt, at: pcsNow() });
+  if ((mem.power.reading ? "laptop" : "desktop") !== kindBefore) pcsHello().catch(() => {});
+  if (next.stage !== was) await pcsStageChanged(was, next.stage);
+  if (mem.power.timer) clearTimeout(mem.power.timer);
+  mem.power.timer = setTimeout(() => { pcsPowerLook().catch((error) => logLine(`[pcs] battery look failed: ${error?.message ?? error}`)); }, pcPower.nextLookMs(reading?.error ? undefined : reading));
+  mem.power.timer.unref?.();
+}
+
+async function pcsStageChanged(was, stage) {
+  const mem = pcsMem();
+  const level = mem.power.reading?.level;
+  await pcsPowerSave();
+  applyKeepAwake();
+  if (stage === "low") {
+    pcsNote(`battery at ${level}%: finishing what runs and starting nothing new`);
+    assistantLog("control", `battery at ${level}%: no new work starts here; ready cards go to your other PCs`);
+    pcsPlan().catch(() => {});
+  } else if (stage === "stopped") {
+    await pcsBatteryStop(level);
+  } else if (stage === "ok") {
+    pcsNote(was === "stopped" ? "working again" : `battery back to ${level ?? "?"}%`);
+    assistantAskForWork(was === "stopped" ? "you chose Continue" : "the battery recovered");
+  }
+  pcsSendState({ force: true }).catch(() => {});
+  pcsPush();
+}
+
+// The stop line: stop every worker with its progress saved (each card waits
+// with an ownerHold of kind "battery"), then park their changes for the others.
+function pcsBatteryStop(level) {
+  const mem = pcsMem();
+  mem.stopping ??= (async () => {
+    const hold = { kind: "battery", at: pcsNow(), level: Number.isFinite(level) ? level : null, reason: `battery at ${level ?? "?"}%` };
+    const stopped = [];
+    for (const job of autopilot.jobs.filter((entry) => entry.taskId && (!entry.finished || entry.settlementPending))) {
+      const before = job.ownerHold;
+      job.ownerHold = hold;
+      delete job.resumeRequested;
+      if (stopExecutorJob(job, `battery at ${level ?? "?"}%`)) stopped.push({ taskId: job.taskId, title: job.title, projectId: job.projectId, projectPath: job.projectPath, startedAt: Number(job.startedAt) || pcsNow() });
+      else job.ownerHold = before;
+    }
+    pcsNote(`battery at ${level ?? "?"}%: stopped ${stopped.length} worker${stopped.length === 1 ? "" : "s"} with progress saved; waiting for Continue`);
+    assistantLog("control", `battery at ${level ?? "?"}%: stopped ${stopped.length} worker(s), progress saved · waiting for you`);
+    emitAutopilot();
+    // Their settlements save the checkpoints; park after that, within 90 s.
+    const deadline = pcsNow() + 90000;
+    while (pcsNow() < deadline && autopilot.jobs.some((job) => stopped.some((row) => row.taskId === job.taskId) && (!job.finished || job.settlementPending))) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    if (stopped.length) await pcsPark(stopped, { why: "battery", level });
+  })().catch((error) => logLine(`[pcs] battery stop failed: ${error?.message ?? error}`)).finally(() => { mem.stopping = null; });
+  return mem.stopping;
+}
+
+// Files changed since the first of these runs started (deletions only when a card named them).
+async function pcsChangedFiles(root, since, named) {
+  const out = await pcsGit(["status", "--porcelain=v1", "-z", "--untracked-files=all"], { cwd: root });
+  if (out.code !== 0) return [];
+  const parts = out.stdout.split("\0").filter(Boolean);
+  const files = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    const code = parts[i].slice(0, 2), file = parts[i].slice(3);
+    if (code[0] === "R" || code[0] === "C") i += 1;
+    try {
+      const info = await stat(path.join(root, file));
+      if (info.mtimeMs >= since - 5000) files.push(file);
+    } catch {
+      if (named.has(file)) files.push(file);
+    }
+  }
+  return files;
+}
+
+// One handoff per project for the stopped (or chosen) cards.
+async function pcsPark(stopped, { why, level = null }) {
+  const settings = await pcsSettings();
+  const me = await coworkMachineId();
+  const byProject = new Map();
+  for (const row of stopped) byProject.set(row.projectId, [...(byProject.get(row.projectId) ?? []), row]);
+  for (const [projectId, rows] of byProject) {
+    const project = projects.find(projectId);
+    if (!project) continue;
+    if (!pcsShared(settings, project.id) || !(await pcsProjectKey(project))) { pcsNote(`${project.name}: kept on this PC (not shared with your other PCs)`); continue; }
+    const listed = await pcHandoff.list({ git: pcsGit, root: project.path });
+    if (!listed.ok) { pcsNote(`${project.name}: kept on this PC (${listed.error})`); continue; }
+    if (listed.branches.length >= pcFleet.LIMITS.parkedPerProject) { pcsNote(`${project.name}: ${listed.branches.length} handoffs are already parked, so this one stays on this PC`); continue; }
+    const tasks = await projects.run(project, async () => (await getEyes()).readJson(TASKS_PATH, []));
+    const cards = rows.map((row) => tasks.find((task) => task?.id === row.taskId)).filter(Boolean).slice(0, pcHandoff.LIMITS.tasks);
+    if (!cards.length) continue;
+    const named = new Set(cards.flatMap((task) => (Array.isArray(task.files) ? task.files : [])));
+    const files = await pcsChangedFiles(project.path, Math.min(...rows.map((row) => row.startedAt)), named);
+    const meta = {
+      v: 1, pc: me, pcName: settings.name, why, level, at: pcsNow(), project: project.name,
+      tasks: cards.map((task) => ({ id: task.id, title: task.title, prompt: String(task.prompt ?? task.title), note: (Array.isArray(task.logs) ? task.logs : []).slice(-3).map((log) => String(log?.text ?? "")).join(" · ") })),
+    };
+    const branch = pcHandoff.branchName(settings.name, pcsNow(), listed.branches.map((row) => row.branch));
+    const parked = files.length
+      ? await pcHandoff.park({ git: pcsGit, root: project.path, files, meta, branch, indexFile: path.join(pcsHome(), `handoff-${pcsNow()}.idx`) })
+      : { ok: false, empty: true };
+    if (!parked.ok && !parked.empty) { pcsNote(`${project.name}: the handoff could not be parked (${parked.error}); the work stays on this PC`); continue; }
+    if (parked.ok) {
+      await projects.run(project, () => mutateBoard((board) => {
+        for (const row of board.tasks) if (cards.some((task) => task.id === row.id)) {
+          row.parked = { branch: parked.branch, sha: parked.sha, at: pcsNow() };
+          executorResume.appendLog(row, `parked for your other PCs as ${parked.branch}`);
+        }
+        return { tasks: board.tasks };
+      }));
+      pcsNote(`${project.name}: parked ${cards.length} card${cards.length === 1 ? "" : "s"} as ${parked.branch}`);
+      const key = await pcsProjectKey(project);
+      for (const peer of (await pcsPeers()).filter((row) => row.relation === "mine")) {
+        await pcsSendTo(peer.id, { type: "handoff", project: { key, name: project.name }, branch: parked.branch, sha: parked.sha, titles: cards.map((task) => task.title).slice(0, 4) });
+      }
+    }
+  }
+  pcsPush();
+}
+
+// The owner's Continue after a battery stop: work again here, except cards
+// another PC already picked up.
+async function pcsContinue() {
+  pcsLibs();
+  if (!pcPower) return { ok: false, error: "unavailable" };
+  const mem = pcsMem();
+  if (mem.power.stage !== "stopped") return { ok: true };
+  const settings = await pcsSettings();
+  const project = projects.open();
+  let kept = 0;
+  if (project) {
+    const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+    const held = tasks.filter((task) => task?.ownerHold?.kind === "battery");
+    const listed = held.some((task) => task.parked) ? await pcHandoff.list({ git: pcsGit, root: project.path }) : { ok: true, branches: [] };
+    if (!listed.ok) return { ok: false, error: `GitHub could not be asked whether another PC took the parked work (${listed.error}). Try again in a minute.` };
+    const taken = new Set();
+    for (const task of held.filter((row) => row.parked)) {
+      const still = listed.branches.find((row) => row.branch === task.parked.branch && row.sha === task.parked.sha);
+      // Still parked: take it back from GitHub first, so no other PC starts it too.
+      if (still) {
+        const dropped = await pcHandoff.drop({ git: pcsGit, root: project.path, branch: still.branch, sha: still.sha });
+        if (!dropped.ok) taken.add(task.id);
+      } else taken.add(task.id);
+    }
+    await mutateBoard((board) => {
+      for (const row of board.tasks) {
+        if (row.ownerHold?.kind !== "battery") continue;
+        delete row.ownerHold;
+        if (taken.has(row.id)) {
+          row.movedTo = { id: null, name: "another PC", at: pcsNow() };
+          executorResume.appendLog(row, "another PC picked up its handoff");
+          kept += 1;
+        } else executorResume.appendLog(row, "you chose Continue");
+        delete row.parked;
+      }
+      return { tasks: board.tasks };
+    });
+  }
+  const next = pcPower.continueStage(mem.power.reading, settings.lines);
+  Object.assign(mem.power, { stage: next.stage, continuedAt: next.continuedAt });
+  await pcsStageChanged("stopped", next.stage);
+  return { ok: true, elsewhere: kept };
+}
+
+// ---- handoffs on GitHub ----------------------------------------------------------
+
+// The open project's handoffs (every five minutes, or when a paired PC says
+// it parked one). A PC taking work picks up one from a paired PC of the owner
+// by itself when its changes apply cleanly.
+async function pcsHandoffLook({ force = false } = {}) {
+  pcsLibs();
+  const project = projects.open();
+  const mem = pcsMem();
+  if (!pcHandoff || !project) return;
+  if (!force && mem.handoffs.projectId === project.id && pcsNow() - mem.handoffs.at < PCS_HANDOFF_EVERY_MS) return;
+  // GitHub is asked by itself only on a PC paired with another of the owner's.
+  if (!force && !(await pcsPeers()).some((peer) => peer.relation === "mine")) return;
+  const settings = await pcsSettings();
+  if (!(await pcsProjectKey(project))) { mem.handoffs = { ...mem.handoffs, at: pcsNow(), projectId: project.id, list: [], error: null }; return; }
+  const listed = await pcHandoff.list({ git: pcsGit, root: project.path });
+  if (!listed.ok) { mem.handoffs = { ...mem.handoffs, at: pcsNow(), projectId: project.id, error: listed.error }; pcsPushSoon(); return; }
+  const me = await coworkMachineId();
+  const list = [];
+  for (const row of listed.branches) {
+    let meta = mem.handoffs.meta.get(row.sha) ?? null;
+    if (!meta) {
+      const read = await pcHandoff.read({ git: pcsGit, root: project.path, branch: row.branch, sha: row.sha });
+      meta = read.ok ? read.meta : null;
+      if (meta) mem.handoffs.meta.set(row.sha, meta);
+    }
+    if (meta) list.push({ ...row, meta, mine: meta.pc === me });
+  }
+  if (mem.handoffs.meta.size > 100) mem.handoffs.meta.clear();
+  mem.handoffs = { ...mem.handoffs, at: pcsNow(), projectId: project.id, list, error: null };
+  const peers = await pcsPeers();
+  const state = await pcsStateNow();
+  const auto = list.find((row) => !row.mine && peers.some((peer) => peer.id === row.meta.pc && peer.relation === "mine"));
+  if (auto && state.accepting && pcFleet.freeSlots(state) > 0 && pcsShared(settings, project.id)) {
+    const check = await pcHandoff.applies({ git: pcsGit, root: project.path, meta: auto.meta, sha: auto.sha });
+    if (check.ok) await pcsPickUp({ branch: auto.branch, sha: auto.sha, auto: true });
+  }
+  pcsPushSoon();
+}
+
+async function pcsPickUp({ branch, sha, auto = false }) {
+  pcsLibs();
+  const project = projects.open();
+  if (!project || !pcHandoff) return { ok: false, error: "Open the project first." };
+  const result = await pcHandoff.pickUp({ git: pcsGit, root: project.path, branch, sha });
+  if (!result.ok) { if (!auto) pcsNote(`could not pick up ${branch}: ${result.error}`); return { ok: false, error: result.error }; }
+  const meta = result.meta;
+  const peer = (await pcsPeers()).find((row) => row.id === meta.pc) ?? { id: meta.pc, name: meta.pcName, relation: "mine" };
+  const files = meta.files.slice(0, 20).join(", ") + (meta.files.length > 20 ? ", …" : "");
+  const cards = meta.tasks.map((task) => pcFleet.cleanCard({
+    id: task.id, title: task.title,
+    prompt: `${task.prompt}\n\nThis continues work ${meta.pcName} started and handed off${meta.why === "battery" ? ` at ${meta.level ?? "?"}% battery` : ""}. Its changes so far are already in the working tree${files ? ` (${files})` : ""}.${task.note ? ` Where it stopped: ${task.note}` : ""} Carry on from there; do not start over.`,
+  })).filter(Boolean);
+  const admitted = await pcsAdmitCards(cards, { peer: { ...peer, relation: "mine" } });
+  const ids = admitted.filter((row) => row.created).map((row) => row.card.id);
+  if (meta.pc) await pcsDeliver(meta.pc, { type: "taken", branch, taskIds: ids });
+  pcsNote(`${auto ? "picked up by itself" : "picked up"}: ${branch} from ${meta.pcName} (${ids.length} card${ids.length === 1 ? "" : "s"})`);
+  pcsMem().handoffs.at = 0;
+  assistantAskForWork(`handoff from ${meta.pcName}`);
+  pcsPush();
+  return { ok: true, tasks: ids.length };
+}
+
+async function pcsDropHandoff({ branch, sha }) {
+  pcsLibs();
+  const project = projects.open();
+  if (!project || !pcHandoff) return { ok: false, error: "Open the project first." };
+  const result = await pcHandoff.drop({ git: pcsGit, root: project.path, branch, sha });
+  if (result.ok) { pcsNote(`dropped ${branch}`); pcsMem().handoffs.at = 0; await pcsHandoffLook({ force: true }); }
+  return result;
+}
+
+// Another PC picked up this PC's parked cards: they are on that PC now.
+async function pcsTakenHear(peer, body) {
+  const ids = (Array.isArray(body.taskIds) ? body.taskIds : []).map((id) => String(id).slice(0, 80)).slice(0, 8);
+  for (const id of ids) {
+    await pcsOnCard(id, (task) => {
+      if (task.parked?.branch !== body.branch && !(task.movedTo && !task.movedTo.id)) return false;
+      delete task.parked;
+      if (task.ownerHold?.kind === "battery") delete task.ownerHold;
+      task.movedTo = { id: peer.id, name: peer.name, at: pcsNow() };
+      executorResume.appendLog(task, `${peer.name} picked up its handoff`);
+      return true;
+    });
+  }
+  pcsPushSoon();
+}
+
+// ---- the page --------------------------------------------------------------------
+
+async function pcsStatus({ watch = false } = {}) {
+  pcsLibs();
+  if (!pcFleet || !pcTrust || !pcPower) return { ok: false, error: "unavailable" };
+  const mem = pcsMem();
+  if (watch) mem.watchUntil = pcsNow() + 90000;
+  const settings = await pcsSettings();
+  const me = await coworkMachineId();
+  const client = hubClient;
+  const hub = client?.status?.() ?? null;
+  let encryption = false;
+  try { encryption = safeStorage.isEncryptionAvailable() === true; } catch {}
+  const state = await pcsStateNow();
+  const peers = await pcsPeers();
+  const now = pcsNow();
+  for (const [id, ask] of mem.asks) if (now - ask.at >= PCS_ASK_MS) mem.asks.delete(id);
+  const rows = pcFleet.pcRows({ me: { id: me, name: settings.name, kind: state.kind, state }, roster: mem.roster, heard: mem.heard, peers, now }).map(({ keys: _keys, ...row }) => ({
+    ...row, heard: row.heard?.state ? { state: row.heard.state, at: row.heard.at } : null,
+  }));
+  const project = projects.open();
+  const key = project ? await pcsProjectKey(project) : null;
+  // The open project's cards this section can move, and the ones out on other PCs.
+  const tasks = project ? await (await getEyes()).readJson(TASKS_PATH, []) : [];
+  const movable = key ? tasks.filter((task) => pcFleet.movable({ ...task, pin: false }, pcsTaskState(task, tasks, now))).slice(0, 20).map((task) => ({ id: task.id, title: task.title })) : [];
+  const moved = tasks.filter((task) => task?.movedTo && !task.movedTo.doneAt && !["done", "archived"].includes(task.status)).slice(0, 20)
+    .map((task) => ({ id: task.id, title: task.title, to: task.movedTo.name, toId: task.movedTo.id ?? null, pending: Boolean(task.movedTo.pending), at: task.movedTo.at ?? null }));
+  const waiting = tasks.filter((task) => task?.ownerHold?.kind === "friend" && !["done", "archived"].includes(task.status)).slice(0, 10).map((task) => ({ id: task.id, title: task.title, from: task.fromPc?.name ?? "a friend" }));
+  let linked = false;
+  try { linked = Boolean(community && (await communityRead()).state.link); } catch {}
+  return {
+    ok: true, me: { id: me, name: settings.name },
+    relay: { state: hub?.state ?? "off", error: hub?.error ?? null, carries: Array.isArray(hub?.features) ? hub.features.includes("pcs") : hub?.pcs === true, linked },
+    encryption,
+    power: { reading: mem.power.reading ?? null, stage: mem.power.stage, continuedAt: mem.power.continuedAt, lines: settings.lines, words: pcPower.describe(mem.power.reading === undefined ? { error: true } : mem.power.reading, mem.power.stage) },
+    stayOn: state.stayOn, awake: state.awake,
+    rows,
+    asks: [...mem.asks.entries()].map(([id, ask]) => ({ id, dir: ask.dir, name: ask.name, numbers: ask.numbers, relation: ask.relation, at: ask.at })),
+    project: project ? { id: project.id, name: project.name, github: Boolean(key), share: Boolean(key) && pcsShared(settings, project.id) } : null,
+    offers: [...mem.offers.values()].map((offer) => ({ toName: offer.toName, count: offer.taskIds.length, at: offer.at })),
+    movable, moved, waiting, held: tasks.filter((task) => task?.ownerHold?.kind === "battery").length,
+    sent: (await pcsSent()).slice(0, 10),
+    handoffs: mem.handoffs.projectId === project?.id ? { at: mem.handoffs.at, error: mem.handoffs.error, list: mem.handoffs.list.map((row) => ({ branch: row.branch, sha: row.sha, mine: row.mine, pcName: row.meta.pcName, why: row.meta.why, level: row.meta.level, at: row.meta.at, titles: row.meta.tasks.map((task) => task.title) })) } : { at: 0, error: null, list: [] },
+    lend: settings.lend,
+    notes: mem.notes.slice(0, 8),
+    limits: { movedPerProject: pcFleet.LIMITS.movedPerProject, parkedPerProject: pcFleet.LIMITS.parkedPerProject },
+  };
+}
+// Pushed only while a page watches (pcs:status with watch: true holds it 90 s).
+function pcsPush() {
+  if (pcsMem().watchUntil < pcsNow()) return;
+  pcsStatus().then((status) => send("pcs:event", status)).catch(() => {});
+}
+function pcsPushSoon() {
+  const mem = pcsMem();
+  if (mem.pushTimer || mem.watchUntil < pcsNow()) return;
+  mem.pushTimer = setTimeout(() => { mem.pushTimer = null; pcsPush(); }, 400);
+  mem.pushTimer.unref?.();
+}
+
+// pcs:set { name, stayOn: "always" | "working" (Keep this PC on; the
+// assistant's own keep-awake switch in Settings stays the home of Off and
+// While working), battery: { low, stop }, share: { projectId, on },
+// lend: [{ id, name, auto }] }.
+async function pcsSet(patch = {}) {
+  pcsLibs();
+  const lines = patch.battery && pcPower ? pcPower.normalizeLines(patch.battery) : null;
+  const lend = Array.isArray(patch.lend) ? patch.lend.filter((row) => /^\d{17,20}$/.test(String(row?.id ?? ""))).slice(0, 8)
+    .map((row) => ({ id: String(row.id), name: String(row.name ?? "").replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, 40) || "friend", auto: row.auto === true })) : null;
+  await updateSettings((settings) => {
+    const pcs = { ...(settings.pcs && typeof settings.pcs === "object" ? settings.pcs : {}) };
+    if (typeof patch.name === "string") pcs.name = patch.name.replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, 40);
+    if (["off", "working", "always"].includes(patch.stayOn)) pcs.stayOn = patch.stayOn === "always" ? "always" : "working";
+    if (lines) pcs.battery = lines;
+    if (patch.share && typeof patch.share.projectId === "string" && typeof patch.share.on === "boolean") {
+      pcs.projects = { ...(pcs.projects ?? {}), [patch.share.projectId.slice(0, 120)]: { share: patch.share.on } };
+    }
+    if (lend) pcs.lend = lend;
+    settings.pcs = pcs;
+  });
+  if (lend) {
+    // Stopping a lend ends that friend's pairing here at once.
+    const keep = new Set(lend.map((row) => row.id));
+    const peers = await pcsPeers();
+    const gone = peers.filter((peer) => peer.relation === "borrower" && !keep.has(peer.uid));
+    if (gone.length) await pcsPeersSave(peers.filter((peer) => !gone.includes(peer)).map((peer) => (peer.relation === "borrower" ? { ...peer, auto: lend.find((row) => row.id === peer.uid)?.auto === true } : peer)));
+    else await pcsPeersSave(peers.map((peer) => (peer.relation === "borrower" ? { ...peer, auto: lend.find((row) => row.id === peer.uid)?.auto === true } : peer)));
+  }
+  await pcsSettings();
+  applyKeepAwake();
+  await pcsHello();
+  pcsSendState({ force: true }).catch(() => {});
+  const status = await pcsStatus();
+  send("pcs:event", status);
+  return status;
+}
+
+async function pcsTick() {
+  pcsLibs();
+  const mem = pcsMem();
+  if (mem.ticking) return;
+  mem.ticking = true;
+  try {
+    // A relay that came up before this PC said who it is hears it now.
+    const status = hubClient?.status?.();
+    if (status?.state === "ready" && status.pcs === true && status.pcOn !== true) await pcsHello();
+    await pcsSendState();
+    await pcsPlan();
+    await pcsHandoffLook();
+  } finally {
+    mem.ticking = false;
+  }
+}
+
+function startPcs() {
+  pcsLibs();
+  if (pcsTimers || SMOKE || CAPTURE || CLI_MODE || !pcFleet || !pcPower) return;
+  const tick = () => projects.run(projects.active(), () => pcsTick()).catch((error) => logLine(`[pcs] look failed: ${error?.message ?? error}`));
+  pcsTimers = { first: setTimeout(tick, 20000), every: setInterval(tick, PCS_TICK_MS) };
+  pcsTimers.first.unref?.();
+  pcsTimers.every.unref?.();
+  pcsPowerLook().catch((error) => logLine(`[pcs] battery look failed: ${error?.message ?? error}`));
+  try {
+    for (const name of ["on-battery", "on-ac"]) powerMonitor?.on?.(name, () => { pcsPowerLook().catch(() => {}); });
+  } catch {}
+}
+// ---- end of My PCs ---------------------------------------------------------------
+
+// ---- Other apps: the Studio API (docs/studio-api.md) ------------------------------
+// Claude Code, Codex, Cursor or the owner's own scripts reach Studio on this PC
+// through a small endpoint on 127.0.0.1 (scripts/studio-api-server.cjs) that the
+// owner turns on in Settings › Other apps. scripts/studio-link.mjs is the MCP
+// server and command line those apps run, scripts/studio-api.cjs the rules, and
+// this block does the work. An app is the owner's chat with less power, as
+// Discord is: its messages pass the same chat gate (remote.gateActions) and the
+// work it files carries origin.via "app", which waits for the owner's OK in
+// every mode (autonomy.remoteWork). The address and key are in the key file
+// (~/.mefi-studio/studio-api.json); the key survives restarts so a script set
+// up once keeps working, New key replaces it at once, and turning the switch
+// off stops the endpoint and deletes the file. The setup prompt (Copy setup
+// prompt, here and in the setup helper) needs none of it.
+// MEFI_STUDIO_NO_APP_API=1 keeps the endpoint closed. Inert at load time:
+// everything starts from studioApiApply().
+let studioApiModules = null;
+let studioApiServer = null;
+let studioApiKey = null;
+let studioApiError = null;
+let studioApiApplying = Promise.resolve();
+const studioApiLog = []; // the calls apps made, newest first, without their words
+const studioApiKilled = () => process.env.MEFI_STUDIO_NO_APP_API === "1";
+
+function studioApiLoad() {
+  if (studioApiModules === null) {
+    const rules = optionalHelper("./scripts/studio-api.cjs", () => require("./scripts/studio-api.cjs"), null);
+    const server = rules ? optionalHelper("./scripts/studio-api-server.cjs", () => require("./scripts/studio-api-server.cjs"), null) : null;
+    studioApiModules = rules && server ? { rules, server } : false;
+  }
+  return studioApiModules || null;
+}
+
+async function studioApiSettings() {
+  const modules = studioApiLoad();
+  return modules ? modules.rules.normalizeSettings((await readSettings()).studioApi) : null;
+}
+const studioApiRunning = () => Boolean(studioApiServer?.running?.());
+
+// Where Studio lives on this PC and how an app starts studio-link.mjs: the
+// setup prompt, GET /v1/setup and the card's commands all read this.
+async function studioApiSetupInfo() {
+  const { rules, server } = studioApiLoad();
+  const packaged = app.isPackaged === true;
+  const studio = packaged ? path.dirname(process.execPath) : SOURCE_ROOT;
+  const local = (name) => path.join(STUDIO_ROOT, name);
+  const docs = [`${local("README.md")} (what Studio is)`, `${local("GETTING_STARTED.md")} (setting up a new PC, step by step)`];
+  // A portable build carries no docs/ folder: those pages are read on GitHub.
+  const deep = async (name, about) => ((await stat(local(path.join("docs", name))).then(() => true, () => false)) ? `${local(path.join("docs", name))} (${about})` : `${rules.DOCS_URL}/docs/${name} (${about})`);
+  docs.push(await deep("architecture.md", "how Studio works, and what its words mean"), await deep("studio-api.md", "how other apps talk to Studio"));
+  const link = rules.connect({ packaged, execPath: process.execPath, electron: Boolean(process.versions.electron), script: local(path.join("scripts", "studio-link.mjs")), platform: process.platform });
+  const settings = await studioApiSettings();
+  const system = process.platform === "win32" ? "Windows" : process.platform === "darwin" ? "macOS" : "Linux";
+  return {
+    app: "Mefi's Studio AI+", version: app.getVersion(), packaged, platform: process.platform, os: `${system} ${os.release()} (${process.arch})`,
+    host: process.env.MEFI_STUDIO_HOST === "tauri" ? "tauri" : "electron",
+    folders: { studio, app: STUDIO_ROOT, data: app.getPath("userData"), project: projects.open() ? projectRoot() : null },
+    docs, keyFile: server.keyFilePath(),
+    link: { ...link, on: settings?.on === true && studioApiRunning() },
+    skill: rules.skillText({ cli: link.cli }),
+  };
+}
+
+// Settings' view: the switch, whether it listens, the commands, and the log.
+async function studioApiStatus() {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  const info = await studioApiSetupInfo();
+  const { claudeCode, codex, json, cli, risky, name } = info.link;
+  return {
+    ok: true, settings: await studioApiSettings(), killed: studioApiKilled(),
+    running: studioApiRunning(), url: studioApiRunning() ? `http://127.0.0.1:${studioApiServer.port()}` : null,
+    error: studioApiError, keyFile: info.keyFile, folder: info.folders.studio,
+    connect: { name, claudeCode, codex, json, cli, risky },
+    log: studioApiLog.slice(0, modules.rules.LOG_MAX),
+  };
+}
+// Settings hears the new state at most four times a second, however fast an app calls.
+let studioApiPushTimer = null;
+function studioApiPush() {
+  if (studioApiPushTimer) return;
+  studioApiPushTimer = setTimeout(() => {
+    studioApiPushTimer = null;
+    studioApiStatus().then((status) => send("studio-api:event", status)).catch(() => {});
+  }, 250);
+  studioApiPushTimer.unref?.();
+}
+
+// Opens or closes the endpoint to match the saved choice. One apply at a time.
+function studioApiApply() {
+  const next = studioApiApplying.then(async () => {
+    if (SMOKE || CAPTURE || CLI_MODE) return;
+    // Off and closed, as most launches are: nothing to load.
+    if (!studioApiServer && (await readSettings())?.studioApi?.on !== true) return;
+    const modules = studioApiLoad();
+    if (!modules) return;
+    const { rules, server } = modules;
+    const settings = await studioApiSettings();
+    const file = server.keyFilePath();
+    if (!settings.on || studioApiKilled()) {
+      if (!studioApiServer) return;
+      const key = studioApiKey;
+      await studioApiServer.stop();
+      studioApiServer = null;
+      studioApiKey = null;
+      // Off: the key goes too. A kill switch only closes the door for this run.
+      if (!settings.on) await server.removeKeyFile(file, key);
+      logLine("[studio-api] closed");
+      return;
+    }
+    if (studioApiRunning()) return;
+    // The saved key, so an app or script set up before keeps working.
+    const key = (await server.readKeyFile(file))?.token ?? server.newKey();
+    const endpoint = server.createApiServer({ handle: studioApiHandle, token: key });
+    const { url, port } = await endpoint.start();
+    studioApiServer = endpoint;
+    studioApiKey = key;
+    await server.writeKeyFile(file, { app: "Mefi's Studio AI+", api: rules.API_VERSION, url, port, token: key, pid: process.pid, version: app.getVersion(), startedAt: new Date().toISOString() });
+    studioApiError = null;
+    logLine(`[studio-api] listening on ${url}`);
+  });
+  studioApiApplying = next.catch((error) => {
+    studioApiError = String(error?.message ?? error).slice(0, 200);
+    logLine(`[studio-api] could not apply: ${studioApiError}`);
+  });
+  return studioApiApplying.then(() => studioApiPush());
+}
+
+// One call from an app: answered, then kept in the card's log without its words.
+async function studioApiHandle({ route, fields = {}, app: caller = "An app" } = {}) {
+  const { rules } = studioApiLoad();
+  const now = Date.now();
+  let answer;
+  try {
+    answer = await studioApiAnswer(rules, route, fields, caller, now);
+  } catch (error) {
+    logLine(`[studio-api] ${route} from ${caller} failed: ${error?.message ?? error}`);
+    answer = { ok: false, text: "Studio could not do that just now. Try again in a minute." };
+  }
+  studioApiLog.unshift(rules.logRow({ at: now, app: caller, route, ok: answer?.ok !== false, note: answer?.note }));
+  studioApiLog.length = Math.min(studioApiLog.length, rules.LOG_MAX);
+  studioApiPush();
+  return answer;
+}
+
+async function studioApiAnswer(rules, route, fields, caller, now) {
+  const noProject = (what) => ({ ok: false, status: 409, text: `No project is open in Studio, so ${what}. Open one in Studio first.` });
+  switch (route) {
+    case "hello": return rules.helloReply({ version: app.getVersion(), project: projects.open()?.name ?? null });
+    case "status": return rules.statusReply(await agentsSnapshot(now), { now });
+    case "made": return rules.madeReply(await agentsSnapshot(now), { now });
+    case "needs": return rules.needsReply(await assistantNeedsYouDigest(now));
+    case "setup": {
+      const info = await studioApiSetupInfo();
+      return { text: rules.setupPrompt(info), data: info };
+    }
+    case "pause":
+      await assistantPause();
+      return { text: "Paused: nothing new starts in Studio until it resumes. Running work finishes." };
+    case "resume":
+      if (autopilot.held) await releaseStartupHold();
+      else await assistantControl("start-work");
+      return { text: "Resumed: Studio's agents pick up work again." };
+    case "notify":
+      send("studio-api:notice", { at: now, app: caller, title: fields.title || "", text: fields.text, level: fields.level || "info" });
+      return { text: "Shown in Studio.", note: fields.level === "done" ? "done" : "" };
+    case "say": {
+      if (!projects.open()) return noProject("Mefi has nowhere to work");
+      const result = await assistantMessage(fields.text, { app: caller });
+      if (result?.ok === false) return { ok: false, status: 400, text: String(result.error ?? "Mefi could not take that message.") };
+      return rules.sayReply(result?.reply);
+    }
+    case "task": {
+      if (!projects.open()) return noProject("there is no board to file it on");
+      const admission = await assistantCreateTask({
+        title: fields.title, prompt: fields.detail ? `${fields.title}\n\n${fields.detail}` : fields.title,
+        source: "chat", conversation: {}, origin: { ...rules.ORIGIN },
+        details: `Filed by ${caller} through Studio's API (Settings › Other apps). It waits for your OK.`,
+      });
+      if (admission?.created) assistantAskForWork("a task from another app");
+      return { ...rules.taskReply(admission, { app: caller }), ...(admission?.created ? { note: "filed" } : {}) };
+    }
+    default: return { ok: false, status: 404, text: "Studio does not know that call." };
+  }
+}
+
+// Settings › Other apps: the switch.
+async function studioApiSet(patch = {}) {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  if (typeof patch.on === "boolean") {
+    await updateSettings((saved) => {
+      const current = modules.rules.normalizeSettings(saved.studioApi);
+      if (current.on === patch.on) return false;
+      saved.studioApi = { ...(saved.studioApi ?? {}), on: patch.on };
+    });
+  }
+  await studioApiApply();
+  const status = await studioApiStatus();
+  logLine(`[studio-api] ${status.settings?.on ? "on" : "off"}`);
+  return status;
+}
+
+// New key: every app reads the key file again on its next call, so only a
+// script that copied the old key needs the new one.
+async function studioApiRekey() {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  if (!studioApiRunning()) return { ...(await studioApiStatus()), ok: false, error: "Turn the switch on first." };
+  const file = modules.server.keyFilePath();
+  const key = modules.server.newKey();
+  const saved = await modules.server.readKeyFile(file);
+  studioApiServer.rekey(key);
+  studioApiKey = key;
+  await modules.server.writeKeyFile(file, { ...(saved ?? {}), app: "Mefi's Studio AI+", api: modules.rules.API_VERSION, url: `http://127.0.0.1:${studioApiServer.port()}`, port: studioApiServer.port(), token: key, pid: process.pid, version: app.getVersion(), startedAt: saved?.startedAt ?? new Date().toISOString() });
+  logLine("[studio-api] new key");
+  return { ...(await studioApiStatus()), message: "New key saved. Apps that read the key file pick it up on their next call." };
+}
+
+// The setup prompt for Claude Code, Codex or another AI helper.
+async function studioApiPrompt() {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  return { ok: true, prompt: modules.rules.setupPrompt(await studioApiSetupInfo()) };
+}
+
+// The Claude Code skill: its text, or with `save` written to
+// ~/.claude/skills/mefi-studio/SKILL.md (only over a copy Studio wrote).
+async function studioApiSkill({ save = false } = {}) {
+  const modules = studioApiLoad();
+  if (!modules) return { ok: false, error: "unavailable" };
+  const text = (await studioApiSetupInfo()).skill;
+  if (!save) return { ok: true, text };
+  const file = path.join(os.homedir(), ".claude", "skills", "mefi-studio", "SKILL.md");
+  const existing = await readFile(file, "utf8").catch(() => null);
+  if (existing !== null && !/^---\r?\nname: mefi-studio\r?\n/.test(existing)) return { ok: false, error: `${file} holds another skill, so Studio left it alone.`, file };
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, text, "utf8");
+  logLine("[studio-api] saved the Claude Code skill");
+  return { ok: true, text, file, message: `Saved for Claude Code: ${file}. New Claude Code sessions can use it.` };
+}
+// ---- end of other apps ---------------------------------------------------------------
 
 // `explicit` is the owner asking (Work on it): a finished inbox row never
 // stands in for it, only unfinished work does.
@@ -11847,7 +13324,10 @@ async function assistantResume() {
 // ---- 24/7: keep-awake, tray, close-to-tray -------------------------------
 function applyKeepAwake() {
   if (SMOKE || CAPTURE || CLI_MODE) return;
-  const wanted = assistantLoop && assistantState?.status === "running" && Boolean(assistantState.prefs?.keepAwake);
+  // My PCs: "Always" keeps a plugged-in PC awake with nothing running, and a
+  // battery stop lets it sleep.
+  const pcs = typeof pcsAwakeWanted === "function" ? pcsAwakeWanted() : null;
+  const wanted = !pcs?.release && ((assistantLoop && assistantState?.status === "running" && Boolean(assistantState.prefs?.keepAwake)) || pcs?.always === true);
   try {
     if (wanted && assistantBlocker === null) assistantBlocker = powerSaveBlocker.start("prevent-app-suspension");
     if (!wanted && assistantBlocker !== null) {
@@ -12657,7 +14137,7 @@ function assistantSettleOfferAsks(taskId, title = "") {
 
 // One validated chat action, run through the same host functions the owner's
 // own buttons use. Returns the outcome resultLine() reads.
-async function assistantChatAction(action = {}, { focused = null, remote = false } = {}) {
+async function assistantChatAction(action = {}, { focused = null, remote = false, from = null } = {}) {
   const kind = String(action?.kind ?? "");
   let taskId = typeof action.taskId === "string" ? action.taskId : "";
   const titleOf = async () => {
@@ -12676,8 +14156,9 @@ async function assistantChatAction(action = {}, { focused = null, remote = false
       const prompt = String(action.ownerText || action.brief || action.title || "");
       const admission = await assistantCreateTask({ title: action.title, prompt, source: "chat", focused, conversation: {},
         details: action.brief && action.brief !== prompt ? `Assistant's reading (not the owner's words): ${action.brief}` : null,
-        // Asked for from Discord: it waits for the owner's OK in every mode.
-        ...(remote && remoteRules ? { origin: { ...remoteRules.ORIGIN } } : {}) });
+        // Asked for from Discord or another app on this PC (via "app", the
+        // "Other apps" block): it waits for the owner's OK in every mode.
+        ...(remote && remoteRules ? { origin: { ...remoteRules.ORIGIN, ...(from === "app" ? { via: "app" } : {}) } } : {}) });
       if (admission?.existing) {
         const item = admission.existing.item ?? {};
         return { ok: true, existing: { title: item.title ?? item.ref?.title ?? action.title, status: admission.existing.kind === "worker" ? "running" : item.status } };
@@ -12834,8 +14315,8 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   // cannot replace that explicit choice with its own interpretation.
   const proposed = localDecisions.length ? localDecisions : envelope.actions;
   let checked = taskOversight.validateChatActions(proposed, context);
-  // From Discord: file, note, brake, stop and start work only (remote.gateActions).
-  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked);
+  // From Discord or another app: file, note, brake, stop and start work only (remote.gateActions).
+  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked, { from: user.from });
   // Talk it over is a conversation: a card the model would file becomes an
   // offer the owner can take (a yes, or Build it), never work filed unasked.
   if (user?.ui?.mode === "talk") {
@@ -12862,7 +14343,7 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
     }
     let outcome;
     try {
-      outcome = await assistantChatAction(action, { focused, remote: user?.remote === true });
+      outcome = await assistantChatAction(action, { focused, remote: user?.remote === true, from: user?.from ?? null });
     } catch (error) {
       outcome = { ok: false, error: error.message };
     }
@@ -12914,7 +14395,7 @@ async function assistantLocalControl({ user, text, intent, facts, slot }) {
   const proposed = decisions.length ? decisions : taskOversight.localChatActions(text, { digest: board, referents, intent, allTitles });
   if (!Array.isArray(proposed) || !proposed.length) return null;
   let checked = taskOversight.validateChatActions(proposed, { ...context, limit: 1 });
-  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked);
+  if (user?.remote && remoteRules) checked = remoteRules.gateActions(checked, { from: user.from });
   const results = assistantRefusalLines(checked.rejected);
   await slotReady(slot);
   for (const action of checked.run) {
@@ -12924,7 +14405,7 @@ async function assistantLocalControl({ user, text, intent, facts, slot }) {
       continue;
     }
     let outcome;
-    try { outcome = await assistantChatAction(action, { remote: user?.remote === true }); } catch (error) { outcome = { ok: false, error: error.message }; }
+    try { outcome = await assistantChatAction(action, { remote: user?.remote === true, from: user?.from ?? null }); } catch (error) { outcome = { ok: false, error: error.message }; }
     results.push(taskOversight.resultLine(action, outcome));
   }
   let tasks = context.tasks;
@@ -13047,7 +14528,7 @@ async function assistantRespond(user, entry = null) {
       await slotReady(slot);
       for (const action of local?.actions ?? []) {
         if (brakeStale(action, generation)) continue;
-        // From Discord only the brake and filing run (remote.LOCAL_ACTIONS).
+        // From Discord or another app only the brake and filing run (remote.LOCAL_ACTIONS).
         if (user.remote && remoteRules && !remoteRules.LOCAL_ACTIONS.includes(action)) {
           done.push(`${action} waits for you in Studio`);
           continue;
@@ -13104,7 +14585,7 @@ async function assistantRespond(user, entry = null) {
               focused,
               pin: Boolean(wanted?.pin),
               conversation: wanted ? { resolvedTitle: wanted.resolvedTitle, existingTarget: wanted.existingTarget } : {},
-              ...(user.remote && remoteRules ? { origin: { ...remoteRules.ORIGIN } } : {}),
+              ...(user.remote && remoteRules ? { origin: { ...remoteRules.ORIGIN, ...(user.from === "app" ? { via: "app" } : {}) } } : {}),
             });
             const created = admission.created;
             if (admission.existing) {
@@ -13241,9 +14722,11 @@ async function assistantMessage(raw, options = {}) {
   const ui = seen || manner ? { ...(seen ?? {}), ...(manner ? { personality: manner } : {}) } : null;
   const user = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "user", text, via: "local", intent: "chat", ...(ui ? { ui } : {}),
     ...(pictures.images.length ? { images: pictures.images.map(({ id, name, mime, bytes }) => ({ id, name, mime, bytes })) } : {}) };
-  // Sent from Discord (the "Discord remote" block): the chat gate narrows what
+  // Sent from Discord (the "Discord remote" block) or another app on this PC
+  // (the "Other apps" block, which names the app): the chat gate narrows what
   // it may do, and the work it files waits for the owner's OK.
   if (options?.remote === true) user.remote = true;
+  if (typeof options?.app === "string" && options.app.trim()) { user.remote = true; user.from = "app"; user.app = options.app.trim().slice(0, 40); }
   assistantState.messages.push(user);
   assistantTrim(assistantState.messages, assistantCaps().messages);
   assistantLog("message", user.text.slice(0, 160));
@@ -17453,7 +18936,7 @@ async function executeNextRequest() {
       ? `Manual worker limit reached (${autopilot.jobs.length}/${Math.max(1, autopilot.parallel)}); waiting for a worker to finish`
       : null;
     setAutopilotWaiting(
-      executorUpdateHold() || (autopilot.jobs.some((entry) => entry.settlementPending) ? pendingSave() : stop === "noproject" ? "Open a project folder to start work" : stop === "cluster" ? autopilot.clusterWaiting || "Cluster is focused on one task" : stop === "resources" ? autopilot.capacity?.reason || "waiting for machine capacity" : stop === "busy" ? "machine busy" : stop === "error" ? `Worker could not start: ${autopilot.lastError || "dispatch failed; retrying"}` : stop === "route" ? `Worker connection unavailable: ${autopilot.lastError || "check Settings & connections"}` : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "scheduled" ? "tasks deferred until later" : stop === "checking" ? "checking queued tasks against work done outside Studio" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : stop === "freecap" ? "The free coding model runs one task at a time; the next starts when this one finishes" : manualWait)
+      executorUpdateHold() || (autopilot.jobs.some((entry) => entry.settlementPending) ? pendingSave() : stop === "noproject" ? "Open a project folder to start work" : stop === "cluster" ? autopilot.clusterWaiting || "Cluster is focused on one task" : stop === "battery" ? (typeof pcsHoldText === "function" ? pcsHoldText() : "battery low: starting nothing new") : stop === "resources" ? autopilot.capacity?.reason || "waiting for machine capacity" : stop === "busy" ? "machine busy" : stop === "error" ? `Worker could not start: ${autopilot.lastError || "dispatch failed; retrying"}` : stop === "route" ? `Worker connection unavailable: ${autopilot.lastError || "check Settings & connections"}` : stop === "approval" ? "Verify first: tasks are waiting for your build approval" : stop === "scheduled" ? "tasks deferred until later" : stop === "checking" ? "checking queued tasks against work done outside Studio" : stop === "cooldown" ? "tasks cooling down" : stop === "prerequisites" ? "waiting for task prerequisites" : stop === "review" ? "tasks need review before retry" : stop === "deferred" ? "waiting on live editors" : stop === "freecap" ? "The free coding model runs one task at a time; the next starts when this one finishes" : manualWait)
     );
     return stop;
   })().finally(() => {
@@ -18422,6 +19905,9 @@ async function spawnNextJob(options) {
   // No folder is open: nothing may build in the app's own seed store.
   if (!projects.open()) return "noproject";
   if (!dispatchAllowed() || executorUpdateHold()) return "empty";
+  // A low or stopped battery (the "My PCs" block) starts nothing new; the
+  // owner's own named start still runs.
+  if (!taskStart && typeof pcsHoldsStarts === "function" && pcsHoldsStarts()) return "battery";
   if (!manualCapacityAvailable()) return dispatchMode === "cluster" ? "cluster" : "empty";
   let leases = null;
   // Read-only, cheap admission checks use the Machine agent's shared sampler.
@@ -22059,7 +23545,9 @@ function flushHeldPushes() {
 // hold, and nothing at all, with no window opened, when no row changed.
 const BOARD_PUSH_MS = 250;
 const BOARD_PUSH_CHANNELS = new Set(["eyes:tasks", "eyes:requests", "eyes:ideas"]);
-const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update", "eyes:progress", "resources:update"]);
+// Other apps' state and notes (the "Other apps" block) wait too: the newest
+// state, and the newest note, which toasts when the window is back.
+const HELD_WHILE_HIDDEN = new Set([...BOARD_PUSH_CHANNELS, "machine:status", "fleet:update", "eyes:progress", "studio-api:event", "studio-api:notice", "resources:update"]);
 const boardPushes = new Map(); // channel -> { timer, pending: { payload, projectId } | null }
 
 function pushBoardList(channel, payload) {
@@ -25947,6 +27435,34 @@ function registerIpc() {
   ipcMain.handle("remote:status", async () => remoteStatus());
   ipcMain.handle("remote:set", async (_event, patch) => remoteSet(patch && typeof patch === "object" ? patch : {}));
   ipcMain.handle("remote:pin", async (_event, payload) => remotePin(payload && typeof payload === "object" ? payload : {}));
+  // My PCs (docs/my-pcs.md, the "My PCs" block).
+  ipcMain.handle("pcs:status", async (_event, payload) => pcsStatus({ watch: payload?.watch === true }));
+  ipcMain.handle("pcs:set", async (_event, patch) => pcsSet(patch && typeof patch === "object" ? patch : {}));
+  ipcMain.handle("pcs:pair", async (_event, payload) => pcsPair(String(payload?.pcId ?? "")));
+  ipcMain.handle("pcs:pair-answer", async (_event, payload) => pcsPairAnswer(String(payload?.pcId ?? ""), payload?.yes === true));
+  ipcMain.handle("pcs:forget", async (_event, payload) => pcsForget(String(payload?.pcId ?? "")));
+  ipcMain.handle("pcs:start", async (_event, payload) => pcsStart({ pcId: String(payload?.pcId ?? ""), title: String(payload?.title ?? ""), prompt: String(payload?.prompt ?? "") }));
+  ipcMain.handle("pcs:move", async (_event, payload) => pcsMove(String(payload?.taskId ?? ""), String(payload?.pcId ?? "")));
+  ipcMain.handle("pcs:recall", async (_event, payload) => pcsRecall(String(payload?.taskId ?? ""), { force: payload?.force === true }));
+  ipcMain.handle("pcs:continue", async () => pcsContinue());
+  ipcMain.handle("pcs:handoffs", async () => { await pcsHandoffLook({ force: true }); return pcsStatus(); });
+  ipcMain.handle("pcs:pick-up", async (_event, payload) => pcsPickUp({ branch: String(payload?.branch ?? ""), sha: String(payload?.sha ?? "") }));
+  // Dropping a handoff deletes a branch on GitHub: a native question first, Cancel by default.
+  ipcMain.handle("pcs:drop", async (event, payload) => {
+    const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    const answer = await dialog.showMessageBox(owner, { type: "warning", buttons: ["Cancel", "Drop it"], defaultId: 0, cancelId: 0, noLink: true,
+      message: "Drop this handoff?", detail: "Its branch is deleted from GitHub. The work in it is gone unless a PC already picked it up." });
+    if (answer.response !== 1) return { ok: false, cancelled: true };
+    return pcsDropHandoff({ branch: String(payload?.branch ?? ""), sha: String(payload?.sha ?? "") });
+  });
+  // Settings › Other apps (the "Other apps" block): the Studio API's switch,
+  // its key, the setup prompt and the Claude Code skill. App-wide like
+  // remote:*: it belongs to this PC, not a project.
+  ipcMain.handle("studio-api:status", async () => studioApiStatus());
+  ipcMain.handle("studio-api:set", async (_event, patch) => studioApiSet(patch && typeof patch === "object" ? { on: patch.on === true ? true : patch.on === false ? false : undefined } : {}));
+  ipcMain.handle("studio-api:rekey", async () => studioApiRekey());
+  ipcMain.handle("studio-api:prompt", async () => studioApiPrompt());
+  ipcMain.handle("studio-api:skill", async (_event, payload) => studioApiSkill({ save: payload?.save === true }));
   // A pet or a playdate for the companion's bond (agent-brain-host companionBond).
   ipcMain.handle("companion:bond", async (_event, payload) => (agentBrain ? agentBrain.companionBond({ event: payload?.event }) : { ok: false, error: "The companion is unavailable." }));
 
@@ -26901,8 +28417,12 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) startVaultAgentsWatch();
   // Cowork claims: the open project's room, this PC's claims renewed each minute.
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCowork();
+  // My PCs: this PC's line to the others, the battery and handoffs.
+  if (!SMOKE && !CAPTURE && !CLI_MODE && typeof startPcs === "function") startPcs();
   // The Discord remote: when the owner turned it on, this PC answers their DMs.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
+  // Other apps: when the owner turned the Studio API on, it opens again.
+  if (!SMOKE && !CAPTURE && !CLI_MODE && typeof studioApiApply === "function") setTimeout(() => { studioApiApply(); }, 5000).unref?.();
   // Friends: a signed-in member shows as online while Studio is open (the "Rooms hub" block).
   if (!SMOKE && !CAPTURE && !CLI_MODE && typeof startHubPresence === "function") startHubPresence();
   // Paired checks: what the owner left running starts again by itself (the "Paired check workers" block).
