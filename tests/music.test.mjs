@@ -620,6 +620,24 @@ test("themePalette is resolved once per theme and custom palette, frozen, and fo
   assert.equal(env.music.themePalette().background, first.background);
 });
 
+test("two-tone themes paint under tier duo: the stylesheets answer duo, and no old tier name is left", async () => {
+  for (const theme of ["void", "eclipse", "abyss", "dusk"]) assert.equal(environment({ saved: { theme } }).document.documentElement.dataset.studioThemeTier, "duo", theme);
+  for (const theme of ["chrome", "aurora", "gold"]) assert.equal(environment({ saved: { theme } }).document.documentElement.dataset.studioThemeTier, "solo", theme);
+  const css = Object.fromEntries(await Promise.all(["music.css", "styles.css", "studio-ui.css"].map(async (name) => [name, (await readFile(new URL(`../renderer/${name}`, import.meta.url), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "")])));
+  for (const [name, text] of Object.entries(css)) {
+    assert.doesNotMatch(text, /data-studio-theme-tier="?premium|music-theme-premium/, `${name} paints no tier that music.js never sets`);
+    for (const tier of text.matchAll(/data-studio-theme-tier=["']?(\w+)/g)) assert.ok(["duo", "solo"].includes(tier[1]), `${name}: tier ${tier[1]}`);
+  }
+  // The two-tone primary outranks the shared one in studio-ui.css, at rest and under the pointer.
+  assert.match(css["music.css"], /:root\[data-studio-theme\]\[data-studio-theme-tier="duo"\] :is\(\.primary:not\(#idle-hud \*, \.danger\), #workspace-layer \.primary, #idle-hud \.primary\) \{ background: linear-gradient\(120deg, var\(--gold-bright\), var\(--gold\) 52%, var\(--accent-2\)\); \}/);
+  assert.match(css["studio-ui.css"], /\.primary:not\(#idle-hud \*, \.danger\):not\(:disabled, \[aria-disabled=true\]\):is\(:hover, :focus-visible\),/, "the shared hover the two-tone fill must outrank");
+  assert.match(css["music.css"], /\.music-theme-duo::before, \.void-swatch \{/);
+  assert.match(css["styles.css"], /:root\[data-studio-theme-tier="duo"\] #workspace-layer \.ws-main \{/);
+  assert.match(css["styles.css"], /:root\[data-studio-theme-tier="duo"\] :is\(\.community-invitation, #settings-community\) \{/);
+  const env = environment();
+  assert.ok(env.ids.get("music-void-themes").children.every((choice) => choice.className === "music-theme music-theme-duo"));
+});
+
 test("live preview view controls change the real tree and follow external view changes", () => {
   const env = environment({ preview: true });env.music.open();
   const flat=env.ids.get("music-tree-view-2d"),solid=env.ids.get("music-tree-view-3d");

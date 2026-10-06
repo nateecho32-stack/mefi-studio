@@ -3027,7 +3027,7 @@ html[data-no-blur] {
 /* The veil keeps the tree a backdrop: a little deeper behind the headline,
    lighter lower down where the panels already frost it. */
 #workspace-layer .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
-:root[data-studio-theme-tier="premium"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+:root[data-studio-theme-tier="duo"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
 #workspace-layer .ws-topbar { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6); }
 #workspace-layer .ws-topbar { border-color: var(--frost-edge-soft); }
 
@@ -3720,7 +3720,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
    member theme's own pair while one is on. Frames are a gradient hairline over
    an opaque fill, so the border gradient never shows through. */
 .community-invitation, #settings-community { --void-a: 124, 108, 255; --void-b: 54, 209, 255; }
-:root[data-studio-theme-tier="premium"] :is(.community-invitation, #settings-community) { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
+:root[data-studio-theme-tier="duo"] :is(.community-invitation, #settings-community) { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
 .community-invitation.community-enter { animation: pop-in var(--dur-3) var(--ease); }
 .walkthrough-invitation.community-invitation { justify-content: flex-start; gap: var(--s4); border-color: transparent; background: radial-gradient(90% 160% at 0 0, rgba(var(--void-a), 0.1), transparent 55%) padding-box, linear-gradient(color-mix(in srgb, var(--gold) 5%, var(--panel-solid)), color-mix(in srgb, var(--gold) 5%, var(--panel-solid))) padding-box, linear-gradient(115deg, rgba(var(--void-a), 0.6), rgba(var(--void-b), 0.35) 40%, var(--hairline-strong) 75%) border-box; }
 /* The emblem: the four themes' two-tone swatches (music.css .void-swatch). */

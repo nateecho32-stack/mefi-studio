@@ -3037,7 +3037,7 @@ html[data-no-blur] {
 /* The veil keeps the tree a backdrop: a little deeper behind the headline,
    lighter lower down where the panels already frost it. */
 #workspace-layer .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
-:root[data-studio-theme-tier="premium"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+:root[data-studio-theme-tier="duo"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
 #workspace-layer .ws-topbar { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6); }
 #workspace-layer .ws-topbar { border-color: var(--frost-edge-soft); }
 
@@ -3730,7 +3730,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
    member theme's own pair while one is on. Frames are a gradient hairline over
    an opaque fill, so the border gradient never shows through. */
 .community-invitation, #settings-community { --void-a: 124, 108, 255; --void-b: 54, 209, 255; }
-:root[data-studio-theme-tier="premium"] :is(.community-invitation, #settings-community) { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
+:root[data-studio-theme-tier="duo"] :is(.community-invitation, #settings-community) { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
 .community-invitation.community-enter { animation: pop-in var(--dur-3) var(--ease); }
 .walkthrough-invitation.community-invitation { justify-content: flex-start; gap: var(--s4); border-color: transparent; background: radial-gradient(90% 160% at 0 0, rgba(var(--void-a), 0.1), transparent 55%) padding-box, linear-gradient(color-mix(in srgb, var(--gold) 5%, var(--panel-solid)), color-mix(in srgb, var(--gold) 5%, var(--panel-solid))) padding-box, linear-gradient(115deg, rgba(var(--void-a), 0.6), rgba(var(--void-b), 0.35) 40%, var(--hairline-strong) 75%) border-box; }
 /* The emblem: the four themes' two-tone swatches (music.css .void-swatch). */
@@ -5266,18 +5266,21 @@ html[data-frame] #idle-hud #map-zoom .glyph { width: 14px; height: 14px; }
 :root[data-studio-theme] :is(.ws-companion-copy p, .ws-welcome p, .ws-project-path, .ws-sidebar-note, .ws-work-summary, .ws-dash-note) { color: var(--muted); }
 :root[data-studio-theme] .ws-work-search input::placeholder { color: var(--muted); }
 :root[data-studio-theme] .ws-buddy-face { background: radial-gradient(circle at 35% 20%, var(--tint-gold-3), var(--panel-solid) 75%); }
-/* Void collection tier: the members' themes add a second hue (--accent-2, set by music.js with the tier flag). */
-:root[data-studio-theme-tier="premium"] .primary { background: linear-gradient(120deg, var(--gold-bright), var(--gold) 52%, var(--accent-2)); }
+/* Two-tone themes (data-studio-theme-tier="duo": the Void collection, a pack with a second hue) add their
+   second hue, --accent-2, which music.js sets with the tier. The primaries name every one the shared rules
+   in studio-ui.css paint, at their resting and their hover specificity and one attribute more (an id and
+   three or four), so the two-tone fill wins from here, earlier in the bundle; a .danger keeps its red. */
+:root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary) { background: linear-gradient(120deg, var(--gold-bright), var(--gold) 52%, var(--accent-2)); }
 /* Only a primary that can be pressed glows; a disabled or busy one stays flat. */
-:root[data-studio-theme-tier="premium"] .primary:not(:disabled, [aria-disabled="true"]) { box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .22), 0 6px 20px -10px rgba(var(--accent-2-rgb), .7); }
-:root[data-studio-theme-tier="premium"] .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), var(--bg); }
-:root[data-studio-theme-tier="premium"] .music-theme[aria-pressed="true"] { box-shadow: 0 0 16px -6px rgba(var(--accent-2-rgb), .75); }
-:root[data-studio-theme-tier="premium"] .music-node-choice[aria-pressed="true"] { box-shadow: inset 0 -2px var(--gold), 0 0 16px -6px rgba(var(--accent-2-rgb), .75); }
+:root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary):not(:disabled, [aria-disabled="true"]) { box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .22), 0 6px 20px -10px rgba(var(--accent-2-rgb), .7); }
+:root[data-studio-theme-tier="duo"] .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), var(--bg); }
+:root[data-studio-theme-tier="duo"] .music-theme[aria-pressed="true"] { box-shadow: 0 0 16px -6px rgba(var(--accent-2-rgb), .75); }
+:root[data-studio-theme-tier="duo"] .music-node-choice[aria-pressed="true"] { box-shadow: inset 0 -2px var(--gold), 0 0 16px -6px rgba(var(--accent-2-rgb), .75); }
 @media (prefers-reduced-motion: no-preference) {
   /* A sheen that sweeps toward the second hue, only while a primary button is pointed at: nothing animates at rest.
      The global button transition list names background-color alone, so this one adds background-position and keeps the rest. */
-  :root[data-studio-theme-tier="premium"] .primary { background-size: 160% 100%; background-position: 0 0; transition: background-position var(--motion-panel) var(--ease), box-shadow var(--motion-menu) var(--ease), border-color var(--motion-press) var(--ease), color var(--motion-press) var(--ease), transform var(--motion-press) var(--ease-enter); }
-  :root[data-studio-theme-tier="premium"] .primary:not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) { background-position: 100% 0; box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .4), 0 8px 26px -8px rgba(var(--accent-2-rgb), .85); }
+  :root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary) { background-size: 160% 100%; background-position: 0 0; transition: background-position var(--motion-panel) var(--ease), box-shadow var(--motion-menu) var(--ease), border-color var(--motion-press) var(--ease), color var(--motion-press) var(--ease), transform var(--motion-press) var(--ease-enter); }
+  :root[data-studio-theme][data-studio-theme-tier="duo"] :is(.primary:not(#idle-hud *, .danger), #workspace-layer .primary, #idle-hud .primary):not(:disabled, [aria-disabled="true"]):is(:hover, :focus-visible) { background-position: 100% 0; box-shadow: 0 0 0 1px rgba(var(--accent-2-rgb), .4), 0 8px 26px -8px rgba(var(--accent-2-rgb), .85); }
 }
 /* The sheet's column, read by the overlay and by the toasts beside it. With
    the menu on, it is measured beside the menu (the overlay starts at its
@@ -5334,8 +5337,8 @@ body.music-preview-active #toast-host { left: calc(var(--shell-x0) + var(--music
 /* Two-tone swatch: the theme's accent (--swatch) and its second hue (--swatch-2)
    split on the diagonal inside a hairline ring, the free dots' size and halo.
    The 1.2px blend at the seam is the anti-aliasing a hard stop lacks. */
-.music-theme-premium::before, .void-swatch { box-sizing: border-box; flex: none; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(135deg, var(--swatch) calc(50% - .6px), var(--swatch-2) calc(50% + .6px)); box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 0 0 3px color-mix(in srgb, var(--swatch-2) 14%, transparent); }
-.music-theme-premium[aria-pressed="true"]::before { box-shadow: 0 0 0 1px rgba(255, 255, 255, .34), 0 0 8px color-mix(in srgb, var(--swatch-2) 65%, transparent); }
+.music-theme-duo::before, .void-swatch { box-sizing: border-box; flex: none; width: 13px; height: 13px; border-radius: 50%; background: linear-gradient(135deg, var(--swatch) calc(50% - .6px), var(--swatch-2) calc(50% + .6px)); box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 0 0 3px color-mix(in srgb, var(--swatch-2) 14%, transparent); }
+.music-theme-duo[aria-pressed="true"]::before { box-shadow: 0 0 0 1px rgba(255, 255, 255, .34), 0 0 8px color-mix(in srgb, var(--swatch-2) 65%, transparent); }
 .music-theme-locked:hover { background: rgba(var(--void-a), .07); }
 /* The buttons are ghost mini; the sheet's smaller type keeps all three on one line. */
 /* A member sees one quiet line where the fork path would be. */
@@ -5837,7 +5840,7 @@ body.appearance-settings-active .settings-media :is(.music-section, .music-node-
 body.appearance-settings-active .settings-media .music-themes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 body.appearance-settings-active .settings-media .music-theme { min-height: 52px; flex-direction: column; justify-content: center; gap: 6px; padding: 7px 4px; font-size: 11px; line-height: 1.3; text-align: center; white-space: normal; border: 1px solid var(--hairline); background: var(--bg-deep); }
 body.appearance-settings-active .settings-media .music-theme::before { width: 26px; height: 6px; flex: none; border-radius: 3px; }
-body.appearance-settings-active .music-theme-premium { position: relative; }
+body.appearance-settings-active .music-theme-duo { position: relative; }
 body.appearance-settings-active .settings-media .music-theme[aria-pressed="true"] { border-color: var(--gold); background: var(--tint-gold-2); }
 body.appearance-settings-active .settings-media .music-node-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 body.appearance-settings-active .settings-media .music-node-choice { min-height: 0; padding: 7px; gap: 3px; }
@@ -70585,10 +70588,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "chrome"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
-        // Music announces the actual theme (and whether this is a temporary
-        // preview) before Workspace writes its own accent preference.
+        // Music applies and announces the theme; syncThemeChoice below then
+        // writes Workspace's own accent preference from that announcement.
         if (id === "accent" && window.MefiMusic?.applyTheme) {
-          window.MefiMusic.applyTheme($(id).value === "sage" ? "forest" : $(id).value, true, { navigate: false });
+          window.MefiMusic.applyTheme($(id).value === "sage" ? "forest" : $(id).value, true);
           return;
         }
         storage.set(key, $(id).value);
@@ -91994,7 +91997,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const swatches = node("div", "setup-helper-swatches"); swatches.setAttribute("role", "radiogroup"); swatches.setAttribute("aria-label", "Theme");
       for (const theme of music.themes?.() || []) {
         const swatch = button(theme.name, () => {
-          music.applyTheme?.(theme.key, true, { navigate: false });
+          music.applyTheme?.(theme.key, true);
           for (const other of swatches.children) other.setAttribute("aria-checked", String(other === swatch));
           say(`${theme.name} theme on.`, "good");
         }, "setup-helper-swatch");
