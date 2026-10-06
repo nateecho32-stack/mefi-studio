@@ -6,6 +6,38 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Test runs take turns on one PC, size to free memory and start the slowest suites first
+
+Branch `wip/test-lease` (C:\wt\coop) off 00d32ca: `scripts/test-lease.mjs` (a machine-wide lease board in
+%LOCALAPPDATA%\MefiStudio\test-lease: one Electron lane, two parallel stages, first come first served),
+`scripts/test-timings.mjs` (a node:test reporter recording each suite's wall time), and run-node-tests taking a
+turn per stage, sizing the parallel width to free memory and ordering every stage longest first. Merged with main
+d55269f before landing (712818c): only CHANGELOG.md conflicted (main's file plus this branch's entry).
+
+Full `npm test` on the gated commit f18d18c, on the 16 GB laptop with other sessions working (0.4 to 1.4 GB free):
+34 min 10 s in all; full gates here took 45 min to 2 h 14 min before. Parallel stage at 4 suites at a time (561 MB
+free when it started; Node's default is 15 here): 7105 tests, 7089 pass, 14 skipped, 2 fail, both Rust parity
+suites under load: rust_parity_git "the actions answer like the JavaScript on real folders" (the Rust side's git
+call hit its time limit, 298 s) and rust_parity_snapshots "the same attempt on two identical repositories" (a
+different start commit; the known under-load timeout). Both pass alone after the gate: 7/7 in 2 min 41 s through `npm run test:one` (the actions test 137 s, the snapshot host test 27 s). Electron lane at 2 windows (1129 MB free):
+100 tests, 97 pass, 1 skipped, 2 fail: layout_contract_render and shell_render, the two display-scaling failures
+this PC shows on clean main (fx/scaling fixes them; layout_contract_render retires on ui/v2-only). Exclusive
+command_render, eyes_toggle_electron and occlusion_probe pass. Python contracts 83 s OK; normalized-path lock OK.
+`npm run audit` 0 findings, `npm run check` ok, eslint on the changed files 0 problems. Hosted CI (ci.yml,
+Windows) green on f18d18c in 8 min 56 s. After the merge with main: `npm run check` ok, and run_all_tests,
+run_node_tests_fast, test_lease, test_timings, check_targets and spec_collisions 44/44 through `npm run test:one`.
+
+The lease worked live during the gate: a Friends render run started from C:\wt\econ waited in line ("waiting for
+the Electron lane, held by C:\wt\coop (npm test: Electron fixtures, running 12 min)") and ran when the lane
+freed; a waiter that was killed had its file cleared at the next read.
+
+The first timing record (wall times under this run's load): the 503 Node suites sum to 3179 s, and the top 10 are
+69% of it: rust_parity_repo 401 s (its sync test alone 281 s), sync 377, rust_parity_git 331, git_actions 218,
+rust_parity_snapshots 186, attempt_snapshots_host 177, worktree_actions 151, attempt_review_host 126, pc_vault 122,
+pc_vault_turns 89; the median suite is 0.37 s. The 48 Electron suites sum to 2017 s (layout_contract_render 193,
+tabs_render 173, unified_studio_render 149, shell_render 139, sessions_render 128). From the next run each stage
+starts its slowest suites first. `npm run test:lease -- --slowest` prints the record.
+
 ## 2026-10-06 Playlists in the media menu land on main
 
 Branch `feat/playlists` in `C:\wt\playlists` (9064526: renderer/playlists.js, the music.js hooks, music.css, docs),
