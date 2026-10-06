@@ -6,6 +6,56 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 The v2 chrome closer to the 0.5 prototype: status bar, Search, one Inbox
+
+Branch `ui/chrome` in `C:\wt\ui-chrome` (off land/ui-work-view fe59dd3,
+node_modules junctioned), pushed as wip/ui-chrome: 9947295 status bar (the
+machine's load from machine:status, the prototype's order, the rule before
+the meters, "5 h" and "Week"), 64854cc Search (the prototype's palette over
+the same registry: twelve rows, groups, the frame's, strip's, New task and
+permission-mode records), 05b5c63 one Inbox (the pill, status bar, Home's
+chip, the tabs and the session list's Needs you read one list; the
+prototype's cards; Work › Inbox), cd4444a Search kept to the free area and
+the Python palette contract updated (both found by the full run).
+
+`npm run check` ok (271 targets), lint 0 errors (44 warnings, none in the
+touched files), `npm run audit` 0 findings. `npm run test:fast` at cd4444a's
+tree: 6934 tests, 6919 pass, 14 skipped, 1 fail (rust_parity_snapshots
+"snapshot host", 73 s under load: 3/3 alone; untouched by this branch).
+Python contracts 248 OK (1 skipped) after the palette contract's update.
+
+Full `npm test` at 05b5c63 (quiet machine): Node 6934 tests, 6920 pass, 14
+skipped, 0 fail; Electron lane 75: 72 pass, 1 skipped, 2 fail:
+layout_contract_render (viewport 1921x1081, as on clean main here) and
+shell_render (Search's layer spanned the window; fixed in cd4444a, then
+shell_render alone reached and stopped at the known 1 px check at 1100 px,
+"373 !== 372", as on clean main); Python 1 fail (the palette contract read
+the old span; fixed in cd4444a); path lock ok. Electron suites alone after
+cd4444a: sessions_render pass (93 s, with its new chrome gallery: the bar's
+order and words, Search's groups and rows, one count everywhere, the Inbox
+popover and Work › Inbox at 1920x1080 and 600 px, every text 12 px or more
+and 4.5:1 in all eleven themes); today_render (53 s) and tabs_render (118 s)
+passed alone before it and in the full run.
+Captures (1920x1080) in `C:\wt\gap\after-chrome\final\`, prototype-left
+side-by-sides in `C:\wt\gap\after-chrome\compare\`.
+
+## 2026-10-04 The v2 Work view lands on main with Rust stage 2
+
+Branch `land/ui-work-view` in `C:\wt\land-ui`: origin/main 90661df (Rust stage
+2's five ports) with wip/ui-work-view 898fe49 merged (only TESTRUNS.md
+conflicted: both new rows kept, newest first, one more older row rotated),
+plus fe59dd3: a key hint inside a filled button takes the button's ink (New
+task's "Ctrl N" was pale on teal, under 4.5:1; shell_frame_css pins it).
+
+Full `npm test` on fe59dd3: Node 6900 tests, 6885 pass, 14 skipped, 1 fail
+(project_preview, the whole file in 0.9 s under load: 18/18 alone); Electron
+lane 75: 72 pass, 1 skipped, 2 fail: layout_contract_render and shell_render
+(viewport 1921x1081, as on clean main on this PC); Python 248 OK; path lock
+ok; `npm run audit` 0 findings; `npm run check` ok (271 targets).
+sessions_render with captures passes (1/1); 1920x1080 captures in
+`C:\wt\shots\land-ui\`, the Work view beside the prototype in
+`C:\wt\gap\after-work\compare\`.
+
 ## 2026-10-04 The v2 Work view closer to the 0.5 prototype: breadcrumb, list head, run menu, inspector
 
 Branch `wip/ui-work-view` (worktree off main 39d98e3, node_modules junctioned),
