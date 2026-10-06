@@ -1314,7 +1314,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     const rows = store.all(`SELECT * FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT 100`);
     return reply(200, {
       ok: true,
-      reports: rows.map((row) => ({ id: row.id, roomId: row.room_id, messageId: row.message_id, author: row.author_id ? userView(row.author_id) : null, reporter: userView(row.reporter_id), reason: row.reason, text: row.text, verified: row.verified === 1, createdAt: row.created_at })),
+      // A project report (credits.mjs) is kept as room "project" with the project's id as its message.
+      reports: rows.map((row) => ({ id: row.id, kind: row.room_id === 'project' ? 'project' : 'message', roomId: row.room_id === 'project' ? null : row.room_id, messageId: row.room_id === 'project' ? null : row.message_id, projectId: row.room_id === 'project' ? row.message_id : null, author: row.author_id ? userView(row.author_id) : null, reporter: userView(row.reporter_id), reason: row.reason, text: row.text, verified: row.verified === 1, createdAt: row.created_at })),
     });
   }, { mod: true });
 

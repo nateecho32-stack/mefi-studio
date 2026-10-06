@@ -581,6 +581,8 @@ export const HTTP_BODIES = Object.freeze({
   // POST /v1/reports
   // message: the reporter's own copy with its sig, kept as evidence only when the sig checks out.
   report: { messageId: snowflake(), roomId: opaqueId(), reason: string(1, LIMITS.reasonChars, { pattern: TEXT, nonBlank: true }), message: optional(roomMessage()) },
+  // POST /v1/projects/:id/report
+  reportProject: { reason: string(1, LIMITS.reasonChars, { pattern: TEXT, nonBlank: true }) },
   // POST /v1/rooms/:id/claims
   claim: {
     machineId: string(1, 64, { pattern: MACHINE_ID }),

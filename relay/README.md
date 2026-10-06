@@ -70,12 +70,16 @@ alt accounts, trading and replays:
 - Ranks unlock one thing: a room in the public list opens at Flame (200
   credits), which the limits above make slow to reach with second accounts.
   Moderation is never a rank: moderators are named accounts (`OWNER_IDS`).
-- Moderators: `GET /v1/admin/credits/:id` shows where a member's credits
-  came from in the last 30 days, by who caused them and with their account
-  ages; `POST /v1/admin/credits/:id/revoke` (`{ "from": "<id>", "days": 30 }`,
-  both optional) takes them back off the balance and the lifetime total, and
-  the same plays and stars can never pay again. Suspending a member stops
-  their credits too.
+- Moderators (Studio's Friends › Moderation): `GET /v1/admin/credits/flags`
+  lists who looks like they are farming (at least 30 credits in 30 days with
+  60% from one member, or two members who each made the other earn 10);
+  `GET /v1/admin/credits/:id` shows where a member's credits came from in the
+  last 30 days, by who caused them and with their account ages;
+  `POST /v1/admin/credits/:id/revoke` (`{ "from": "<id>", "days": 30 }`, both
+  optional) takes them back off the balance and the lifetime total, and the
+  same plays and stars can never pay again. Suspending a member stops their
+  credits too. `POST /v1/projects/:id/report` (anyone, not their own, once
+  each, 10 an hour) puts a project in `GET /v1/admin/reports` with its card.
 
 ## Layout
 
