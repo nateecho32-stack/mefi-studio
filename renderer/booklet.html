@@ -6654,6 +6654,35 @@ html[data-no-blur] #plans-overlay { --planning-blur: none; --planning-page-blur:
   .planning-field-head { gap: 6px; }
   .planning-field-title { gap: 6px; font-size: 12px; }
 }
+/* The same steps by the room the page really has. In the 0.5 frame the rail and the list column stand beside the
+   page, so at a 1024 px window Plans had about 680 px while every query above still read the window as wide: the
+   editor squeezed to a strip between the plan list and the planning partner. The sheet is the container. */
+.planning-sheet { container: plans-sheet / inline-size; }
+@container plans-sheet (max-width: 1200px) {
+  .planning-body { grid-template-columns: 165px minmax(0, 1fr); }
+  .planning-detail { padding: 16px; }
+  .planning-canvas { gap: 14px; grid-template-columns: minmax(0, 1fr) 300px; }
+  .planning-flow-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .planning-flow-rail li:nth-child(4)::after { display: none; }
+}
+@container plans-sheet (max-width: 1000px) {
+  .planning-detail { display: block; overflow: auto; }
+  .planning-workflow { max-height: none; overflow: visible; }
+  .planning-canvas { grid-template-columns: minmax(0, 1fr); }
+  .planning-editor { overflow: visible; }
+  .planning-copilot { min-height: 340px; }
+  .planning-copilot-body { flex: auto; max-height: 460px; }
+}
+@container plans-sheet (max-width: 780px) {
+  .planning-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .planning-sidebar { padding: 10px 16px; border-right: 0; border-bottom: 1px solid var(--hairline); max-height: 160px; }
+  .planning-sidebar > button { width: auto; margin: 0 8px 6px 0; }
+  .planning-list { display: flex; overflow: auto; gap: 8px; margin-top: 4px; }
+  .planning-list button { flex: 0 0 180px; padding: 8px 11px; }
+  .planning-library-label { display: none; }
+  .planning-library-empty { display: none; }
+  .planning-destination-actions { align-items: stretch; flex-direction: column; }
+}
 @media (prefers-reduced-motion: reduce) {
   .planning-field, .planning-field :is(input, textarea, select), .planning-flow-stage { transition: none !important; animation: none !important; }
   .planning-section-chevron { transition: none; }
