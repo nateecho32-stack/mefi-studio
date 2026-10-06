@@ -183,7 +183,9 @@ test("effort starts at a supported low level and escalates only bounded reasonin
 
 test("unchanged snapshots reuse ledger reads and summaries while reporting the current time", async (t) => {
   let clock = 100;
-  const { filePath, store } = await fixture(t, { now: () => clock });
+  // A file clock a minute on: the ledger is past the racy window, so its
+  // unchanged file times decide alone and nothing is read twice.
+  const { filePath, store } = await fixture(t, { now: () => clock, fileClock: () => Date.now() + 60000 });
   await store.record(observation("cached", { requestedEffort: "low" }));
   const originalRead = fs.readFile;
   let reads = 0, effortPartitions = 0;
@@ -251,12 +253,11 @@ test("external same-length edits, replacements, corruption and removal invalidat
   const edited = await stat(filePath, { bigint: true });
   assert.equal(edited.size, metadata.size);
   assert.equal(edited.mtimeNs, metadata.mtimeNs);
-  // The store's change key includes ctime, which is the only signal left once
-  // size and mtime are restored. Some filesystems (GitHub's Windows runners)
-  // do not advance it within one write, and then there is nothing to detect.
-  const snapshot = await store.snapshot();
-  if (edited.ctimeNs !== metadata.ctimeNs) assert.equal(snapshot.models[0].model, "model-b", "ctime detects edits even when size and mtime are restored");
-  else t.diagnostic("ctime did not advance within the edit on this filesystem; the same-size, same-mtime case is not observable here");
+  // The store's change key includes ctime, the only field left once size and
+  // mtime are restored, and some filesystems (GitHub's Windows runners) do
+  // not advance it within one write. The ledger changed moments ago, so the
+  // store compares its bytes as well and sees the edit either way.
+  assert.equal((await store.snapshot()).models[0].model, "model-b", "an edit that restores size and mtime is still noticed");
   const replacement = `${filePath}.replacement`;
   await writeFile(replacement, original.replace('"model-a"', '"model-c"'));
   await rename(replacement, filePath);
@@ -268,6 +269,51 @@ test("external same-length edits, replacements, corruption and removal invalidat
   assert.equal((await store.snapshot()).calls, 0);
   await writeFile(filePath, original);
   assert.equal((await store.snapshot()).models[0].model, "model-a");
+});
+
+// Every stat the store makes reports the file times of its first one, so a
+// test's writes all share one file-time tick, as writes a few milliseconds
+// apart do on Windows (15.6 ms ticks by default) or FAT (2 s). fileClock
+// reads age.ms past that tick.
+function oneFileTick(t) {
+  const realStat = fs.stat;
+  let tick = null;
+  t.mock.method(fs, "stat", async (...args) => {
+    const value = await realStat(...args);
+    tick ??= value.mtimeNs;
+    return Object.assign(Object.create(Object.getPrototypeOf(value)), value, { mtimeNs: tick, ctimeNs: tick });
+  });
+  const age = { ms: 1 };
+  return { age, fileClock: () => Number(tick) / 1e6 + age.ms };
+}
+
+test("a same-length rewrite in the cached version's file-time tick is noticed while the ledger is fresh", async (t) => {
+  const { age, fileClock } = oneFileTick(t);
+  const { filePath, store } = await fixture(t, { fileClock });
+  await store.record(observation("fresh"));
+  await store.snapshot();
+  const original = await readFile(filePath, "utf8");
+  await writeFile(filePath, original.replace('"model-a"', '"model-b"'));
+  assert.equal((await store.snapshot()).models[0].model, "model-b", "a cache hit on a fresh ledger compares its bytes");
+  age.ms = 60000;
+  const originalRead = fs.readFile;
+  let reads = 0;
+  t.mock.method(fs, "readFile", async (...args) => {
+    if (args[0] === filePath) reads += 1;
+    return originalRead(...args);
+  });
+  for (let index = 0; index < 3; index++) await store.snapshot();
+  assert.equal(reads, 1, "past the window one hit checks the bytes, then the file times decide alone");
+});
+
+test("racyMs 0 turns the byte check off, and the change key alone misses that rewrite", async (t) => {
+  const { fileClock } = oneFileTick(t);
+  const { filePath, store } = await fixture(t, { fileClock, racyMs: 0 });
+  await store.record(observation("fresh"));
+  await store.snapshot();
+  const original = await readFile(filePath, "utf8");
+  await writeFile(filePath, original.replace('"model-a"', '"model-b"'));
+  assert.equal((await store.snapshot()).models[0].model, "model-a", "with the check off, a same-tick rewrite of the same length keeps the cached ledger");
 });
 
 test("a failed atomic save cannot leave an unpersisted rating in the cache", async (t) => {

@@ -39,6 +39,32 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 model_performance: the corrupt-ledger race, and the store's cache compares a fresh ledger's bytes
+
+Branch `fix/model-perf-race` (C:\wt\mperf), landed from `land/model-perf-race` (off main 86cfa93, main merged in up to 89639b4). Hosted Windows CI failed "corrupt ledger failures preserve the file and
+do not poison subsequent operations" once (run 37455162395 on fx/scaling, attempt 1: "Missing expected rejection" at
+line 165; the re-run passed). The test's last outside edit rewrote the ledger in place, on the same inode, at the
+very length the store had written ("10" for "0" pays for the store's trailing newline: 1007 bytes both). The store
+keyed its cache on `[dev, ino, size, mtimeNs, ctimeNs]`, and file times move once per clock tick (15.6 ms on Windows
+by default; that test took 10 ms on the runner). When the store's save and the edit shared a tick, all five fields
+matched, `record()` reused the ledger `snapshot()`/`read()` had cached, and it resolved. The store now follows git's
+racy rule like `settings-cache.cjs`: for 2 s after the file's mtime or ctime, a cache hit reads the file and compares
+bytes before reusing the parsed ledger; past that the five fields decide alone (`racyMs: 0` turns it off). The
+corrupt-ledger test is unchanged; the external-edits test now asserts its ctime-only case instead of skipping it;
+two new tests hold the file times in one tick and pin the check and its off switch.
+
+Loops, one `node --test --test-name-pattern="corrupt ledger" tests/model_performance.test.mjs` at a time under a
+suites lease. Old store: quiet 34/200 failed, all at line 165 (a later quiet run 0/200: the file clock here steps
+1 ms while an app holds a fine timer resolution); 15 spinning threads 0/200 (load spreads the steps over ticks);
+with a preload rounding `fs.promises.stat` file times to 1 s, 98/100 failed at line 165. Fixed store, test
+unchanged: 1 s rounding 200/200 passed; quiet 200/200; 8 spinning threads (holding the Electron lane, so no fixture
+ran beside them) 100/100. `snapshot()` on a 10,000-row ledger (4.57 MB): a miss ~110 ms and a settled hit ~5.8 ms
+as before; a hit within 2 s of a change ~15 ms against ~6 ms (one async read and a byte compare). `npm run check` ok, `npm run audit` 0/0, eslint clean on both files, `npm run test:one` on the 14 suites that reach
+the store (model_performance, learning_host, model_routing, model_routing_evidence, model_win_evaluator,
+planning_routing, usage_tracker_host, task_cap_host, kind_routes_host, jev_model_routing_host,
+explicit_route_fallback, builder_thinking_host, build_home_host, ai_route_gate): 201/201. Not run: the full
+`npm test` (hosted CI runs the Node stage on the branch).
+
 ## 2026-10-06 My PCs: the owner's PCs live, splitting the queue, and a laptop that hands off on low battery
 
 Branch `feat/my-pcs` (C:\wt\pcs, merged with main twice in C:\wt\pcs2: the CHANGELOG kept from both sides, the
@@ -484,34 +510,6 @@ Seen in a browser preview of the real renderer files with a stub bridge: the fiv
 Make it yours, Share's text round trip (multi-line, one line, the YouTube link alone), Browse's box handing a shared
 list to Playlists, Save to a playlist from a Browse card (and Escape closing only it), Play putting 11 videos at the
 front of Up next with the playing row marked; no console errors.
-
-## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
-
-Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
-answer styles with ELI5 the default, `use_skill`, Team › Connectors, the parallel tool loop, the MCP pool and
-Streamable HTTP; 6318720 the twelve fixes an independent review found), landed from `land/skills` in
-`C:\wt\skills-land` with main merged twice (648e6ea over 00d32ca, 6e11811 over 33c3c4e: no conflicts beyond
-CHANGELOG, booklet.html rebuilt) and the release scope updated (1d5334a: Connectors move from 0.5.x into 0.5.0).
-
-Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on every step of the
-branch: fef2aef (run 37395870981), 6318720 (37397466087), 1d5334a (37397753111) and the landing commit 6e11811
-(37398222559). On this PC, on the landing tree: `npm run check` ok, `npm run audit` 0 errors and 0 warnings,
-`npm run lint` 0 errors and 45 warnings (as main). The suites this change touches or the merges brought in, run
-together on 6e11811: 321 tests, 320 pass, 1 skipped (skill_use, connectors, connectors_ui, chat_tools_ui,
-agent_tools_skills, skills_connectors_host, agent_rules, agent_rules_host, mentions_host, today_home,
-module_purity, skills_ipc, app_wide_ipc, booklet_build, size_page, friends_front_ui, friends_navigation, hub_host,
-project_hub_ui, rooms_ui, app_rail, relay_credits, relay_connect). Before the second merge, 568 tests on the touched
-suites: 567 pass, 1 skipped. Real windows, one at a time while no other session's window suite ran: team_render 1/1 (84 s) and sessions_render 1/1
-(134 s), the two fixtures this change edits; today_render, skills_render, composer_render, autonomy_render,
-agent_setup_render and unified_studio_render were still queued behind other sessions' window suites at landing.
-
-Measured: offering skills to a role (`autoSkills`, 30 skills in project and home) costs about 11 ms a call warm and
-114 ms cold; a second call to a connector reuses its open session (the pool keeps it 3 minutes, four servers at most;
-a worker keeps its own for the run). The review's fixes are pinned: an online connector gets only its saved values
-(never the PC's environment or the GitHub sign-in), one connector's calls keep their order, a bare `null` line, a
-404'd session and a server still starting at quit are handled, the values file is never wiped, `%TEMP%` tool folders
-are swept after six hours, `/name` counts only in the owner's own words. Kill switches MEFI_STUDIO_NO_SKILL_USE,
-MEFI_STUDIO_NO_CONNECTORS, MEFI_STUDIO_NO_MCP_POOL and MEFI_STUDIO_SERIAL_TOOLS, each pinned.
 
 ## Read Before Any Tests
 
