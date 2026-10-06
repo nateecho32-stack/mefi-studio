@@ -30,6 +30,7 @@ import { createOembed, publicLink } from './media.mjs';
 import { createPcs } from './pcs.mjs';
 import { CLOSE_CODES, FEATURES, LIMITS, NOW_PLAYING_PROVIDERS, OLDEST_PROTOCOL, PROTOCOL_VERSION, checkVersion, hubFrame, parseClientFrame, validateBody, validateQuery } from './protocol.mjs';
 import { createSessions, readConfig, describeMember } from './sessions.mjs';
+import { createShop } from './shop.mjs';
 import { createStore } from './store.mjs';
 import { DAY_MS, MINUTE_MS, SECOND_MS, b64url, cleanLine, cleanText, fromB64url, hmac, hmacKey, isOpaqueId, isSnowflake, keyedBuckets, newId, randomBytes } from './util.mjs';
 
@@ -148,6 +149,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   let credits = null;
   let economy = null;
   let events = null;
+  let shop = null;
   let pcs = null;
   let alarmAt = undefined; // unknown after a wake
   const oembed = createOembed({ fetch: fetchImpl, now });
@@ -190,6 +192,9 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     // Community events the relay runs by itself (events.mjs): the weekly Build Jam, co-work hours, building together.
     events = createEvents({ store, now, credits, economy, paused, rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
     events.routes(route);
+    // The Shop (shop.mjs): Studio's own items and members' style packs, bought with credits.
+    shop = createShop({ store, now, credits });
+    shop.routes(route);
     // My PCs (pcs.mjs): kept on the sockets, never in the store.
     pcs = createPcs({ readySockets, sendFrame, sockets, now, friendsOf });
     const at = now();
@@ -220,7 +225,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const onlineHidden = (uid) => store.get('SELECT online_hidden FROM members WHERE user_id = ?', uid)?.online_hidden === 1;
 
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building, FEATURES.events, FEATURES.pcs];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building, FEATURES.events, FEATURES.pcs, FEATURES.shop];
 
   // ---- rooms in the store --------------------------------------------------------
 
@@ -452,6 +457,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       credits.upkeep();
       events.upkeep();
       economy.upkeep();
+      shop.upkeep();
       store.setMeta('upkeep_at', at);
     });
   }
@@ -814,9 +820,12 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   // ---- HTTP ----------------------------------------------------------------------
 
   const ROUTES = [];
+  // A :name in a pattern is an opaque id, unless the route names its own pattern in options.param (the Shop's
+  // buy route, whose items may be Studio's own, "studio:skin-frost").
   const route = (method, pattern, handler, options = {}) => {
     const names = [];
-    const regex = new RegExp(`^${pattern.replace(/:([a-zA-Z]+)/g, (_, name) => (names.push(name), '([A-Za-z0-9_-]{1,64})'))}$`);
+    const param = options.param ?? '[A-Za-z0-9_-]{1,64}';
+    const regex = new RegExp(`^${pattern.replace(/:([a-zA-Z]+)/g, (_, name) => (names.push(name), `(${param})`))}$`);
     ROUTES.push({ method, regex, names, handler, options });
   };
 
@@ -1421,8 +1430,10 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       store.run('DELETE FROM leases WHERE member_id = ?', actor.uid);
       store.run('DELETE FROM token_cache WHERE user_id = ?', actor.uid);
       out.projects = count('SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?', actor.uid);
+      out.packs = count('SELECT COUNT(*) AS n FROM shop_packs WHERE maker_id = ?', actor.uid);
       credits.forget(actor.uid, fingerprint);
       events.forget(actor.uid);
+      shop.forget(actor.uid);
       store.run('DELETE FROM members WHERE user_id = ?', actor.uid);
       return out;
     });
@@ -1447,22 +1458,34 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
 
   route('GET', '/v1/admin/reports', () => {
     const rows = store.all(`SELECT * FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT 100`);
+    // A project report (credits.mjs) is kept as room "project" with the project's id as its message, and a Shop
+    // pack's (shop.mjs) as room "shop" with the pack's id.
+    const kindOf = (row) => (row.room_id === 'project' ? 'project' : row.room_id === 'shop' ? 'shop' : 'message');
     return reply(200, {
       ok: true,
-      // A project report (credits.mjs) is kept as room "project" with the project's id as its message.
-      reports: rows.map((row) => ({ id: row.id, kind: row.room_id === 'project' ? 'project' : 'message', roomId: row.room_id === 'project' ? null : row.room_id, messageId: row.room_id === 'project' ? null : row.message_id, projectId: row.room_id === 'project' ? row.message_id : null, author: row.author_id ? userView(row.author_id) : null, reporter: userView(row.reporter_id), reason: row.reason, text: row.text, verified: row.verified === 1, createdAt: row.created_at })),
+      reports: rows.map((row) => {
+        const kind = kindOf(row);
+        return {
+          id: row.id, kind, roomId: kind === 'message' ? row.room_id : null, messageId: kind === 'message' ? row.message_id : null,
+          projectId: kind === 'project' ? row.message_id : null, packId: kind === 'shop' ? row.message_id : null,
+          author: row.author_id ? userView(row.author_id) : null, reporter: userView(row.reporter_id), reason: row.reason, text: row.text, verified: row.verified === 1, createdAt: row.created_at,
+        };
+      }),
     });
   }, { mod: true });
 
-  route('POST', '/v1/admin/reports/:id/resolve', ({ actor, params }) => {
-    const row = store.get('SELECT id FROM reports WHERE id = ?', params.id);
+  // Resolving a report; with action "remove", a reported Shop pack also goes off the Shop for good (shop.remove).
+  route('POST', '/v1/admin/reports/:id/resolve', ({ actor, params, body }) => {
+    const row = store.get('SELECT id, room_id, message_id FROM reports WHERE id = ?', params.id);
     if (!row) return reply(404, { ok: false, error: 'not-found' });
+    if (body.action === 'remove' && row.room_id !== 'shop') return reply(400, { ok: false, error: 'bad-request', reason: 'action' });
     store.transaction(() => {
+      if (body.action === 'remove') shop.remove(row.message_id, actor.uid);
       store.run(`UPDATE reports SET status = 'resolved' WHERE id = ?`, row.id);
-      store.run('INSERT INTO audit (kind, actor_id, detail, at) VALUES (?, ?, ?, ?)', 'report-resolve', actor.uid, JSON.stringify({ reportId: row.id }), now());
+      store.run('INSERT INTO audit (kind, actor_id, detail, at) VALUES (?, ?, ?, ?)', 'report-resolve', actor.uid, JSON.stringify({ reportId: row.id, ...(body.action ? { action: body.action } : {}) }), now());
     });
     return reply(200, { ok: true });
-  }, { mod: true });
+  }, { mod: true, body: 'resolveReport' });
 
   route('POST', '/v1/admin/members/:uid/suspend', ({ actor, params, body }) => {
     const minutes = Number(body?.minutes);

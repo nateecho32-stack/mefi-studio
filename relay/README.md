@@ -36,11 +36,15 @@ that comes back has to match what was actually said.
 | Community events: each week's Build Jam (theme, entries as member and project ids, votes as voter and entrant ids, the results) and each co-work hour (its room, and how many of its three looks saw each member) | the events run by themselves | 180 days |
 | Building together: per member and day, how many looks found them in a co-work room with another member | the once-a-day together reward | 7 days |
 | Each day's count of members seen in the last 7 days | the day's community budget stays fixed once read | 400 days |
-| Reports: the reason, plus the reported message only when its relay signature checks out | moderation | 30 days |
+| Shop style packs: each member-made pack's name, blurb, price and data (colours and a few style keys, at most 2 KB), its sales count, whether it is listed, and its maker's id | the Shop | until its maker uses Forget me; a pack a moderator removed goes 30 days later |
+| What each member got in the Shop: the item's id, what it cost and when | the things you own, on every PC | until Forget me |
+| Reports: the reason, plus the reported message only when its relay signature checks out (for a project or a Shop pack, its name and what the reporter added) | moderation | 30 days |
 | Moderator actions (ids only) | accountability | 90 days |
 
 Forget me (`POST /v1/me/forget`) deletes every row about you and closes the
-rooms you own. Observability is off in `wrangler.toml`. Who's online and The
+rooms you own; your Shop packs are taken off for everyone, with no id, name
+or words of yours left in them.
+Observability is off in `wrangler.toml`. Who's online and The
 Lobby's front page (`GET /v1/front`) are read from the live connections when a
 member asks; nothing about who was online, or when, is written. When a member
 opens Studio, the people they share a room with (not the Lobby) hear it as a
@@ -61,7 +65,8 @@ room with (not the Lobby).
 
 ## Credits that cannot be farmed
 
-Credits are earned only by playing and starring other members' projects, and
+Credits are earned only by playing and starring other members' projects (and
+the community events and Shop sales below), and
 the relay works out every balance and rank itself: a Studio only shows what
 the relay says, so a changed Studio can change only its own screen. Against
 alt accounts, trading and replays:
@@ -150,6 +155,44 @@ fixed amounts and caps. `GET /v1/events` returns the week's jam, the co-work
 hour, the member's together count and today's budget; `GET /v1/front` carries
 a one-line summary.
 
+## The Shop
+
+Credits are spent in the Shop (`src/shop.mjs`, feature `shop`). They are
+still only earned: there is no way to pay money in or take credits out, and
+everything free in Studio stays free, since the Shop sells new things only:
+
+- **Studio's own items**, defined in code (`CATALOG`): four scales for Ember,
+  the dragon that flies around every Studio (Ember is free and built in);
+  three ways for menus to leave; and three style packs. What they cost
+  leaves the economy.
+- **Style packs** members make. A pack is data only (`src/shop-pack.mjs`):
+  four or five colours, and a node style, a material and a font from Studio's
+  own lists, at most 2 KB. A key the schema does not name is refused, so a
+  pack cannot carry CSS, links or images, and its text and accent have to
+  read well (WCAG contrast 4.5 and 3). Free, or 10 to 250 credits.
+
+A purchase is one transaction: the item, the price the member was shown and
+their balance are checked, the credits come off the balance, and the item is
+theirs on every PC. A member may add a tip of up to 100 credits to a pack,
+a free one too (Studio's own items take none). A pack's maker earns 75% of
+what was paid, tip included, only when buyer and maker are both in good
+standing; one buyer is worth at most 100 credits to one maker in 7 days,
+and a maker earns at most 300 a day from sales. The rest is nobody's, so
+moving credits between two accounts through the Shop loses at least a
+quarter of them every time, and soon pays nothing. Selling needs the same good standing as earning; a free pack needs
+only a member who may write. A maker lists 12 packs at most and publishes 4 a
+day, and the Shop holds 2000.
+
+`GET /v1/shop?view=studio|new|top|owned|mine` lists (30 packs a page, with
+`cursor`), `GET /v1/shop/owned` puts what a member owns back on a new PC, and
+`POST /v1/shop/:id/buy` (`{ "price": 40 }`, and for a pack an optional
+`"tip"`) buys. `POST /v1/shop/packs`
+publishes a pack, `PUT /v1/shop/packs/:id` changes or lists it again, and
+`DELETE` takes it off the lists (whoever owns it keeps it, with its newest
+colours). `POST /v1/shop/packs/:id/report` reports one; moderators remove it
+with `POST /v1/admin/shop/:id/remove`, or by resolving its report with
+`{ "action": "remove" }`, and nobody is served it again.
+
 ## Layout
 
 | File | Purpose |
@@ -164,6 +207,7 @@ a one-line summary.
 | `src/leases.mjs` · `src/paths.mjs` | Cowork claims, carried over from the hub. |
 | `src/events.mjs` · `src/economy.mjs` | Community events the relay runs by itself, and the daily community budget they draw on. |
 | `src/pcs.mjs` | My PCs: which PCs see each other, status lines and envelopes passed between them, kept on the sockets only. |
+| `src/shop.mjs` · `src/shop-pack.mjs` | The Shop: Studio's own items, members' style packs, purchases and a maker's share; what a pack may hold. |
 | `src/store.mjs` | The schema and its migrations. |
 | `node/adapter.mjs` | The real Worker and Hub under Node with in-memory sockets and a scripted Discord, for Studio's tests. |
 | `scripts/smoke.mjs` | A real-network check of a running relay. |
@@ -214,6 +258,7 @@ and The Lobby reads once a minute only while it is on screen. The community
 events add about 15 short alarms a day (three co-work hours, each opened,
 looked at three times and closed) and one jam close a week; the building
 together looks ride on the 15-minute sweep that already runs while anyone is
-connected, and Friends › Events reads once when it opens. That fits a
+connected, and Friends › Events reads once when it opens. The Shop reads when
+a member opens it and writes only when someone buys or publishes. That fits a
 community of several hundred people a day; past that, the $5 Workers Paid plan
 lifts every limit.
