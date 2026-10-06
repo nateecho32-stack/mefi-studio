@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The window no longer scrolls under a page.** The Model catalog and
+  Settings pages sat, invisible, under Home, the Map, Work's pages and
+  Friends and kept the window three screens tall, so a scroll arrow sat
+  over the status bar and the mouse wheel could scroll the window. They
+  are now left out while another page is on show.
 - **Activity, the permissions menu and the Team card no longer cover or
   cut their own words.** On Home's chat view, Activity used to lie over the
   conversation, message box and Send included, at every window width in the
