@@ -86,6 +86,15 @@ progress delivers the board at once, untouched cards keep their objects, progres
 nothing, and the seeded walk checks every live delivery against the host's board). Electron fixtures not run here
 (no Electron in the container); judged on the Windows "Studio checks" run of this commit.
 
+## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
+
+Branch `fix/linux-ci` (60b90a1, off main dfda798), test expectations only: rust_modules feeds the image-store
+factory's folder() a platform-native absolute folder (a `C:\` path is relative on Linux), and package_host names
+the Rust host program mefi-studio.exe on Windows and mefi-studio elsewhere, as rust-host.mjs does. Here (Windows):
+rust_modules and package_host pass alone. Hosted CI on the branch (run 37395258702, Windows): the whole chain green.
+studio-linux.yml runs on the main push this lands with; it failed on every main push since 4 October on exactly
+these two tests.
+
 ## 2026-10-05 The Mefi Studio relay, the Project hub, the Lobby and one Friends page land on main
 
 Branch `wip/friends-ux` in `C:\wt\fux`: wip/relay (the Cloudflare relay under `relay/`, hub-client, room history,
@@ -541,32 +550,6 @@ preview (17 rows) and glance were byte-identical JSON to the JavaScript's.
 Timing on this checkout: glance about 330 ms and preview about 720 ms in
 both (git's own time). `fsutil fsinfo volumeinfo` is refused without admin
 on this PC, so the weak-drive check reads unknown in both languages.
-
-## 2026-10-03 Rust stage 2: the store and repo modules move into Rust
-
-Branch `wip/rust-host`, after 80b1e0e. The OpenCode store reads
-(`eyes.mjs` worker methods) and `sync.mjs`/`worktrees.mjs`/
-`worktree-actions.mjs` now have Rust ports in `crates/mefi-core`, served under
-the Rust host only.
-
-Full `npm test` on the store port (node_modules junctioned to the main
-checkout, so the Electron lane ran): Node 6765 tests, 0 fail in the parallel
-stage; Python 248 OK; path lock ok. Four Electron fixtures failed in the
-loaded run: `tree_dynamics_render` and `today_render` pass solo (load);
-`layout_contract_render` (viewport 1921x1081, was 1920x1080) and
-`shell_render` (373 vs 372 px) fail identically on a clean origin/main
-worktree (72c6f58) on this PC, so they are this display's state, not the port.
-
-After the repo port: `npm run check` ok (265 targets), `npm run test:fast`
-6768 tests, 0 fail; lint 0 errors, no new warnings; audit ok; 16 mefi-core
-unit tests. Parity: `tests/rust_parity_eyes.test.mjs` (4 tests, ~100 store
-reads plus the dump and git helpers) and `tests/rust_parity_repo.test.mjs`
-(3 tests: sync through clean/behind/check-failed/pushed/diverged/rebased,
-lost work found and acknowledged, every worktree action) all identical. On
-the owner's 20 GB OpenCode store, read-only: 12 of 12 reads identical;
-usageLedger cold 2.1 s vs 3.1 s, warm 22 ms vs ~190 ms. Live self-test on
-the Rust host: `eyes:state` and `worktrees:list` answered through Rust
-(rustCalls lists eyes.* and repo.sync.sync, repo.worktrees.listWorktrees).
 
 ## Read Before Any Tests
 
