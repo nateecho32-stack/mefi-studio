@@ -1923,6 +1923,36 @@ this.stateRingOf = stateRingOf;`, env);
   assert.equal(ring({ kind: "agent", status: "running" }, true), null, "agents keep their own dress");
 });
 
+test("a state ring draws on its own: the legend colour round the style's outline, a deep ink on a light page, still with motion off", () => {
+  const strokes = [], outlines = [];
+  const kept = [];
+  const ctx = { globalAlpha: 1, lineWidth: 1, strokeStyle: "", save() { kept.push([this.globalAlpha, this.lineWidth, this.strokeStyle]); }, restore() { [this.globalAlpha, this.lineWidth, this.strokeStyle] = kept.pop(); }, beginPath() {}, arc() { outlines.push("arc"); }, stroke() { strokes.push([this.strokeStyle, this.lineWidth, this.globalAlpha]); } };
+  const NODE_RGB = { warm: [230, 201, 141], amber: [255, 212, 121], verify: [151, 179, 244], done: [104, 236, 164] };
+  const run = (key, { light = false, still = false } = {}) => {
+    strokes.length = 0; outlines.length = 0;
+    const env = vm.createContext({
+      NODE_RGB, Math,
+      state: { nodeTheme: { light }, nodeStyle: "orbs" },
+      rgba: (triple, alpha) => `rgba(${triple.join(",")},${alpha})`,
+      window: { MefiNodeStyles: { outline: (_ctx, style, x, y, r) => outlines.push([style, x, y, r]), inkOf: (triple) => ({ hot: triple.map((value) => Math.round(value / 2)) }) } },
+    });
+    vm.runInContext(`${section("function stateRingOf(", "function drawWorkOrbit(")}
+this.drawStateRing = drawStateRing;`, env);
+    env.drawStateRing(ctx, { _detail: 3 }, { x: 100, y: 50 }, 12, key, { seed: 0.25 }, 1200, still, 1);
+    return { strokes: [...strokes], outlines: [...outlines] };
+  };
+  const held = run("held");
+  assert.equal(held.outlines[0][0], "orbs", "the ring follows the style's own outline");
+  assert.ok(held.outlines[0][3] > 12 + 3, "a few pixels off the orb");
+  assert.match(held.strokes[0][0], /^rgba\(255,212,121,/, "Needs you is the legend's amber");
+  assert.equal(held.strokes.length, 2, "and glows a little on a dark sky");
+  assert.match(run("done").strokes[0][0], /^rgba\(104,236,164,/);
+  assert.equal(run("done").strokes.length, 1, "Done holds still, no glow");
+  assert.match(run("verify", { light: true }).strokes[0][0], /^rgba\(76,90,122,/, "a light page takes the deep ink");
+  const a = run("active", { still: true }), b = run("active", { still: true });
+  assert.deepEqual(a, b, "with motion off the ring holds still");
+});
+
 test("music moves the overview only inside the frame it keeps in reserve", () => {
   for (const layout of ["constellation", "tree", "helix", "layers"]) {
     const { env, state, nodes, area } = overviewFixture(layout);

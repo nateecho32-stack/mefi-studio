@@ -4452,16 +4452,17 @@
   // phase; Review and Done hold still, as everything does with motion off. On a
   // light page the colour takes its deep ink so it reads on the pale ground.
   function drawStateRing(ctx, node, p, radius, key, motion, time, still, dim) {
+    const styles = globalThis.window?.MefiNodeStyles;
     const triple = key === "held" ? NODE_RGB.amber : key === "verify" ? NODE_RGB.verify : key === "done" ? NODE_RGB.done : NODE_RGB.warm;
     const light = state.nodeTheme?.light === true;
-    const ink = light ? nodeStyles?.inkOf?.(triple, state.nodeTheme)?.hot ?? triple : triple;
+    const ink = light ? styles?.inkOf?.(triple, state.nodeTheme)?.hot ?? triple : triple;
     const period = key === "active" ? 2400 : key === "held" ? 1400 : 0;
     const beat = still || !period ? 0.5 : 0.5 + 0.5 * Math.sin(Math.PI * 2 * (time / period + (motion?.seed ?? 0)));
     const gap = 3.2 + (key === "held" ? 1.4 : 0.6) * beat;
     ctx.save();
     ctx.globalAlpha *= dim;
     ctx.beginPath();
-    if (nodeStyles) nodeStyles.outline(ctx, state.nodeStyle ?? "orbs", p.x, p.y, radius + gap, motion);
+    if (styles) styles.outline(ctx, state.nodeStyle ?? "orbs", p.x, p.y, radius + gap, motion);
     else ctx.arc(p.x, p.y, radius + gap, 0, Math.PI * 2);
     ctx.strokeStyle = rgba(ink, Math.round((light ? 0.9 : 0.62 + 0.3 * beat) * 32) / 32);
     ctx.lineWidth = key === "held" ? 2.2 : 1.8;
