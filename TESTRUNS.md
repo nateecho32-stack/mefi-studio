@@ -39,6 +39,23 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Playlists in the media menu land on main
+
+Branch `feat/playlists` in `C:\wt\playlists` (9064526: renderer/playlists.js, the music.js hooks, music.css, docs),
+rebased onto main d55269f with the CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged.
+
+Windows CI (`Studio checks`: build-booklet and its diff, check, the full `npm test` with the Python contracts, audit)
+green on the first push of the branch (run 37398280329, 7 min 19 s). On this PC, after each rebase: `npm run check`
+ok (285 targets, every selector used), eslint on the touched files clean, `npm run audit` no findings; music 123/123,
+playlists 12/12 (new), booklet_build, together_ui: 150 pass. Electron, run alone while another session's suites came
+and went: media_window_render 1/1 (69 s) and media_browser_render 1/1 (17 s), the two fixtures that open the media
+menu. command_render only opens it for the Tree reactions this does not change, and was not run here.
+
+Seen in a browser preview of the real renderer files with a stub bridge: the five starting points with thumbnails,
+Make it yours, Share's text round trip (multi-line, one line, the YouTube link alone), Browse's box handing a shared
+list to Playlists, Save to a playlist from a Browse card (and Escape closing only it), Play putting 11 videos at the
+front of Up next with the playing row marked; no console errors.
+
 ## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
 
 Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
@@ -504,32 +521,6 @@ same way on clean main on this PC; command_render and planning_render pass;
 Python 248 OK (1 skipped); path lock ok. Captures at 1920x1080 in
 `C:\wt\gap\after-work\` with prototype-left side-by-sides in
 `C:\wt\gap\after-work\compare\`.
-## 2026-10-04 Rust stage 2: five more modules move into Rust
-
-Branch `rust/stage2-ports` in `C:\wt\rust2` (pushed as wip/rust-stage2-ports):
-the Skills page's files (55281f0), a message's pictures (cd8cc2c), attempt
-snapshots (0ff6869), settings + keys + projects (1435ae9), and the Git chip's
-host layer with git-link's describe and chip (c5a1e03), each behind a
-Rust-backed factory in scripts/rust-modules.cjs, each with its parity test
-(rust_parity_skills, rust_parity_images, rust_parity_snapshots: twin repos
-with a fixed clock give the same commit ids; rust_parity_settings: main.cjs's
-own settings code from its text against Rust on twin userData folders;
-rust_parity_git: describe on about 830 sets of facts and 28 host steps on
-two boxes with the fake gh). `mefi-core repo-batch` now answers a
-{ $mefi: "fn" } argument with null and lists its calls.
-
-Full `npm test` on c5a1e03: Node 6899 tests, 6885 pass, 14 skipped, 0 fail;
-Electron lane 75: 70 pass, 1 skipped, 4 fail: layout_contract_render and
-shell_render (viewport 1921x1081, as on clean main on this PC),
-evidence_capture ("UnknownVizError") and task_overview_render ("No fixture
-report"), both while another worktree's full run shared the Electron stage:
-each passes alone (1/1, 1/1). Python 248 OK; path lock ok; `npm run audit` 0
-findings; `npm run check` ok (271 targets). An earlier run on 1435ae9 had the
-same picture apart from attempt_review_host "a shot that is slow" (28/28
-alone). A first run was stopped and its children kept running into a second
-one: overlapping runs failed to start processes (0xC0000142) and wrote one
-log; neither is counted here. `cargo test --lib` 26 pass.
-
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
