@@ -1,0 +1,544 @@
+// Community events the relay runs by itself, on its alarm, with nobody to
+// organise them:
+//
+// - The weekly Build Jam. Every Monday at 00:00 UTC a jam opens with a theme
+//   from the list below (next week's is shown too, so people can plan).
+//   Until Saturday a member may enter one of their shared projects; until
+//   the next Monday members play the entries and vote for up to three. A
+//   vote counts only from a member in good standing (credits.mjs standing())
+//   who played that entry during the jam (play_log, which already holds only
+//   plays from members in good standing, once per player and day). On Monday
+//   the results are paid from the jam's pool (economy.mjs): an entry played
+//   by three or more members earns a showcase reward, and the top three with
+//   at least two votes share the rest 50/30/20. Votes stay hidden until then.
+// - Co-work hours. Three times a day (02:00, 10:00 and 18:00 UTC) the relay
+//   opens a listed co-work room for an hour. It looks who is there at three
+//   moments (15, 35 and 55 minutes in); everyone seen at two of them, with at
+//   least one other member seen too, earns 4 credits. The room closes at the
+//   end of the hour.
+// - Building together. In any member's co-work room, two or more members with
+//   the room open at once earn a tick each time the relay looks (at most every
+//   10 minutes); three ticks in a day pay 4 credits, once a day.
+//
+// Every reward goes through credits.award(): both sides in good standing, paid
+// once per (giver, earner, kind, what), under the kind's caps and, for the
+// together and co-work rewards, the day's community budget. The giver of a
+// together or co-work reward is a member who was there with the earner, so
+// the 15-a-week limit between two members applies: two aged accounts sitting
+// in a room are capped like everything else. A jam prize's giver is the event.
+// There are no rewards for inviting or bringing anyone (Discord's platform
+// rules): credits come from building and playing together.
+
+import { DAY_MS, HOUR_MS, MINUTE_MS, isOpaqueId, isSnowflake } from './util.mjs';
+import { dayOf } from './economy.mjs';
+
+export const WEEK_MS = 7 * DAY_MS;
+/** Monday 5 January 1970, 00:00 UTC: weeks are counted from here, so a jam runs Monday to Monday. */
+export const FIRST_MONDAY = Date.UTC(1970, 0, 5);
+export const weekOf = (ms) => Math.floor((ms - FIRST_MONDAY) / WEEK_MS);
+export const weekStart = (week) => FIRST_MONDAY + week * WEEK_MS;
+
+export const JAM = Object.freeze({
+  entriesMs: 5 * DAY_MS, // Monday to Saturday 00:00: enter, play and vote
+  votesPerMember: 3,
+  placeMinVotes: 2,
+  shares: Object.freeze([0.5, 0.3, 0.2]),
+  showcasePlayers: 3, // members who played an entry, for its showcase reward
+  showcaseAmount: 5,
+  showcaseShareMax: 0.3, // of the pool, at most, for all the showcase rewards together
+  listMax: 100,
+});
+
+export const COWORK = Object.freeze({
+  hoursUtc: Object.freeze([2, 10, 18]),
+  lengthMs: HOUR_MS,
+  opensEarlyMs: 10 * MINUTE_MS,
+  checksAt: Object.freeze([15 * MINUTE_MS, 35 * MINUTE_MS, 55 * MINUTE_MS]),
+  checksNeeded: 2,
+  minAttendees: 2,
+  amount: 4,
+  maxMembers: 25,
+  name: 'Co-work hour',
+});
+
+export const TOGETHER = Object.freeze({ everyMs: 10 * MINUTE_MS, ticksNeeded: 3, amount: 4 });
+
+export const EVENT_KEEP_MS = 180 * DAY_MS;
+
+/** One theme a week, in this order, round and round. Short, open, kind to any kind of project. */
+export const THEMES = Object.freeze([
+  'One button', 'Tiny worlds', 'Night shift', 'Echoes', 'Gravity is optional', 'Made of paper', 'Lost and found',
+  'Only one room', 'Weather', 'Machines with feelings', 'Upside down', 'Glow', 'Something is following you',
+  'Build it twice', 'Shapes', 'Time loop', 'Under the sea', 'Small sounds', 'The last level', 'Garden',
+  'Signals', 'Collect them all', 'Fix it', 'Mirror', 'Fast and slow', 'Home', 'Out of order', 'Friends',
+  'Leftovers', 'The map is wrong',
+]);
+
+export const themeFor = (week) => THEMES[((week % THEMES.length) + THEMES.length) % THEMES.length];
+
+export function jamWindow(week) {
+  const startsAt = weekStart(week);
+  return { id: `jam_w${week}`, week, startsAt, entriesUntil: startsAt + JAM.entriesMs, endsAt: startsAt + WEEK_MS, theme: themeFor(week) };
+}
+
+export function jamPhase(row, at) {
+  if (row.status !== 'open') return 'results';
+  if (at < row.entries_until) return 'entries';
+  if (at < row.ends_at) return 'voting';
+  return 'results';
+}
+
+/** The co-work hour slot covering `at` (opening early included), or null. */
+export function coworkSlot(at) {
+  const day = dayOf(at);
+  for (const offset of [0, 1]) {
+    for (const hour of COWORK.hoursUtc) {
+      const startsAt = (day + offset) * DAY_MS + hour * HOUR_MS;
+      if (at >= startsAt - COWORK.opensEarlyMs && at < startsAt + COWORK.lengthMs) return { id: `cowork_d${day + offset}h${hour}`, startsAt, endsAt: startsAt + COWORK.lengthMs };
+    }
+  }
+  return null;
+}
+
+/** When the next co-work hour starts, after `at`. */
+export function nextCoworkStart(at) {
+  const day = dayOf(at);
+  for (const offset of [0, 1]) {
+    for (const hour of COWORK.hoursUtc) {
+      const startsAt = (day + offset) * DAY_MS + hour * HOUR_MS;
+      if (startsAt > at) return startsAt;
+    }
+  }
+  return null;
+}
+
+/**
+ * How a jam's pool is paid: showcase rewards first (at most 30% of the pool,
+ * 5 each, less each when many earn one), then the places 50/30/20 from the
+ * rest. `ranked` is the entries in final order: [{ userId, votes, players }].
+ * -> [{ userId, place|null, amount, why: 'place'|'showcase' }]
+ */
+export function splitPool(pool, ranked) {
+  const payouts = new Map();
+  const add = (userId, amount, why, place = null) => {
+    if (amount <= 0) return;
+    const was = payouts.get(userId) ?? { userId, place: null, amount: 0, why };
+    was.amount += amount;
+    if (place !== null) {
+      was.place = place;
+      was.why = 'place';
+    }
+    payouts.set(userId, was);
+  };
+  const showcase = ranked.filter((entry) => entry.players >= JAM.showcasePlayers);
+  const each = showcase.length ? Math.min(JAM.showcaseAmount, Math.floor((pool * JAM.showcaseShareMax) / showcase.length)) : 0;
+  for (const entry of showcase) add(entry.userId, each, 'showcase');
+  const rest = pool - each * showcase.length;
+  const placed = ranked.filter((entry) => entry.votes >= JAM.placeMinVotes).slice(0, JAM.shares.length);
+  placed.forEach((entry, index) => add(entry.userId, Math.floor(rest * JAM.shares[index]), 'place', index + 1));
+  return [...payouts.values()];
+}
+
+/**
+ * createEvents({ store, now, credits, economy, rooms })
+ *   credits: { award(o) -> Promise<number>, standing(uid, held), heldUntil(uid) -> Promise<number>, card(uid) }
+ *   economy: createEconomy(...)
+ *   rooms:   { present(roomId) -> uid[], open({ name, maxMembers }) -> roomId, join(roomId, uid) -> result, close(roomId), member(roomId, uid) -> bool }
+ * -> { routes(route), tick(), nextDue(), forget(uid), upkeep(), summary(uid) }
+ */
+export function createEvents({ store, now, credits, economy, rooms }) {
+  const eventRow = (id) => (isOpaqueId(id) ? store.get('SELECT * FROM events WHERE id = ?', id) : undefined);
+  const nameOf = (uid) => store.get('SELECT name FROM members WHERE user_id = ?', uid)?.name ?? 'member';
+
+  // ---- the weekly Build Jam -------------------------------------------------------
+
+  /** This week's jam, made the first time anyone or the alarm asks. */
+  function currentJam(at = now()) {
+    const window = jamWindow(weekOf(at));
+    store.run(
+      `INSERT INTO events (id, kind, title, theme, starts_at, entries_until, ends_at, status) VALUES (?, 'jam', ?, ?, ?, ?, ?, 'open') ON CONFLICT (id) DO NOTHING`,
+      window.id, `Build Jam: ${window.theme}`, window.theme, window.startsAt, window.entriesUntil, window.endsAt,
+    );
+    return eventRow(window.id);
+  }
+
+  const jamDays = (row) => ({ from: dayOf(row.starts_at), to: dayOf(row.ends_at - 1) });
+
+  /** Members in good standing who played the entry's project during the jam (its owner never counts). */
+  function playersOf(row, entry) {
+    const { from, to } = jamDays(row);
+    return Number(store.get('SELECT COUNT(DISTINCT player_id) AS n FROM play_log WHERE project_id = ? AND day BETWEEN ? AND ? AND player_id <> ?', entry.project_id, from, to, entry.user_id)?.n ?? 0);
+  }
+
+  function playedDuring(row, projectId, uid) {
+    const { from, to } = jamDays(row);
+    return Boolean(store.get('SELECT 1 AS yes FROM play_log WHERE project_id = ? AND player_id = ? AND day BETWEEN ? AND ?', projectId, uid, from, to));
+  }
+
+  function projectLite(projectId) {
+    const row = store.get('SELECT id, owner_id, url, host, title, blurb, kind FROM projects WHERE id = ?', projectId);
+    return row ? { id: row.id, ownerId: row.owner_id, url: row.url, host: row.host, title: row.title, blurb: row.blurb, kind: row.kind } : null;
+  }
+
+  function jamView(row, uid, at = now()) {
+    const phase = jamPhase(row, at);
+    const entries = store.all('SELECT * FROM event_entries WHERE event_id = ? ORDER BY at LIMIT ?', row.id, JAM.listMax);
+    const mine = store.all('SELECT entrant_id FROM event_votes WHERE event_id = ? AND voter_id = ?', row.id, uid).map((vote) => vote.entrant_id);
+    const results = row.results ? JSON.parse(row.results) : null;
+    const { from, to } = jamDays(row);
+    const out = {
+      id: row.id,
+      title: row.title,
+      theme: row.theme,
+      phase,
+      startsAt: row.starts_at,
+      entriesUntil: row.entries_until,
+      endsAt: row.ends_at,
+      // The pool so far: what the budget left on the jam's finished days.
+      pool: row.pool ?? economy.jamPool(from, Math.min(to, dayOf(at) - 1)),
+      nextTheme: themeFor(weekOf(row.starts_at) + 1),
+      entries: entries.map((entry) => {
+        const project = projectLite(entry.project_id);
+        const view = {
+          user: { id: entry.user_id, name: nameOf(entry.user_id) },
+          project,
+          players: playersOf(row, entry),
+          mine: entry.user_id === uid,
+          voted: mine.includes(entry.user_id),
+          played: project ? playedDuring(row, project.id, uid) : false,
+        };
+        // Votes stay hidden while the jam runs, so nobody votes with the crowd.
+        if (results) view.votes = results.votes?.[entry.user_id] ?? 0;
+        return view;
+      }),
+      you: {
+        entered: entries.find((entry) => entry.user_id === uid)?.project_id ?? null,
+        votesLeft: Math.max(0, JAM.votesPerMember - mine.length),
+      },
+    };
+    if (results) out.results = results.payouts;
+    return out;
+  }
+
+  /** Closing a jam: count the votes that still stand, then pay. Safe to run again: each payment is paid once. */
+  async function closeJam(row) {
+    if (row.status === 'closed') return;
+    if (row.status === 'open') {
+      const entries = store.all('SELECT * FROM event_entries WHERE event_id = ?', row.id);
+      const votes = store.all('SELECT voter_id, entrant_id FROM event_votes WHERE event_id = ?', row.id);
+      const voters = [...new Set(votes.map((vote) => vote.voter_id))];
+      const held = new Map();
+      for (const voter of voters) held.set(voter, await credits.heldUntil(voter));
+      store.transaction(() => {
+        const fresh = eventRow(row.id);
+        if (fresh.status !== 'open') return;
+        const good = new Set(voters.filter((voter) => credits.standing(voter, held.get(voter)).ok));
+        const tally = {};
+        for (const vote of votes) {
+          const entry = entries.find((item) => item.user_id === vote.entrant_id);
+          if (!entry || !good.has(vote.voter_id) || vote.voter_id === entry.user_id) continue;
+          if (!playedDuring(fresh, entry.project_id, vote.voter_id)) continue;
+          tally[entry.user_id] = (tally[entry.user_id] ?? 0) + 1;
+        }
+        const ranked = entries
+          .map((entry) => ({ userId: entry.user_id, projectId: entry.project_id, votes: tally[entry.user_id] ?? 0, players: playersOf(fresh, entry), at: entry.at }))
+          .sort((a, b) => b.votes - a.votes || b.players - a.players || a.at - b.at);
+        const { from, to } = jamDays(fresh);
+        const pool = entries.length ? economy.jamPool(from, to) : 0;
+        const payouts = splitPool(pool, ranked).map((payout) => ({ ...payout, projectId: ranked.find((entry) => entry.userId === payout.userId)?.projectId ?? null, name: nameOf(payout.userId) }));
+        store.run(`UPDATE events SET status = 'paying', pool = ?, results = ? WHERE id = ?`, pool, JSON.stringify({ votes: tally, payouts, entries: entries.length }), row.id);
+      });
+    }
+    const paying = eventRow(row.id);
+    if (paying?.status !== 'paying') return;
+    const results = JSON.parse(paying.results ?? '{}');
+    for (const payout of results.payouts ?? []) {
+      const paid = await credits.award({ actor: `event:${paying.id}`, target: payout.userId, kind: 'jam', uniq: paying.id, ref: paying.id, amount: payout.amount });
+      payout.paid = paid;
+    }
+    store.run(`UPDATE events SET status = 'closed', results = ?, closed_at = ? WHERE id = ? AND status = 'paying'`, JSON.stringify(results), now(), paying.id);
+  }
+
+  // ---- co-work hours --------------------------------------------------------------
+
+  /** The co-work hour open now (made, with its room, the first time it is asked for). */
+  function currentCowork(at = now()) {
+    const slot = coworkSlot(at);
+    if (!slot) return null;
+    let row = eventRow(slot.id);
+    if (!row) {
+      store.transaction(() => {
+        if (eventRow(slot.id)) return;
+        const roomId = rooms.open({ name: COWORK.name, maxMembers: COWORK.maxMembers });
+        store.run(`INSERT INTO events (id, kind, title, room_id, starts_at, ends_at, status) VALUES (?, 'cowork', ?, ?, ?, ?, 'open')`, slot.id, COWORK.name, roomId, slot.startsAt, slot.endsAt);
+      });
+      row = eventRow(slot.id);
+    }
+    return row;
+  }
+
+  function coworkView(row, uid, at = now()) {
+    if (!row) return null;
+    const attendees = Number(store.get('SELECT COUNT(*) AS n FROM event_attendance WHERE event_id = ? AND checks >= ?', row.id, COWORK.checksNeeded)?.n ?? 0);
+    return {
+      id: row.id,
+      title: row.title,
+      roomId: row.status === 'open' ? row.room_id : null,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      started: at >= row.starts_at,
+      joined: row.status === 'open' && row.room_id ? rooms.member(row.room_id, uid) : false,
+      here: row.status === 'open' && row.room_id ? rooms.present(row.room_id).length : 0,
+      checks: Number(store.get('SELECT checks FROM event_attendance WHERE event_id = ? AND user_id = ?', row.id, uid)?.checks ?? 0),
+      checksDone: row.checks_done,
+      checksNeeded: COWORK.checksNeeded,
+      attendees,
+      amount: COWORK.amount,
+    };
+  }
+
+  /** Look who is in the room at each check that is due; at the end, pay and close. */
+  async function runCowork(row, at) {
+    if (row.status !== 'open') return;
+    const due = COWORK.checksAt.filter((offset) => at >= row.starts_at + offset).length;
+    if (due > row.checks_done && row.room_id) {
+      const here = rooms.present(row.room_id);
+      store.transaction(() => {
+        const fresh = eventRow(row.id);
+        if (fresh.checks_done >= due) return;
+        for (const uid of here) {
+          store.run('INSERT INTO event_attendance (event_id, user_id, checks) VALUES (?, ?, 1) ON CONFLICT (event_id, user_id) DO UPDATE SET checks = checks + 1', row.id, uid);
+        }
+        store.run('UPDATE events SET checks_done = ? WHERE id = ?', due, row.id);
+      });
+    }
+    if (at < row.ends_at) return;
+    const attended = store.all('SELECT user_id, checks FROM event_attendance WHERE event_id = ? AND checks >= ? ORDER BY checks DESC, user_id', row.id, COWORK.checksNeeded);
+    const held = new Map();
+    for (const one of attended) held.set(one.user_id, await credits.heldUntil(one.user_id));
+    const good = attended.filter((one) => credits.standing(one.user_id, held.get(one.user_id)).ok);
+    const paid = {};
+    if (good.length >= COWORK.minAttendees) {
+      for (const one of good) {
+        // The giver is the member who was there longest with them, so two accounts are capped as a pair.
+        const partner = good.find((other) => other.user_id !== one.user_id);
+        paid[one.user_id] = await credits.award({ actor: partner.user_id, target: one.user_id, kind: 'cowork', uniq: row.id, ref: row.id });
+      }
+    }
+    store.run(`UPDATE events SET status = 'closed', results = ?, closed_at = ? WHERE id = ? AND status = 'open'`, JSON.stringify({ attended: attended.length, paid }), now(), row.id);
+    if (row.room_id) rooms.close(row.room_id);
+  }
+
+  // ---- building together ------------------------------------------------------------
+
+  async function together(at) {
+    if (at - Number(store.meta('together_at') ?? 0) < TOGETHER.everyMs) return;
+    store.setMeta('together_at', at);
+    const eventRooms = new Set(store.all(`SELECT room_id FROM events WHERE kind = 'cowork' AND room_id IS NOT NULL`).map((row) => row.room_id));
+    const groups = [];
+    for (const room of store.all(`SELECT id FROM rooms WHERE kind = 'cowork' AND status = 'active'`)) {
+      if (eventRooms.has(room.id)) continue;
+      const here = rooms.present(room.id);
+      if (here.length >= 2) groups.push(here);
+    }
+    if (!groups.length) return;
+    const held = new Map();
+    for (const uid of new Set(groups.flat())) held.set(uid, await credits.heldUntil(uid));
+    const day = dayOf(at);
+    const ticked = new Map(); // uid -> partner
+    for (const group of groups) {
+      const good = group.filter((uid) => credits.standing(uid, held.get(uid)).ok).sort();
+      if (good.length < 2) continue;
+      for (const uid of good) if (!ticked.has(uid)) ticked.set(uid, good.find((other) => other !== uid));
+    }
+    const reached = [];
+    store.transaction(() => {
+      for (const [uid, partner] of ticked) {
+        const row = store.get(
+          `INSERT INTO together_ticks (day, user_id, ticks, partner_id, last_at) VALUES (?, ?, 1, ?, ?)
+           ON CONFLICT (day, user_id) DO UPDATE SET ticks = ticks + 1, partner_id = excluded.partner_id, last_at = excluded.last_at RETURNING ticks`,
+          day, uid, partner, at,
+        );
+        if (Number(row?.ticks) === TOGETHER.ticksNeeded) reached.push({ uid, partner });
+      }
+    });
+    for (const { uid, partner } of reached) await credits.award({ actor: partner, target: uid, kind: 'together', uniq: `d${day}`, ref: null });
+  }
+
+  // ---- the alarm -----------------------------------------------------------------------
+
+  /** Everything due now: this week's jam exists, last week's is paid, the co-work hour runs, together ticks. */
+  async function tick() {
+    const at = now();
+    currentJam(at);
+    for (const row of store.all(`SELECT * FROM events WHERE kind = 'jam' AND status <> 'closed' AND ends_at <= ?`, at)) await closeJam(row);
+    currentCowork(at);
+    for (const row of store.all(`SELECT * FROM events WHERE kind = 'cowork' AND status = 'open'`)) await runCowork(row, at);
+    await together(at);
+  }
+
+  /** The next moment tick() has something to do. */
+  function nextDue() {
+    const at = now();
+    const candidates = [weekStart(weekOf(at) + 1)];
+    const start = nextCoworkStart(at);
+    if (start) candidates.push(start - COWORK.opensEarlyMs);
+    for (const row of store.all(`SELECT * FROM events WHERE kind = 'cowork' AND status = 'open'`)) {
+      for (const offset of COWORK.checksAt) if (row.starts_at + offset > at) candidates.push(row.starts_at + offset);
+      candidates.push(row.ends_at);
+    }
+    if (store.get(`SELECT 1 AS yes FROM events WHERE kind = 'jam' AND status <> 'closed' AND ends_at <= ?`, at)) candidates.push(at);
+    return Math.min(...candidates);
+  }
+
+  // ---- what a member sees ------------------------------------------------------------
+
+  function summary(uid) {
+    const at = now();
+    const jam = currentJam(at);
+    const last = store.get(`SELECT * FROM events WHERE kind = 'jam' AND status = 'closed' ORDER BY ends_at DESC LIMIT 1`);
+    const cowork = currentCowork(at);
+    const day = dayOf(at);
+    const ticks = Number(store.get('SELECT ticks FROM together_ticks WHERE day = ? AND user_id = ?', day, uid)?.ticks ?? 0);
+    return {
+      now: at,
+      jam: jam ? jamView(jam, uid, at) : null,
+      lastJam: last ? { id: last.id, theme: last.theme, endsAt: last.ends_at, pool: last.pool, results: JSON.parse(last.results ?? '{}').payouts ?? [] } : null,
+      cowork: coworkView(cowork, uid, at),
+      nextCowork: nextCoworkStart(cowork ? cowork.ends_at : at),
+      together: { ticks: Math.min(ticks, TOGETHER.ticksNeeded), needed: TOGETHER.ticksNeeded, amount: TOGETHER.amount, everyMs: TOGETHER.everyMs },
+      budget: economy.status(),
+    };
+  }
+
+  /** A line for the Lobby front page: the jam's theme and phase, the next co-work hour. */
+  function front(uid) {
+    const at = now();
+    const jam = currentJam(at);
+    const cowork = currentCowork(at);
+    return {
+      jam: jam ? { id: jam.id, theme: jam.theme, phase: jamPhase(jam, at), entriesUntil: jam.entries_until, endsAt: jam.ends_at, entries: Number(store.get('SELECT COUNT(*) AS n FROM event_entries WHERE event_id = ?', jam.id)?.n ?? 0), entered: Boolean(store.get('SELECT 1 AS yes FROM event_entries WHERE event_id = ? AND user_id = ?', jam.id, uid)) } : null,
+      cowork: cowork ? { id: cowork.id, startsAt: cowork.starts_at, endsAt: cowork.ends_at, here: cowork.room_id && cowork.status === 'open' ? rooms.present(cowork.room_id).length : 0 } : { id: null, startsAt: nextCoworkStart(at), endsAt: null, here: 0 },
+    };
+  }
+
+  // ---- routes ----------------------------------------------------------------------------
+
+  function routes(route) {
+    const reply = (status, body) => ({ status, body });
+    const fail = (status, error, extra = {}) => reply(status, { ok: false, error, ...extra });
+
+    route('GET', '/v1/events', ({ actor }) => reply(200, { ok: true, ...summary(actor.uid) }));
+
+    // Entering: one of your own shared projects, one entry per member, until Saturday.
+    route('POST', '/v1/events/:id/entry', ({ actor, params, body }) => {
+      const at = now();
+      const result = store.transaction(() => {
+        const row = eventRow(params.id);
+        if (!row || row.kind !== 'jam') return fail(404, 'not-found');
+        if (jamPhase(row, at) !== 'entries') return fail(409, 'conflict', { reason: 'entries-closed' });
+        const project = store.get('SELECT id, owner_id FROM projects WHERE id = ?', body.projectId);
+        if (!project) return fail(404, 'not-found', { reason: 'project' });
+        if (project.owner_id !== actor.uid) return fail(403, 'forbidden', { reason: 'not-yours' });
+        const was = store.get('SELECT project_id FROM event_entries WHERE event_id = ? AND user_id = ?', row.id, actor.uid);
+        if (was?.project_id === project.id) return reply(200, { ok: true, unchanged: true });
+        // A different project is a different entry: the votes for the old one go.
+        if (was) store.run('DELETE FROM event_votes WHERE event_id = ? AND entrant_id = ?', row.id, actor.uid);
+        store.run('INSERT INTO event_entries (event_id, user_id, project_id, at) VALUES (?, ?, ?, ?) ON CONFLICT (event_id, user_id) DO UPDATE SET project_id = excluded.project_id, at = excluded.at', row.id, actor.uid, project.id, at);
+        return reply(200, { ok: true });
+      });
+      if (!result.body.ok) return result;
+      return reply(200, { ok: true, jam: jamView(eventRow(params.id), actor.uid) });
+    }, { write: true, body: 'enterEvent' });
+
+    route('DELETE', '/v1/events/:id/entry', ({ actor, params }) => {
+      const at = now();
+      const row = eventRow(params.id);
+      if (!row || row.kind !== 'jam') return fail(404, 'not-found');
+      if (jamPhase(row, at) !== 'entries') return fail(409, 'conflict', { reason: 'entries-closed' });
+      store.transaction(() => {
+        store.run('DELETE FROM event_votes WHERE event_id = ? AND entrant_id = ?', row.id, actor.uid);
+        store.run('DELETE FROM event_entries WHERE event_id = ? AND user_id = ?', row.id, actor.uid);
+      });
+      return reply(200, { ok: true, jam: jamView(eventRow(row.id), actor.uid) });
+    }, { write: true, readOnlyOk: true });
+
+    // A moderator takes an entry out of a jam that is still running.
+    route('DELETE', '/v1/events/:id/entries/:userId', ({ actor, params }) => {
+      const row = eventRow(params.id);
+      if (!row || row.kind !== 'jam' || !isSnowflake(params.userId)) return fail(404, 'not-found');
+      if (row.status !== 'open') return fail(409, 'conflict', { reason: 'closed' });
+      store.transaction(() => {
+        store.run('DELETE FROM event_votes WHERE event_id = ? AND entrant_id = ?', row.id, params.userId);
+        store.run('DELETE FROM event_entries WHERE event_id = ? AND user_id = ?', row.id, params.userId);
+        store.run('INSERT INTO audit (kind, actor_id, target_id, detail, at) VALUES (?, ?, ?, ?, ?)', 'event-entry-remove', actor.uid, params.userId, JSON.stringify({ eventId: row.id }), now());
+      });
+      return reply(200, { ok: true });
+    }, { write: true, mod: true });
+
+    // Voting: members in good standing, for entries they played during the jam, three each.
+    route('POST', '/v1/events/:id/votes', async ({ actor, params, body }) => {
+      const held = await credits.heldUntil(actor.uid);
+      const at = now();
+      const result = store.transaction(() => {
+        const row = eventRow(params.id);
+        if (!row || row.kind !== 'jam') return fail(404, 'not-found');
+        const phase = jamPhase(row, at);
+        if (phase !== 'entries' && phase !== 'voting') return fail(409, 'conflict', { reason: 'voting-closed' });
+        const stand = credits.standing(actor.uid, held);
+        if (!stand.ok) return fail(403, 'forbidden', { reason: 'standing', hold: stand.reason });
+        const entry = store.get('SELECT * FROM event_entries WHERE event_id = ? AND user_id = ?', row.id, body.userId);
+        if (!entry) return fail(404, 'not-found', { reason: 'entry' });
+        if (entry.user_id === actor.uid) return fail(403, 'forbidden', { reason: 'self' });
+        if (!playedDuring(row, entry.project_id, actor.uid)) return fail(409, 'conflict', { reason: 'play-first' });
+        if (store.get('SELECT 1 AS yes FROM event_votes WHERE event_id = ? AND voter_id = ? AND entrant_id = ?', row.id, actor.uid, entry.user_id)) return reply(200, { ok: true, unchanged: true });
+        const used = Number(store.get('SELECT COUNT(*) AS n FROM event_votes WHERE event_id = ? AND voter_id = ?', row.id, actor.uid)?.n ?? 0);
+        if (used >= JAM.votesPerMember) return fail(409, 'limit', { reason: 'votes-used' });
+        store.run('INSERT INTO event_votes (event_id, voter_id, entrant_id, at) VALUES (?, ?, ?, ?)', row.id, actor.uid, entry.user_id, at);
+        return reply(200, { ok: true });
+      });
+      if (!result.body.ok) return result;
+      return reply(200, { ok: true, jam: jamView(eventRow(params.id), actor.uid) });
+    }, { write: true, body: 'voteEvent' });
+
+    route('DELETE', '/v1/events/:id/votes/:userId', ({ actor, params }) => {
+      const row = eventRow(params.id);
+      if (!row || row.kind !== 'jam' || !isSnowflake(params.userId)) return fail(404, 'not-found');
+      if (row.status !== 'open' || now() >= row.ends_at) return fail(409, 'conflict', { reason: 'voting-closed' });
+      store.run('DELETE FROM event_votes WHERE event_id = ? AND voter_id = ? AND entrant_id = ?', row.id, actor.uid, params.userId);
+      return reply(200, { ok: true, jam: jamView(row, actor.uid) });
+    }, { write: true, readOnlyOk: true });
+
+    // A co-work hour: join its room straight away, no request to approve.
+    route('POST', '/v1/events/:id/join', ({ actor, params }) => {
+      const row = eventRow(params.id);
+      if (!row || row.kind !== 'cowork') return fail(404, 'not-found');
+      if (row.status !== 'open' || !row.room_id || now() >= row.ends_at) return fail(410, 'gone', { reason: 'over' });
+      const joined = rooms.join(row.room_id, actor.uid);
+      if (!joined.ok) return reply(joined.status ?? 409, { ok: false, error: joined.error ?? 'conflict', reason: joined.reason });
+      return reply(200, { ok: true, roomId: row.room_id, cowork: coworkView(eventRow(row.id), actor.uid) });
+    }, { write: true });
+  }
+
+  // ---- keeping the store small -------------------------------------------------------
+
+  /** Forget me: the member's entries, votes, attendance and ticks. */
+  function forget(uid) {
+    store.run('DELETE FROM event_votes WHERE voter_id = ? OR entrant_id = ?', uid, uid);
+    store.run('DELETE FROM event_entries WHERE user_id = ?', uid);
+    store.run('DELETE FROM event_attendance WHERE user_id = ?', uid);
+    store.run('DELETE FROM together_ticks WHERE user_id = ?', uid);
+  }
+
+  /** Daily: events after 180 days, together ticks after a week. */
+  function upkeep() {
+    const at = now();
+    for (const row of store.all(`SELECT id FROM events WHERE status = 'closed' AND ends_at < ?`, at - EVENT_KEEP_MS)) {
+      for (const table of ['event_entries', 'event_votes', 'event_attendance']) store.run(`DELETE FROM ${table} WHERE event_id = ?`, row.id);
+      store.run('DELETE FROM events WHERE id = ?', row.id);
+    }
+    store.run('DELETE FROM together_ticks WHERE day < ?', dayOf(at) - 7);
+  }
+
+  return Object.freeze({ routes, tick, nextDue, forget, upkeep, summary, front, currentJam, currentCowork });
+}

@@ -84,6 +84,7 @@ export const FEATURES = Object.freeze({
   credits: 'credits', // GET /v1/me, member cards, the credits frame
   projects: 'projects', // the project hub: share, play, star, feature
   front: 'front', // GET /v1/front: the Lobby front page in one read
+  events: 'events', // GET /v1/events: the weekly Build Jam, co-work hours and building together (relay/src/events.mjs)
   friendOnline: 'friend.online', // friendOnline: someone you share a room with just opened Studio (to clients that list it)
 });
 
@@ -105,7 +106,7 @@ export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'succ
 
 /** Project cards (feature "projects") and why a credits frame was sent (feature "credits"). */
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
-export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature', 'revoked']);
+export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature', 'revoked', 'together', 'cowork', 'jam']);
 
 export const ROOM_KINDS = Object.freeze(['hangout', 'cowork']);
 export const ROOM_POLICIES = Object.freeze(['request', 'invite']);
@@ -611,6 +612,10 @@ export const HTTP_BODIES = Object.freeze({
   onlineVisible: { visible: boolean() },
   // POST /v1/projects/:id/played: the token from POST /v1/projects/:id/play, at least two minutes old.
   playFinish: { token: string(1, 64, { pattern: /^[a-z0-9]{1,12}\.[A-Za-z0-9_-]{22}$/ }) },
+  // POST /v1/events/:id/entry (feature "events"): one of your own shared projects into the week's Build Jam.
+  enterEvent: { projectId: opaqueId() },
+  // POST /v1/events/:id/votes: a vote for an entrant, by their member id.
+  voteEvent: { userId: snowflake() },
 });
 
 /** Query strings, by name. */
