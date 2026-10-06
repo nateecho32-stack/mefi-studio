@@ -515,9 +515,17 @@
       log.replaceChildren(...items);
       if (follow || atEnd) log.scrollTop = log.scrollHeight;
     }
+    // Friends' pets (renderer/pets.js) visit while their room is open here: the
+    // relay's roomPets lists the members there with a pet (this member's own
+    // too, which is left out). Another room, or none, sends them home.
+    const petsHome = () => window.MefiPets?.guests?.([]);
+    function petsOf(event) {
+      const list = Array.isArray(event?.pets) ? event.pets : [];
+      return list.map((entry) => ({ id: String(entry?.userId ?? entry?.id ?? ""), name: entry?.name, pet: entry?.pet })).filter((entry) => entry.id && entry.id !== String(me?.id ?? ""));
+    }
     async function open(room) {
       const seq = ++openSeq;
-      if (openRoom && openRoom.id !== room.id) api.hubSubscribe?.(openRoom.id, false, "rooms");
+      if (openRoom && openRoom.id !== room.id) { api.hubSubscribe?.(openRoom.id, false, "rooms"); petsHome(); }
       openRoom = room;
       messages = [];
       more = false;
@@ -544,6 +552,7 @@
       openSeq += 1;
       if (openRoom) api.hubSubscribe?.(openRoom.id, false, "rooms");
       openRoom = null;
+      petsHome();
       rows.clear();
       reporting.clear();
       void refresh();
@@ -846,6 +855,7 @@
         return;
       }
       if (!openRoom || event?.roomId !== openRoom.id) return;
+      if (event.type === "roomPets") { window.MefiPets?.guests?.(petsOf(event)); return; }
       if (event.type === "presence") { here = Array.isArray(event.inStudio) ? event.inStudio : []; paintHere(); return; }
       if (event.type === "claims") { if (coworkShow) void Promise.resolve(api.coworkStatus?.()).then(coworkShow).catch(() => {}); return; }
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
@@ -867,7 +877,7 @@
     function dispose() {
       openSeq += 1;
       if (onlineTimer) { clearTimeout(onlineTimer); onlineTimer = null; }
-      if (openRoom) api.hubSubscribe?.(openRoom.id, false, "rooms");
+      if (openRoom) { api.hubSubscribe?.(openRoom.id, false, "rooms"); petsHome(); }
       openRoom = null;
       if (current === handle) current = null;
     }

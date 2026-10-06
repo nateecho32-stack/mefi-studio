@@ -989,8 +989,21 @@
     loop.raf = 0; loop.timer = 0;
     for (const view of views.values()) view.canvas.hidden = true;
   }
+  // The relay hears which pet this member has (main.cjs hub:pet), so rooms can
+  // show it to friends: the saved choice only (a Try is not announced), and
+  // only when it changed. hub-client says it again after a reconnect.
+  let announced = null;
+  function announce() {
+    const shown = look();
+    const pet = shown.on ? { kind: shown.kind, skin: shown.skin, name: prefs.name } : null;
+    const key = JSON.stringify(pet);
+    if (key === announced || typeof window.mefiStudio?.hubPet !== "function") return;
+    announced = key;
+    Promise.resolve(window.mefiStudio.hubPet(pet)).catch(() => { announced = null; });
+  }
   // The owner's pet is there while it is on; guests while their room is open.
   function sync() {
+    if (!borrowed) announce();
     if (headless()) return;
     const shown = look();
     if (shown.on && !views.has("you")) makeView("you", { size: prefs.size });

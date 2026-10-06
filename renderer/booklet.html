@@ -78896,9 +78896,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       log.replaceChildren(...items);
       if (follow || atEnd) log.scrollTop = log.scrollHeight;
     }
+    // Friends' pets (renderer/pets.js) visit while their room is open here: the
+    // relay's roomPets lists the members there with a pet (this member's own
+    // too, which is left out). Another room, or none, sends them home.
+    const petsHome = () => window.MefiPets?.guests?.([]);
+    function petsOf(event) {
+      const list = Array.isArray(event?.pets) ? event.pets : [];
+      return list.map((entry) => ({ id: String(entry?.userId ?? entry?.id ?? ""), name: entry?.name, pet: entry?.pet })).filter((entry) => entry.id && entry.id !== String(me?.id ?? ""));
+    }
     async function open(room) {
       const seq = ++openSeq;
-      if (openRoom && openRoom.id !== room.id) api.hubSubscribe?.(openRoom.id, false, "rooms");
+      if (openRoom && openRoom.id !== room.id) { api.hubSubscribe?.(openRoom.id, false, "rooms"); petsHome(); }
       openRoom = room;
       messages = [];
       more = false;
@@ -78925,6 +78933,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       openSeq += 1;
       if (openRoom) api.hubSubscribe?.(openRoom.id, false, "rooms");
       openRoom = null;
+      petsHome();
       rows.clear();
       reporting.clear();
       void refresh();
@@ -79227,6 +79236,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         return;
       }
       if (!openRoom || event?.roomId !== openRoom.id) return;
+      if (event.type === "roomPets") { window.MefiPets?.guests?.(petsOf(event)); return; }
       if (event.type === "presence") { here = Array.isArray(event.inStudio) ? event.inStudio : []; paintHere(); return; }
       if (event.type === "claims") { if (coworkShow) void Promise.resolve(api.coworkStatus?.()).then(coworkShow).catch(() => {}); return; }
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
@@ -79248,7 +79258,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     function dispose() {
       openSeq += 1;
       if (onlineTimer) { clearTimeout(onlineTimer); onlineTimer = null; }
-      if (openRoom) api.hubSubscribe?.(openRoom.id, false, "rooms");
+      if (openRoom) { api.hubSubscribe?.(openRoom.id, false, "rooms"); petsHome(); }
       openRoom = null;
       if (current === handle) current = null;
     }
@@ -109820,8 +109830,21 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     loop.raf = 0; loop.timer = 0;
     for (const view of views.values()) view.canvas.hidden = true;
   }
+  // The relay hears which pet this member has (main.cjs hub:pet), so rooms can
+  // show it to friends: the saved choice only (a Try is not announced), and
+  // only when it changed. hub-client says it again after a reconnect.
+  let announced = null;
+  function announce() {
+    const shown = look();
+    const pet = shown.on ? { kind: shown.kind, skin: shown.skin, name: prefs.name } : null;
+    const key = JSON.stringify(pet);
+    if (key === announced || typeof window.mefiStudio?.hubPet !== "function") return;
+    announced = key;
+    Promise.resolve(window.mefiStudio.hubPet(pet)).catch(() => { announced = null; });
+  }
   // The owner's pet is there while it is on; guests while their room is open.
   function sync() {
+    if (!borrowed) announce();
     if (headless()) return;
     const shown = look();
     if (shown.on && !views.has("you")) makeView("you", { size: prefs.size });
