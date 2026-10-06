@@ -19,6 +19,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   within seconds when a friend arrives or leaves. The Playground says what
   friends see in one plain sentence. It all fits from a small window at 150%
   to 1920x1080, in dark and light colours.
+- **Test runs on one PC take turns.** When several sessions test Studio from
+  their own folders at once, `npm test` and the new `npm run test:one --
+  tests/x.test.mjs` now wait for their turn instead of starving each other:
+  one set of live test windows on the PC at a time, two batches of the quick
+  suites at a time, first come first served, with a line every 30 seconds
+  saying who is running. `npm run test:lease` shows the line-up. The quick
+  suites run as many at once as free memory allows, and every run starts its
+  slowest suites first, from timings each run records. `MEFI_TEST_LEASE=off`
+  turns the turns off.
+- **Playlists in the media menu.** A new Playlists section (under every
+  source) starts you off with five lists of real videos: Code & math
+  explorers (Sebastian Lague, 2swap, 3Blue1Brown, Emergent Garden),
+  Visualizers, Focus streams, Shaders & graphics and Simulated worlds. Make
+  your own from scratch or from Up next, save any video with the new **+** on
+  Browse cards and the playing video, and drag rows to reorder. **Share**
+  copies a list as text that reads well in Discord, with a link that plays it
+  on YouTube; paste that text into **Add a shared playlist** or the Browse box
+  and Studio turns it back into a playlist.
 - **Moderation in Studio, and Report on projects.** Moderators get a
   Friends › Moderation place (nobody else sees it): who looks like they are
   farming credits (most of their credits from one person, or two people

@@ -116,6 +116,11 @@
     aura: `<circle cx="12" cy="12" r="2.6" fill="currentColor"/><circle cx="12" cy="12" r="5.6" ${STROKE} opacity=".7"/><circle cx="12" cy="12" r="8.6" ${STROKE} opacity=".35"/>`,
     trails: `<ellipse cx="12" cy="12" rx="8.5" ry="4.2" transform="rotate(-24 12 12)" ${STROKE}/><circle cx="18.4" cy="7.9" r="1.9" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>`,
     halos: `<path d="M12 3.8l1.8 5 5 1.8-5 1.8-1.8 5-1.8-5-5-1.8 5-1.8z" fill="currentColor"/><circle cx="18.2" cy="18" r="1.3" fill="currentColor"/><circle cx="5.8" cy="17.2" r=".9" fill="currentColor"/>`,
+    playlists: `<rect x="3.5" y="4.5" width="13" height="9.5" rx="2" ${STROKE}/><path d="M6.5 17h11.5c.8 0 1.5-.7 1.5-1.5V8M9.5 20h10.5c.8 0 1.5-.7 1.5-1.5V11" ${STROKE} opacity=".6"/><path d="M8.7 7.3v4c0 .3.3.5.6.3l3.1-2c.3-.2.3-.5 0-.7l-3.1-2c-.3-.1-.6 0-.6.4z" fill="currentColor"/>`,
+    save: `<path d="M4.5 7h10M4.5 12h10M4.5 17h6" ${STROKE}/><path d="M18 13.5v7M14.5 17h7" ${STROKE}/>`,
+    shuffle: `<path d="M4 7.5h3.2c1.4 0 2.6.7 3.4 1.8l2.8 5.4c.8 1.1 2 1.8 3.4 1.8H20M4 16.5h3.2c1 0 1.9-.4 2.6-1M13.2 8.5c.7-.6 1.6-1 2.6-1H20" ${STROKE}/><path d="M17.5 5l2.5 2.5-2.5 2.5M17.5 14l2.5 2.5-2.5 2.5" ${STROKE}/>`,
+    share: `<circle cx="17.5" cy="6" r="2.4" ${STROKE}/><circle cx="6.5" cy="12" r="2.4" ${STROKE}/><circle cx="17.5" cy="18" r="2.4" ${STROKE}/><path d="M8.6 10.8l6.8-3.6M8.6 13.2l6.8 3.6" ${STROKE}/>`,
+    back: `<path d="M14.5 6l-6 6 6 6" ${STROKE}/>`,
   };
   // Listener-funded and Creative Commons stations that carry no advertising at
   // all, so there is never a break to skip, mute or talk over. Every mirror here
@@ -315,10 +320,11 @@
   const prefs = safePreferences(stored);
   const MEDIA_UI_KEY = "mefiStudio.mediaMenu.v1";
   // section: the part of the unfolded menu last opened (Up next, Add, …).
-  let mediaMenu = { showLinks: true, copiedLinks: true, section: null };
+  // playlists: the Playlists section and its Save buttons (renderer/playlists.js).
+  let mediaMenu = { showLinks: true, copiedLinks: true, playlists: true, section: null };
   try {
     const savedMenu = JSON.parse(localStorage.getItem(MEDIA_UI_KEY) || "null");
-    mediaMenu = { showLinks: savedMenu?.showLinks !== false, copiedLinks: savedMenu?.copiedLinks !== false, section: typeof savedMenu?.section === "string" ? savedMenu.section.slice(0, 20) : null };
+    mediaMenu = { showLinks: savedMenu?.showLinks !== false, copiedLinks: savedMenu?.copiedLinks !== false, playlists: savedMenu?.playlists !== false, section: typeof savedMenu?.section === "string" ? savedMenu.section.slice(0, 20) : null };
   } catch {}
   let clipboardOffer = null, lastClipboardUrl = null, clipboardTimer = 0, clipboardBusy = false, clipboardGeneration = 0;
   let linkQueue = [];
@@ -388,6 +394,11 @@
   // What Studio last asked an embed for, and when: a report that disagrees
   // right after it is the player echoing an older level or position.
   let volumeSentAt = -Infinity, seekSentAt = -Infinity, seekSent = 0;
+  // renderer/playlists.js, once it has registered (MefiMusic.playlists): it
+  // fills the Playlists section and answers the Save buttons. More › This
+  // menu turns all of it off (mediaMenu.playlists).
+  let playlistsHook = null;
+  const playlistsOn = () => Boolean(playlistsHook) && mediaMenu.playlists !== false;
 
   const persist = () => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(safePreferences(prefs))); } catch {} };
   const event = (name, detail) => window.dispatchEvent(new CustomEvent(name, { detail }));
@@ -890,6 +901,44 @@
     saveLinkQueue(); note(index === 0 && linkQueue.length > 1 ? `${item.title} will play next.` : `${item.title} is number ${index + 1} in Up next.`);
     return true;
   }
+  // ---- Playlists (renderer/playlists.js) play and queue through these two.
+  const listItems = (items) => (Array.isArray(items) ? items : []).flatMap((item) => {
+    const link = playableLink(mediaLink(item?.url));
+    return link ? [{ url: link.url, title: typeof item.title === "string" && item.title.trim() ? item.title.trim().slice(0, 160) : link.label }] : [];
+  });
+  // A list starts at its first video; the rest go to the front of Up next,
+  // ahead of what was already waiting, as many as the queue has room for.
+  function playItems(items, name = "") {
+    const list = listItems(items);
+    if (!list.length) { note("Nothing in that list plays here.", true); return false; }
+    const [first, ...rest] = list;
+    // Starting a list on the video already loaded restarts it.
+    if (state.link?.url === first.url) unmountLink();
+    if (!playLink(first.url, { label: first.title, keepField: true })) return false;
+    const lined = rest.slice(0, Math.max(0, LINK_QUEUE_LIMIT - linkQueue.length));
+    if (lined.length) { linkQueue.splice(0, 0, ...lined); saveLinkQueue(); }
+    const left = rest.length - lined.length;
+    note(`${name ? `${name}: ` : ""}${first.title} is playing.${lined.length ? ` ${lined.length} more ${lined.length === 1 ? "is" : "are"} first in Up next.` : ""}${left ? ` ${left} did not fit: the queue holds ${LINK_QUEUE_LIMIT}.` : ""}`);
+    return true;
+  }
+  // The loaded video as a list item: what Save to a playlist keeps. A YouTube
+  // list link keeps the video it is on.
+  function playingItem() {
+    const link = state.source === "link" && !els.browser?.active ? playableLink(state.link) : null;
+    if (!link) return null;
+    const current = linkPlayback?.url ? playableLink(mediaLink(linkPlayback.url)) : null;
+    return { url: current?.url || link.url, title: linkPlayback?.title || link.label, channel: linkPlayback?.author || "" };
+  }
+  function queueItems(items, name = "") {
+    const list = listItems(items);
+    if (!list.length) { note("Nothing in that list plays here.", true); return 0; }
+    const lined = list.slice(0, Math.max(0, LINK_QUEUE_LIMIT - linkQueue.length));
+    if (!lined.length) { note(`The queue holds ${LINK_QUEUE_LIMIT} videos. Remove some before adding more.`, true); return 0; }
+    linkQueue.push(...lined); saveLinkQueue();
+    const left = list.length - lined.length;
+    note(`${lined.length} ${lined.length === 1 ? "video" : "videos"}${name ? ` from ${name}` : ""} added to Up next.${left ? ` ${left} did not fit.` : ""}`);
+    return lined.length;
+  }
   function moveQueued(from, to) {
     if (!linkQueue[from]) return false;
     const [item] = linkQueue.splice(from, 1);
@@ -1073,6 +1122,10 @@
     const add = iconButton("queue", `Add ${item.title} to queue`, card, () => queueLink(item.url, item.title));
     const next = iconButton("next", `Queue ${item.title} next`, card, () => queueLink(item.url, item.title, true));
     for (const node of [play, add, next]) node.classList.add("music-yt-action");
+    if (playlistsHook) {
+      const save = iconButton("save", `Save ${item.title} to a playlist`, card, () => playlistsHook?.save?.(save, { url: item.url, title: item.title, channel: item.channel, duration: item.duration }));
+      save.classList.add("music-yt-action", "music-yt-save");
+    }
     card.addEventListener("click", (event) => { if (!event.target?.closest?.("button")) feedPick(item); });
     dragMedia(card, item);
     return card;
@@ -1601,9 +1654,11 @@
     local: [["tracks", "Tracks", "tracks"]],
     radio: [["stations", "Stations", "stations"]],
     link: [["browse", "Browse", "find"], ["picture", "Picture", "picture"]],
-    all: [["tree", "Tree", "tree"], ["more", "More", "more"]],
+    // Playlists shows under every source (playing one turns to Video), once
+    // renderer/playlists.js has registered.
+    all: [["playlists", "Playlists", "playlists"], ["tree", "Tree", "tree"], ["more", "More", "more"]],
   };
-  const sectionsFor = (source) => [...(DECK_SECTIONS[source] || []), ...DECK_SECTIONS.all];
+  const sectionsFor = (source) => [...(DECK_SECTIONS[source] || []), ...DECK_SECTIONS.all].filter(([key]) => key !== "playlists" || playlistsOn());
   function currentSection(source = shownSource()) {
     const keys = sectionsFor(source).map(([key]) => key);
     return keys.includes(deckSection) ? deckSection : keys[0];
@@ -1652,6 +1707,8 @@
     els.link.hidden = !(source === "link" && (section === "browse" || section === "picture"));
     els.linkBrowse.hidden = section !== "browse"; els.linkPicture.hidden = section !== "picture";
     els.audioLink.hidden = section !== "tree"; els.more.hidden = section !== "more";
+    els.playlists.hidden = section !== "playlists";
+    if (deckOpen && !els.playlists.hidden) playlistsHook?.shown?.();
     const defs = sectionsFor(source);
     const signature = defs.map(([key]) => key).join(",");
     if (els.sections.dataset.signature !== signature) {
@@ -1671,7 +1728,7 @@
     els.expand.dataset.open = String(deckOpen);
     setAttr(els.expand, "aria-expanded", String(deckOpen));
     setAttr(els.expand, "aria-label", deckOpen ? "Show less" : "Show more");
-    els.expand.title = deckOpen ? "Fold back to the mini player" : "Unfold: queue, search, picture and tree settings";
+    els.expand.title = deckOpen ? "Fold back to the mini player" : `Unfold: queue, search, ${playlistsOn() ? "playlists, " : ""}picture and tree settings`;
     renderNextLine();
     scheduleDropdown();
   }
@@ -1765,6 +1822,9 @@
     els.showLinks?.setAttribute("aria-pressed", String(mediaMenu.showLinks));
     if (els.linkInput) els.linkInput.type = mediaMenu.showLinks ? "text" : "password";
     if (els.copiedLinks) els.copiedLinks.checked = mediaMenu.copiedLinks;
+    if (els.playlistsSwitch) { els.playlistsSwitch.checked = mediaMenu.playlists; els.playlistsSwitch.parentElement.hidden = !playlistsHook; }
+    // A Browse card's Save stays drawn; the switch hides it (music.css).
+    if (els.dropdown) els.dropdown.dataset.playlists = String(playlistsOn());
     renderLinks(); renderLinkQueue(); renderClipboardOffer();
   }
   function renderLinks() {
@@ -1814,6 +1874,7 @@
     const backdrop = placement.background ? "Bring the video back from behind your workspace" : "Play behind your workspace";
     setAttr(els.backgroundToggle, "aria-label", backdrop); els.backgroundToggle.title = backdrop;
     els.nowActions.hidden = !shown || !loaded;
+    els.saveNow.hidden = !playlistsOn() || !playingItem();
     els.linkTools.hidden = !shown || !loaded;
     els.browseLink.hidden = Boolean(browser);
     els.pictureEmpty.hidden = loaded && !browser;
@@ -2075,6 +2136,11 @@
     els.nowDetail = element("small", "music-now-detail", "", words);
     const actions = element("div", "music-now-actions", null, meta);
     els.nowActions = actions;
+    els.saveNow = iconButton("save", "Save to a playlist", actions, () => {
+      const item = playingItem();
+      if (item) playlistsHook?.save?.(els.saveNow, item);
+    }, "music-video-save");
+    els.saveNow.hidden = true;
     els.backgroundToggle = iconButton("backdrop", "Play behind your workspace", actions, () => {
       const browsing = els.browser?.active;
       if (browsing && !playLink(els.browser.state.url)) return;
@@ -2224,7 +2290,9 @@
     els.linkInput.setAttribute("aria-label", "Search YouTube or paste a media link"); els.linkInput.dataset.typeHere = "";
     els.linkInput.autocomplete = "off"; els.linkInput.spellcheck = false; els.linkInput.maxLength = 8192;
     // Words search YouTube; a link (with or without https://) plays.
-    const findOrPlay = () => { const value = els.linkInput.value.trim(); if (!value) { els.linkInput.focus(); return; } if (mediaLink(value)) playLink(value); else void searchYouTube(value); };
+    // A shared playlist (its text, or a YouTube watch_videos link) opens in
+    // Playlists, ready to save.
+    const findOrPlay = () => { const value = els.linkInput.value.trim(); if (!value) { els.linkInput.focus(); return; } if (playlistsOn() && playlistsHook.offer?.(value)) { els.linkInput.value = ""; return; } if (mediaLink(value)) playLink(value); else void searchYouTube(value); };
     button("Go", "primary", linkForm, findOrPlay, "music-link-load");
     linkForm.addEventListener("submit", (event) => { event.preventDefault(); findOrPlay(); });
     const queueTools = element("div", "music-link-tools", null, els.linkBrowse);
@@ -2298,6 +2366,10 @@
       playLink(text);
     });
 
+    // Playlists: renderer/playlists.js draws it (MefiMusic.playlists).
+    els.playlists = element("section", "music-playlists", null, els.deck); els.playlists.id = "music-playlists"; els.playlists.hidden = true;
+    els.playlists.setAttribute("aria-label", "Playlists");
+
     // Tree: what the node tree listens to and how it moves.
     const audioLink = element("section", "music-audio-link", null, els.deck);
     els.audioLink = audioLink;
@@ -2367,6 +2439,15 @@
       mediaMenu.copiedLinks = els.copiedLinks.checked; saveMediaMenu();
       clipboardOffer = null; renderClipboardOffer();
       if (mediaMenu.copiedLinks) { lastClipboardUrl = null; startClipboardChecks(); } else stopClipboardChecks();
+    });
+    const playlistsLabel = element("label", "music-clipboard-toggle", null, menuSwitches);
+    els.playlistsSwitch = element("input", null, null, playlistsLabel); els.playlistsSwitch.id = "music-playlists-switch"; els.playlistsSwitch.type = "checkbox";
+    element("span", null, "Playlists in this menu", playlistsLabel);
+    playlistsLabel.hidden = true;
+    els.playlistsSwitch.addEventListener("change", () => {
+      mediaMenu.playlists = els.playlistsSwitch.checked; saveMediaMenu();
+      if (!mediaMenu.playlists) playlistsHook?.dismiss?.();
+      render(); renderMediaMenu();
     });
     els.showLinks = button("Show links", "ghost mini", menuSwitches, () => { mediaMenu.showLinks = !mediaMenu.showLinks; saveMediaMenu(); renderMediaMenu(); }, "music-show-links");
     els.showLinks.title = "Show or hide URLs in this menu (queue, recent and copied links)";
@@ -2476,6 +2557,8 @@
   }
   function audioKey(event) {
     if (event.key === "Escape" && els.dropdown?.hidden === false) {
+      // An open Save to a playlist list closes first.
+      if (playlistsHook?.dismiss?.()) { event.preventDefault(); event.stopPropagation(); return; }
       if (window.MefiSelect?.owns?.(els.dropdown)) {
         event.preventDefault(); event.stopPropagation(); window.MefiSelect.close(true); return;
       }
@@ -2881,6 +2964,25 @@
     }
     if (!window.MefiNav?.release) priorFocus?.focus?.();
   }
+  // For renderer/playlists.js: its section, and the player's hands. Lists
+  // play and queue through here, never by touching the player's state.
+  function registerPlaylists(hook) {
+    init();
+    playlistsHook = hook && typeof hook === "object" ? hook : null;
+    render(); renderMediaMenu();
+    return {
+      host: els.playlists, menu: els.dropdown, glyph, note, relayout: scheduleDropdown,
+      info: (raw) => { const link = mediaLink(raw); return link ? { provider: link.provider, providerName: link.providerName, kind: link.kind, label: link.label, url: link.url, playable: Boolean(playableLink(link)), youtube: youtubeId(link.url) } : null; },
+      thumbnail: (url) => thumbnail(youtubeId(url)),
+      play: playItems, queue: queueItems, playing: playingItem,
+      queued: () => linkQueue.map((item) => ({ url: item.url, title: item.title })),
+      // A channel's videos in Browse, without changing what plays.
+      browse: (query) => { if (shownSource() !== "link") { settingsReveal.source = "link"; renderSourcePanels(); } return searchYouTube(query); },
+      open: () => openSection("playlists"),
+      drag: (node, item) => dragMedia(node, item),
+      showLinks: () => mediaMenu.showLinks,
+    };
+  }
   window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, openSection, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
     stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })),
     // Where the playing source is ({ position, duration } in seconds; duration 0 for a stream with no end): the status bar's time left.
@@ -2897,6 +2999,7 @@
     // (an iframe, or the <video> of a plain file), and where its section goes.
     linkElement: () => { const frame = els.linkFrame; return frame && state.link && state.source === "link" ? { url: state.link.url, kind: state.link.kind, provider: state.link.provider, element: frame } : null; },
     togetherHost: () => { init(); return els.together; },
+    playlists: registerPlaylists,
     linkInfo: (raw) => { const link = mediaLink(raw); return link ? { provider: link.provider, providerName: link.providerName, kind: link.kind, label: link.label, url: link.url, playable: Boolean(playableLink(link)) } : null; },
     customColors: () => ({ ...prefs.customColors }), themePalette,
     // isNodeStyle is for the tree painters; the catalog feeds Settings › Community.
