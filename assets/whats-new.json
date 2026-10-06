@@ -1,4 +1,12 @@
 {
+  "0.5.0": [
+    "Studio has a new look with two modes: Social and Studio.",
+    "Starting out is easier.",
+    "Agents fix what they can on their own and only ask when they give up.",
+    "You can see every change an agent made and undo it.",
+    "Friends work with no setup.",
+    "Updates can be taken back, and Studio is yours to shape."
+  ],
   "0.4.4": [
     "The Void collection is free.",
     "Work done outside Studio.",
@@ -27,13 +35,5 @@
     "Duplicate card families become one owner decision.",
     "Repeating work is put to you once.",
     "Task run history."
-  ],
-  "0.3.0": [
-    "Loop guard and memory alignment.",
-    "Planning and reading can each answer through their own provider, and OpenCode Zen is a route.",
-    "Ad-free radio in Style & sound.",
-    "One navigation rail replaces three menus.",
-    "Brain maps is a proper node editor.",
-    "A model route that keeps failing is paused instead of retried every turn."
   ]
 }

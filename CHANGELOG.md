@@ -7,6 +7,37 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-06
+
+### Highlights
+
+- **Studio has a new look with two modes: Social and Studio.**
+  Social is the calm mode: Today, one box to describe what you want, what
+  needs you, and your friends. Studio is the in-depth mode: sessions, the Map,
+  Team and every tool. Ctrl+M switches; tabs, Search (Ctrl+K) and one Inbox
+  (Ctrl+J) are shared. The classic layout is gone.
+- **Starting out is easier.**
+  Start a new app leads the launch screen and Studio makes the folder. The
+  first run says which account each AI tool uses, signs you in and puts Studio
+  on it (OpenCode's free models if you have no subscription), then asks what
+  Studio should make first, in plain words.
+- **Agents fix what they can on their own and only ask when they give up.**
+  A task retrying its checks says "fixing itself" with the running work, and
+  everything that does need you waits in one Inbox.
+- **You can see every change an agent made and undo it.**
+  Each changed file with its checks, Accept, put one file back or revert the
+  whole attempt; deleted tasks and ideas wait in Recently deleted.
+- **Friends work with no setup.**
+  Rooms, room chat, Listen together, the Lobby, Events and Your PCs run
+  through Studio's own relay, and nothing of your projects is shared unless
+  you share it.
+- **Updates can be taken back, and Studio is yours to shape.**
+  From 0.5 on, a broken update rolls itself back and Roll back in Settings ›
+  Updates does it by hand. Twelve themes, interface scale from 70% to 150%,
+  text size, density and panels you drag, fold and reset.
+
+### Everything in 0.5.0
+
 - **0.5 polish: an easier first run, and menus that behave.** A new
   install now starts with **Start a new app** (Studio makes the folder) beside
   **Open a folder…**, and the Studio Daily says *Welcome to Studio*. The first
@@ -3167,7 +3198,8 @@ which installed copies pick up through the in-app updater.
   locked or the cover window is destroyed.
 - Project switch drains background work instead of refusing it.
 
-[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.4...main
+[Unreleased]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.5.0...main
+[0.5.0]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.4...v0.5.0
 [0.4.4]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/nateecho32-stack/mefi-studio/compare/v0.4.0...v0.4.2

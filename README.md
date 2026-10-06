@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4"><img src="https://img.shields.io/badge/download-v0.4.4-D8AE65?style=flat-square" alt="Download 0.4.4"></a>
-  <a href="https://nateecho32-stack.github.io/mefi-studio/roadmap.html#now"><img src="https://img.shields.io/badge/next-0.5%20being%20built-8B7CF6?style=flat-square" alt="Next: 0.5, being built"></a>
+  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.5.0"><img src="https://img.shields.io/badge/download-v0.5.0-D8AE65?style=flat-square" alt="Download 0.5.0"></a>
+  <a href="https://nateecho32-stack.github.io/mefi-studio/roadmap.html#now"><img src="https://img.shields.io/badge/next-0.5.x-8B7CF6?style=flat-square" alt="Next: 0.5.x"></a>
   <a href="docs/rust-migration.md"><img src="https://img.shields.io/badge/moving%20to-Rust%20%C2%B7%20Tauri%202-CE422B?style=flat-square&logo=rust&logoColor=white" alt="Moving to Rust with Tauri 2"></a>
   <a href="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml"><img src="https://github.com/nateecho32-stack/mefi-studio/actions/workflows/ci.yml/badge.svg?branch=main&style=flat-square" alt="Studio checks"></a>
   <br>
@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4"><strong>Download 0.4.4</strong></a> ·
+  <a href="https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.5.0"><strong>Download 0.5.0</strong></a> ·
   <a href="https://nateecho32-stack.github.io/mefi-studio/">Website</a> ·
   <a href="https://nateecho32-stack.github.io/mefi-studio/roadmap.html">Roadmap</a> ·
   <a href="https://nateecho32-stack.github.io/mefi-studio/wiki/">Guide</a> ·
@@ -32,7 +32,7 @@
 <p align="center">
   <img src="docs/images/0.5/build.webp" width="960" alt="The 0.5 layout in Studio mode: the project's sessions grouped as Needs you, Running, Review, Queued and Done on the left, Today in the middle with the message box, what needs you and what is running, and the project's repository, team and live activity on the right">
   <br>
-  <sub>The 0.5 layout in Studio mode, in the new Chrome theme, from the current build on <code>main</code> with sample data.</sub>
+  <sub>Studio 0.5 in Studio mode, in the Chrome theme, with sample data.</sub>
 </p>
 
 Pick a project folder, say what you want, and coding agents build it while you watch. Every change waits for you to accept or revert it, and the [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is there when you want company, feedback or a hand.
@@ -41,11 +41,11 @@ Pick a project folder, say what you want, and coding agents build it while you w
 
 | | |
 | --- | --- |
-| **Download** | **0.4.4**, released 27 September 2026. [Release notes](docs/releases/0.4.4.md) |
-| **Next** | **0.5 is being built** on `main`, with no release date yet. What was planned for 0.4.5 and 0.4.6 is folded into it. 0.4.4 cannot install 0.5 by itself, so that one update is by hand; the steps come with the release. [What's in 0.5](docs/release-scope-0.5.0.md) |
+| **Download** | **0.5.0**, released 6 October 2026. [Release notes](docs/releases/0.5.0.md) |
+| **Next** | **0.5.x** finishes what 0.5.0 left for later: the [0.5 scope](docs/release-scope-0.5.0.md) lists it, and the [roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html) has the rest. |
 | **Platform** | **Studio is moving from Electron to Rust** with Tauri 2, in three stages. The interface, your settings and your saved keys stay the same, and the Electron build keeps shipping until the switch. [How it works](docs/rust-migration.md) |
 
-The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html) lists what is done, what is being worked on and what is planned. The [changelog](CHANGELOG.md) lists every change since 0.4.4 under Unreleased.
+The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html) lists what is done, what is being worked on and what is planned. The [changelog](CHANGELOG.md) lists every change since 0.5.0 under Unreleased.
 
 ## What it does
 
@@ -57,9 +57,9 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
 - **Works with the tools you already use.** Claude Code, Codex, Cursor or a script on the same PC can check on Studio, message Mefi and hand it tasks (they wait for your OK), through an MCP server and a local API that are off until you turn them on. **Copy setup prompt** hands those helpers everything they need to walk you through setup.
 - **Local storage, your choice of AI.** Project records and settings stay on your machine, keys are encrypted with the OS keystore, and Studio has no usage telemetry or required hosted account. Connected AI providers and coding tools may receive prompts and project context.
 
-## Coming in 0.5
+## New in 0.5
 
-0.5 puts two modes in one frame: **Social** (once called Vibe), for vibing with friends and keeping a light eye on agents, and **Studio** (once called Build), for in-depth building. Your sessions on the left, the work in the middle, an inspector beside it, tabs on top and a status bar below; Ctrl+M switches modes. It is the only layout on `main`: a source run opens in it. The 0.4.4 download keeps the classic layout described further down until 0.5 is released.
+0.5 puts two modes in one frame: **Social** (once called Vibe), for vibing with friends and keeping a light eye on agents, and **Studio** (once called Build), for in-depth building. Your sessions on the left, the work in the middle, an inspector beside it, tabs on top and a status bar below; Ctrl+M switches modes. A new install starts easier: **Start a new app** on the launch screen, then a three-step welcome: **Pick the AI that builds for you**, **Choose a project** and **What should Studio make first?**
 
 <table>
   <tr>
@@ -84,7 +84,7 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
   </tr>
 </table>
 
-Also in 0.5: an easier first run (**Start a new app** on the launch screen, **Pick the AI that builds for you** in plain words, and **What should Studio make first?**), **Chrome**, a new matte black and brushed-metal theme with an iridescent finish (silver, ice blue, lilac and aqua on its edges and highlights) that new installs open in (a theme you already picked stays), tabs you add and pin, Work › Worktrees, Windows notifications and quiet hours, Report a problem, What's new after an update, pictures on a message, the `@ # /` picker, Skills and rules for agents, and The Studio Daily. The [0.5 scope](docs/release-scope-0.5.0.md) has the full list and what moves to 0.5.x.
+Also in 0.5: **Chrome**, a new matte black and brushed-metal theme with an iridescent finish (silver, ice blue, lilac and aqua on its edges and highlights) that new installs open in (a theme you already picked stays), tabs you add and pin, Work › Worktrees, Windows notifications and quiet hours, Report a problem, What's new after an update, pictures on a message, the `@ # /` picker, Skills and rules for agents, and The Studio Daily. The [0.5 scope](docs/release-scope-0.5.0.md) has the full list and what moves to 0.5.x.
 
 ## Moving to Rust
 
@@ -102,7 +102,7 @@ Settings, saved keys and projects stay where they are (`%APPDATA%\Mefi's Studio 
 
 ### Download (Windows)
 
-1. Download the zip from the [latest release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.4.4).
+1. Download the zip from the [latest release](https://github.com/nateecho32-stack/mefi-studio/releases/tag/v0.5.0).
 2. Right-click it, choose **Extract All**, keep the folder together, and open `Mefi Studio AI+.exe`.
 3. The build is not code-signed yet, so Windows SmartScreen may ask the first time: **More info**, then **Run anyway**.
 
@@ -120,7 +120,7 @@ Beta builds have not been through a release's checks: back up your work first.
 
 ### Updating from 0.4.4
 
-An installed 0.4.4 cannot update itself. Its update helper never runs, so the **Update** button downloads the new build, Studio quits and nothing is installed. 0.5 carries the fix, so in-app updates work from 0.5 onward. When 0.5 is out, move a portable 0.4.4 to it by hand:
+An installed 0.4.4 cannot update itself. Its update helper never runs, so the **Update** button downloads the new build, Studio quits and nothing is installed. 0.5 carries the fix, so in-app updates work from 0.5 onward. Move a portable 0.4.4 to 0.5 by hand, once:
 
 1. Close Studio. Opening a second copy while it runs only brings the running one forward.
 2. Download the Windows zip from the [releases page](https://github.com/nateecho32-stack/mefi-studio/releases) and extract it to a **new** folder.
@@ -155,68 +155,24 @@ npm start
 
 ### First launch
 
-1. **Choose a project** on the launch screen, then **Open** (agents stay off unless you turn the **Start agents** switch on). Nothing runs before you choose. If a crash or a restart interrupted work in the last ten minutes, Studio skips the question, reopens that folder and restarts the agents that were running; closing the studio yourself always brings the question back.
-2. **Follow the walkthrough.** *Start here* opens on the first launch with seven short stops: scan, workspace, first map, connections, create, monitor, review. Each stop's **Walk with me** opens the real menu and highlights the control. It remembers your place.
-
-   At Scan or First map, choose an existing Codex, Claude Code, Grok or Antigravity login, or **Install and sign in**. **Check connection**, then **Use for the whole studio** routes mapping, chat, planning, agents and coding through that account. Have an API key (z.ai, OpenCode Go or Zen, OpenRouter, a custom endpoint) or a local server (LM Studio, Ollama) instead? **I have an API key or a local model server** takes you to Connections and scans again when you return. OpenCode is optional. See [guided CLI setup](docs/cli-setup.md) for installation and account limits.
-3. **Check the connection.** A fresh install runs **auto setup** by itself on the first launch, from the keys, CLIs and local servers already on the machine, and **Settings › Connections** says what it chose. Press **Run auto setup** again after adding a key or CLI, or configure a provider there. No key yet? The catalog, manual planning and saved work all work without one.
-4. **Give one clear task** and watch it move from *Ready* to *Working* to *Review*.
+1. **Start a new app**, or **Open a folder…** if you already have a project. Nothing runs before you choose. Later launches list your projects with **Open** and a **Start agents** switch; agents stay off unless you turn it on. If a crash or a restart interrupted work in the last ten minutes, Studio reopens that folder and restarts the agents that were running.
+2. **Pick the AI that builds for you.** A short welcome shows the coding tools on this PC and the account each one uses: Claude Code (your Claude subscription), Codex (your ChatGPT plan), Grok, Antigravity (your Google account), or OpenCode's free models. Sign in, come back to Studio, and press **Continue**: Studio uses that tool for chatting, planning and building. An API key or a local model (LM Studio, Ollama) works too, under **Other ways** in the welcome or later in **Team › Providers**. [Guided CLI setup](docs/cli-setup.md) covers installing and account limits.
+3. **Choose a project**, say **what Studio should make first** and press **Build it**.
+4. **Watch it, then check it.** The task runs on Today and the Map. When it finishes, look at what changed, then **Approve and finish**, or revert one file or the whole attempt.
 
 [GETTING_STARTED.md](GETTING_STARTED.md) walks through 0.5 (on `main` and in the beta builds) step by step, in plain words: your first ten minutes, where things are, and what every task state means.
 
-## A short tour of 0.4.4
+## A short tour of 0.5
 
 <details>
-<summary>The screens in the current download: Vibe or Build, the workspace, Command view, Start here and Settings.</summary>
+<summary>Social and Studio, Today, the Map, Team, Friends, Search, the Inbox, Settings and Help.</summary>
 
-### Vibe or Build
-
-**Vibe** puts conversation, task creation, work in progress and decisions on one
-screen. Its **Needs you** drawer handles questions, build approvals and blocked
-tasks. Open other tools from its dock and return to Vibe from the top of the rail.
-Switch to **Build** for the full workspace described below; Studio remembers
-which mode you use during updates. New launches start in Vibe; turn off
-**Always start in Vibe** in Settings to keep your last mode across launches.
-
-The **menu** down the left edge opens **Home**, **Work**, **Agents** and **Friends**, with section-local Back/Forward navigation for pages. Friends opens the companion's existing Friends menu; its Rooms, Your PCs and Playground links go straight to the matching card. Agents contains Overview, Setup, Live, Workflows, Models and Usage. It stays open by default in wide windows; **Keep menu open** saves your preference. **Settings**, **Search** (`Ctrl K`) and **Help** stay at its foot. Help contains Start here, Shortcuts (`?`) and Community. The project selector at the top switches projects, and `Ctrl ,` opens Settings from anywhere.
-
-### Your workspace (`H`)
-
-<p align="center">
-  <img src="docs/images/workspace.png" width="900" alt="The workspace: a status strip, a conversation with the companion, and the project's work queue">
-</p>
-
-The home screen. **Studio at a glance** shows the service state with a single Pause / Resume, running workers, what needs you, what is up next, the machine gauge and today's usage. Below it: the conversation with **Chat** and **Create task**, and **Your work** (Queue, Ideas, Review, Done). Expand **Queue settings** to change Auto build or Agent mode.
-
-### Command view (`D`)
-
-<p align="center">
-  <img src="docs/images/command.png" width="900" alt="Command view: sessions, tasks and agents as a 3D node tree, with the Live work panel on the right">
-</p>
-
-Every session, task and agent is a node. Agents orbit the assistant, fly to the task they work on, and say what they are doing in speech bubbles. The panel on the right holds **Work**, **Assistant**, **Runs** (recent builds grouped by task) and **Ask**, where agents wait for your decision with a recommended option. **Agents** in the top toolbar opens queue settings and links to full team setup.
-
-### Start here walkthrough
-
-<p align="center">
-  <img src="docs/images/walkthrough.png" width="900" alt="The seven-stop Start here walkthrough">
-</p>
-
-### Settings (`4` or `Ctrl ,`)
-
-<p align="center">
-  <img src="docs/images/settings.png" width="900" alt="Settings: auto setup and Providers (API keys, local servers, CLI logins), with model routing and coding workers in the side list">
-</p>
-
-Settings keeps **General**, **Appearance**, **Audio** and **System**. Connections, model routing, team roles and workflow behavior live in **Agents › Setup**. **Find a setting** searches individual controls and opens the matching category and disclosure. Connection forms and advanced options expand in place. Appearance includes Focus, Studio and Atmosphere presets and the live canvas preview. Agents and the companion share confirmed operational controls.
-
-See [Unified Studio](docs/unified-studio.md) for team presets, configuration scope, scrollbar-free navigation and the adaptive companion, and the [interface inventory](docs/interface-remaster.md) for the full set of screens and interior menus.
-
-### Also in the box
-
-**Tasks** (`T`) with briefs, prerequisites, attempts and evidence · **Plans** (`P`) that turn an unclear idea into a specification and tasks · **Ideas** (`I`) inbox · **Model catalog** (`1`) and **Performance** (`2`), plus Usage and Context · **Activity & evidence** (`3`), a read-only view of the coding sessions · **Sessions** (`E`), **Analyzer** (`A`), **Overhead** (`O`), **Appearance** (`U`), and the **Performance profiler** · **Search Studio** (`Ctrl K`) finds any page, tool, task, setting or model · `?` lists every shortcut.
-
-Watch the [40-second showreel](https://github.com/nateecho32-stack/mefi-studio/releases/download/v0.4.2/mefi-studio-v0.4.2-discord.mp4) (sample tasks from 0.4.2).
+- **Social** opens on **Today**: one box to describe what you want (**Talk it over** or **Build it**), then what needs you, what runs, what to review and what is done. Its menu has Today, Friends, the Map, Tasks, Plans, Ideas, Team and Search, with Settings and Help at its foot.
+- **Studio** lists every task as a session (Needs you, Running, Review, Queued, Done). The session you pick fills the middle with its thread, and the inspector beside it shows its Plan, Changes, Checks, Preview and Agent. Its menu has **Work**, **Map**, **Team** and **Friends**.
+- **The Map** (`D`) draws your agents and tasks as a live tree, with **Fleet** and **Pipelines** a click away.
+- **Team** holds who builds and with which AI (**Providers**, **Seats and models**), what they may decide alone (**Permissions**), and their **Rules**, **Skills** and **Connectors**.
+- **Friends** has The Lobby, Rooms, Your PCs, the Playground, the Project hub and Events.
+- **Search** (`Ctrl K`) finds any page, setting, task or action. The **Inbox** (`Ctrl J`) holds every question and approval. **Settings** (`Ctrl ,`) has your name and startup, notifications, the look (Appearance, Size and density, Map look), sound, updates and Other apps. **Help** has Start here, the Setup guide, Shortcuts (`?`), What's new and Report a problem.
 
 </details>
 
@@ -224,10 +180,10 @@ The full feature walkthrough, in Studio's own vocabulary with a glossary, is in 
 
 ## Keys and privacy
 
-- Keys are entered once in Settings › Connections and stored encrypted in the OS keystore; only "saved / not saved" reaches the UI. Headless setup, from a source checkout in PowerShell: `$env:MEFI_STUDIO_KEY = "<key>"; npx electron . --set-key`, then `Remove-Item Env:MEFI_STUDIO_KEY` (while it is set it overrides the saved key). [.env.example](.env.example) pairs every `--set-*-key` flag with its variable.
+- Keys are entered once in Team › Providers and stored encrypted in the OS keystore; only "saved / not saved" reaches the UI. Headless setup, from a source checkout in PowerShell: `$env:MEFI_STUDIO_KEY = "<key>"; npx electron . --set-key`, then `Remove-Item Env:MEFI_STUDIO_KEY` (while it is set it overrides the saved key). [.env.example](.env.example) pairs every `--set-*-key` flag with its variable.
 - Git tracks only `data/curated.json` and `data/models.json`. Tasks, conversations, settings, databases and captures stay local and are never packaged.
-- Agents run real commands in the project folder you chose. Turn **Auto build** off (*Verify first*) to approve each task before it runs.
-- Nothing contacts Discord unless you link an account. The link reads your Discord id, username and roles in the Void Engine server, and nothing about your projects.
+- Agents run real commands in the project folder you chose. The permission mode decides what waits for you: **Always ask** holds every task for your OK (Team › Permissions, or the chip in the message box).
+- Nothing contacts Discord unless you sign in with Discord in Friends. The sign-in reads your Discord id, username and membership in the Void Engine server, and nothing about your projects.
 - See [SECURITY.md](SECURITY.md) for reporting.
 
 <a id="community--perks"></a>
@@ -236,8 +192,8 @@ The full feature walkthrough, in Studio's own vocabulary with a glossary, is in 
 
 The [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is where people share projects, ask for feedback and hang out while they build. Unfinished ideas are welcome. Come meet **Studio**, the Discord bot, and help shape what it becomes. Discord is optional: Studio works on its own, and ideas and bug reports are just as welcome on GitHub.
 
-- **Rooms** (Friends › Rooms) lists your rooms and the listed ones you can join. Ask to join with a short note, accept or decline invites, and for rooms you own, let people in, invite by name, lock or close the room, and make new ones (hangout or cowork, open or invite-only, listed or not). Each room has a plain-text chat with @names; links are never clickable. Rooms need the room service's address in the build and a linked Discord account; until then the panel says what is missing.
-- **Listen together** and companion playdates are built and switch on once the community's rooms hub is online. The personal media player is available now.
+- **Friends**, in the menu, brings the community inside Studio once you sign in with Discord: **The Lobby** (who is online and the week's top project), **Rooms** with a chat (hangouts for up to 25, cowork rooms for up to 10, joined with a short invite code), **Listen together**, the **Playground**, the **Project hub** (share a project as a card and earn credits by playing other people's) and **Events** (a weekly Build Jam and co-work hours). It runs on the Mefi Studio relay, a free service built into Studio: the relay keeps no chat, and links in chat are never clickable.
+- The personal media player, playlists and radio work without any of it.
 - **Every theme and node style is free**, the Void collection included.
 
 The [community guide](https://nateecho32-stack.github.io/mefi-studio/wiki/#/community) explains what's available. [Public site and voice direction](docs/public-site.md) records the website's location, public naming and proposed voice integration.
@@ -288,7 +244,7 @@ npm run host:test        # the Rust host's unit tests (needs Rust)
 
 ### Ruins Runner
 
-Studio can launch the author's LÖVE game from Settings › Integrations when a checkout is found (`MEFI_STUDIO_GAME_ROOT`, or a sibling `2d-Trippy-Hell` or `2d Trippy Hell` folder). A fresh clone works without it.
+Studio can launch the author's LÖVE game from Settings › System, where its card shows only when a checkout is found (`MEFI_STUDIO_GAME_ROOT`, or a sibling `2d-Trippy-Hell` or `2d Trippy Hell` folder). A fresh clone works without it.
 
 ### Discord Server Styler
 
