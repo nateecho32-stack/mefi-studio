@@ -42100,7 +42100,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const lift = always ? 1 : Number.isFinite(node._lift) ? node._lift : focused ? 1 : 0;
     const style = state.nodeStyle;
     const quiet = state.nodeTheme?.light === true ? (style === "singularity" || style === "prism" || style === "sigil" ? 0.92 : 0.85) : 0.65;
-    return { prominent: always || focused, maxRadius: (node.kind === "assistant" ? 14 : node.kind === "session" ? 12 : 11) + 4 * lift, alpha: quiet + (1 - quiet) * lift, shape: "circle" };
+    // A task orb is a size up from the rest (12, 16 when lifted), so work reads first.
+    return { prominent: always || focused, maxRadius: (node.kind === "assistant" ? 14 : node.kind === "session" || node.kind === "task" ? 12 : 11) + 4 * lift, alpha: quiet + (1 - quiet) * lift, shape: "circle" };
   }
 
   function setSettingsPreview(rect, { keepActive = false } = {}) {
@@ -42419,6 +42420,47 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const from = Math.max(x, x - 6 + u * (filled + 6)), to = Math.min(x + filled, x + u * (filled + 6));
         if (to - from > 0.5) { ctx.beginPath(); ctx.roundRect(from, y, to - from, 2, 1); ctx.fillStyle = light ? rgba(theme.bg, 0.7) : rgba(ink.spec, 0.7); ctx.fill(); }
       }
+    }
+    ctx.restore();
+  }
+
+  // Which of the Map legend's states (MAP_LEGEND: active, held, verify, done) a
+  // work orb shows as a ring, or null: done while its finish holds, Review while
+  // it is checked, Needs you when it waits on the owner (blocked or an
+  // approval), Running while it runs. Agents, the hub and quiet work wear none.
+  function stateRingOf(node, active, hold) {
+    const work = node.kind === "task" || node.kind === "todo" || Boolean(node.workTask) || Boolean(node._workLabel);
+    if (!work || node.kind === "agent" || node.kind === "assistant") return null;
+    if (hold) return "done";
+    if (node._workLabel === "Verifying" || (node.task ?? node.workTask)?.status === "awaiting_verification") return "verify";
+    if (node._stage === "blocked" || node._stage === "approval") return "held";
+    if (active || node._workLabel === "Running") return "active";
+    return null;
+  }
+  // The ring follows the style's silhouette a few pixels off the orb. Running
+  // breathes (2.4 s) and Needs you pulses (1.4 s), each in the node's own
+  // phase; Review and Done hold still, as everything does with motion off. On a
+  // light page the colour takes its deep ink so it reads on the pale ground.
+  function drawStateRing(ctx, node, p, radius, key, motion, time, still, dim) {
+    const triple = key === "held" ? NODE_RGB.amber : key === "verify" ? NODE_RGB.verify : key === "done" ? NODE_RGB.done : NODE_RGB.warm;
+    const light = state.nodeTheme?.light === true;
+    const ink = light ? nodeStyles?.inkOf?.(triple, state.nodeTheme)?.hot ?? triple : triple;
+    const period = key === "active" ? 2400 : key === "held" ? 1400 : 0;
+    const beat = still || !period ? 0.5 : 0.5 + 0.5 * Math.sin(Math.PI * 2 * (time / period + (motion?.seed ?? 0)));
+    const gap = 3.2 + (key === "held" ? 1.4 : 0.6) * beat;
+    ctx.save();
+    ctx.globalAlpha *= dim;
+    ctx.beginPath();
+    if (nodeStyles) nodeStyles.outline(ctx, state.nodeStyle ?? "orbs", p.x, p.y, radius + gap, motion);
+    else ctx.arc(p.x, p.y, radius + gap, 0, Math.PI * 2);
+    ctx.strokeStyle = rgba(ink, Math.round((light ? 0.9 : 0.62 + 0.3 * beat) * 32) / 32);
+    ctx.lineWidth = key === "held" ? 2.2 : 1.8;
+    ctx.stroke();
+    // Running and Needs you also glow a little past the ring on a dark sky.
+    if (!light && period && (node._detail ?? 3) >= 2) {
+      ctx.globalAlpha *= 0.22 + 0.16 * beat;
+      ctx.lineWidth = 6;
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -43014,21 +43056,29 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return state.orbitFrame;
   }
 
-  // The overview's scale for a whole turn: the largest (at most 1) at which
-  // every anchor stays inside half-extents halfW × halfH of the frame at every
-  // angle of the spin, under every tilt its slow nod, the owner's pitch and
-  // the music's nod can give it. Each anchor only needs its reach off the
+  // How much closer than 1 the overview may come for a small tree: ten or more
+  // live nodes sit at 1 as before, fewer may come in up to 1.7 (one to three).
+  const FILL_MAX = 1.7;
+  function fillCeiling(count) {
+    if (!(count < 10)) return 1;
+    return Math.min(FILL_MAX, 1 + (10 - Math.max(1, count)) * 0.1);
+  }
+
+  // The overview's scale for a whole turn: the largest (at most `ceiling`, 1
+  // unless the tree is small) at which every anchor stays inside half-extents
+  // halfW × halfH of the frame at every angle of the spin, under every tilt
+  // its slow nod, the owner's pitch and the music's nod can give it. Each anchor only needs its reach off the
   // spin axis (r) and its height (y) about the centre, so the frame is sized
   // once for the turn instead of breathing in and out as a long tree swings
   // end-on. Across a turn an anchor's screen x peaks at r / √(1 − ρ²), where
   // ρ = r / camera distance; its screen y peaks with it nearest (or
   // farthest) and at the tilt that lifts it most.
-  function orbitEnvelope(points, centre, halfW, halfH) {
+  function orbitEnvelope(points, centre, halfW, halfH, ceiling = 1) {
     const scale = Math.max(0.01, state.fit * state.zoom);
     const distance = cameraDistance(scale);
     const nod = state.groove?.tiltRoom ?? 0;
     const low = state.pitch - 0.35 - nod, high = state.pitch + 0.35 + nod;
-    let fit = 1;
+    let fit = ceiling;
     for (const point of points) {
       const r = Math.hypot(point.x - centre.x, point.z - centre.z) * scale;
       const y = (point.y - centre.y) * scale;
@@ -43293,11 +43343,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const previousOffset = state.overviewOffset ?? { x: 0, y: 0 };
       const moving = !still && state.view === "3d" && state.orbit === "auto" && !state.selected && !state.query && !state.focus && !state.panning && !state.rotating && !state.settingsPreview && Number.isFinite(animationTime) && Date.now() >= (state.settleUntil ?? 0);
       if (moving && !state.overviewMotion) state.overviewMotion = globalThis.window?.MefiCameraTour?.createOverview?.();
-      let scale = 1;
-      if (state.view !== "2d") {
-        const live = anchors.filter(({ node }) => !node.dying && !node._absorbed && node._layoutAnchor).map(({ node }) => node._layoutAnchor);
-        scale = orbitEnvelope(live, state.orbitFrame, halfW, halfH) * (groove?.frame ?? 1);
-      }
+      // In 3D a small tree comes in closer than 1 (fillCeiling), so a handful
+      // of nodes fills the frame instead of sitting as a thin line in the
+      // middle; the room checks below still shrink it to fit. The flat map
+      // keeps 1: its nodes hold the screen places they were given.
+      const live = anchors.filter(({ node }) => !node.dying && !node._absorbed && node._layoutAnchor).map(({ node }) => node._layoutAnchor);
+      const fill = state.view !== "2d" ? fillCeiling(live.length) : 1;
+      let scale = fill;
+      if (state.view !== "2d") scale = orbitEnvelope(live, state.orbitFrame, halfW, halfH, fill) * (groove?.frame ?? 1);
       const roomX = Math.max(1, halfW - Math.abs(swayX)), roomY = Math.max(1, halfH - Math.abs(swayY));
       for (const { node, p } of anchors) {
         if (node.dying || node._absorbed) continue;
@@ -43314,6 +43367,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const shot = state.overviewMotion.step({ points, viewport, dt: (animationTime - (state.overviewAt ?? animationTime)) / 1000, moving, still, initial: { scale: previousScale / frame, ...previousOffset }, ceiling: scale / frame });
         scale = shot.scale * frame;
         state.overviewOffset = { x: shot.x, y: shot.y };
+      }
+      // Coming in closer eases (about a third of a second); a frame that has to
+      // shrink to keep every node in view does so at once, as it always did.
+      if (fill > 1 && scale > previousScale && !still && Number.isFinite(animationTime) && Number.isFinite(state.overviewAt)) {
+        const dt = Math.max(0, Math.min(0.1, (animationTime - state.overviewAt) / 1000));
+        const eased = previousScale + (scale - previousScale) * (1 - Math.exp(-dt / 0.12));
+        scale = scale - eased < 0.002 ? scale : eased;
       }
       state.overviewAt = animationTime;
       state.overviewScale = scale;
@@ -47213,7 +47273,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         nodeStyles.stepMotion(motion, stepFlags, dt, still);
         tint = nodeStyles.shownTint(motion, tint, time, still);
       }
-      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : node.child ? 7.5 : 11;
+      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 13 : node.child ? 7.5 : 11;
       // Hover and selection ease the node up a twentieth (the record's sel),
       // on top of the lift that raises its size cap.
       const pop = motion ? 1 + 0.05 * motion.sel : 1;
@@ -47255,6 +47315,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           if (grow >= 0 && grow < 1) nodeStyles.arrival(ctx, state.nodeStyle, p, radius, tint, grow, overlay);
           if (marked) nodeStyles.select(ctx, state.nodeStyle, p, radius, tint, overlay);
         }
+      }
+      // The node's state at a glance: a ring in its legend colour (Running,
+      // Needs you, Review, Done) round every work orb, so the Map reads like
+      // its legend in every theme. Under the work orbit and the done badge;
+      // labels and callouts keep clear of it.
+      const ring = stateRingOf(node, active, hold);
+      if (ring) {
+        drawStateRing(ctx, node, p, radius, ring, motion, time, still, Math.max(0.35, factor));
+        node._styleReach = Math.max(node._styleReach ?? 0, radius + 6);
       }
       drawWorkOrbit(ctx, node, p, radius, time, still);
       drawFiledWork(ctx, node, p, radius, runningIds, time, still);
