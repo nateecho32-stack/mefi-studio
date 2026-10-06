@@ -26,9 +26,9 @@ server.
    there is always somewhere to say hi.
 3. **Get into the same room.** In a room, **Copy invite** gives a short code
    (like `7K3Q-M2XR`); a friend types it into **Join with a code** in Rooms
-   and comes straight in. Someone with the Room Host role (or a moderator)
-   can make a listed room; anyone a week or more in the server can make an
-   unlisted one. Others see a listed room with **Ask to join**; the owner's
+   and comes straight in. Anyone a week or more in the server can make an
+   unlisted room; showing one in the room list opens at Flame rank (200
+   credits), and moderators can always. No Discord roles are needed. Others see a listed room with **Ask to join**; the owner's
    **Requests** tab lets them in. Companions meet while the room is open in
    Studio.
 4. **Friends › Playground.** Within a few seconds it shows the other PCs'
@@ -88,7 +88,8 @@ rooms service does not carry the Discord remote.
 | "Link your Discord account…" | This PC has not linked Discord yet: Settings › Community › Link Discord |
 | "Not connected to the room service" | Press **Connect**; if it keeps failing, check that this PC is online and that `https://mefi-relay.mefi-studio.workers.dev/v1/health` opens |
 | "Only members of the Void Engine server can use rooms" | The linked Discord account is not in the server |
-| "Making your own rooms opens after a week in the server" | Unlisted rooms need a week in the server; ask a Room Host meanwhile |
+| "Making your own rooms opens after a week in the server" | Unlisted rooms need a week in the server; join one with a code meanwhile |
+| "Showing a room in the list opens at Flame rank" | Untick **Show it in the room list** and invite people with the room's code; listing opens at 200 credits |
 | "New members can share links after their first day" | The server's day-one rule, for chat, listening and the Project hub |
 | "This room service has no project hub yet" | Connection details point at an older Void Engine hub instead of the relay |
 

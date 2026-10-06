@@ -21,7 +21,7 @@
 // it to: rate buckets refill, pending peer-history asks just lapse.
 
 import { createChat, idTime } from './chat.mjs';
-import { FRONT, createCredits } from './credits.mjs';
+import { FRONT, RANKS, createCredits, rankFor } from './credits.mjs';
 import { createLeases } from './leases.mjs';
 import { createListen } from './listen.mjs';
 import { createOembed, publicLink } from './media.mjs';
@@ -56,7 +56,10 @@ export const ROOM_LIMITS = Object.freeze({
   invitesPerDay: 20,
   requestTtlMs: 7 * DAY_MS,
   inviteTtlMs: 7 * DAY_MS,
-  unlistedMinAgeMs: 7 * DAY_MS, // your own unlisted room: a week in the server (listed rooms need Room Host)
+  unlistedMinAgeMs: 7 * DAY_MS, // your own unlisted room: a week in the server
+  // A room in the public list: Studio's own rank, earned from credits (credits.mjs), so no Discord role is needed.
+  // A moderator, or a Room Host role when ROLE_IDS_JSON names one, may list a room at any rank.
+  listedRank: 'flame',
   removedCooldownMs: 30 * DAY_MS,
   postsPer10s: 5,
   postsPerMinute: 30,
@@ -210,6 +213,12 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   // ---- rooms in the store --------------------------------------------------------
 
   const roomRow = (roomId) => (isOpaqueId(roomId) ? store.get('SELECT * FROM rooms WHERE id = ?', roomId) : undefined);
+  // Whether a member's Studio rank (from lifetime credits, worked out here) is at least `key`.
+  function rankAtLeast(uid, key) {
+    const order = RANKS.map((rank) => rank.key);
+    return order.indexOf(rankFor(credits.account(uid).lifetime).key) >= order.indexOf(key);
+  }
+
   function isMember(roomId, uid) {
     if (!isOpaqueId(roomId) || !isSnowflake(uid)) return false;
     return Boolean(store.get(`SELECT 1 AS yes FROM room_members m JOIN rooms r ON r.id = m.room_id WHERE m.room_id = ? AND m.user_id = ? AND r.status <> 'closed'`, roomId, uid));
@@ -771,7 +780,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     const name = cleanLine(body.name, LIMITS.roomNameChars);
     if (!name) return fromResult(fail('bad-request', 'name'));
     if (actor.isNew) return fromResult(fail('forbidden', 'new-member'));
-    if (body.listed && !actor.isRoomHost && !actor.isMod) return fromResult(fail('forbidden', 'room-host-role'));
+    if (body.listed && !actor.isRoomHost && !actor.isMod && !rankAtLeast(actor.uid, ROOM_LIMITS.listedRank)) return fromResult(fail('forbidden', 'listed-rank'));
     if (!body.listed && !actor.isRoomHost && !actor.isMod && (!Number.isFinite(actor.joinedAt) || now() - actor.joinedAt < ROOM_LIMITS.unlistedMinAgeMs)) return fromResult(fail('forbidden', 'week-member'));
     const at = now();
     const result = store.transaction(() => {

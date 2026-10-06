@@ -17,6 +17,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   and only plays and stars from members in good standing count toward Top.
   The Project hub says when your credits start, and moderators can see
   where someone's credits came from and take farmed ones back.
+- **No Discord roles needed.** Ranks are Studio's own, from credits: Flame
+  rank (200 credits) now unlocks showing a room in the public list, which
+  used to need a Room Host role in the Discord server. Anyone a week in the
+  server can still make an unlisted room and invite people with its code.
+  Moderators are named accounts.
 - **Friends has a front page, a sign-in and shows you online.** Friends now
   opens on **The Lobby**, a front page in the style of The Studio Daily: who
   is online right now and which room they are in, the week's top project

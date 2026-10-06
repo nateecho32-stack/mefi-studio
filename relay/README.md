@@ -23,7 +23,7 @@ that comes back has to match what was actually said.
 
 | What | Why | How long |
 | --- | --- | --- |
-| Your Discord id, display name, roles, server join date and timeout | sign-in, room rules ("Room Host", "a day in the server"), member search | until 2 years without signing in, or `POST /v1/me/forget` |
+| Your Discord id, display name, roles, server join date and timeout | sign-in, room rules ("a week in the server"), member search | until 2 years without signing in, or `POST /v1/me/forget` |
 | A keyed hash of a Discord token already checked | a renewal does not ask Discord again | until the token expires, at most 7 days |
 | Rooms, who is in them, join requests, invites, removals | rooms | 30 days after a room closes or a request is answered |
 | A room's shared player: link, label, position | listen together survives the relay sleeping | while it plays; ends after 30 min paused or 6 h idle |
@@ -67,6 +67,9 @@ alt accounts, trading and replays:
   people who received them.
 - Featuring is once a week per owner, however projects are removed and
   shared again.
+- Ranks unlock one thing: a room in the public list opens at Flame (200
+  credits), which the limits above make slow to reach with second accounts.
+  Moderation is never a rank: moderators are named accounts (`OWNER_IDS`).
 - Moderators: `GET /v1/admin/credits/:id` shows where a member's credits
   came from in the last 30 days, by who caused them and with their account
   ages; `POST /v1/admin/credits/:id/revoke` (`{ "from": "<id>", "days": 30 }`,
@@ -106,8 +109,8 @@ npx wrangler dev --ip 127.0.0.1 --port 8787
 ```
 
 with a `.dev.vars` (never committed) holding
-`STUDIO_APP_ID=100000000000000001`, `DISCORD_API_BASE=http://127.0.0.1:8799` and
-`ROLE_IDS_JSON={"room_host":"300000000000000001"}`, then
+`STUDIO_APP_ID=100000000000000001` and `DISCORD_API_BASE=http://127.0.0.1:8799`
+(plus `ROLE_IDS_JSON={"room_host":"300000000000000001"}` to try a Room Host role), then
 
 ```bash
 node scripts/smoke.mjs http://127.0.0.1:8787 --fake-discord 8799
@@ -117,8 +120,11 @@ node scripts/smoke.mjs http://127.0.0.1:8787 --fake-discord 8799
 
 1. A free Cloudflare account, then `npx wrangler login` in this folder.
 2. Fill in `[vars]` in `wrangler.toml`: `STUDIO_APP_ID` (the Mefi Studio Link
-   Discord application), `OWNER_IDS`, and the role ids in `MOD_ROLE_IDS` and
-   `ROLE_IDS_JSON` (`room_host`, and the rank roles).
+   Discord application) and `OWNER_IDS` (the moderators' Discord user ids).
+   No Discord roles are needed: ranks are Studio's own, from credits, and
+   Flame rank unlocks listed rooms. `MOD_ROLE_IDS` and `ROLE_IDS_JSON` are
+   optional, for also honouring Discord roles (moderators, a Room Host role,
+   extra badges).
 3. `npx wrangler deploy` prints `https://mefi-relay.<account>.workers.dev`.
 4. `node scripts/smoke.mjs https://mefi-relay.<account>.workers.dev`.
 

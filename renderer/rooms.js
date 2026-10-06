@@ -19,9 +19,10 @@
   const button = (text, run, id) => { const el = node("button", "ghost rooms-button", text); el.type = "button"; if (id) el.id = id; el.addEventListener("click", run); return el; };
   const bridge = () => window.mefiStudio;
   const REASONS = {
-    "room-host-role": "Creating rooms needs the Room Host role in the Void Engine server.",
+    "listed-rank": "Showing a room in the list opens at Flame rank (200 credits, earned when friends play and star what you share). Untick \"Show it in the room list\" to make it now and invite people.",
+    "room-host-role": "Showing a room in the list needs the Room Host role in the Void Engine server.",
     "new-member": "New members can do this after their first day in the server.",
-    "week-member": "Making your own rooms opens after a week in the server. Ask a Room Host to make one meanwhile.",
+    "week-member": "Making your own rooms opens after a week in the server. Meanwhile, join one with a code or from the list.",
     "owned-rooms": "You already own 3 open rooms. Close one first.",
     "daily-creates": "You have made 5 rooms today. Try again tomorrow.",
     "hub-full": "The room service is full right now.",
@@ -252,7 +253,7 @@
       listed.type = "checkbox";
       listed.id = "rooms-create-listed";
       listed.checked = true;
-      listedLabel.append(listed, node("span", "", " Show it in the room list"));
+      listedLabel.append(listed, node("span", "", " Show it in the room list (opens at Flame rank)"));
       const create = button("Make room", () => guard("Making the room…", async () => {
         const answer = await call("createRoom", { name: name.value.trim(), kind: kind.value, policy: policy.value, listed: listed.checked });
         status.textContent = answer?.ok ? `${answer.room.name} is ready.` : why(answer, answer?.error === "bad-request" ? "Give the room a one-line name of up to 80 characters." : "The room could not be made.");
