@@ -25,9 +25,9 @@ Settings has four categories: **General**, **Appearance**, **Audio** and **Syste
 
 <span class="status next">New in 0.5</span> Three more startup settings:
 
-- **When Studio opens**: **Resume what I had** (the default), **Start agents** or **Keep agents off**. The launch screen's main button follows it, and opening with agents off stays one click away.
+- **Agents when Studio opens**: **Resume what I had** (the default), **Start agents** or **Keep agents off**. The launch screen's main button follows it, and opening with agents off stays one click away.
 - **A switch to open the Map after five quiet minutes**, off by default. In 0.4.4, Studio switched to the Command view by itself after five quiet minutes.
-- **Start with Windows**: Studio opens in the tray when you sign in to Windows, on the project you had open. The agents then follow **When Studio opens**.
+- **Start with Windows**: Studio opens in the tray when you sign in to Windows, on the project you had open. The agents then follow **Agents when Studio opens**.
 
 ### Community
 

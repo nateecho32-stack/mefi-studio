@@ -478,7 +478,7 @@
             {
               "id": "when-studio-opens",
               "title": "Studio opens the way you want",
-              "text": "A new When Studio opens setting: Resume what I had, Start agents or Keep agents off.",
+              "text": "A new Agents when Studio opens setting: Resume what I had, Start agents or Keep agents off.",
               "status": "next",
               "label": "New in 0.5",
               "area": "Setup",

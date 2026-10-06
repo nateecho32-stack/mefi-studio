@@ -68,6 +68,6 @@ Updating keeps your data: the in-app update leaves `resources\app\data` in place
 
 If Studio went away while work was running, and that work was less than ten minutes old, the next launch reopens the same folder and picks up where you left off. If the window crashed or disappeared, reopen Studio and check the saved project before you start the same tasks again.
 
-> <span class="status next">New in 0.5</span> **Settings › General › When Studio opens** decides whether agents start on launch: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+> <span class="status next">New in 0.5</span> **Settings › General › Agents when Studio opens** decides whether agents start on launch: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
 
 For a blank window, a missing project or repeated failed checks, see [Troubleshooting](troubleshooting.md). In a bug report, include your Studio version, the task's state and the error, and leave keys and private project content out.

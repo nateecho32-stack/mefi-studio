@@ -116,7 +116,7 @@ From 0.5 this is Studio's only layout. The classic layout and the switch back to
 
 - **Chrome, the new default look.** A new theme of matte black panels, silver type and brushed chrome on the main buttons and the side of a switch you are on, an iridescent finish (silver, ice blue, lilac and aqua) on the edges, the selection bars and the highlights, and silver nodes on the Map. New installs open in it. A theme you already picked, Aurora included, stays. Every theme also gets a finer finish: buttons ease into hover and press, and raised controls catch a fine top highlight. See [Appearance](#/appearance).
 - **Configuration.** Every setting in one searchable tree (`Ctrl Shift ,`), with the setup helper’s sections, a pinned **Walk me through setup**, and a new **Interface scale** from 70% to 150%. See [Configuration](#/settings/configuration).
-- **When Studio opens.** Choose **Resume what I had**, **Start agents** or **Keep agents off**.
+- **Agents when Studio opens.** Choose **Resume what I had**, **Start agents** or **Keep agents off**.
 - **No surprise Map.** Opening the Map after five quiet minutes is now a setting, off by default.
 - **Start with Windows.** Studio can open in the tray when you sign in, so a PC you leave working keeps working after an update restart. See [Settings and Configuration](#/settings).
 - **One two-step confirm.** Every action that can't be undone, from **Stop all** to deleting a recipe, asks the same way: the first press asks, the second acts.
