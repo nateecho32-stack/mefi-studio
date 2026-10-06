@@ -14,38 +14,44 @@ A portable build and a source install on the same Windows account share their se
 
 ## An update doesn't install
 
-In 0.4.4, the in-app update downloads and verifies the new release, but the step that installs it after Studio closes never runs. The old version stays in place. Update by hand instead:
+Coming from 0.4.4? Its in-app update downloads and verifies the new release, but the step that installs it after Studio closes never runs, so the old version stays in place. Update by hand this once:
 
 1. Quit Studio from its tray icon.
 2. Extract the new release zip into a **new** folder.
 3. Copy everything in the old folder's `resources\app\data` into the new one's `resources\app\data`, except `curated.json` and `models.json`. Those hold the new release's model catalog.
 4. Open `Mefi Studio AI+.exe` in the new folder.
 
-Settings and saved keys live in `%APPDATA%\Mefi's Studio AI+`, so they carry over by themselves. [Updates](updates.md#update-from-044-by-hand) has the full steps. <span class="status next">New in 0.5</span> The install step works, so updates from 0.5 on install themselves.
+Settings and saved keys live in `%APPDATA%\Mefi's Studio AI+`, so they carry over by themselves. [Updates](updates.md#update-from-044-by-hand) has the full steps. From 0.5 on, updates install themselves. If a new build misbehaves, **Roll back** in **Settings › Updates** puts back the one before.
 
 ## Agents are off or not starting
 
-Read the line under Vibe's box, or the status at the top of Home in Build mode. It names what's holding the agents and offers one button:
+Read the line under the box on Today. It names what's holding the agents and offers the one button that clears it:
 
-- **Waiting for you** means Studio opened with the agents off. Press **Start agents**. The tray icon's menu has **Start agents** too.
-- **Paused** means new work is on hold. Press **Resume**.
-- **No AI connected** means there's no working AI yet. Press **Connect an AI**, or see [Connect an AI](connections.md).
+| The line says | What it means | Press |
+| --- | --- | --- |
+| **Agents are off** | Studio opened with the agents off. | **Start agents**. The play button in the top bar and the tray icon's menu start them too. |
+| **Agents paused** | New work is on hold. | **Resume agents** |
+| **No AI connected** | There's no working AI yet. | **Connect an AI**, or see [Connect an AI](connections.md). |
+| **No project open** | Agents have nowhere to work. | **Open a project** |
+| **Agents are cooling down** | Workers failed to start several times in a row. | **Try now** |
+| **The work scheduler is stuck** | Its last pass ran past its time limit. | **Restart Studio** |
+| *N* **tasks need your OK** or **your review** | Tasks wait for you. | **Review tasks** |
 
-> <span class="status next">New in 0.5</span> One status explains every hold, everywhere, with the one button that clears it: **Agents are off** (**Start agents**), **Agents paused** (**Resume agents**), **No AI connected** (**Connect an AI**), **No project open** (**Open a project**), **Agents are cooling down** after failed starts (**Try now**), **The work scheduler is stuck** (**Restart Studio**), and tasks that need your OK or review (**Review tasks**). **Settings › General › When Studio opens** decides whether agents start on launch.
+The same status shows everywhere, so the parts of Studio never disagree. **Settings › General › Agents when Studio opens** decides whether agents start on launch.
 
 ## A connection or coding agent is not ready
 
-Open **Help › Start here** and use **Check connection** for the tool you picked. Finish its sign-in if it asks. **Agents › Overview › Check connections** takes you to the connection settings, and `Ctrl K` finds them too.
+Open **Help › Start here** and use **Check connection** for the tool you picked. Finish its sign-in if it asks. **Team › Overview › Check connections** takes you to **Team › Providers**, and `Ctrl K` finds them too.
 
-In 0.4.4 the guided **Install and sign in** window may close as soon as it opens. [Sign in from a terminal](connections.md#sign-in-from-a-terminal), then choose **Refresh installed tools** and **Check connection**. Studio finds a tool you install while it's open, so you don't need to restart it.
+Studio finds a tool you install while it's open, so you don't need to restart it: choose **Refresh installed tools**, then **Check connection**. If the setup window doesn't work for you, [sign in from a terminal](connections.md#sign-in-from-a-terminal).
 
-A working chat connection doesn't prove the coding worker is ready, so check the coding tool as well. If it still fails, run that tool in a terminal and read its error before you retry in Studio. In 0.4.4, a missing coding tool can show up as "'opencode' is not recognized".
+A working chat connection doesn't prove the coding worker is ready, so check the coding tool as well. If it still fails, run that tool in a terminal and read its error before you retry in Studio.
 
 > <span class="status next">New in 0.5</span> A new install starts with a short welcome that lists the coding tools on this PC and marks one that's installed but not signed in, and the [setup helper](setup-helper.md) offers **Set up automatically**. With no coding tool installed, **Start agents** says to install OpenCode, Claude Code or Codex, and a run that fails that way says the tool "is not installed or not on PATH".
 
 ## A Claude Code or Codex login hit its limit
 
-Work waits until your plan's limit resets. <span class="status next">New in 0.5</span> Add a second login under the setup helper's **Connect an AI › More than one login**. Studio then moves to the next login when one reaches its limit. See [Connect an AI](connections.md#more-than-one-login).
+Work waits until your plan's limit resets, without using up the task's tries. <span class="status next">New in 0.5</span> Add a second login under **Your subscriptions** in **Team › Providers**, or the setup helper's **Connect an AI › More than one login**. Studio then moves to the next login when one reaches its limit. See [Connect an AI](connections.md#more-than-one-login).
 
 ## A task stays Ready
 
@@ -67,7 +73,7 @@ Use **Retry loading** before you create it again. A failed board refresh can hid
 
 ## A task says Needs attention
 
-Read the failure and the agent's question. Answer it in **Needs you** or **Ask**, fix the cause, then retry. Check the selected project and connection before running the same attempt again.
+Read the failure and the agent's question. Answer it in the Inbox (`Ctrl J`), fix the cause, then retry. Check the selected project and connection before running the same attempt again.
 
 If Studio reports a prerequisite cycle, edit the tasks so they no longer depend on each other in a loop.
 
@@ -75,17 +81,17 @@ If Studio reports a prerequisite cycle, edit the tasks so they no longer depend 
 
 The worker finished, but Studio doesn't have enough evidence yet that the task is done. Open the task and read its checks and evidence. If automatic checks can't run, test the result yourself and confirm it only once it does what you asked. See [Verification](verification.md).
 
-In 0.4.4, work built by Claude Code, Codex, Grok or Antigravity usually waits for you to check and confirm it, because Studio can't read those runs yet. <span class="status next">New in 0.5</span> Studio checks those builds with its own checks.
+Studio checks builds from every coding tool with its own checks. <span class="status next">New in 0.5</span> In 0.4.4, work built by Claude Code, Codex, Grok or Antigravity usually waited for you to confirm it yourself.
 
 ## Old questions stay in Needs you
 
-In 0.4.4, **Clear list** in the companion's list takes stuck items off it until something new happens to them.
+Answered questions leave the list at once. Questions older than two days, or about a task that left the board, close when the project loads. **Clear list**, in your companion's **Needs you** bubble, takes stuck items off the list until something new happens to them.
 
-> <span class="status next">New in 0.5</span> Answered questions leave the list at once. Questions older than two days, or about a task that left the board, close when the project loads.
+<span id="studio-switched-to-command-view-by-itself"></span>
 
-## Studio switched to Command view by itself
+## Studio switched to the Map by itself
 
-In 0.4.4, Studio switches to Command view after five quiet minutes. Move the mouse or press a key to get back to work. <span class="status next">New in 0.5</span> The Command view is called the Map, and opening it after five quiet minutes becomes a switch in Settings, off by default.
+That's **Show the Map after 5 quiet minutes**, in **Settings › General**. It's off by default: turn it off, and Studio stays on the page you left. Before 0.5, Studio always switched to the Map, then called the Command view, after five quiet minutes.
 
 ## A worker will not stop
 
@@ -113,9 +119,9 @@ A synced folder can lock files while it uploads them. Try keeping the Studio fol
 
 ## I cannot join a shared listening room
 
-In 0.4.4, Listen together has no room service to connect to: the message reads "this build isn't connected to one yet", and reinstalling won't change that. The music player itself works without it.
+Rooms and Listen together run on the Mefi Studio relay, which is built into Studio, so there's no address to enter. Sign in with Discord in Friends; your account needs to be in the Void Engine server. When Friends can't connect, it says why in one sentence and offers only what helps: sign in again, update Studio, join the Discord or connect. See [Friends, rooms and playdates](friends-and-rooms.md).
 
-> <span class="status next">New in 0.5</span> Rooms and Listen together run on the Mefi Studio relay, which is built into Studio, so there's no address to enter. Sign in with Discord in Friends; your account needs to be in the Void Engine server. When Friends can't connect, it says why in one sentence and offers only what helps: sign in again, update Studio, join the Discord or connect. See [Friends, rooms and playdates](friends-and-rooms.md).
+Still on 0.4.4? Its Listen together has no room service to connect to, and reinstalling won't change that. [Update to 0.5](updates.md#update-from-044-by-hand). The music player itself works without it.
 
 ## `npm start` says Electron is running as Node
 

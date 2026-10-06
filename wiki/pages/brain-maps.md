@@ -2,7 +2,7 @@
 
 Brain maps let you look at, and change, the steps Studio's work follows: how work is approved, handed to agents and checked, and how the agents ask you for help.
 
-Open **Agents › Workflows › Brain maps**, or press `B`. The built-in map, **The studio pipeline**, is a good place to start. You can use Studio without ever editing it.
+Open **Team › Workflows › Brain maps**, or press `B`. The built-in map, **The studio pipeline**, is a good place to start. You can use Studio without ever editing it.
 
 Brain maps are the rules. The [Agent brain](agent-brain.md) (`J`) is different: it shows one task's pipeline as it runs.
 
@@ -65,7 +65,7 @@ Who answers depends on your [permission mode](permissions.md):
 
 Questions about permissions, risk, or things only you can do always wait for you.
 
-Questions reach you in Command's **Ask** tab, Vibe's **Needs you** drawer, your companion's **Requests** bubble, and a **Decision needed** notice with **Answer**. Each question explains the problem and offers the actions that fit. Depending on the kind of question, you may see:
+Questions reach you in the Inbox (`Ctrl J`), on Today's board, in the Map's **Ask** tab, in your companion's **Needs you** bubble, and in a **Decision needed** notice with **Answer**. Each question explains the problem and offers the actions that fit. Depending on the kind of question, you may see:
 
 | Option | What it does |
 | --- | --- |

@@ -6,14 +6,14 @@ A good review answers three questions: what changed, which checks ran, and wheth
 
 ## Where to review
 
-- **In Vibe**, the **Freshly done** card shows what finished in the last half day. The **Tasks** panel's **Checking** and **Done** lanes hold the rest. Open a task to read its result.
-- **In Build mode**, open **Review** under **Your work** on Home, or the task's own details.
+- **On Today**, in either mode, finished work waits under **Review**, and what finished today shows under **Done**. In Social, the **Tasks** panel's **Checking** and **Done** lanes hold the rest.
+- **In Studio mode**, the session list's **Review** group holds finished work. Open a session and press **See the changes**: the inspector's **Changes** tab lists every changed file, line by line, and **Checks** shows what was tested. The task board's **Review** filter lists the same work.
 
 ## Read the result
 
 Start with the agent's summary, then open the changed files or the running app. Compare the result with the task's brief and its acceptance checks.
 
-A task's details have four tabs: **Details**, **Evidence**, **History** and **References**.
+On the task board, a task's details have four tabs: **Details**, **Evidence**, **History** and **References**.
 
 - **Evidence** shows **Work done outside Studio**, **Result & completion checks** and **Follow-up work**.
 - **History** holds the **Brief history** and every **Attempt**.
@@ -24,9 +24,9 @@ Some work, such as a small edit in a project with no test command, can be verifi
 
 ## Builds from other coding tools
 
-In 0.4.4, Studio reads its evidence from OpenCode sessions. Work built by Claude Code, Codex, Grok or Antigravity leaves no session Studio can read, so it usually waits for you to check it and confirm it yourself, or to retry it on OpenCode.
+Studio verifies builds from every coding tool, Claude Code, Codex, Grok and Antigravity included, with its own checks. Every run reports what it did before it ends, and Studio checks the work against that report.
 
-> <span class="status next">New in 0.5</span> Studio verifies builds from every coding tool with its own checks, instead of handing them back to you.
+> <span class="status next">New in 0.5</span> In 0.4.4, work built by Claude Code, Codex, Grok or Antigravity usually waited for you to confirm it yourself, or to retry it on OpenCode.
 
 ## If the task is still waiting
 
@@ -36,14 +36,16 @@ Read the reason on the card before you retry:
 
 - **Evidence is pending**: give the records time to arrive.
 - **A check failed**: look at its command and output.
-- **A question needs your answer**: open **Ask**, or Vibe's **Needs you** drawer.
+- **A question needs your answer**: open the Inbox (`Ctrl J`).
 - **Follow-up work is unfinished**: open the linked task to see what's left.
 
 ## Accept it, or send it back
 
-When a task is waiting for your review, its button reads **Confirm done**; otherwise it reads **Mark done**. Choose it once you've checked a result you want to keep. Studio records your confirmation apart from its own verification.
+In Studio mode, **Approve and finish** on a finished session moves it to **Done**. On the Changes tab, **Accept changes** only notes that you looked. **Revert**, beside a file, puts that one file back. **Revert attempt** puts every file back and reopens the task: press it again when it says **Revert all** and a number, and **Undo** brings the changes back.
 
-If the result needs more work, use **Ask for a change** to start a new request about it, or give a specific change request and retry the task. See [Tasks](workflow.md) for task states and recovery.
+On the task board, a task waiting for your review has **Confirm done**; otherwise its button reads **Mark done**. Choose it once you've checked a result you want to keep. Studio records your confirmation apart from its own verification.
+
+If the result needs more work, use **Request changes** (or **Ask for a change** in Social's Tasks panel) to start a follow-up task about it, or give a specific change request and retry the task. See [Tasks](workflow.md) for task states and recovery.
 
 ## Work done outside Studio
 

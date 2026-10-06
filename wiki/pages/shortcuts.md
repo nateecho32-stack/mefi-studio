@@ -1,65 +1,65 @@
 # Navigation and shortcuts
 
-Press `Ctrl K` to search Studio for any page, tool, task or setting. Press `?` for Studio's own shortcut sheet.
+Press `Ctrl K` to search Studio for any page, setting, task or action. Press `?` for Studio's own shortcut sheet.
 
-## Vibe and Build
+## Social and Studio
 
-Studio has two modes. **Vibe** is the calm front door: one box to talk or build, the work in progress and what needs you. **Build** is the full studio, with the menu down the left side.
+Studio has two modes in one window, with the same projects and tasks.
 
-Switch with the **Vibe / Build** toggle at the top of Vibe, the **Build** button at the foot of Vibe's rail, **Settings › General › Studio mode**, or **Switch to Build** in Search. Studio remembers your choice.
+- **Social** is the calm mode, where Studio opens. Its home page, **Today**, has one box to talk or build and a board of what needs you, what's running, what to review and what's done.
+- **Studio** is the in-depth mode. Your tasks are sessions in a list on the left, with **New task** (`Ctrl N`) on top. The task you pick fills the middle, and the inspector on the right shows its **Plan**, **Changes**, **Checks**, **Preview** and **Agent**.
 
-In Vibe:
+Switch with the **Social | Studio** switch at the top left or `Ctrl M`. Search has **Switch to Studio** (or **Switch to Social**) too.
 
-- In the box, **Enter** talks it over and **Ctrl + Enter** builds it.
-- The dock holds **Watch**, **Tasks**, **Plans**, **Ideas**, **Team** and **More**. Watch, Plans and Ideas appear only while they have something to show.
-- Each dock stop opens a compact panel. **Full view** opens the full page inside Vibe's rail, and **Back** or `Esc` steps out.
-- Other pages open inside Vibe's own rail. The spark at the top takes you back to Vibe.
+In Social:
 
-See [Vibe mode](vibe-mode.md).
+- In the box, `Enter` talks it over and `Ctrl Enter` builds it.
+- On Today, `T`, `P`, `I` and `M` open compact **Tasks**, **Plans**, **Ideas** and **Team** panels, and `S` opens **Settings**. **Full view** opens the whole page, and **Back** or `Esc` steps out.
+- Other pages open beside Social's own narrow rail. **Today**, at its top, takes you back.
 
-## The menu in Build
+See [Social mode](vibe-mode.md).
 
-From top to bottom, the menu holds:
+## The rail in Studio
 
-- **M+ Projects**, which opens your projects so you can add or switch folders.
-- **Vibe mode**, **New task** and **Search**.
-- The three sections: **Home**, **Work** and **Agents**.
-- **Recent tasks** from the current project.
-- **Settings** and **Help** at the foot. Help holds **Start here**, **Shortcuts** and **Community**.
+From top to bottom, the rail holds:
 
-The pin button, **Keep the menu open**, keeps the menu open beside the page in wide windows.
+- **Projects**, which opens your projects so you can add or switch folders.
+- The four places: **Work**, **Map**, **Team** and **Friends**. Friends also lists its pages under it.
+- **Settings** and **Help** at the foot, with your companion. Help holds **Start here**, **Setup guide**, **Shortcuts**, **What's new**, **Report a problem** and the **Void Engine Discord**.
 
-| Where | What's inside |
+**Keep menu open**, the pin at the bottom, keeps the rail open beside the page in wide windows.
+
+| Place | What's inside |
 | --- | --- |
-| **Home** | Your workspace: the conversation, your work and Studio's status |
-| **Work** | Tasks, Plans, Ideas and Analyzer |
-| **Agents › Overview** | Your team, whether it's ready, and the queue switches |
-| **Agents › Setup** | Team & models, Providers, Routing & fallback, Run behavior |
-| **Agents › Live** | Command, Pipelines, Sessions, Activity, Trace, Overhead; <span class="status next">New in 0.5</span> Fleet, beside the Map |
-| **Agents › Workflows** | Brain maps, Playbook, Project map, Context |
-| **Agents › Models** | Catalog, Performance |
-| **Agents › Usage** | Recorded calls, Provider accounts |
-| **Settings** | General, Appearance, Audio, System. See [Settings](settings.md). |
+| **Work** | **Today** (your home page), **Tasks**, **Plans**, **Ideas**, the **Inbox**, the **Analyzer** and **Worktrees** |
+| **Map** | The live tree, **Fleet** and **Pipelines** |
+| **Team** | **Overview**, **Providers**, **Seats and models** and **Permissions**; then **Rules**, **Skills**, **Connectors**, **Related folders** and **Workflows** (Brain maps, Playbook, Project map, Context); then **Health and usage**, **Resources**, **Models** (Catalog, Performance) and **Inspect** (Sessions, Activity and evidence, Trace, Overhead, the profiler, Machine status, the Connection log) |
+| **Friends** | **The Lobby**, **Rooms**, **Your PCs**, **Playground**, the **Project hub** and **Events** |
+| **Settings** | **General**, **Notifications**, **Appearance**, **Size and density**, **Map look**, **Sound and music**, **Updates**, **Report a problem**, **Other apps** and **System**. See [Settings](settings.md). |
 
-> <span class="status next">New in 0.5</span> **M+** opens Projects with keyboard focus on the project you're in.
+When you open a place, its pages are listed in the column beside the rail, with **Back** and **Forward** for that place (`Alt ←` and `Alt →`).
 
-<span class="status next">New in 0.5</span> The 0.5 layout replaces this menu with a rail of four places: **Work** (Tasks, Plans, Ideas, the Inbox, the Analyzer and Worktrees), **Map** (the live tree, Fleet and Pipelines), **Team** (everything under Agents today) and **Friends** (The Lobby, Rooms, Your PCs, Playground, the Project hub and Events), with **Search**, **Settings** and **Help** at its foot. Search opens any place directly, and the companion's Friends bubble stays available. See [the 0.5 layout](coming-in-0-5.md#the-05-layout).
+## The top bar and the status bar
 
-## In the 0.5 layout <span class="status next">New in 0.5</span>
+The **top bar** holds, from left to right: the list toggle, the **Social | Studio** switch, where you are, **Search or run a command**, how many things need you (or **All clear**), what's working with its pause button, and the inspector toggle.
+
+The **status bar** at the bottom holds **Layout** (the list, the inspector, the tab strip, their widths, **Reset layout** and **Size and density**), what's running and what waits on you, your AI usage, what's playing, this PC's CPU and memory (it opens **Team › Resources**), today's cost when Studio knows it, and your permission mode.
+
+## Keys with Ctrl
 
 | Key | Action |
 | --- | --- |
 | `Ctrl M` | Switch between Social and Studio |
-| `Ctrl K` | Search, from the top bar |
+| `Ctrl K` | Search |
 | `Ctrl J` | Open the Inbox |
 | `Ctrl N` | A new task, in Studio mode |
 | `Ctrl T` / `Ctrl W` | Add a tab / close the tab you're on. `Ctrl W` never closes the window. |
 | `Ctrl Tab`, `Ctrl 1` to `9` | Move between tabs |
 | `Ctrl Shift T` | Reopen the tab you closed last |
-| `Ctrl B` / `[` | Show or hide the session list / the inspector |
+| `Ctrl B` / `[` | Show or hide the list / the inspector |
 | `Ctrl +` `Ctrl −` `Ctrl 0` | Interface scale up, down, or back to normal |
-
-On the Map, `N` opens a new task and `S` opens Search.
+| `Ctrl ,` | Open Settings, even while typing |
+| `Ctrl Shift ,` | Open **Configuration**: every setting in one searchable tree |
 
 ## Single keys
 
@@ -67,11 +67,11 @@ These work when you're not typing in a text field.
 
 | Key | Opens |
 | --- | --- |
-| `H` | Home, or Vibe in Vibe mode |
-| `D` | Command view |
-| `T` | Task board |
-| `P` | Plans |
-| `I` | Feature ideas |
+| `H` | **Today**, your home page |
+| `D` | The Map |
+| `T` | The task board, or the Tasks panel on Social's Today |
+| `P` | Plans, or the Plans panel on Social's Today |
+| `I` | Feature ideas, or the Ideas panel on Social's Today |
 | `B` | Brain maps |
 | `J` | Agent brain |
 | `E` | Session explorer |
@@ -85,24 +85,22 @@ These work when you're not typing in a text field.
 
 | Key | Action |
 | --- | --- |
-| `Ctrl K` | Search Studio |
-| `Ctrl ,` | Open Settings, even while typing |
-| `Ctrl Shift ,` | <span class="status next">New in 0.5</span> Open **Configuration**: every setting in one searchable tree |
 | `/` | Search the model catalog |
 | `R` | Refresh the model catalog |
-| `G` | Pin the node-tree preview |
 | `?` | Show shortcuts |
 | `Esc` | Close the current menu or layer. With nothing open, it opens your companion's menu. |
 
-Trace has no single key: open it from **Agents › Live › Trace** or Search.
+Trace has no single key: open it from **Team › Inspect › Trace** or Search.
 
-## In Command view
+<span id="in-command-view"></span>
+
+## On the Map
 
 | Key | Action |
 | --- | --- |
 | `←` `→` | Cycle sessions, or the siblings of the selected item |
 | `↑` `↓` | Up to the parent, or down into its to-dos and tasks |
-| `[` `]` | Cycle task nodes |
+| `]` | The next task node |
 | `Enter` | Run the selected node's first action |
 | Double-click | The same, on the node you click |
 | Right-drag | Orbit the camera |
@@ -111,14 +109,14 @@ Trace has no single key: open it from **Agents › Live › Trace** or Search.
 | `Home` | Select the root and fit |
 | `+` `−` `0` | Zoom in, out, or reset |
 | `Space` | Pause or resume the spin. It doesn't pause the agents. |
-| `C` | Camera: overview, follow or free |
-| `V` | Switch between the 3D orbit and a flat 2D map |
-| `L` | Node labels: auto, updates, all or none |
-| `S` | Find a session, to-do or task |
+| `C` | Camera: Overview, Follow or Free |
+| `V` | Switch between the 3D orbit and a flat map |
+| `L` | Node labels: Auto, Updates, All or None |
+| `S` | Search, which also finds the Map's sessions, to-dos and tasks |
 | `N` | Add a task |
 | `M` | Message the assistant |
 
-The mouse wheel or a two-finger pinch zooms toward the pointer. Click a node to inspect it, and click empty canvas to let it go. See [Command view](command-center.md).
+The mouse wheel or a two-finger pinch zooms toward the pointer. Click a node to inspect it, and click empty canvas to let it go. See [The Map](command-center.md).
 
 ## In Brain maps
 
@@ -143,7 +141,7 @@ The mouse wheel or a two-finger pinch zooms toward the pointer. Click a node to 
 
 ## In the project map
 
-Open the project map from **Agents › Workflows › Project map**. Click the map first, then:
+Open the project map from **Team › Workflows › Project map**. Click the map first, then:
 
 | Key | Action |
 | --- | --- |

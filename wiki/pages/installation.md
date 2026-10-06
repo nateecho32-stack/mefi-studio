@@ -36,9 +36,9 @@ The two hashes should match.
 
 ## First launch
 
-A new install starts with a three-step welcome. Pick the AI that builds for you: each coding tool on this PC shows **Ready** or **Sign in**, and **Other ways to connect** covers keys and local models. Then choose a project (or open a folder, or start a new app), and say what Studio should make first: Studio adds that task and starts it. **Skip** leaves the [setup helper](setup-helper.md) waiting in Help and Search.
+A new install starts with a three-step welcome. Pick the AI that builds for you: each coding tool on this PC shows **Ready** or **Sign in**, and **Other ways: an API key, a ChatGPT plan or a local model** covers the rest. Then choose a project (or open a folder, or start a new app), and say what Studio should make first: Studio adds that task and starts it. **Skip** leaves the [setup helper](setup-helper.md) waiting in Help and Search.
 
-Later launches open on the project picker: one **Open** button with a **Start agents** switch, and **Open a folder…**, **Start a new app** and **Get from GitHub** at its foot. **Settings › General › When Studio opens** decides whether agents start: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+Later launches open on the project picker: one **Open** button with a **Start agents** switch, and **Open a folder…**, **Start a new app** and **Get from GitHub** at its foot. **Settings › General › Agents when Studio opens** decides whether agents start: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
 
 **Help › Start here** walks you through setup, sign-in and a connection check. Continue with [Your first project](getting-started.md).
 
@@ -63,7 +63,7 @@ Saved keys are encrypted for the Windows account that saved them. On another PC,
 
 ## Updates
 
-Open **Settings › System › Updates** and press **Check GitHub** to look for a newer release. On 0.4.4 the in-app update can't install 0.5, so move to it [by hand](updates.md#update-from-044-by-hand) once; from 0.5 on, updates install themselves. [Update Studio](updates.md) has the details.
+Open **Settings › Updates** and press **Check GitHub** to look for a newer release. On 0.4.4 the in-app update can't install 0.5, so move to it [by hand](updates.md#update-from-044-by-hand) once; from 0.5 on, updates install themselves. [Update Studio](updates.md) has the details.
 
 ## From source
 

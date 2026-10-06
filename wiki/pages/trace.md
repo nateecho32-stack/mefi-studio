@@ -6,7 +6,7 @@ Trace arrived in 0.4.4. Small fixes, and a log that's kept instead of starting e
 
 ## Open Trace
 
-- In Build's menu, go to **Agents › Live › Trace**. It sits beside **Activity**. <span class="status next">New in 0.5</span> It's under **Team › Inspect**.
+- Open **Team › Inspect › Trace**. It sits beside **Activity and evidence**.
 - Or press `Ctrl K` and type *trace*.
 
 Trace has no single-key shortcut. `Esc` closes it.
@@ -47,7 +47,7 @@ Open **Settings › System › Diagnostics**:
 - **Open profiler**: the Performance profiler records frame timing, slow rendering, host requests, CPU and memory. Choose **Start capture**, reproduce the slowdown, then come back to **Stop** and **Export JSON**. A capture stays in memory until you export it.
 - **Run auditor** runs local wiring and gap checks. **Machine** shows test runs and the automatic stopping of runaway ones. Both open in the Session explorer.
 
-The **Connection log** (provider, tool and probe activity) is in **Agents › Setup › Providers**.
+The **Connection log** (provider, tool and probe activity) is in **Team › Providers**, and **Team › Inspect** links to it.
 
 ## Report a bug
 
@@ -56,6 +56,8 @@ The **Connection log** (provider, tool and probe activity) is in **Agents › Se
 3. In Trace, open the channel that covers the problem, narrow it down with search or **Problems**, then **Copy** the lines.
 4. Before you share anything, read it and remove private details: API keys, tokens, email addresses, and file paths that show your name or your projects.
 5. Open a [bug report on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md) and paste it in.
+
+**Help › Report a problem** builds a report you can read before you save it, and can replace task titles with numbers.
 
 You can also ask for help in the [Void Engine Discord](https://discord.gg/xgfKc5pVxG). It's optional; GitHub works without it.
 

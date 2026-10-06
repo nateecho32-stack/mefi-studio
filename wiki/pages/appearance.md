@@ -4,7 +4,7 @@ Make Studio yours: a color theme, a style for the live node tree, a layout, and 
 
 ## Open Appearance
 
-Press **U**, or open **Settings › Appearance**. The sidebar sits beside the live tree, so you see each change as you make it. It has four sections: **Theme**, **Nodes**, **Layout** and **Interface**.
+Press **U**, or open **Settings › Appearance** for the **Theme** and the **Interface**. The node styles and the tree's layout are in **Settings › Map look**, under **Nodes** and **Layout**. The live tree sits beside them, so you see each change as you make it.
 
 - **2D**, **3D** and **Fit** change the preview of the tree.
 - The arrow button moves the sidebar to the other side of the window.
@@ -12,9 +12,9 @@ Press **U**, or open **Settings › Appearance**. The sidebar sits beside the li
 
 ## Color themes
 
-Pick one of seven themes: **Aurora** (the default), **Studio gold**, **Midnight**, **Forest**, **Violet**, **Ember** and **Rose**.
+Pick one of eight themes: **Chrome**, **Aurora**, **Studio gold**, **Midnight**, **Forest**, **Violet**, **Ember** and **Rose**.
 
-<span class="status next">New in 0.5</span> **Chrome** joins them, first in the list: matte black panels, silver type and brushed metal on the main buttons and the side of a switch you are on, with an iridescent finish (silver, ice blue, lilac and aqua) on the edges, the selection bars and the highlights. It becomes the look a new install opens in. If you already picked a theme, Aurora included, you keep it.
+<span class="status next">New in 0.5</span> **Chrome**, first in the list, is the look a new install opens in: matte black panels, silver type and brushed metal on the main buttons and the side of a switch you are on, with an iridescent finish (silver, ice blue, lilac and aqua) on the edges, the selection bars and the highlights. If you already picked a theme, Aurora included, you keep it.
 
 The **Void collection** adds four two-tone themes, each with a second color of its own: **Void**, **Eclipse**, **Abyss** and **Neon Dusk**. They sit under their own heading, and since 0.4.4 they're free for everyone, like every other look.
 
@@ -24,7 +24,7 @@ Colors are separate from node style and layout, so you can mix any of them.
 
 ## Node styles
 
-The **Nodes** section changes how each agent and task looks on the live tree. Each style has its own shape, motion, wires and finishing effect.
+**Settings › Map look › Nodes** changes how each agent and task looks on the live tree. Each style has its own shape, motion, wires and finishing effect.
 
 | Style | What it looks like |
 | --- | --- |
@@ -68,10 +68,10 @@ The **Layout** section also holds two sets of controls that you'll find in Music
 Then adjust **Density** (**Comfortable** or **Compact**), **Glass intensity** and **Glow intensity**. With glass at zero, reading surfaces turn solid.
 
 - **Motion**: **Full** plays every animation, **Calm** stops looping motion, and **Off** also stops node motion and transitions. Studio follows the reduced-motion setting in Windows too.
-- **Blur behind panels**: turn it off to give sheets, menus and Home's panels a plain, darker backdrop.
+- **Blur behind panels**: turn it off to give sheets, menus and Today's panels a plain, darker backdrop.
 - **Let your companion move**: turn it off to keep your [companion](#/companion) still.
 
-<span class="status next">New in 0.5</span> **Interface scale** makes the whole interface 70% to 150% of its size, text included, and keeps it for the next launch. Find it in **Configuration** under **UI & Surfaces**. Open Configuration with **Ctrl + Shift + ,** or **All settings in one place** in Settings. It's also on the 0.5 layout's **Size and density** page, with a live miniature of the window, and **Ctrl +**, **Ctrl −** and **Ctrl 0** change it.
+<span class="status next">New in 0.5</span> **Interface scale** makes the whole interface 70% to 150% of its size, text included, and keeps it for the next launch. Find it in **Configuration** under **UI & Surfaces**. Open Configuration with **Ctrl + Shift + ,** or **All settings in one place** in Settings. It's also on the **Size and density** page, with a live miniature of the window, and **Ctrl +**, **Ctrl −** and **Ctrl 0** change it.
 
 ## Keys
 
@@ -83,7 +83,7 @@ Then adjust **Density** (**Comfortable** or **Compact**), **Glass intensity** an
 | **C** | Cycle the camera: overview, follow or free |
 | **Space** | Pause or resume the spin |
 
-**V**, **L**, **C** and **Space** work in [Command view](#/command-center), which is called the Map from 0.5. [Navigation and shortcuts](#/shortcuts) lists the rest.
+**V**, **L**, **C** and **Space** work on [the Map](#/command-center). [Navigation and shortcuts](#/shortcuts) lists the rest.
 
 ## Looks from the community <span class="status planned">Planned</span>
 

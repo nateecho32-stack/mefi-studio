@@ -4,16 +4,16 @@ Keep ideas for later, and turn one into a reviewed plan before anything is built
 
 ## Keep ideas
 
-An idea is a note about something you might build. It becomes a task only when you, or **Work through backlog** on Home, turn it into one.
+An idea is a note about something you might build. It becomes a task only when you turn it into one, or when you let Studio work through the backlog.
 
-- **Feature ideas** (`I`) is the inbox. New ideas arrive unread, such as the suggestions from a project's first map, or ideas found in your chats with **Scan chats for ideas** in Search. Select one to read it, keep it or mark it done.
-- In Vibe, the **Fresh ideas** card and the **Ideas** panel show what's waiting. Each idea offers **Build it**, **Keep for later** (or **Not now**) and **Dismiss**.
+- **Feature ideas** (`I`, or **Work › Ideas**) is where ideas arrive. New ones come in unread, such as the suggestions from a project's first map, or ideas found in your chats with **Scan chats for ideas** in Search. Select one to read it, keep it or mark it done.
+- In Social, `I` on Today opens the **Ideas** panel. Each idea offers **Build it**, **Keep for later** (or **Not now**) and **Dismiss**.
 
 <span class="status next">New in 0.5</span> The Ideas list becomes compact cards with a title, short excerpt and status. Short cards fill the free space under taller ones, and the layout adapts to the window. Select a card to use the same detail and actions.
 
 ## Plan it, or just build it?
 
-Use **Build it** in Vibe when you can say what you want in a few sentences. Studio sizes it: a small change becomes one task, and a bigger one may become two to six steps.
+Use **Build it** on Today when you can say what you want in a few sentences. Studio sizes it: a small change becomes one task, and a bigger one may become two to six steps.
 
 Use a plan when the approach isn't clear yet: several ways to do it, decisions to make first, or work that depends on other work.
 
@@ -62,13 +62,13 @@ Save your edits, review the specification and approve it. Then use the **Build**
 
 Planning never starts coding workers by itself. [Tasks](workflow.md) explains what happens after the tasks exist, and [Verification](verification.md) covers finished work.
 
-In Vibe, the **Plans** panel and the **Plan in flight** card follow a plan while it's being built.
+In Social, the **Plans** panel (`P` on Today) follows a plan while it's being built.
 
 > <span class="status next">New in 0.5</span> Plans show one step at a time, with an **Up next** button to the step that's waiting on you (**Show every step** lays the whole plan out again). The interview reads like a chat, and Mefi can ask the next question on its own. A new idea needs no name and offers **Idea starters**. **Where this lives** pins a plan to an area of your [project map](agent-brain.md). A split request's plan shows a timeline of which agent is on each step.
 
 ## Check plans against your code
 
-**Analyzer** (`A`, in the **Work** section) compares a project's old plans and notes with its current files. Its findings point to files and lines, missing references, or claims of finished work that need checking.
+**Analyzer** (`A`, or **Work › Analyzer**) compares a project's old plans and notes with its current files. Its findings point to files and lines, missing references, or claims of finished work that need checking.
 
 Start with **Analyze project**, which runs on your PC. **AI project read** uses your AI connection and sends selected excerpts, only when you ask for it. Use the findings to decide what to check or turn into a task.
 

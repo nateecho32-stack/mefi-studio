@@ -2,7 +2,7 @@
 
 Do you work on the same project from more than one Windows PC? **Your PCs** keeps them in step through GitHub. Each PC keeps its own copy, and the project's default branch on GitHub is the one state they share. Studio shows what hasn't reached GitHub yet and only syncs in safe directions.
 
-Open your [companion](#/companion), choose **Friends**, and find **Your PCs**. Opening it only looks. Nothing moves until you press a button. <span class="status next">New in 0.5</span> Friends is a place of its own on the rail, and Search opens **Friends › Your PCs** directly.
+Choose **Friends** on the rail, then **Your PCs**. Search, and your [companion](#/companion)'s **Friends** bubble, open **Friends › Your PCs** directly too. Opening it only looks. Nothing moves until you press a button.
 
 This page covers syncing, [My PCs](#my-pcs-your-pcs-work-as-one) (your PCs sharing the work), [Set up this PC](#set-up-this-pc), [Share between my PCs](#share-between-my-pcs) (your private vault) and [Share with friends](#share-with-friends).
 
@@ -100,7 +100,7 @@ To use a friend's file, choose **Open a share file**. Studio reviews it first an
 
 ## Start with Windows <span class="status next">New in 0.5</span>
 
-Turn on **Start with Windows** in **Settings › General › Profile & startup**, or in the setup helper's **Machine & app**. Studio then opens in the tray when you sign in to Windows, on the project you had open, and the agents follow **When Studio opens**. A PC you leave working keeps working after an update restart. The switch shows what Windows really holds, so it notices when Task Manager › Startup apps turns Studio off.
+Turn on **Start with Windows** in **Settings › General › Profile & startup**, or in the setup helper's **Machine & app**. Studio then opens in the tray when you sign in to Windows, on the project you had open, and the agents follow **Agents when Studio opens**. A PC you leave working keeps working after an update restart. The switch shows what Windows really holds, so it notices when Task Manager › Startup apps turns Studio off.
 
 ## Reach this PC from Discord <span class="status rolling">Rolling out</span>
 

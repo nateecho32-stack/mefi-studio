@@ -4,8 +4,8 @@ Studio has its own media player. Play your own music, ad-free radio, or a YouTub
 
 ## Open Music & video
 
-- Use the audio button in Command view's toolbar (**Music, video and audio setup**). Hover it to open the settings for what's playing.
-- Open **Settings › Audio** and choose **Open music & video**.
+- While something plays, press the player in the status bar at the bottom of the window.
+- Open **Settings › Sound and music** and choose **Open music & video**.
 - Search for “Music & video” with **Ctrl + K**.
 - In the [companion](#/companion) menu, choose **Audio link** at the bottom.
 
@@ -74,7 +74,7 @@ With **Tree motion** on and the 3D overview spinning, the music's energy quicken
 ## More sound
 
 - **Music recommendations**: say what you're in the mood for and choose **Ask for recommendations**. Each suggestion has a **Search Spotify** button. This needs a connected AI.
-- **Zen bells**, under **Settings › Audio › Sound effects**, play soft bells that follow how fast your agents work. Pick a **Profile**: Zen Bells, Deep Temple, Crystal Bells or After Hours.
+- **Zen bells**, under **Settings › Sound and music › Sound effects**, play soft bells that follow how fast your agents work. Pick a **Profile**: Zen Bells, Deep Temple, Crystal Bells or After Hours.
 
 ## Listen with friends <span class="status next">New in 0.5</span>
 
@@ -88,4 +88,4 @@ With **Tree motion** on and the 3D overview spinning, the music's energy quicken
 
 The [roadmap](../roadmap.html) has the details.
 
-See also: [Themes, node styles and looks](#/appearance), [Command view](#/command-center) and [Privacy](#/privacy).
+See also: [Themes, node styles and looks](#/appearance), [The Map](#/command-center) and [Privacy](#/privacy).

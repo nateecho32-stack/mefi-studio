@@ -19,10 +19,10 @@ In every mode, the elevated requests you keep (below) still come to you.
 
 All of these change the same saved setting:
 
-- **In Vibe**, the permission chip in the box shows your mode. Click it to pick another. **Elevated requests…** opens the full settings.
-- **In Vibe's Settings panel** (the gear at the top right).
-- **In your companion's menu**, under **Settings** (called **Personality** from 0.5).
-- **In Agents › Overview**.
+- **In the message box**, in either mode, the permission chip shows your mode. Click it to pick another. **Elevated requests…** opens the full settings.
+- **At the right end of the status bar**, and in Social's **Settings** panel (the Settings button at the top right of Today).
+- **In your companion's menu**, under **Personality**.
+- **In Team › Permissions**, which holds every permission setting, and in **Team › Overview**.
 - **In Search**: press `Ctrl K` and pick **Mefi's permission mode**.
 - <span class="status next">New in 0.5</span> **In the setup helper**, under **Setup helper › Permissions**. See [The setup helper](#/setup-helper).
 
@@ -54,7 +54,7 @@ Some things never go to Mefi, whatever your mode:
 
 ## Decided for you and For you
 
-When Mefi has decided something for you, **Decided for you · For you** appears under Vibe's box, with a count for each.
+When Mefi has decided something for you, **Decided for you · For you** appears under the box on Social's Today, with a count for each. The newest decision also shows at the foot of the Inbox as **Mefi decided**, with **Undo**.
 
 - **Decided for you** lists Mefi's recent automatic choices. Open **Why** to read its reason, or choose **Undo** to put the question back to you. Undo waits for a running worker to finish, and it keeps any edits made since.
 - **For you** holds real-world to-dos only a person can do, up to 50. Mark each one **Done** or **Not mine**.
@@ -63,7 +63,7 @@ Answers Mefi gives for you are marked **Mefi decided**, with a reason. They keep
 
 ## How Mefi learns from you
 
-Open the full permission settings (**Elevated requests…** from the chip, or Vibe's Settings panel) and scroll to **Learning**:
+Open the full permission settings (**Team › Permissions**, or **Elevated requests…** from the chip) and scroll to **Learning**:
 
 - **Learn from my answers** turns learning on or off. Turning it off keeps what was learned but stops using it.
 - **Use my decisions from** picks **This project + others**, **This project** or **All projects**.
@@ -76,14 +76,14 @@ Recent answers count more than old ones, and corrections count double. Choosing 
 
 Two older switches pick a mode for you:
 
-- **Auto build**, on some older screens and in brain maps: on picks **Auto**, off picks **Always ask**.
-- **Let the desk handle asks**, in **Agents › Setup › Run behavior**: on picks **Auto**, off picks **Always ask**.
+- **Build approval** in **Team › Overview**, and **Auto build** in brain maps: **Automatic** (on) picks **Auto**, and **Review first** (off) picks **Always ask**.
+- **Let the desk handle asks**, under **More settings** in **Team › Seats and models**: on picks **Auto**, off picks **Always ask**.
 
 <span class="status next">New in 0.5</span> In 0.4.4, **Auto build** could overwrite your mode, turning **Elevated only** into **Auto** or **Accept per task** into **Always ask**. From 0.5 it leaves a matching mode alone: on keeps **Auto** and **Elevated only**, and off keeps **Always ask** and **Accept per task**. Each mode's description also says what happens to a new task.
 
 ## Related pages
 
-- [Vibe mode](#/vibe-mode) shows where Needs you and Decided for you live.
+- [Social mode](#/vibe-mode) shows where Needs you and Decided for you live.
 - [Tasks](#/workflow) covers approving a build and task states.
 - [Brain maps](#/brain-maps) explains the steps that raise questions.
 - [Your companion](#/companion) keeps the list of what needs you.

@@ -6,15 +6,7 @@ Friends is the social side of Studio. You can join rooms with people from the [V
 
 ## Open Friends
 
-Click your [companion](#/companion) at the foot of the menu, or press **Esc** on a workspace page. Then choose the **Friends** bubble.
-
-<span class="status next">New in 0.5</span> Friends is a place of its own on the rail: one page with **The Lobby**, **Rooms**, **Your PCs**, **Playground**, the **Project hub** and **Events** in the list beside it. Search and the companion's **Friends** bubble open it at the right place, and each place can be a tab. The bubble shows a badge when invites or join requests wait for you, or when a PC has work to sync.
-
-In 0.4.4, Friends held three things:
-
-- **Connect with Discord** opened **Settings › General › Community**.
-- **Friends & listening rooms** opened [Listen together](#listen-together) in Music & video.
-- **Your PCs** kept your own PCs in step. See [Your PCs](#/your-pcs).
+Choose **Friends** on the rail, in either mode. It's one page with **The Lobby**, **Rooms**, **Your PCs**, **Playground**, the **Project hub** and **Events** in the list beside it. Search and your [companion](#/companion)'s **Friends** bubble open it at the right place, and each place can be a tab. The bubble shows a badge when invites or join requests wait for you, or when a PC has work to sync.
 
 ## What you need
 

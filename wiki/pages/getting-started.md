@@ -4,39 +4,33 @@ Start with a small change in a project you can easily check. Studio helps you ta
 
 ## 1. Choose the folder you want to work on
 
-At launch, pick an existing project or choose **Open another folder…**. Then:
+A **project** is a folder on your PC that holds one app. Studio opens on its launch screen, **The Studio Daily**, with your projects listed and the one you had open last already picked. Press **Open**.
 
-- **Open studio** opens the project with the agents off. Press **Start agents** when you're ready.
-- **Open and start agents** opens the project and starts them.
+- The **Start agents** switch beside **Open** decides whether the agents start too. With it off, nothing is built until you say so: press **Start agents** on Today when you're ready.
+- **Settings › General › Agents when Studio opens** sets where that switch starts: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+- **Open a folder…** opens a folder you already have, and **Get from GitHub** downloads a project and opens it.
 
-Check the project name at the top before you send any work. In Vibe, the project picker sits at the top of the page. In Build, **M+** at the top of the menu opens **Projects**, where you add or switch folders. Removing a project from the list leaves its files where they are.
+Starting from nothing? Press **Start a new app**. Name the app and, under **What do you want to build?**, say what it should do in a sentence or two, then press **Start project**. Studio makes a folder under **Mefi Apps** in your home folder, starts version history in it with Git (which remembers every change so it can be undone), puts your words in its README and opens it. On a first launch, your words wait in the welcome's last step as the first task. You can put the app on GitHub later from the Git chip.
 
-Starting from nothing? **New app**, the button beside Vibe's project picker, asks for a name and a description. Studio makes a folder under **Mefi Apps** in your home folder, starts Git there with a short README, opens it, and sends your description through **Build it** as the first request.
-
-> <span class="status next">New in 0.5</span> The launch screen has one **Open** button with a **Start agents** switch, and **Open a folder…**, **Start a new app** and **Get from GitHub** at its foot. **Settings › General › Agents when Studio opens** decides whether agents start: **Resume what I had** (the default), **Start agents** or **Keep agents off**.
+Check the project name at the top before you send any work. Press it to switch to another project. In Social, **+** beside it starts a new app; in Studio, the project menu has **Start a new app…** and **Open a folder…**. Removing a project from the list leaves its files where they are.
 
 ## 2. Connect your tools
 
-Open **Help › Start here**. You can also reach the same controls from **Agents › Setup › Providers** with **Install a coding tool or use one subscription for Studio**.
+Studio has no AI of its own. It works through an AI coding tool you sign in to with your own account. On a new install, a short welcome in three steps opens first. Step one, **Pick the AI that builds for you**, says which account each tool uses: **Claude Code** your Claude subscription, **Codex** your ChatGPT plan, **Grok** your Grok account and **Antigravity** your Google account. **OpenCode** has free models to start with.
 
-1. Choose your coding tool: Codex, Claude Code, Grok, Antigravity or OpenCode.
-2. Select **Install and sign in**, or **Sign in** if it's already installed.
-3. Back in Studio, choose **Refresh installed tools**, then **Check connection**.
-4. Select **Use for the whole studio** to use that account for chat, planning, mapping and coding.
+1. Press **Install and sign in** on the tool you pay for (**Sign in** if it's already installed). A window opens: sign in there with your account.
+2. Come back to Studio. A tool you're signed in to says **✓ Ready**.
+3. Press **Continue**. Studio switches to that tool for chatting, planning and building.
 
-For OpenCode, the last two steps are **Scan OpenCode**, then **Use scanned setup**.
+No subscription? Install **OpenCode** and press **Continue** to use its free models. They cost nothing, but they run one task at a time, and their makers may use what you send to improve them. Have an API key or an AI on your PC? Press **Other ways: an API key, a ChatGPT plan or a local model**. [Connect an AI](connections.md) explains every option.
 
-In 0.4.4 the setup window may close as soon as it opens. If it does, [sign in from a terminal](connections.md#sign-in-from-a-terminal), then do steps 3 and 4.
+A subscription's work counts toward that plan's limits, as if you used the tool yourself. Studio adds no bill of its own, and your password stays in the company's own sign-in window.
 
-The connection check uses a little of your account's allowance, and your provider's plan and limits apply. API keys and local models work too: [Connect an AI](connections.md) explains every option.
-
-The **Start here** walkthrough has seven stops and remembers your place. A stop's **Walk me to…** button opens the matching part of the app and points at the control.
-
-> <span class="status next">New in 0.5</span> A new install starts with a three-step welcome: pick the AI that builds for you (a coding tool you sign in to with your own account, OpenCode's free models, or another way to connect), choose a project, and say what Studio should make first. Studio adds that task and starts it. **Skip** leaves the [setup helper](setup-helper.md) waiting in Help and Search. Its **Quick setup** takes three steps: connect an AI, choose how much Mefi may decide for you, and finish. **Set up automatically** uses the login you already have. **Start free with OpenCode** uses OpenCode's free models, with no subscription or key. When you close a setup window, Studio finds the tool by itself.
+The second step, **Choose a project**, shows the folder Studio builds in, and the last one asks **What should Studio make first?** **Skip** (or `Esc`) closes the welcome at any step: **Help › Setup guide** has the same settings and more, and **Help › Start here** is a guided tour in seven stops.
 
 ## 3. Give one clear task
 
-In Vibe, type in the box in the middle. **Enter** sends it to **Talk it over**, to discuss the idea. **Ctrl + Enter** sends it to **Build it**, to create work. In Build mode, Home's composer offers **Chat** and **Create task** instead.
+Type in the box on **Today**. **Enter** sends it to **Talk it over**, to discuss the idea. **Ctrl Enter** sends it to **Build it**, to create work.
 
 Describe the result, and how you'll check it:
 
@@ -51,9 +45,9 @@ Done when:
 Keep the existing note format and save location.
 ```
 
-A bigger **Build it** request may become a few steps. The **Plan in flight** card shows how far along they are. Use [Plans](planning.md) when you want to settle the decisions before anything is built.
+A bigger **Build it** request may become a few steps, and **Show the plan** follows how far along they are. Use [Plans](planning.md) when you want to settle the decisions before anything is built.
 
-Before you start, check the permission mode. It decides what Mefi may start and answer for you:
+Before you start, check the permission mode in the box. It decides what Mefi may start and answer for you:
 
 - **Always ask**: every new task, yours too, waits for your OK.
 - **Accept per task**: you OK each new task once, then Mefi handles its ordinary questions.
@@ -64,20 +58,31 @@ Before you start, check the permission mode. It decides what Mefi may start and 
 
 ## 4. Follow the work
 
-Vibe shows **Building now** and **Needs you** while they have something to show. Open a task to read its brief, activity and result. When an agent needs a decision, answer it under **Needs you**.
+Your task shows on **Today** under **Running**. Press it to see what the AI does, step by step. `D` opens **the Map**, a live picture of your agents at work. The pause button in the top bar holds new work; running jobs still finish.
 
-If nothing starts, read the line under Vibe's box. It says what's holding the agents and offers one button to fix it, such as **Start agents**, **Resume** or **Connect an AI**.
+If nothing starts, read the line under the box. It says what's holding the agents and offers one button to fix it:
 
-**Watch** opens the live tree, where tasks, agents and their steps appear as work moves. The [task board](workflow.md) lists all the work and its state.
+| The line says | Press |
+| --- | --- |
+| Agents are off | **Start agents** |
+| No AI connected | **Connect an AI** |
+| Agents paused | **Resume agents** |
+| *N* tasks need your OK | **Review tasks** |
+| No project open | **Open a project** |
 
-**Pause** stops new starts while running jobs finish. If a task is waiting, read the reason on its card.
+When the AI has a question or needs your OK, the top bar says **1 needs you**. Press it to open the **Inbox** (`Ctrl J`) and answer there. The [task board](workflow.md) (`T`) lists all the work and its state.
 
-> <span class="status next">New in 0.5</span> The same line also names a cooldown after failed starts, a stuck scheduler or tasks waiting for your OK, with **Try now**, **Restart Studio** or **Review tasks**. Social, as Vibe is called from 0.5, also offers **Modify**, **Experiment**, **Fix** and **Improve** starting points, and **Suggest a next step**. See [Vibe mode](vibe-mode.md).
+Under the box, **Modify**, **Experiment**, **Fix** and **Improve** start the sentence for you, and **Suggest a next step** asks Mefi for ideas. See [Social mode](vibe-mode.md).
 
 ## 5. Review and recover
 
-Read the finished task's evidence, look at the changed files and try the new behavior. Run your project's checks before you accept the result. [Verification](verification.md) explains what Studio checks for you.
+When the work is done, the task moves to **Review** and Studio runs its own checks. Then it's your turn:
 
-Use **Ask for a change** on a finished task when it needs another pass. For blocked work, open the task and fix the reported problem before you retry. [Troubleshooting](troubleshooting.md) covers connection and scheduling problems.
+1. Open the task and press **See the changes**. The **Changes** tab lists every file the AI changed, line by line, and **Checks** shows what was tested.
+2. Try the app yourself.
+3. Happy? Press **Approve and finish**, and the task moves to **Done**.
+4. Not happy? **Revert**, beside a file, puts that one file back. **Revert attempt** puts every file back and reopens the task. **Request changes** says what to change, and Studio makes a follow-up task.
+
+[Verification](verification.md) explains what Studio checks for you, and [Troubleshooting](troubleshooting.md) covers connection and scheduling problems.
 
 If Studio went away while work was running, such as after a crash or an update restart, and that work was less than ten minutes old, the next launch reopens the same folder and picks up where you left off. When you close Studio yourself, the next launch asks which project to open.

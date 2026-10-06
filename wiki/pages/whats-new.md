@@ -45,7 +45,6 @@ Windows notifications with quiet hours, **Report a problem**, **What's new** aft
 ## Good to know
 
 - Studio isn't code-signed yet, so Windows SmartScreen may ask the first time: choose **More info**, then **Run anyway**.
-- Some pages of this guide still show 0.4.4's screens and names (Vibe, Build, the Command view and Agents). Their **New in 0.5** marks say what changed.
 
 ## Studio is moving to Rust
 

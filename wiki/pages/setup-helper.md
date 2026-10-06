@@ -8,9 +8,9 @@ Every change saves as you make it. The helper has no settings of its own: each c
 
 ## When it opens
 
-- **On a new install**, a three-step welcome comes first: pick the AI that builds for you, choose a project, and say what Studio should make first. **Other ways to connect** opens the helper at **Connect an AI**, and **Skip** leaves it waiting in Help and Search.
+- **On a new install**, a three-step welcome comes first: pick the AI that builds for you, choose a project, and say what Studio should make first. **Other ways: an API key, a ChatGPT plan or a local model** opens the helper at **Connect an AI**, and **Skip** leaves it waiting in **Help › Setup guide** and Search.
 - **After you update to 0.5**, it opens once, with your current choices already filled in.
-- **Any time later**, press `Ctrl K` and type *setup helper*. To go straight to one part, pick it from the results, for example **Setup helper › Routing** or **Setup helper › Permissions**.
+- **Any time later**, choose **Help › Setup guide**, or press `Ctrl K` and type *setup helper*. To go straight to one part, pick it from the results, for example **Setup helper › Routing** or **Setup helper › Permissions**.
 
 **Save & close** (or `Esc`) leaves at any point. Nothing is lost, because every change is already saved.
 
@@ -54,7 +54,7 @@ Good to know:
 
 Have two Claude or ChatGPT subscriptions? Under **More than one login**, choose **Add a Claude Code login** (or **Add a Codex login**), then sign in with the other account in the window that opens. Each tool takes up to six logins.
 
-Studio uses the first login until it reaches its usage limit, moves to the next, and goes back when the limit resets. Other providers answer only once every login has hit its limit, and only through fallbacks you already allowed. Each login gets its own row in **Agents › Usage › Provider accounts**.
+Studio uses the first login until it reaches its usage limit, moves to the next, and goes back when the limit resets. Other providers answer only once every login has hit its limit, and only through fallbacks you already allowed. Each login gets its own row in **Team › Health and usage › Provider accounts**.
 
 ## The other sections
 

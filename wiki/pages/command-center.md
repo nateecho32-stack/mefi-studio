@@ -1,76 +1,73 @@
-# Command view
+# The Map
 
-Command view shows your project's tasks, sessions and agents as one moving tree. Press `D` or open **Agents › Live › Command**. In Vibe, **Watch** opens it inside Vibe's own rail, and **Back** returns you to Vibe.
+The Map is a live picture of your agents at work: your project's sessions, agents, to-dos and tasks as one moving tree. Press `D`, or choose **Map** on the rail. In Social, **Map** sits on Social's own rail.
 
-Use it to see what's running, follow a task and answer questions without leaving the work.
-
-> <span class="status next">New in 0.5</span> The Command view becomes **the Map**, a place of its own on the rail. Your sessions stay in the list beside the tree, and a small bar over it holds **Map | Fleet | Pipelines**, **Running only** and **View** (the layouts, labels, the camera, and a flat map or a 3D orbit). The toolbar described below belongs to 0.4.4: in 0.5, Search and new tasks live in the frame, and the Legend and the colours of the four states sit at the bottom left, with Fit and zoom at the bottom right.
-
-![Command view with the live tree and work panel](../../assets/shots/command.webp)
+Use it to see what's running, follow a task and answer questions without leaving the work. Before 0.5, the Map was called the Command view.
 
 ## Find the work you care about
 
-The toolbar has a box to **Add a task… (Enter)** and a search to **Find a session, todo or task…**. Click a node or its label to open its details on the right.
-
 Agents fly to the work they're doing, and their speech bubbles say what they're up to. Task labels show status and progress. Finished work stays in the task's details, even when the tree folds it into a bigger group.
 
-The tree is an overview. To review what changed and which checks passed, open the task's evidence.
+Click a node or its label to open its details on the right. Press `S` to search, which also finds the Map's sessions, to-dos and tasks, and `N` to add a task.
+
+The tree is an overview. To review what changed and which checks passed, open the task itself. See [Verification](verification.md).
+
+## The bar over the tree
+
+- **Map | Fleet | Pipelines** switches between the Map's three pages. See [other views](#other-live-views) below.
+- **Running only** dims everything that isn't running. Studio remembers it on this PC.
+- **View** holds the **Layout** (five tree shapes), **Labels** (`L`: Auto, Updates, All or None), the **Camera** (`C`: Overview, Follow or Free), **Flat map** or **3D orbit** (`V`) and **Spin** (`Space`). **Map look** at its foot opens the node styles in Settings.
+
+At the bottom left, the colours of **Running**, **Needs you**, **Review** and **Done** sit beside **Legend**, which explains every colour and ring. At the bottom right, **Fit** (`F`) and the zoom buttons frame the tree.
 
 ## Use the side panel
 
 | Tab | What to look for |
 | --- | --- |
-| **Work** | Running work, queued tasks and anything that needs attention. |
-| **Assistant** | Your conversation with the assistant, and the **New work** switch. |
-| **Runs** | Recent build attempts, grouped by task. |
+| **Work** | **Live work**: what's running now and the step it's on, the agents, and what's up next. **Ready**, **Waiting** and **Attention** show those tasks and why they're there. |
+| **Assistant** | Your conversation with the assistant, quick asks such as **Status** and **What next?**, and the **New work** switch. |
+| **Runs** | Recent build runs, one row per task. |
 | **Ask** | Questions waiting for your answer, each with a recommended option. |
 
-Selecting a node adds a **Node** tab with its details. Press `Esc` to step back out. In a narrow window, details appear in a floating card.
+Selecting a node adds a **Node** tab, and its details take over the panel. `Esc` steps back out one level at a time: the first press brings the rest of the panel back, the next lets the node go. In a narrow window, details appear in a floating card.
 
-**Agents** in the toolbar opens the queue controls: Autopilot, Parallel builds, Build mode, Agent mode, **Stop all** and **Restart Studio**. [Assistant and agents](assistant.md) explains each one.
+The pause button in the top bar holds new work, while running jobs finish. The rest of the queue controls live in **Team › Overview**. [Assistant and agents](assistant.md) explains each one.
 
 ## Move around
 
-- **Fit** (`F`) rearranges the tree and brings it all into view.
-- **Overview** keeps the whole tree framed, and **Follow** tracks the current work. `C` cycles overview, follow and free.
-- **Spin** turns the tree. `Space` pauses or resumes the spin. It doesn't pause your agents.
-- **View** holds the 3D or flat 2D map (`V`), the node labels (`L`) and zoom.
-- The mouse wheel or a two-finger pinch zooms toward the pointer, and the arrow keys and `[` `]` step through the tree.
+- **Fit** (`F`) rearranges the tree and brings it all into view. `Shift F` fits the selected branch.
+- **Overview** keeps the whole tree framed, and **Follow** tracks the current work. `C` cycles Overview, Follow and Free.
+- **Spin** turns the 3D orbit. `Space` pauses or resumes it. It doesn't pause your agents.
+- The mouse wheel or a two-finger pinch zooms toward the pointer. The arrow keys step through the tree.
 
-[Navigation and shortcuts](shortcuts.md#in-command-view) lists every key. If you'd like the tree to hold still, pause the spin and pick a view that's easy to read.
-
-## Ambience
-
-The **Ambience** button sets the mood:
-
-- **Look**: the **Backdrop** behind the tree, **Speech bubbles**, and the **Card style** (Auto, Outline or Filled).
-- **Sound**: what the nodes **Listen to** (your local player, desktop audio, or the microphone), and **Zen bells**.
-- **Calm**: **Zen mode** fades the panels and tours the tree after 30 seconds without input. You can also park the mouse at the right edge for about two seconds. Move the mouse or press a key to come back.
-
-## Legend and Usage
-
-The **Legend** pill in the corner explains what the colours and rings mean. The **Usage** pill shows readings from your connected providers, with **Refresh** and **Details**, which opens **Agents › Usage**. Refreshing sends no prompts. See [Model Lab and usage](model-lab.md).
+[Navigation and shortcuts](shortcuts.md#in-command-view) lists every key. If you'd like the tree to hold still, turn off **Spin** and pick a view that's easy to read.
 
 ## Make it feel like your space
 
-Press `U` to open **Appearance**: **Theme**, **Nodes**, **Layout** and **Interface**. Every theme and node style has been free since 0.4.4, including the Void collection, and you don't need Discord to use any of them. The tree's brightness, outlines and motion live there too. See [Themes, node styles and looks](appearance.md).
+**Settings › Map look** holds the node styles and tree layouts, and **Node tree details**: the **Backdrop** behind the tree, **Speech bubbles**, the **Card style** (Auto, Outline or Filled) and **Zen mode**. Zen mode fades the panels and tours the tree after 30 seconds without input. Move the mouse or press a key to come back.
 
-The toolbar's audio button (**Connect audio**) opens **Music & video**. Closing that panel keeps playback running. The tree can react to a track, desktop audio or your microphone, and a video can play behind the tree. The microphone only drives the visuals: nothing is transcribed. See [Music, video and the player](media-player.md).
+Press `U` for **Appearance**: themes, motion and glass. Every theme and node style is free, and you don't need Discord to use any of them. See [Themes, node styles and looks](appearance.md).
 
-## When Command view opens by itself
+The tree can react to a track, desktop audio or your microphone, and a video can play behind it: open **Music & video** to set it up. The microphone only drives the visuals: nothing is transcribed. **Settings › Sound and music** has the **Zen bells**, soft bells that follow how fast your agents work. See [Music, video and the player](media-player.md).
 
-In 0.4.4, Studio switches to Command view after five quiet minutes. Move the mouse or press a key, then **Close** (`Esc` or `D`) to go back.
+## When the Map opens by itself
 
-> <span class="status next">New in 0.5</span> Opening the Map after five quiet minutes becomes a switch in **Settings › General**, and it's off by default. The Map also says why agents aren't working, with the one control that fixes it. Answered questions leave the list at once, and **Stop all** and **Restart** ask twice.
+Turn on **Show the Map after 5 quiet minutes** in **Settings › General** to have Studio switch to the Map when you leave it alone. It's off by default.
 
-## Other Live views
+<span id="other-live-views"></span>
 
-**Agents › Live** holds more ways to look at the work:
+## Other views
 
+- **Fleet**, beside the Map, shows every agent seat on the team: who's working on what, and how work moves between them.
 - **Pipelines** (the [Agent brain](agent-brain.md), `J`) draws one task's pipeline: the lead, the steps and the helpers it sent out.
-- **Sessions** (`E`) shows each coding session and its saved context. Its **Session tools** open the Assistant, Activity and Diagnostics tabs.
-- **Activity** (`3`) opens **Activity & evidence**: pick a session, then read its change feed, diffs, images or log. The file inspector has **Reveal file** and **Copy path**, and you can pin a spot on a PNG. It reads the session records your coding tool keeps; when a tool keeps none, use the task's evidence and attempts instead.
+
+**Team › Inspect** holds more ways to look at the work:
+
+- **Sessions** (`E`) shows each coding session and its saved context.
+- **Activity and evidence** (`3`): pick a session, then read its change feed, diffs, images or log. The file inspector has **Reveal file** and **Copy path**, and you can pin a spot on a PNG. It reads the session records your coding tool keeps; when a tool keeps none, use the task's evidence and attempts instead.
 - **Trace** puts Studio's logs in one viewer. See [Trace, logs and diagnostics](trace.md).
 - **Overhead** (`O`) shows how tasks relate to sessions.
+
+Your plan usage shows in the status bar at the bottom of the window. Press it for **Team › Health and usage**. See [Model Lab and usage](model-lab.md).
 
 For reviewing finished work, continue to [Verification](verification.md).

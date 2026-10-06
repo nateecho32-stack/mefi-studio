@@ -11,10 +11,14 @@
     "coming-in-05": "coming-in-0-5",
     "setup": "setup-helper",
     "vibe": "vibe-mode",
+    "social": "vibe-mode",
+    "social-mode": "vibe-mode",
     "rooms": "friends-and-rooms",
     "media": "media-player",
     "themes": "appearance",
-    "command-view": "command-center"
+    "command-view": "command-center",
+    "map": "command-center",
+    "the-map": "command-center"
   },
   "sections": [
     {
@@ -62,8 +66,8 @@
       "pages": [
         {
           "slug": "vibe-mode",
-          "title": "Vibe mode",
-          "summary": "The calm front door: talk it over, build it, and answer what needs you"
+          "title": "Social mode",
+          "summary": "The calm mode Studio opens in: Today, one box to talk it over or build it, and what needs you"
         },
         {
           "slug": "workflow",
@@ -87,8 +91,8 @@
         },
         {
           "slug": "command-center",
-          "title": "Command view",
-          "summary": "Follow agents and tasks in the live tree"
+          "title": "The Map",
+          "summary": "Follow agents and tasks in the live tree, with Fleet and Pipelines beside it"
         },
         {
           "slug": "agent-brain",
@@ -153,7 +157,7 @@
         {
           "slug": "settings",
           "title": "Settings and Configuration",
-          "summary": "What lives in General, Appearance, Audio and System, and how to find any setting"
+          "summary": "What lives in each place of Settings, from General to System, and how to find any setting"
         }
       ]
     },

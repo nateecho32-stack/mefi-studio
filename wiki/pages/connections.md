@@ -6,7 +6,7 @@ Studio doesn't supply an AI subscription. Model access, usage limits and charges
 
 ## Use an existing sign-in
 
-Open **Help › Start here**. **Agents › Setup › Providers** reaches the same controls through **Install a coding tool or use one subscription for Studio**.
+On a new install, the welcome's first step, **Pick the AI that builds for you**, does this for you: see [Your first project](getting-started.md). Any time later, open **Help › Start here**, or press **Install a coding tool or use one subscription for Studio** in **Team › Providers**.
 
 1. Choose your coding tool: Codex, Claude Code, Grok, Antigravity or OpenCode.
 2. Select **Install and sign in** if it's missing, or **Sign in** if it's already installed.
@@ -20,11 +20,11 @@ For OpenCode, steps 4 and 5 are **Scan OpenCode**, then **Use scanned setup**.
 
 **Use for the whole studio** saves the account for Studio's defaults and for the current project, even if that project has its own team. Other projects with their own saved teams keep them. It also turns cross-provider fallback off, so Studio won't switch to another provider when that account fails.
 
-> In 0.4.4 the **Install and sign in** and **Sign in** windows may close as soon as they open. If that happens, [sign in from a terminal](#sign-in-from-a-terminal). <span class="status next">New in 0.5</span> The windows stay open and run the setup, and Studio finds the tool by itself when you close one.
+The setup window stays open while it installs the tool and runs its sign-in, and Studio finds the tool by itself when you close it. Prefer a terminal? See [Sign in from a terminal](#sign-in-from-a-terminal).
 
 ## Sign in from a terminal
 
-Use this when the guided window closes at once in 0.4.4:
+Use this if you'd rather work in a terminal, or if you're still on 0.4.4, where the guided window can close at once:
 
 1. Open PowerShell.
 2. If the tool isn't installed yet, install it with its maker's instructions. **Setup instructions** in Studio opens them, or use the links below.
@@ -43,9 +43,9 @@ These are the same commands Studio's setup window runs. Your password and tokens
 
 ## More than one login <span class="status next">New in 0.5</span>
 
-Have two Claude or ChatGPT subscriptions? In the [setup helper](setup-helper.md), open **Connect an AI › More than one login** and add a second Claude Code or Codex login, up to six in all. Each login signs in through its own window.
+Have two Claude or ChatGPT subscriptions? Add a second Claude Code or Codex login under **Your subscriptions** in **Team › Providers**, or in the [setup helper](setup-helper.md) under **Connect an AI › More than one login**, up to six in all. Each login signs in through its own window.
 
-Studio uses the first login that hasn't reached its usage limit. When one does, Studio sets it aside until it resets and moves on to the next. A coding worker's task goes back to the queue for the next login, without using up one of its tries. Each login gets its own row in **Usage › Provider accounts**.
+Studio uses the first login that hasn't reached its usage limit. When one does, Studio sets it aside until it resets and moves on to the next. A coding worker's task goes back to the queue for the next login, without using up one of its tries. Each login gets its own row in **Team › Health and usage › Provider accounts**.
 
 ## Other connection options
 
@@ -59,7 +59,7 @@ Studio uses the first login that hasn't reached its usage limit. When one does, 
 | A running LM Studio server | **LM Studio (local)** |
 | Ollama or another OpenAI-compatible server | **Custom endpoint**, its URL and its key |
 
-Find the provider forms under **Agents › Setup › Providers**. **Agents › Setup › Routing & fallback** decides which provider answers, and whether Studio may try another one.
+Find the provider tiles under **Team › Providers**. **Model routing**, under **More settings** in **Team › Seats and models**, decides which provider answers, and whether Studio may try another one.
 
 Chat and coding have separate needs. A local chat server, for example, doesn't install a coding worker. Check both before you start a build.
 
@@ -67,7 +67,7 @@ Chat and coding have separate needs. A local chat server, for example, doesn't i
 
 ## Auto setup
 
-**Run auto setup**, under **Agents › Setup › Providers**, chooses from your saved keys, installed tools and running local servers. A fresh install runs it once. Run it again after you add a key or a tool.
+**Run auto setup**, under **Team › Providers**, chooses from your saved keys, installed tools and running local servers. A fresh install runs it once by itself. Run it again after you add a key or a tool.
 
 Auto setup says what it picked. It doesn't send a test prompt or change your saved keys. Use **Check connection** when you want to test an account.
 
@@ -75,7 +75,7 @@ Auto setup says what it picked. It doesn't send a test prompt or change your sav
 
 ## Models, seats and coding tiers
 
-Model choices are saved per provider and per coding tool, so switching never mixes them up. Leave a model blank to use that provider's default. **Agents › Setup › Team & models** assigns a model to each role and to the five helper seats: Companion, Task context scout, Overseer, Lead and Desk. [Assistant and agents](assistant.md) explains what each one does.
+Model choices are saved per provider and per coding tool, so switching never mixes them up. Leave a model blank to use that provider's default. **Team › Seats and models** assigns a model to each job: the companion, the routine assistant, planning and review, the coding worker, the lead, the desk, the scout and the overseer. [Assistant and agents](assistant.md) explains what each one does.
 
 The coding worker's **Build tier** decides which model builds:
 

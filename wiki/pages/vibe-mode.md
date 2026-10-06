@@ -1,90 +1,105 @@
-# Vibe mode
+# Social mode
 
-Vibe is Studio's calm front door and its default mode. You get one box for an idea, a fix or a question. Below it, cards appear only when they have something to show: what needs you, what's building and what just finished.
+Social is Studio's calm mode, and the one Studio opens in. It's for time with friends and a light eye on your agents. Its home page, **Today**, has one box for an idea, a fix or a question. Under it, a board shows what needs you, what's running, what to review and what finished today.
 
-Vibe arrived in 0.4.2, and 0.4.4 added its panels, **Build it** sizing and **New app**. Items marked <span class="status next">New in 0.5</span> came with 0.5. In 0.5, Vibe is called **Social** and Build is called **Studio**: see [Social and Studio](#social-and-studio).
+Before 0.5, Social was called **Vibe** and Studio mode was called **Build**. Only the names changed: your saved mode and settings carried over.
 
-## Vibe or Build
+## Social and Studio
 
-Studio has two modes:
+Studio has two modes in one window. Both show the same projects and the same tasks.
 
-- **Vibe** keeps the conversation, current work and decisions on one quiet page.
-- **Build** is the full studio, with **Home**, **Work** and **Agents** in the menu.
+- **Social** keeps things simple: Today, with the box and the board. Other pages open beside Social's own narrow rail.
+- **Studio** is for in-depth work: your tasks as sessions in a list, each with its thread and an inspector, and the rail with **Work**, **Map**, **Team** and **Friends**.
 
-Switch with the **Vibe | Build** switch at the top of Vibe, at the foot of Vibe's side rail, or in **Settings › General › Studio mode**. Studio remembers your choice.
+To switch, use the **Social | Studio** switch at the top left (`Ctrl M`), the **Studio** button at the foot of Social's rail, **Mode** in **Settings › General**, or **Switch to Studio** in Search (`Ctrl K`).
 
-In Vibe, every other page you open (Tasks, Plans, Command, Settings or a search result) opens inside Vibe's narrow side rail. The spark at the top of the rail brings you back to Vibe. Only the Build switch leaves the mode.
+Every launch starts in Social. To open the mode you used last instead, turn off **Always start in Social mode** in **Settings › General**.
 
-## Talk it over, or build it
+Pages you open from Social, such as Tasks, Plans or the Map, open beside Social's rail. **Today**, at the top of that rail, brings you back. Only the Studio switch leaves the mode.
 
-Type in the box, then choose:
+## Today
 
-- **Talk it over** (`Enter`) to chat with Mefi about the idea first.
+Today greets you and asks what's next for your project. Type in the box, then choose:
+
+- **Talk it over** (`Enter`) to chat with Mefi about the idea first. It only talks: nothing is built.
 - **Build it** (`Ctrl Enter`) to turn your words into work on the board.
 
-To bring in a file, drop text or code files on the box, or use **Add files**. Their contents land in your draft as text you can edit, up to eight files of 128 KB each. A drop never sends anything by itself.
+**Modify**, **Experiment**, **Fix** and **Improve**, under the box, start the sentence for you. **Suggest a next step** asks Mefi for ideas. See [MEFI](#mefi-modify-experiment-fix-improve) below.
 
-Your draft is saved for each project, so switching projects or pages doesn't lose it.
+To bring in a file, drop text or code files on the box, or use **Add files**. Their contents land in your draft as text you can edit, up to eight files of 128 KB each. A drop never sends anything by itself. Your draft is kept for each project, so switching projects or pages doesn't lose it.
 
-### How Build it sizes your request
+The chips in the box show your [permission mode](#/permissions) and how Mefi answers (Explain like I'm 5 at first). Press one to change it.
+
+### The line under the box
+
+When something holds the agents back, a line under the box says what, with one button that fixes it:
+
+| The line says | Press |
+| --- | --- |
+| Agents are off | **Start agents** |
+| No AI connected | **Connect an AI** |
+| Agents paused | **Resume agents** |
+| Agents are cooling down | **Try now** |
+| The work scheduler is stuck | **Restart Studio** |
+| *N* tasks need your OK | **Review tasks** |
+| No project open | **Open a project** |
+
+### The board
+
+The board has four groups: **Needs you**, **Running**, **Review** and **Done** (what finished today). Each says so when it's empty. A task that waits its turn shows under **Running**, marked *up next*.
+
+A card that waits on you shows its question and its first answers right there. **Answer** or **More** opens it in the Inbox. How much each card shows is up to you: **Settings › Size and density › Detail** has **Titles**, **Titles and status** and **Everything**.
+
+### Start a new app
+
+Press **+** beside the project name at the top left. Fill in **Name** and **What should it be?**, then choose what happens on GitHub: **Create a private GitHub repository**, **Link a repository I already have** or **Only on this PC for now**. Studio makes a folder under **Mefi Apps** in your home folder, starts Git in it, opens it and sends your description as its first build.
+
+## How Build it sizes your request
 
 - A short, single change becomes one task at once.
 - A bigger request may be split into two to six steps. Each step leaves your project working, and your own card runs last as the final check.
-- A split request shows as a **Plan in flight** card. **Make it one task** drops the steps that haven't started, so your card runs as a whole.
+- When the steps are ready, **Show the plan** opens them in the **Plans** panel. **Make it one task** drops the steps that haven't started, so your card runs as a whole.
 
 If the agents are off, paused or have no AI, **Build it** says so and points at the control that fixes it.
 
-### New app
-
-Choose **+** beside the project name at the top left, then fill in **Name** and **What should it be?** and choose **Make it and start building**. Studio makes a new folder under *Mefi Apps* in your home folder, starts Git in it, opens it as your project and sends your description as its first build.
-
-## The cards
-
-Each card shows only while it has something in it:
-
-- **Needs you**: questions, builds waiting for your go-ahead and stuck tasks.
-- **Building now**: what the agents are working on. **Watch it live** opens the live node tree.
-- **Plan in flight**: a split request and its steps.
-- **Freshly done**: work finished in the last half day.
-- **Fresh ideas**: ideas the agents noticed.
-
-A quiet project shows one calm line instead of empty boxes. The pill at the top right says what needs you and what's building.
-
 ## Answer what needs you
 
-Each row under **Needs you** has one action:
+When something needs you, the top bar says how many things (for example **1 needs you**). Press it, or press `Ctrl J`, to open the **Inbox**: every question, permission, approval and stopped task in one list.
 
-- **Answer** opens a drawer beside Vibe with the question, the task it blocks, the last lines the agent saw, and the options with the recommended one first. You can also type your own answer. After you answer, the drawer moves to the next item.
-- **Review** shows a waiting task's brief. Choose **Approve build** (**Accept this task** in Accept per task mode) or **Drop it**.
-- A stuck task shows **See why**, **Try again**, **Resume** or **Run anyway**, depending on why it stopped. The drawer explains the hold and offers to run it again, **It's done** or **Drop it**.
+- A question shows its options with the recommended one first. Press one, or a number key from `1` to `9`. **Answer in my own words** opens a box for your own answer.
+- A task waiting for your OK offers **Approve build** (**Accept this task** in Accept per task mode) or **Drop it**.
+- A stopped task offers **Try again**, **Resume**, **Run anyway** or **Build it anyway**, depending on why it stopped, and **It's done** or **Drop it**.
+- **Decide later** puts an item last for now. It still needs you.
 
-**Open in Watch** shows the same decision in the Command view.
+An answered item leaves a short **Decided** line, with **Undo** where Studio can undo it. **Open as a tab** keeps the Inbox open as a page, **Work › Inbox**.
 
-When something holds every agent back, a banner under the box names it and carries the fix, such as **Start agents**, **Resume** or **Connect an AI**. <span class="status next">New in 0.5</span> The banner can also offer **Try now**, **Restart Studio** or **Open a project**, and it reads the same answer as every other part of Studio, so they never disagree.
+Mefi's automatic choices show as **Decided for you · For you** under the box. See [Permissions and decisions](#/permissions).
 
-Mefi's automatic choices appear as **Decided for you · For you** under the box. See [Permissions and decisions](#/permissions).
+## Social's panels
 
-## The dock and panels
+On Today, single keys open compact panels beside the box. Rows open their details, and **Back** or `Esc` steps out. **Full view** opens the whole page beside Social's rail.
 
-The dock at the bottom always has **Tasks**, **Team** and **More** (which opens Search). **Watch** joins while agents work, **Plans** while a plan is in play, and **Ideas** while fresh ones wait.
+| Key | Opens |
+| --- | --- |
+| `T` | **Tasks**: your work as a **List** or as **Lanes** |
+| `P` | **Plans**: plans in progress, and a split request's steps |
+| `I` | **Ideas**: ideas the agents noticed |
+| `M` | **Team**: who's working, and on which model |
+| `S` | **Settings**, also behind the Settings button at the top right |
+| `C` | The conversation with Mefi |
+| `N` | The first thing that needs you |
+| `/` | The box |
 
-Each one opens a compact panel beside the box. Rows open their details, and **Back** or `Esc` steps out. **Full view** opens the full page inside Vibe's rail.
+- **Tasks** shows **Lanes** for **Needs you**, **Ready**, **Building**, **Checking**, **Later** and **Done**, each with a count. It can pause new work and set a **Worker limit**: 1, 2, 3 or **Automatic**. A task's **Inspector** sets its priority, estimated minutes, **Done when** checks and a **Defer until** date. A finished task offers **Ask for a change**.
+- **Ideas** offers **Build it**, **Keep for later** (or **Not now**) and **Dismiss** on each idea.
+- **Team** shows who's building and each agent's model, with **Start agents**, **Resume** or **Pause new work**, and what Mefi is still thinking about under **Thinking now**.
+- **Settings** has your permission mode, **Mode**, colours, names, **Open Social on launch**, **Always start in Social mode** and **Key tips**.
 
-- **Tasks** shows your work as a **List** or as **Lanes** (Needs you, Ready, Building, Checking, Later and Done). It can pause new work and set a **Worker limit**. Each task's **Inspector** sets its priority, estimated minutes, **Done when** checks and a **Defer until** date. A finished task offers **Ask for a change**.
-- **Team** shows who's building and each agent's model, with **Start agents**, **Resume** or **Pause new work**.
-- The gear at the top right opens a short **Settings** panel: your permission mode, Studio mode, colours, names and **Open Vibe on launch**.
+These keys work while you're not typing. Press `?` for the full list.
 
-## New in 0.5
+## MEFI: Modify, Experiment, Fix, Improve
 
-> <span class="status next">New in 0.5</span> These came with 0.5.
-
-### Social and Studio
-
-Vibe is called **Social**: time with friends and a light eye on your agents. Build is called **Studio**: in-depth building, with the social side still there. Both modes share the 0.5 layout, Studio's only layout from 0.5, and open on **Today**: your box to build or talk it over, and a board of what needs you, what runs, what to review and what is done. Switch in the top bar or with `Ctrl M`. Only the names change: your saved mode and settings carry over. See [the 0.5 layout](#/coming-in-0-5/the-05-layout).
-
-### MEFI: Modify, Experiment, Fix, Improve
-
-The starter chips under the box become four ways to build on the open project:
+Four ways to build on the open project, Studio itself included:
 
 - **Modify** shapes an existing feature.
 - **Experiment** tries a small, reversible idea.
@@ -93,24 +108,17 @@ The starter chips under the box become four ways to build on the open project:
 
 Pick one, describe the change, then talk it over or build it.
 
-**Suggest a next step** reads your project and suggests next steps, with reasons and the files involved. **Add to draft** adds a suggestion to your box as a brief you can edit, **Save idea** keeps it for later, and **Clear** puts the set away. Nothing starts until you build. The same panel links to the **System map** and **Ideas tree** in the [Agent brain](#/agent-brain).
+**Suggest a next step** reads your project and suggests next steps, with reasons and the files involved. **Add to draft** puts a suggestion in your box as a brief you can edit, **Save idea** keeps it for later, and **Clear** puts the set away. Nothing starts until you build. The same panel links to the **System map** and **Ideas tree** in the [Agent brain](#/agent-brain).
 
-### Watch Mefi think
+## Watch Mefi think
 
-**Suggest a next step** and **Build it** show a live strip while they work, instead of one still sentence. It shows the stage they've reached, the files read or steps planned as they arrive, which model is thinking, and a clock against how long it usually takes on your PC.
+**Suggest a next step** and **Build it** show a live strip while they work. It shows the stage they've reached, the files read or steps planned as they arrive, which model is thinking, and a clock against how long it usually takes on your PC.
 
-A split request's **Plan in flight** card draws its steps as a track that ends in the final check. It names the step being built, the tool its agent uses and what that agent is doing now. **Building now** rows and a new timeline in the **Plans** panel show the same. The **Team** panel lists what Mefi is still thinking about under **Thinking now**.
-
-### Smaller changes
-
-- **Talk it over** only talks. In 0.4.4 a message like "Add a search box" could quietly become a task; now the reply offers the board instead, and says plainly when no AI is connected.
-- The **Worker limit** offers only what Studio really runs: 1, 2, 3 or **Automatic**. In 0.4.4, higher numbers were quietly treated as 3.
-- A deferred task reads **Scheduled for later** and shows why.
-- Questions that expired, or whose task left the board, close when the project loads, so **Needs you** shows only live ones.
+A split request's plan draws its steps as a track that ends in the final check. It names the step being built, the tool its agent uses and what that agent is doing now. The **Plans** panel shows the same timeline, and the **Team** panel lists what Mefi is still thinking about under **Thinking now**.
 
 ## Related pages
 
-- [Tasks](#/workflow) covers task states and the full board.
+- [Tasks](#/workflow) covers task states and the full task board.
 - [Plans and ideas](#/planning) is for ideas that need thinking through first.
-- [Command view](#/command-center) is the live node tree behind **Watch**.
+- [The Map](#/command-center) is the live picture of your agents at work.
 - [Navigation and shortcuts](#/shortcuts) lists the keys.

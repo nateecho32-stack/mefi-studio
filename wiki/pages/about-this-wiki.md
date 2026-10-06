@@ -1,6 +1,6 @@
 # About this guide
 
-This guide helps you get started with Mefi Studio and find the next step when something is unclear. Its pages describe **Studio 0.5**, the current download, though some still show 0.4.4's screens and names. For conversation, ideas and works in progress, join the [Discord community](https://discord.gg/xgfKc5pVxG).
+This guide helps you get started with Mefi Studio and find the next step when something is unclear. Its pages describe **Studio 0.5**, the current download. For conversation, ideas and works in progress, join the [Discord community](https://discord.gg/xgfKc5pVxG).
 
 ## How pages mark what's new
 
@@ -17,7 +17,7 @@ What the latest release added, and anything that isn't in a download yet, carrie
 
 There was no 0.4.5 or 0.4.6 release. Both were folded into 0.5.
 
-In 0.5, Vibe became **Social**, Build **Studio**, the Command view **the Map** and Agents **Team**. Pages that still describe 0.4.4's screens use the old names; their **New in 0.5** marks use the new ones.
+In 0.5, Vibe became **Social**, Build **Studio**, the Command view **the Map** and Agents **Team**. The guide uses the new names, and mentions an old one only to say what something was called before.
 
 In a page's Markdown, write a mark as a span, for example `<span class="status next">New in 0.5</span>`. The classes are `released`, `next`, `rolling`, `progress`, `planned` and `idea`. A mark inside a heading doesn't change that heading's link.
 

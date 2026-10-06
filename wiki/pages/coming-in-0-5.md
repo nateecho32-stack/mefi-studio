@@ -6,7 +6,7 @@
 
 **Coming from 0.4.4?** Its in-app update can't install 0.5, so [update by hand](#/updates/update-from-044-by-hand) this once. From 0.5 on, updates install themselves.
 
-**New names.** In 0.5, Vibe is called **Social**, Build is called **Studio**, the Command view is **the Map** and Agents is **Team**. Some pages of this guide still show 0.4.4's screens and use the old names.
+**New names.** In 0.5, Vibe is called **Social**, Build is called **Studio**, the Command view is **the Map** and Agents is **Team**. This guide uses the new names.
 
 <span id="what-will-and-wont-ship"></span>
 
@@ -63,7 +63,7 @@ From 0.5 this is Studio's only layout. The classic layout and the switch back to
 
 ## Social
 
-- **MEFI: Modify, Experiment, Fix, Improve.** Four ways to build on the open project, plus **Suggest a next step**. Suggestions can go into your draft or be saved as ideas, and nothing starts until you build. See [Vibe mode](#/vibe-mode/mefi-modify-experiment-fix-improve).
+- **MEFI: Modify, Experiment, Fix, Improve.** Four ways to build on the open project, plus **Suggest a next step**. Suggestions can go into your draft or be saved as ideas, and nothing starts until you build. See [Social mode](#/vibe-mode/mefi-modify-experiment-fix-improve).
 - **Watch Mefi think.** **Suggest a next step** and **Build it** show a live strip: the stage, the files read or steps planned, which model is thinking, and a clock. A split request draws its steps as a track. See [Watch Mefi think](#/vibe-mode/watch-mefi-think).
 - **Talk it over only talks.** It no longer turns a message like "Add a search box" into a task.
 - **Honest worker limits.** The worker limit offers 1, 2, 3 or Automatic, which is what Studio really runs.

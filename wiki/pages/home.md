@@ -2,7 +2,7 @@
 
 Welcome to the Mefi Studio guide. Studio is a free Windows app for building your ideas with coding agents. You talk an idea through, the agents build it, and you check what they made. The [Void Engine Discord](discord.md) is where people share what they're making, get help and hang out.
 
-This guide describes **Studio 0.5**, the current download. Some pages still show screens and names from 0.4.4 (Vibe, Build, the Command view and Agents); [Everything new in 0.5](coming-in-0-5.md) says what changed.
+This guide describes **Studio 0.5**, the current download. Coming from 0.4.4? Vibe is now **Social**, Build is **Studio**, the Command view is **the Map** and Agents is **Team**. [Everything new in 0.5](coming-in-0-5.md) says what changed.
 
 ## How this guide marks things
 
@@ -33,11 +33,11 @@ Already using Studio? Read [what's new in 0.5](whats-new.md), or the full list i
 | You want to… | Read |
 | --- | --- |
 | Set up every agent setting in one place <span class="status next">New in 0.5</span> | [The setup helper](setup-helper.md) |
-| Talk an idea over, then build it from one box | [Vibe mode](vibe-mode.md) |
+| Talk an idea over, then build it from one box | [Social mode](vibe-mode.md) |
 | Create work and follow its progress | [Tasks](workflow.md) |
 | Work out an approach before anything is built | [Plans and ideas](planning.md) |
 | Decide what Mefi may start and answer for you | [Permissions and decisions](permissions.md) |
-| Watch your agents in the live tree | [Command view](command-center.md) |
+| Watch your agents in the live tree | [The Map](command-center.md) |
 | See a task's pipeline, or explore your project's map | [Agent brain](agent-brain.md) |
 | Change your model or coding tool | [Connect an AI](connections.md) |
 | Talk with your companion and see what needs you | [Your companion](companion.md) |

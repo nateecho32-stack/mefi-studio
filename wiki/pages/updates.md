@@ -2,7 +2,7 @@
 
 The current release is **0.5.0**, from __RELEASE_DATE__. It took in what was planned for 0.4.5 and 0.4.6, which were never released on their own: see [everything new in 0.5](#/coming-in-0-5/what-will-and-wont-ship). The next updates are 0.5.x. A source install gets new work by pulling `main`.
 
-Open **Settings › System › Updates** to see your version and look for a newer one.
+Open **Settings › Updates** to see your version and look for a newer one. On 0.4.4 it's **Settings › System › Updates**.
 
 > **In 0.4.4, in-app updates don't finish installing.** Studio downloads and verifies the new release, but the step that installs it after Studio closes never runs. So to move from 0.4.4 to 0.5, [update by hand](#update-from-044-by-hand), just this once. <span class="status next">New in 0.5</span> The install step works, so from 0.5 on, updates install themselves.
 
@@ -10,7 +10,7 @@ Open **Settings › System › Updates** to see your version and look for a newe
 
 Studio checks GitHub for a new release every 20 minutes. When one is out, a notice says **Update available** and points to **Settings › Updates**. To look right away:
 
-1. Open **Settings › System › Updates** and choose **Check GitHub**.
+1. Open **Settings › Updates** and choose **Check GitHub**.
 2. If a newer release is out, choose **Update to vX.Y.Z**.
 3. The button shows **Downloading…**, then **Installing…** while Studio restarts.
 
@@ -57,7 +57,7 @@ Turn off **Apply updates automatically** if you'd rather choose when changes app
 
 **Check GitHub** shows the result of the latest check. Compare your version with the [GitHub releases](https://github.com/nateecho32-stack/mefi-studio/releases).
 
-A public release needs no GitHub token. A private repository needs a read-only token, saved in **Settings › System › Updates**.
+A public release needs no GitHub token. A private repository needs a read-only token: paste it in **Settings › Updates** and press **Save token**.
 
 > <span class="status next">New in 0.5</span> The [setup helper](setup-helper.md)'s **Machine & app** section also holds **Install updates automatically** and the GitHub token.
 

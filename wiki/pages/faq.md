@@ -84,7 +84,7 @@ Yes, in stages. The move started on 3 October 2026 and uses Tauri 2. The screens
 
 ## How do I update?
 
-Open **Settings › System › Updates** and choose **Check GitHub**, or use the [download page](../../download.html). From 0.5 on, **Update** installs new releases for you. On 0.4.4 it can't, so move to 0.5 [by hand](updates.md#update-from-044-by-hand) this once.
+Open **Settings › Updates** and choose **Check GitHub**, or use the [download page](../../download.html). From 0.5 on, **Update** installs new releases for you. On 0.4.4 it can't, so move to 0.5 [by hand](updates.md#update-from-044-by-hand) this once.
 
 ## Where do I ask for a feature or get help?
 
