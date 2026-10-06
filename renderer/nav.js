@@ -718,7 +718,7 @@
     {
       id: "onboarding", label: "Start here", short: "Start here", kind: "overlay", layer: "transient", section: "help",
       group: "system", key: null, glyph: "g-flag", badge: null,
-      desc: "The guided walkthrough: link an AI, add a project, connect providers, then create, follow and review work",
+      desc: "The guided tour: connect your AI, open a project, then make, watch and check your first task",
       searchTerms: "start here walkthrough tour getting started guide tutorial help welcome onboarding",
       showIn: showIn({ dock: true, tools: true, palette: true }),
       element: "walkthrough-overlay", focus: "#walkthrough-title",

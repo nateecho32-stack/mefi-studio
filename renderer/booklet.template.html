@@ -210,7 +210,7 @@
 
       </details>
       <details id="workspace-help-details" class="ws-home-disclosure"><summary>Getting started &amp; community</summary>
-        <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">Set up your project</strong><p>Connect your tools, add a project, and create your first task.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start here</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it walks the menus with you">Walk me through it</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this invitation; Start here stays at the foot of the menu">Not now</button></div></section>
+        <section class="walkthrough-invitation" id="walkthrough-invitation" aria-label="Getting started" hidden><div><strong id="walkthrough-invite-title">Set up your project</strong><p>Connect your AI, open a project, and make your first task.</p><div id="walkthrough-invite-steps" class="walkthrough-setup" role="status" aria-label="Setup progress"></div><div class="walkthrough-bar mini" id="walkthrough-invite-bar" role="progressbar" aria-label="Setup progress" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0"><span id="walkthrough-invite-bar-fill"></span></div></div><div class="walkthrough-invite-actions"><button id="walkthrough-invite-open" class="ghost" data-nav="onboarding">Start here</button><button id="walkthrough-invite-walk" class="ghost" type="button" title="Keep the guide in the corner while it shows you around">Walk me through it</button><button id="walkthrough-dismiss" class="ghost mini" type="button" title="Hide this card. The tour waits under Help › Start here">Not now</button></div></section>
     <section class="walkthrough-invitation community-invitation" id="community-invitation" aria-labelledby="community-invite-title" hidden><span class="community-emblem" id="community-invite-swatches" aria-hidden="true" hidden></span><div class="community-invite-copy"><strong id="community-invite-title">Build with others in the Void Engine Discord</strong><p class="community-pitch">Share what you're making, swap model setups, and hang out with other builders.</p><p class="community-note" id="community-invite-note" hidden></p></div><div class="walkthrough-invite-actions community-invite-actions"><button id="community-invite-join" class="primary" type="button" title="Open the Void Engine invite in your browser">Join the Discord</button><button id="community-invite-link" class="ghost" type="button" title="Sign in with Discord in your browser to link your account">Link my Discord</button><button id="community-invite-copy" class="ghost mini" type="button" title="Copy a prompt that unlocks the collection in your own fork" hidden>Copy agent prompt</button><span class="community-invite-dismiss"><button id="community-invite-later" class="ghost mini community-quiet" type="button" title="Hide this for a week">Not now</button><button id="community-invite-never" class="ghost mini community-quiet" type="button" title="Settings › Community keeps the link">Don't show again</button></span></div></section>
 
       </details>
@@ -2205,15 +2205,15 @@
       <div id="walkthrough-build-mode" class="build-mode-control">
         <label class="switch" for="walkthrough-auto-build"><input type="checkbox" id="walkthrough-auto-build" checked disabled aria-describedby="walkthrough-build-mode-note"><span class="track"></span><span>Auto build</span></label>
         <strong id="walkthrough-build-mode-label">Loading preference…</strong>
-        <p id="walkthrough-build-mode-note">Choose how work starts. You can change this in Agents › Setup › Run behavior at any time.</p>
+        <p id="walkthrough-build-mode-note">Choose how building starts. You can change this any time in Team › Overview.</p>
         <p id="walkthrough-build-mode-feedback" role="status"></p>
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
       <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
         <h3 id="walkthrough-cli-heading">Use the account you already have</h3>
-        <p>One supported subscription can handle chat, mapping, planning and coding. Choose your tool, sign in with its own window, then check the connection. Your account's model access and usage limits apply.</p>
-        <label for="walkthrough-cli-choice">Your coding tool</label>
-        <select id="walkthrough-cli-choice"><option value="codex">Codex</option><option value="claude">Claude Code</option><option value="grok">Grok</option><option value="antigravity">Antigravity</option><option value="opencode">OpenCode (free models or linked providers)</option></select>
+        <p>One subscription can do it all: chatting, mapping, planning and building. Pick your tool, sign in in its own window, then check the connection. Your plan's own limits still apply.</p>
+        <label for="walkthrough-cli-choice">Your AI tool</label>
+        <select id="walkthrough-cli-choice"><option value="codex">Codex · ChatGPT plan</option><option value="claude">Claude Code · Claude subscription</option><option value="grok">Grok · Grok account</option><option value="antigravity">Antigravity · Google account</option><option value="opencode">OpenCode · free models, or accounts you link</option></select>
         <p id="walkthrough-cli-detail" class="muted"></p>
         <div class="walkthrough-panel-actions">
           <button class="ghost" id="walkthrough-cli-install" type="button">Install and sign in</button>
@@ -2223,27 +2223,27 @@
           <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
           <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
         </div>
-        <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window and downloads the selected tool. Node.js is installed if an npm tool needs it. Studio looks for the tool again when that window closes. Check connection sends a small test using your account's allowance. Passwords stay in the provider's sign-in window.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window that downloads the tool, and Node.js too if the tool needs it. Studio looks for the tool again when that window closes. Check connection sends one small test, which counts toward your plan. Your password stays in the company's own sign-in window.</p>
         <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-cli-keys" type="button">I have an API key or a local model server</button></div>
-        <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription tool? Save a z.ai, OpenRouter, OpenCode Go or Zen key, point the custom route at your own endpoint, or pick LM Studio in Connections. The guide walks you there, then scans again so Use this setup can map your folder with it.</p>
+        <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription? Paste a key from z.ai, OpenRouter, OpenCode Go or Zen, use your own server, or pick LM Studio in Team › Providers. The guide takes you there, then scans again so Use this setup can map your project with it.</p>
         <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
       </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
-        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their free tier may use prompts to improve the model)</span></label></div>
-        <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, linked provider names, models and agents. It sends no prompt and saves nothing until you choose Use this setup.</p>
+        <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-scan-run" type="button">Run the first scan</button><button class="ghost" id="walkthrough-scan-apply" type="button" hidden>Use this setup</button><label class="walkthrough-panel-option" for="walkthrough-scan-allow-free"><input type="checkbox" id="walkthrough-scan-allow-free" checked><span>Allow free models (their makers may use what you send to improve them)</span></label></div>
+        <p id="walkthrough-scan-status" class="muted" role="status">Not run yet. The scan asks OpenCode what it has: its version, the accounts linked to it and its models. It only reads, and saves nothing until you choose Use this setup.</p>
         <ul id="walkthrough-scan-facts" class="walkthrough-facts"></ul>
         <ul id="walkthrough-scan-notes" class="walkthrough-notes"></ul>
       </div>
       <div id="walkthrough-map" class="walkthrough-panel" hidden>
         <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-map-run" type="button">Map this project</button><button class="ghost" id="walkthrough-map-cancel" type="button" hidden>Cancel</button></div>
-        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. Your selected provider uses a read-only project scan to map the folder and suggest first tasks. Suggestions are saved as ideas for you to review. Nothing is built.</p>
+        <p id="walkthrough-map-status" class="muted" role="status">Not mapped yet. Your AI reads the project and suggests a few small first jobs. They are saved in Ideas for you to look at. Nothing is built, and nothing in your project changes.</p>
         <ul id="walkthrough-map-steps" class="walkthrough-notes"></ul>
         <pre id="walkthrough-map-tail" class="walkthrough-textTail" hidden></pre>
         <ul id="walkthrough-map-facts" class="walkthrough-facts"></ul>
       </div>
       <div id="walkthrough-assist" class="walkthrough-panel" hidden>
-        <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-assist-run" type="button">Ask my assistant what to do next</button><button class="ghost" id="walkthrough-assist-task" type="button" hidden>Put the suggested task in the task box</button></div>
-        <p id="walkthrough-assist-status" class="muted" role="status">After the scan, the AI you linked plans the rest of this setup from what it found.</p>
+        <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-assist-run" type="button">Ask my assistant what to do next</button><button class="ghost" id="walkthrough-assist-task" type="button" hidden>Put the suggested task in the box</button></div>
+        <p id="walkthrough-assist-status" class="muted" role="status">Once your AI is connected, it can suggest what to do at each of the steps that are left, from what it found.</p>
         <ul id="walkthrough-assist-list" class="walkthrough-facts walkthrough-assist-list"></ul>
       </div>
       <div class="walkthrough-destinations"><button class="primary" id="walkthrough-action" type="button"></button><button class="ghost" id="walkthrough-secondary" type="button" hidden></button></div><p id="walkthrough-note" class="muted"></p></div>
@@ -2252,7 +2252,7 @@
 </div>
 <aside class="walkthrough-coach" id="walkthrough-coach" role="region" aria-label="Walkthrough coach" hidden>
   <header class="walkthrough-coach-head"><span class="eyebrow" id="walkthrough-coach-progress" role="status">Step 1 of 7</span><div class="walkthrough-coach-tools"><button class="ghost mini" id="walkthrough-coach-back" type="button">Back</button><button class="ghost mini" id="walkthrough-coach-guide" type="button">Full guide</button><button class="ghost mini" id="walkthrough-coach-end" type="button" title="End the guided walk (Esc)">End tour</button></div></header>
-  <strong id="walkthrough-coach-title">Your workspace</strong>
+  <strong id="walkthrough-coach-title">Your project</strong>
   <p id="walkthrough-coach-copy" aria-live="polite"></p>
   <p class="walkthrough-coach-hint" id="walkthrough-coach-hint"></p>
   <div class="walkthrough-coach-actions"><button id="walkthrough-coach-next" class="primary mini" type="button">Done — next stop</button></div>

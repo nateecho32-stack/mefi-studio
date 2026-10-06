@@ -563,7 +563,7 @@ class VerifiedWindow extends NativeWindow {
     // Progress also reports completed lessons now; retain the exact step and
     // total assertions, independently of the seeded project's done count.
     assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent.split(' ').slice(0,4).join(' ');"), "Step 1 of 7", "the requested first tour starts at the scan lesson");
-    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /scan this computer/i, "the guide opens on the scan stop");
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Pick the AI that builds for you/, "the guide opens on the scan stop");
     // The scan stop starts its read-only scan by itself. This launch runs with
     // --smoke, so the host refuses it before OpenCode is asked anything; the
     // stop must say so and offer nothing to save.
@@ -582,7 +582,7 @@ class VerifiedWindow extends NativeWindow {
     await this.capture("00-first-project-guide");
     await this.click("#walkthrough-next");
     assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent.split(' ').slice(0,4).join(' ');"), "Step 2 of 7");
-    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Welcome to Mefi/, "the workspace stop follows the scan");
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Open your project/, "the workspace stop follows the scan");
     await this.until("!document.getElementById('walkthrough-build-mode').hidden && !document.getElementById('walkthrough-auto-build').disabled", "first-use build preference loads on the workspace stop");
     assert.equal(await this.run("return document.getElementById('walkthrough-auto-build').checked;"), true, "auto build remains enabled by default for existing preferences");
     await this.click('label[for="walkthrough-auto-build"]');
@@ -591,12 +591,12 @@ class VerifiedWindow extends NativeWindow {
     assert.equal(JSON.parse(fs.readFileSync(path.join(config.profile, "settings.json"), "utf8")).ui.autopilot.autoBuild, false, "verify-first is stored in the isolated Electron profile");
     await this.capture("00c-first-use-verify-first");
     await this.click("#walkthrough-next");
-    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Map the folder/, "the map stop follows the workspace stop");
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /map your project/, "the map stop follows the workspace stop");
     assert.equal(await this.run("return document.getElementById('walkthrough-map').hidden;"), false, "the map stop shows its panel");
     assert.equal(await this.run("return document.getElementById('walkthrough-build-mode').hidden;"), true, "the build preference is not offered on the map stop");
     await this.click("#walkthrough-next");
     assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent.split(' ').slice(0,4).join(' ');"), "Step 4 of 7");
-    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /Connect/);
+    assert.match(await this.run("return document.getElementById('walkthrough-title').textContent;"), /AI accounts/);
     this.webContents.sendInputEvent({type:"keyDown",keyCode:"Escape"});
     this.webContents.sendInputEvent({type:"keyUp",keyCode:"Escape"});
     await this.until("document.getElementById('walkthrough-overlay').hidden", "Escape closes the guide");
@@ -661,7 +661,9 @@ class VerifiedWindow extends NativeWindow {
     await this.openFromNav("onboarding");
     assert.equal(await this.run("return document.getElementById('walkthrough-progress').textContent.split(' ').slice(0,4).join(' ');"), "Step 4 of 7");
     await this.click("#walkthrough-next"); await this.click("#walkthrough-action");
-    assert.equal(await this.run("return document.getElementById('workspace-mode-work').getAttribute('aria-pressed');"), "true");
+    // Studio's Today holds Home's box with its own Talk it over and Build it: the walk lands in it and leaves its purpose alone.
+    assert.equal(await this.run("return document.activeElement?.id;"), "workspace-input", "the guide's walk lands in the box");
+    assert.equal(await this.run("return document.getElementById('workspace-mode-work').getAttribute('aria-pressed');"), "false", "the walk never switches Today's box to Create task");
     assert.equal((await this.run("return (await window.mefiStudio.tasksList()).tasks;")).length, 30, "guide action prepares but never submits a task");
     await this.click("#workspace-task-outline");
     assert.match(await this.run("return document.getElementById('workspace-input').value;"), /Goal:[\s\S]*Done when:[\s\S]*Keep unchanged:/);

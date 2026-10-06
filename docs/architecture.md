@@ -708,7 +708,7 @@ settings and per-model work-kind summaries for the shared controls.
   it. Only **Continue to the guided tour** opens the walkthrough; any other
   close leaves it waiting as the Start here card (`MefiOnboarding.invite()`)
   with one toast to start it. When the helper has connected an AI, the
-  walkthrough starts at Your workspace instead of its scan stop.
+  walkthrough starts at Your project instead of its scan stop.
 - **The first run in the 0.5 layout** (`html[data-layout="v2"]`) is the 0.5
   prototype's three-step welcome instead of the sheet: **Connect the AI you
   already use** (the coding tools `setup:cli-status` finds, each with its own
