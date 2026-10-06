@@ -217,5 +217,5 @@ test("the kill switch keeps the door closed, and the bridge passes only the swit
   assert.deepEqual(invoked, [["studio-api:set", [{ on: true }]], ["studio-api:set", [{}]], ["studio-api:skill", [{ save: false }]]]);
   assert.match(main, /const APP_WIDE_PREFIXES = \[[^\]]*"studio-api:"/, "it belongs to this PC, not to the open project");
   for (const channel of ["status", "set", "rekey", "prompt", "skill"]) assert.match(main, new RegExp(`ipcMain\\.handle\\("studio-api:${channel}"`), channel);
-  assert.match(main, /const HELD_WHILE_HIDDEN = new Set\(\[[^\]]*"studio-api:event", "studio-api:notice"\]\);/, "a note sent while Studio is hidden waits for the window instead of toasting unseen");
+  assert.match(main, /const HELD_WHILE_HIDDEN = new Set\(\[[^\]]*"studio-api:event", "studio-api:notice"[^\]]*\]\);/, "a note sent while Studio is hidden waits for the window instead of toasting unseen");
 });

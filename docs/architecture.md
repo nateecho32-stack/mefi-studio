@@ -1827,6 +1827,43 @@ failed process stays an error and cannot produce briefing requests.
   itself is unchanged. At 1500 px and under the inspector is a drawer under the
   tab bar, and under 760 px the page stacks.
 
+### Resources: making room for the agents
+
+- **Team › Resources** ([resource-manager.md](resource-manager.md)) lists this
+  PC's other apps, heaviest first, each as one app however many processes it
+  runs (a browser's tabs and a launcher's web views fold into it), with its
+  share of the PC's CPU, the memory it holds, its window title and what Studio
+  holds on it. Four meters sit on top: the PC's CPU, its memory, Studio and
+  its agents, and whether the agents are building. The status bar's CPU · Mem
+  reading opens the page.
+- Each app has **Slow down** (idle priority, efficiency mode and a low memory
+  priority), **Pause** (every thread suspended, then its memory handed back),
+  **Free memory** (its working set handed back without stopping it), **Close**
+  (its own close message), **End** (after a second press) and **Put back**.
+  **Restore all** undoes every hold.
+- **Manual** changes nothing by itself; **Make room now** does one round of
+  what auto mode would do, as your own holds. **Auto** acts only while agents
+  build or work waits for the machine: it slows heavy apps you are not using,
+  gives memory back when free memory drops under the amount you chose, offers
+  (never takes) the pauses that would close the gap, and pauses or closes only
+  the apps whose own menu says so. Calls, music, recording, remote access,
+  terminals and security software start as Leave it alone. It never touches
+  the app in front of you or one used in the last two minutes, lets a paused app
+  you switch to run at once, and puts back what it did once the agents finish
+  (after one minute by default). Its actions arrive as a toast with Open and
+  Put back.
+- Never touched: Studio, its agents and their tools, what Studio was started
+  from, Windows (its folder, services, critical processes), other people's
+  sessions, console windows and security software.
+- The host (`scripts/resource-host.cjs`, rules in `scripts/resource-rules.cjs`)
+  runs a small C# helper (`scripts/resource-helper.cs`, built once with
+  Windows' own `csc.exe` into the local folder's `resources/`) only while the
+  page is open, auto mode acts or an app is held. The helper is detached and
+  puts everything back when its stdin closes, so a quit, a crash or an ended
+  Studio never leaves an app paused; a journal beside it lets the next helper
+  or the next launch put back what an ended helper held. Windows only;
+  `MEFI_STUDIO_NO_RESOURCE_MANAGER=1` turns it off.
+
 ### The Agent Brain
 
 - Every project keeps a **work event** stream (`work-events.jsonl`): runs going

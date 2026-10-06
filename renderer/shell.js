@@ -1157,8 +1157,9 @@
     item("player", "shell-player", () => { const music = window.MefiMusic; if (typeof music?.toggleAudio === "function") music.toggleAudio(); else nav()?.go?.("audio"); }, "Music and video");
     items.player.setAttribute("aria-haspopup", "true");
     items.player.append(icon("audio"), text("span", "shell-player-title", ""), text("span", "shell-player-time", ""));
-    // The machine's load opens the machine status (the Explorer's diagnostics), where Home's Machine tile goes too.
-    item("machine", "shell-machine", () => { const n = nav(); if (n?.get?.("machine")) n.go?.("machine"); else n?.go?.("explorer", { panel: "diagnostics" }); }, "Machine load");
+    // The machine's load opens Team › Resources (renderer/resources.js), where its apps can be held back for the agents;
+    // without that page, the machine status (the Explorer's diagnostics), where Home's Machine tile goes too.
+    item("machine", "shell-machine", () => { const n = nav(); if (n?.get?.("resources")) n.go?.("resources"); else if (n?.get?.("machine")) n.go?.("machine"); else n?.go?.("explorer", { panel: "diagnostics" }); }, "Machine load");
     items.machine.append(text("span", "", ""));
     item("permission", "shell-permission", () => { const autonomy = window.MefiAutonomy; if (typeof autonomy?.openSettings === "function") autonomy.openSettings(); else nav()?.go?.("agents", { section: "setup" }); }, "Permission mode");
     items.permission.append(icon("shield"), text("span", "shell-status-word", ""));
@@ -1283,8 +1284,9 @@
       const words = [machine.cpu === null ? "" : `CPU ${machine.cpu}%`, machine.mem === null ? "" : `Mem ${machine.mem}%`].filter(Boolean).join(" · ");
       const spoken = [machine.cpu === null ? "" : `CPU ${machine.cpu} percent`, machine.mem === null ? "" : `memory ${machine.mem} percent in use`].filter(Boolean).join(", ");
       items.machine.children[0].textContent = words;
-      items.machine.setAttribute("aria-label", `Machine load: ${spoken}. Open the machine status`);
-      items.machine.setAttribute("title", `Machine load: ${spoken}.${machine.held ? ` New workers wait${machine.reason ? `: ${machine.reason}` : "."}` : ""} Open the machine status.`);
+      const where = nav()?.get?.("resources") ? "Open Resources" : "Open the machine status";
+      items.machine.setAttribute("aria-label", `Machine load: ${spoken}. ${where}`);
+      items.machine.setAttribute("title", `Machine load: ${spoken}.${machine.held ? ` New workers wait${machine.reason ? `: ${machine.reason}` : "."}` : ""} ${where}.`);
     }
     items.cost.hidden = live.cost === null;
     if (live.cost !== null) {
