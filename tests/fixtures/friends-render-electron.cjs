@@ -36,7 +36,7 @@ function finish(error) {
 process.on("uncaughtException", finish); process.on("unhandledRejection", finish);
 
 // The prototype's places, in its order, and the card each shows.
-const PLACES = [["lobby", "The Lobby", "friends-front"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pc-sync"], ["playground", "Playground", "friends-card"], ["hub", "Project hub", "project-hub"], ["events", "Events", "friends-events"]];
+const PLACES = [["lobby", "The Lobby", "friends-front"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pc-sync"], ["playground", "Playground", "friends-card"], ["hub", "Project hub", "project-hub"], ["events", "Events", "friends-events"], ["shop", "Shop", "friends-shop"]];
 
 async function bridgeNames() {
   const source = fs.readFileSync(path.join(studio, "preload.cjs"), "utf8");
@@ -80,7 +80,7 @@ app.whenReady().then(async () => {
     syncStatus: { ok: true, checkedAt: now, headline: "GitHub has 2 commits this PC has not pulled yet.", lines: ["GitHub has 2 commits this PC has not pulled yet."], pending: [{ kind: "github-branch" }], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 2 } },
     hubFriends: friendsView, hubSharingSet: friendsView,
     hubRooms: { ok: true, rooms: [{ id: "room_jam", name: "Friday jam", kind: "hangout", policy: "request", listed: true, status: "active", you: "owner", ownerId: "123456789012345678", memberCount: 2, maxMembers: 25 }] },
-    hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [], front: true, events: true } },
+    hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [], front: true, events: true, shop: true } },
     pcSetupStatus: { ok: true, ready: true, account: "fixture-owner", tools: [{ id: "git", name: "Git", installed: true, version: "2.47.1" }, { id: "gh", name: "GitHub CLI", installed: true, version: "2.63.0" }], project: { root: "C:/Notes app", github: "fixture-owner/notes-app", hook: true }, steps: [], notes: [] },
     vaultStatus: { ok: true, linked: false, pcs: [], shelves: [] },
   };
@@ -122,9 +122,29 @@ app.whenReady().then(async () => {
     { id: "500000000000000005", author: { id: "200000000000000002", name: "Jabilee", viaStudio: true }, text: "See you at 8.", createdAt: now - 10 * 60_000, editedAt: null, mentions: [], attachments: [] },
   ];
   const roomReplies = { requests: { ok: true, requests: [] }, invites: { ok: true, invites: [] }, messages: { ok: true, hasMore: true, messages: chat }, front, roomCode: { ok: true, code: "KQ7M-2PXD", link: "https://mefi-relay.mefi-studio.workers.dev/join/KQ7M2PXD" } };
+  // Friends › Shop as main's hub:shop hands it over (the relay's Studio catalog, members' packs): scales for Ember (Ember
+  // itself is free with every Studio and has a card of its own), effects and packs.
+  const shopItem = (id, kind, name, price, blurb, extra = {}) => ({ id, kind, name, blurb, price, requires: null, maker: null, data: null, sales: 0, owned: false, status: "listed", createdAt: now, updatedAt: now, ...extra });
+  const shopReplies = {
+    studio: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [
+      shopItem("studio:skin-frost", "skin", "Frost scales", 40, "Ember in icy blue."),
+      shopItem("studio:skin-void", "skin", "Void scales", 60, "Ember in black with a violet glow."),
+      shopItem("studio:fx-dissolve", "effect", "Dissolve", 60, "Menus crumble into pixels when they close."),
+      shopItem("studio:fx-embers", "effect", "Burn away", 90, "Menus burn away from the edges with glowing embers."),
+      shopItem("studio:pack-synthwave", "pack", "Synthwave", 50, "Hot pink and violet on midnight blue.", { data: { v: 1, palette: { accent: "#ff4fa3", accent2: "#8b5cff", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } }),
+      shopItem("studio:pack-sakura", "pack", "Sakura (light)", 50, "Soft pink on warm white, a light look.", { data: { v: 1, palette: { accent: "#d6457a", accent2: "#8a6bd1", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24" }, nodeStyle: "minimal", material: "focus", font: "studio" } }),
+    ] },
+    new: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [
+      shopItem("pack_nightmarket0001", "pack", "Night market with a rather long name", 30, "Neon on wet streets.", { maker: { id: "200000000000000001", name: "Maxwell" }, sales: 12, data: { v: 1, palette: { accent: "#ffb347", accent2: "#7f5af0", background: "#101014", surface: "#1b1b22", text: "#f4f1ea" }, nodeStyle: "glass", material: "studio", font: "serif" } }),
+      shopItem("pack_paper000000001", "pack", "Paper", 0, "", { maker: { id: "200000000000000004", name: "Tess" }, sales: 3, data: { v: 1, palette: { accent: "#9b3d12", background: "#fbf6ee", surface: "#ffffff", text: "#2b2118" }, nodeStyle: "minimal", material: "focus", font: "serif" } }),
+    ] },
+    owned: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [] },
+    mine: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [] },
+    shopOwned: { ok: true, items: [] },
+  };
   const names = await bridgeNames();
   const preload = path.join(root, "friends-preload.cjs");
-  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const roomReplies=${JSON.stringify(roomReplies)};const eventReplies=${JSON.stringify(eventReplies)};const names=${JSON.stringify(names)};const calls=[];
+  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const roomReplies=${JSON.stringify(roomReplies)};const eventReplies=${JSON.stringify(eventReplies)};const shopReplies=${JSON.stringify(shopReplies)};const names=${JSON.stringify(names)};const calls=[];
     const bridge={};
     for(const name of names){
       if(/^on[A-Z]/.test(name))bridge[name]=()=>()=>{};
@@ -132,6 +152,7 @@ app.whenReady().then(async () => {
     }
     bridge.hubRoom=async(method)=>{calls.push('hubRoom:'+method);return roomReplies[method]??{ok:true};};
     bridge.hubEvents=async(method)=>{calls.push('hubEvents:'+method);return eventReplies[method]??{ok:true};};
+    bridge.hubShop=async(method,view)=>{calls.push('hubShop:'+method);return (method==='shop'?shopReplies[view]:shopReplies[method])??{ok:true,items:[]};};
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
     contextBridge.exposeInMainWorld('friendsFixture',{calls:()=>calls.slice(),signedIn:(on)=>{responses.hubStatus.status.linked=on===true;}});
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));localStorage.setItem('mefiStudio.whatsNew.seen','vibe-build-1');localStorage.setItem('mefiStudio.setupHelper.seen','setup-helper-1');
@@ -210,6 +231,11 @@ app.whenReady().then(async () => {
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
   await until("window.MefiNav && window.MefiCompanionHub && window.MefiShell && window.MefiShell.active() && !window.MefiBoot?.isActive?.()", "studio ready (v2)");
   await run("window.MefiVibe?.setMode?.('build', { go: false }); window.MefiNav.setRailPinned?.(false, { save: false });");
+  // The Shop shows an item's controls only when the module that shows it is in the build (pets.js, effects.js, music.js's
+  // packs): stand in for any that is not, so the Shop is measured with the controls it will have.
+  await run(`const music = window.MefiMusic; music.applyPack ??= () => true; music.previewPack ??= () => {}; music.endPreview ??= () => {}; music.packInfo ??= () => null;
+    window.MefiPets ??= { kinds: () => [{ id: 'dragon', item: 'studio:pet-dragon', name: 'Ember' }], skins: () => [{ id: 'theme', item: null, name: "Your theme's colours" }], state: () => ({ on: false, kind: 'dragon', skin: 'theme', name: 'Ember' }), set() {}, preview() {}, endPreview() {}, paintPreview() {} };
+    window.MefiEffects ??= { list: () => [], current: () => 'none', use() {}, preview() {}, endPreview() {}, demo() {} };`);
   await resize(1920, 1080);
   // The rail's Friends opens the page on its first place.
   // (A press, not a pointer: the rail widens under a hovering pointer, so a release can land on the row beneath.)
@@ -219,7 +245,7 @@ app.whenReady().then(async () => {
   const first = await run(measure);
   assert.equal(first.hub, false, "the companion's bubbles stay closed");
   assert.equal(first.listTitle, "Friends", "the list column is Friends'");
-  assert.deepEqual(first.list, ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub", "Events"], "the list column holds The Lobby, the prototype's three places, the Project hub and Events, The Lobby current");
+  assert.deepEqual(first.list, ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub", "Events", "Shop"], "the list column holds The Lobby, the prototype's three places, the Project hub, Events and the Shop, The Lobby current");
   for (const [id, title, card] of PLACES) {
     await click(`#shell-pages-list [data-page="friends:${id}"]`);
     await until(placeIs(id), `${title} is the place`);
@@ -252,7 +278,7 @@ app.whenReady().then(async () => {
   assert.equal(await run("return document.getElementById('agent-hub')?.hidden !== false;"), true, "the bubble did not stay open over the page");
   // A tab per place.
   report.tabs = await run("return (window.MefiTabs?.list?.() ?? []).filter((tab) => tab.route.id === 'friends-page').map((tab) => tab.title).sort();");
-  assert.ok(report.tabs.length >= 1 && report.tabs.every((title) => ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events"].includes(title)), `Friends tabs are named by their place: ${JSON.stringify(report.tabs)}`);
+  assert.ok(report.tabs.length >= 1 && report.tabs.every((title) => ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events", "Shop"].includes(title)), `Friends tabs are named by their place: ${JSON.stringify(report.tabs)}`);
   report.steps.push("ways in land");
   // The Lobby, read once: the front page's parts, its invite code, and a person or room that opens Rooms there.
   await go("friends-page", { place: "lobby" });
@@ -317,6 +343,29 @@ app.whenReady().then(async () => {
       if (id === "pcs" || wrong.length) await capture(`friends-${id}-${width}x${height}@${zoom}.png`);
     }
   }
+  // The Shop's other views at the two small sizes: Make a style (the editor beside its preview), and a member's pack's
+  // Buy question with its tip picks.
+  report.shop = [];
+  for (const [width, height, zoom] of [[1100, 720, 1], [600, 560, 1.5]]) {
+    await resize(width, height, zoom);
+    await go("friends-page", { place: "shop" });
+    await until(placeIs("shop") + " && document.getElementById('friends-shop')?.dataset.state === 'ready'", `the Shop at ${width}x${height}@${zoom}`);
+    for (const [view, ready] of [["make", "document.getElementById('friends-shop-form')"], ["packs", "document.getElementById('friends-shop-buy-pack_nightmarket0001')"]]) {
+      await run(`document.getElementById('friends-shop-view-${view}').click();`);
+      await until(ready, `the Shop's ${view} view at ${width}x${height}@${zoom}`);
+      if (view === "packs") {
+        await run("document.getElementById('friends-shop-buy-pack_nightmarket0001').click();");
+        await until("document.querySelector('#friends-shop .friends-shop-tips')", "the tip picks");
+      }
+      await sleep(400);
+      const m = await run(measure);
+      report.shop.push({ view, size: `${width}x${height}@${zoom}`, small: m.small, wide: m.wide, sideways: m.sideways });
+      found.push(...problems(m, `the Shop's ${view} view at ${width}x${height}@${zoom}`));
+      await capture(`friends-shop-${view}-${width}x${height}@${zoom}.png`);
+    }
+    await run("document.getElementById('friends-shop-view-studio').click();");
+  }
+  report.steps.push("the Shop's editor and tips fit");
   // A light palette (the app's own custom colours): every place, and an open room, still fit with no text under 12 px.
   await resize(1440, 900);
   assert.equal(await run("return window.MefiMusic.applyCustomColors({ accent: '#8A5A00', background: '#F4F0E6', surface: '#FFFFFF', text: '#1D1B17' });"), true);

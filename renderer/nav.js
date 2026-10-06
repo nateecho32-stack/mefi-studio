@@ -133,7 +133,7 @@
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends", "friends-shop": "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -208,9 +208,11 @@
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
       ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
       ["friends-events", "Events", "g-bolt", "This week's Build Jam, co-work hours and building together", "events"],
-    ].map(([id, label, glyph, desc, target]) => ({
+      // renderer/friends-shop.js; Settings › Appearance's Theme section has a way in too.
+      ["friends-shop", "Shop", "g-shop", "Scales for Ember, menu effects and style packs for the credits you earn", "shop", "shop store buy credits pet dragon effects dissolve style pack theme make sell scales tip"],
+    ].map(([id, label, glyph, desc, target, terms]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
-      searchTerms: `friends ${label} ${desc}`,
+      searchTerms: `friends ${label} ${desc}${terms ? ` ${terms}` : ""}`,
       showIn: showIn({ palette: true }),
       run: () => { closeAll(); window.MefiCompanionHub?.open?.({ section: "friends", target }); },
     })),
@@ -224,7 +226,7 @@
       // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): The Lobby, Rooms, Your PCs, Playground or the Project hub, one at a time.
       // go("friends") and its five ways in land here (friendsPages in go()); Search lists them.
       id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
-      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends lobby rooms chat invite code online pcs playground project hub credits ranks events moderation",
+      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends lobby rooms chat invite code online pcs playground project hub credits ranks events shop moderation",
       showIn: showIn({}), element: "friends-overlay", focus: "#friends-place-title",
       open: (params) => window.MefiCompanionHub?.openPlace?.(params), close: () => window.MefiCompanionHub?.closePlace?.(), isOpen: () => overlayOpen("friends-overlay"),
     },
@@ -1182,7 +1184,7 @@
     else if (id === "map") id = "command";
     // Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The Lobby and each
     // way in at its own place. (Spelled out here, not shared: suites run go() on its own.)
-    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub", "friends-events": "events" };
+    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub", "friends-events": "events", "friends-shop": "shop" };
     if (Object.hasOwn(friendsPages, id)) {
       params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
@@ -1563,7 +1565,7 @@
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events"]) { const dest = get(id); if (dest) children.append(navButton(dest, "app-rail-item", { key: false })); }
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events", "friends-shop"]) { const dest = get(id); if (dest) children.append(navButton(dest, "app-rail-item", { key: false })); }
         group.append(children);
       }
       sections.append(group);

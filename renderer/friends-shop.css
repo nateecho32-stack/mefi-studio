@@ -1,0 +1,180 @@
+/* Friends › Shop (renderer/friends-shop.js): pets, menu effects and style packs for
+   credits, and the style packs members make. Colours are the theme's tokens; a pack's
+   own colours paint only its little app window (--pack-*). No text under 12px. */
+.friends-shop { display: grid; gap: 14px; min-width: 0; color: var(--ivory); }
+.friends-shop-title { margin: 0; font-size: 14px; font-weight: 650; color: var(--ivory); }
+/* On the Friends page the page title says "Shop": the card's own small title steps aside, as the other places' do. */
+#friends-overlay .friends-place-body .friends-shop-title { display: none; }
+.friends-shop-status { margin: 0; color: var(--muted); font-size: 13px; }
+.friends-shop-status:empty { display: none; }
+.friends-shop-body { display: grid; gap: 18px; min-width: 0; }
+.friends-shop-lead { margin: 0; max-width: 72ch; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.friends-shop-empty { margin: 0; color: var(--muted); font-size: 13px; }
+
+/* ---- the head: your balance and how to earn more ---- */
+.friends-shop-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.friends-shop-balance { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--line)); border-radius: var(--r-pill); background: color-mix(in srgb, var(--gold) 12%, transparent); color: var(--ivory); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.friends-shop-gem { width: 14px; height: 14px; color: var(--gold); }
+.friends-shop-link { min-height: 30px; padding: 0 2px; border: 0; background: none; color: var(--gold); font: inherit; font-size: 13px; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 0.2em; white-space: normal; cursor: pointer; }
+.friends-shop-link:hover { background: none; color: var(--gold-bright); }
+
+/* ---- one segmented control for the views, like the Project hub's ---- */
+.friends-shop-views { display: inline-flex; flex-wrap: wrap; gap: 2px; width: fit-content; max-width: 100%; padding: 3px; border: 1px solid var(--line-strong); border-radius: 10px; }
+.friends-shop-tab { min-height: 32px; padding: 4px 14px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: 13px; white-space: normal; }
+.friends-shop-tab:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); color: var(--ivory); }
+.friends-shop-tab[aria-selected="true"] { background: color-mix(in srgb, var(--gold) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent); color: var(--ivory); font-weight: 600; }
+.friends-shop-sort { display: flex; flex-wrap: wrap; gap: 6px; }
+.friends-shop-chip { min-height: 30px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: transparent; color: var(--muted); font-size: 12.5px; }
+.friends-shop-chip[aria-pressed="true"] { border-color: color-mix(in srgb, var(--gold) 60%, transparent); background: color-mix(in srgb, var(--gold) 14%, transparent); color: var(--ivory); font-weight: 600; }
+
+/* ---- the try banner: at the top of the page while an item is tried ---- */
+.friends-shop-try { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--gold) 50%, var(--line)); border-radius: var(--r-lg); background: color-mix(in srgb, var(--gold) 12%, var(--panel-solid)); box-shadow: var(--shadow-1); font-size: 13px; transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-base) var(--ease-out); }
+.friends-shop-try-words { flex: 1 1 200px; min-width: 0; color: var(--ivory); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.friends-shop-try > .friends-shop-confirm { flex: 1 1 100%; }
+
+/* ---- the items ---- */
+.friends-shop-group { display: grid; gap: 10px; min-width: 0; }
+.friends-shop-group-title { margin: 0; font: 650 13px/1.3 var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ivory); }
+.friends-shop-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 228px), 1fr)); gap: 12px; min-width: 0; }
+.friends-shop-item { display: grid; grid-template-rows: auto 1fr auto; gap: 10px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: var(--r-xl); background: color-mix(in srgb, var(--panel-solid) 72%, transparent); transition: border-color var(--motion-fast) var(--ease-out); }
+.friends-shop-item:hover, .friends-shop-item:focus-within { border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); }
+.friends-shop-preview { display: grid; place-items: center; min-width: 0; min-height: 112px; overflow: hidden; border-radius: var(--r-lg); background: color-mix(in srgb, var(--ivory) 4%, transparent); }
+.friends-shop-pet { display: block; width: 100%; height: auto; aspect-ratio: 2 / 1; }
+.friends-shop-placeholder { display: grid; place-items: center; width: 100%; aspect-ratio: 2 / 1; color: var(--muted); }
+.friends-shop-placeholder-gem { width: 40px; height: 40px; opacity: 0.6; }
+.friends-shop-words { display: grid; gap: 4px; align-content: start; min-width: 0; }
+.friends-shop-name { margin: 0; font: 650 14px/1.3 var(--font-ui); color: var(--ivory); overflow-wrap: anywhere; }
+.friends-shop-by { margin: 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.friends-shop-blurb { margin: 0; color: var(--ivory); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
+.friends-shop-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 2px 0 0; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.friends-shop-price, .friends-shop-owned { display: inline-flex; align-items: center; gap: 5px; color: var(--ivory); font-weight: 600; font-variant-numeric: tabular-nums; }
+.friends-shop-needs, .friends-shop-note { color: var(--ivory); }
+.friends-shop-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.friends-shop-button { min-height: 30px; padding: 0 12px; font-size: 12.5px; white-space: normal; }
+.friends-shop-primary { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 14px; border: 0; border-radius: var(--r-lg); background: var(--gold); color: var(--bg); font-weight: 600; font-size: 12.5px; white-space: normal; cursor: pointer; }
+.friends-shop-primary:hover { background: var(--gold); filter: brightness(1.08); }
+.friends-shop-primary .friends-shop-gem { color: currentColor; }
+.friends-shop-primary[aria-disabled="true"], .friends-shop-button[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; filter: none; }
+.friends-shop-primary:disabled, .friends-shop-button:disabled { opacity: 0.55; cursor: default; }
+.friends-shop-inuse { display: inline-flex; align-items: center; min-height: 30px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--good) 55%, transparent); border-radius: var(--r-pill); color: var(--ivory); font-size: 12.5px; font-weight: 600; }
+.friends-shop-inuse::before { content: "✓"; margin-right: 6px; color: var(--good); }
+.friends-shop-soon { color: var(--muted); font-size: 12.5px; }
+/* Ember comes free with every Studio: its card carries a switch instead of a price. aria-checked is the switch's state;
+   the thumb's side and the word beside it show it too. */
+.friends-shop-ember { border-color: color-mix(in srgb, var(--gold) 35%, var(--line)); }
+.friends-shop-switch { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 12px 0 6px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: transparent; color: var(--ivory); font-size: 12.5px; white-space: normal; }
+.friends-shop-switch-track { position: relative; flex: none; width: 34px; height: 20px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ivory) 22%, transparent); transition: background var(--motion-fast) var(--ease-out); }
+.friends-shop-switch-thumb { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--ivory); transition: translate var(--motion-base) var(--ease-out); }
+.friends-shop-switch[aria-checked="true"] .friends-shop-switch-track { background: var(--gold); }
+.friends-shop-switch[aria-checked="true"] .friends-shop-switch-thumb { translate: 14px 0; background: var(--bg); }
+.friends-shop-switch-label { font-weight: 600; }
+.friends-shop-switch-state { color: var(--muted); }
+
+/* ---- asking before spending, and reporting ---- */
+.friends-shop-confirm, .friends-shop-report { display: grid; gap: 8px; min-width: 0; padding: 10px 12px; border: 1px solid var(--line-strong); border-left: 3px solid var(--gold); border-radius: var(--r-lg); background: color-mix(in srgb, var(--panel-solid) 88%, transparent); font-size: 13px; transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-base) var(--ease-out); }
+.friends-shop-confirm > :is(button), .friends-shop-report .friends-shop-actions { justify-self: start; }
+.friends-shop-confirm { grid-template-columns: minmax(0, 1fr); }
+.friends-shop-ask { margin: 0; color: var(--ivory); font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.friends-shop-reasons { display: grid; gap: 4px; }
+.friends-shop-reason { display: flex; align-items: center; gap: 8px; min-height: 28px; color: var(--ivory); font-size: 13px; cursor: pointer; }
+.friends-shop-report-text { width: 100%; min-width: 0; min-height: 32px; font-size: 13px; }
+/* A tip for a member's pack: quick picks, another amount, and where it goes. */
+.friends-shop-tips { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.friends-shop-tip-title { margin: 0; color: var(--ivory); font-size: 13px; font-weight: 600; }
+.friends-shop-tip-picks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.friends-shop-tip-other { width: 9ch; min-width: 0; min-height: 30px; font-size: 13px; }
+.friends-shop-tip-fine { margin: 0; color: var(--muted); font-size: 12.5px; }
+.friends-shop-chip:disabled { opacity: 0.45; cursor: not-allowed; }
+@starting-style {
+  .friends-shop-try:not([hidden]), .friends-shop-confirm, .friends-shop-report { opacity: 0; translate: 0 4px; }
+}
+
+/* ---- an effect's little menu, and a pack's little app window ---- */
+.friends-shop-stage { display: grid; place-items: center; width: 100%; min-height: 112px; padding: 10px; }
+.friends-shop-menu { display: grid; gap: 7px; width: min(70%, 170px); padding: 10px; border: 1px solid var(--line-strong); border-radius: var(--r-md); background: var(--panel-solid); box-shadow: var(--shadow-1); }
+.friends-shop-menu-head { display: block; width: 45%; height: 7px; border-radius: 3px; background: var(--gold); }
+.friends-shop-menu-row { display: block; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--ivory) 45%, transparent); }
+.friends-shop-menu-row.is-short { width: 65%; }
+.friends-shop-mock { --pack-bg: var(--bg); --pack-surface: var(--panel-solid); --pack-text: var(--ivory); --pack-accent: var(--gold); --pack-accent2: var(--info);
+  display: grid; grid-template-columns: 28% minmax(0, 1fr); width: 100%; height: 112px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--pack-text) 18%, transparent); border-radius: var(--r-md); background: var(--pack-bg); color: var(--pack-text); font: 600 12px/1.25 var(--font-ui); text-align: left; }
+.friends-shop-mock.is-big { height: auto; min-height: 220px; aspect-ratio: 16 / 10; font-size: 14px; }
+.friends-shop-mock-side { display: grid; align-content: start; gap: 8px; padding: 12px 9px; border-right: 1px solid color-mix(in srgb, var(--pack-text) 12%, transparent); background: var(--pack-surface); }
+.friends-shop-mock-main { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; gap: 6px; min-width: 0; padding: 9px 11px; }
+.friends-shop-mock-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.friends-shop-mock.is-big .friends-shop-mock-title { font-size: 16px; }
+.friends-shop-mock-line { display: block; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--pack-text) 55%, transparent); }
+.friends-shop-mock-line.is-short { width: 60%; }
+.friends-shop-mock-words { display: grid; gap: 5px; }
+.friends-shop-mock-tree { display: flex; align-items: center; justify-content: center; min-height: 26px; }
+.friends-shop-mock-orb { --orb: var(--pack-accent); flex: none; width: 18px; height: 18px; border-radius: 50%; background: var(--orb); box-shadow: 0 0 12px color-mix(in srgb, var(--orb) 60%, transparent); }
+.friends-shop-mock-orb.is-second { --orb: var(--pack-accent2); }
+.friends-shop-mock.is-big .friends-shop-mock-orb { width: 30px; height: 30px; }
+.friends-shop-mock-wire { flex: 0 1 38%; height: 2px; background: linear-gradient(90deg, var(--pack-accent), var(--pack-accent2)); opacity: 0.75; }
+.friends-shop-mock-button { justify-self: start; padding: 2px 10px; border-radius: 6px; background: var(--pack-accent); color: var(--pack-bg); }
+.friends-shop-mock.is-big .friends-shop-mock-button { padding: 5px 14px; font-size: 13px; }
+/* The node style shapes the orbs. */
+.friends-shop-mock[data-node-style="glass"] .friends-shop-mock-orb { border: 1.5px solid var(--orb); background: color-mix(in srgb, var(--orb) 30%, transparent); box-shadow: none; }
+.friends-shop-mock[data-node-style="minimal"] .friends-shop-mock-orb { width: 11px; height: 11px; box-shadow: none; }
+.friends-shop-mock[data-node-style="halo"] .friends-shop-mock-orb { border: 2px solid var(--orb); background: transparent; box-shadow: 0 0 0 4px color-mix(in srgb, var(--orb) 22%, transparent), 0 0 14px color-mix(in srgb, var(--orb) 50%, transparent); }
+.friends-shop-mock[data-node-style="crystal"] .friends-shop-mock-orb { border-radius: 3px; rotate: 45deg; scale: 0.85; }
+.friends-shop-mock[data-node-style="singularity"] .friends-shop-mock-orb { border: 2px solid var(--orb); background: var(--pack-bg); box-shadow: 0 0 14px var(--orb); }
+.friends-shop-mock[data-node-style="prism"] .friends-shop-mock-orb { border-radius: 0; clip-path: polygon(50% 0, 100% 100%, 0 100%); box-shadow: none; }
+.friends-shop-mock[data-node-style="sigil"] .friends-shop-mock-orb { border: 2px solid var(--orb); border-radius: 2px; background: transparent; rotate: 45deg; scale: 0.85; box-shadow: none; }
+/* The material: Focus is solid and crisp, Studio soft, Atmosphere glows with the accent. */
+.friends-shop-mock[data-material="focus"] .friends-shop-mock-orb { box-shadow: none; }
+.friends-shop-mock[data-material="studio"] .friends-shop-mock-side { background: color-mix(in srgb, var(--pack-surface) 86%, var(--pack-bg)); }
+.friends-shop-mock[data-material="atmosphere"] .friends-shop-mock-side { background: color-mix(in srgb, var(--pack-surface) 70%, transparent); }
+.friends-shop-mock[data-material="atmosphere"] .friends-shop-mock-main { background: radial-gradient(circle at 70% 25%, color-mix(in srgb, var(--pack-accent) 24%, transparent), transparent 62%); }
+/* The font. */
+.friends-shop-mock[data-font="display"] { font-family: var(--font-display); letter-spacing: 0.01em; }
+.friends-shop-mock[data-font="serif"] { font-family: "Iowan Old Style", "Charter", "Georgia", serif; }
+.friends-shop-mock[data-font="mono"] { font-family: var(--font-mono); }
+
+/* ---- Make a style ---- */
+.friends-shop-make { display: grid; gap: 12px; min-width: 0; }
+.friends-shop-make-layout { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; align-items: start; min-width: 0; }
+.friends-shop-make-side { display: grid; gap: 10px; min-width: 0; }
+.friends-shop-form { display: grid; gap: 10px; min-width: 0; }
+.friends-shop-field { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: 12.5px; }
+.friends-shop-label { color: var(--muted); }
+.friends-shop-field :is(input, select) { width: 100%; max-width: 100%; min-width: 0; min-height: 32px; font-size: 13px; }
+.friends-shop-looks { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 8px; }
+.friends-shop-colours, .friends-shop-price-row { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-lg); }
+.friends-shop-colours legend, .friends-shop-price-row legend { padding: 0 4px; color: var(--muted); font-size: 12.5px; }
+.friends-shop-colour { display: grid; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 10ch); align-items: center; gap: 8px; }
+.friends-shop-colour-name { min-width: 0; color: var(--ivory); font-size: 13px; overflow-wrap: anywhere; }
+.friends-shop-picker { width: 40px; height: 30px; min-height: 30px; padding: 2px; border: 1px solid var(--line-strong); border-radius: var(--r-sm); background: none; cursor: pointer; }
+.friends-shop-hex { width: 100%; min-width: 0; min-height: 30px; font-family: var(--font-mono); font-size: 13px; }
+.friends-shop-hex[aria-invalid="true"] { border-color: var(--bad); }
+.friends-shop-price-row { grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); align-items: center; }
+.friends-shop-price-row :is(select, .friends-shop-amount) { width: 100%; min-width: 0; min-height: 32px; font-size: 13px; }
+.friends-shop-hold { grid-column: 1 / -1; margin: 0; padding: 6px 10px; border-left: 2px solid var(--gold); color: var(--ivory); font-size: 12.5px; }
+.friends-shop-check { margin: 0; padding: 6px 10px; border-left: 2px solid var(--good); color: var(--ivory); font-size: 13px; overflow-wrap: anywhere; }
+.friends-shop-check[data-state="blocked"] { border-left-color: var(--warn); }
+.friends-shop-contrast { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.friends-shop-contrast li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 10px; padding: 5px 0; border-top: 1px solid var(--line); }
+/* The Friends page sets list items to 12px (companion-hub.css); these lines are read, so they keep 13px. */
+#friends-overlay .friends-place-body .friends-shop-contrast li, #friends-overlay .friends-place-body li.friends-shop-mine-row { font-size: 13px; }
+.friends-shop-ratio { color: var(--ivory); font-variant-numeric: tabular-nums; }
+.friends-shop-verdict { color: var(--muted); }
+.friends-shop-contrast .is-low .friends-shop-ratio { font-weight: 600; }
+.friends-shop-contrast .is-low { border-left: 2px solid var(--warn); padding-left: 8px; }
+.friends-shop-contrast .is-good .friends-shop-verdict { color: var(--ivory); }
+
+/* ---- your packs ---- */
+.friends-shop-mine { display: grid; gap: 8px; min-width: 0; }
+.friends-shop-mine-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.friends-shop-mine-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-lg); }
+.friends-shop-mine-row > .friends-shop-words { flex: 1 1 200px; }
+.friends-shop-mine-name { color: var(--ivory); font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
+.friends-shop-swatches { display: inline-flex; flex: none; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--r-sm); }
+.friends-shop-swatches i { display: block; width: 12px; height: 26px; background: var(--swatch); }
+
+/* ---- the way in from Settings › Appearance ---- */
+.friends-shop-settings { display: grid; gap: 8px; justify-items: start; }
+.friends-shop-settings-title { margin: 0; }
+.friends-shop-settings-line { margin: 0; max-width: 60ch; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .friends-shop-try, .friends-shop-confirm, .friends-shop-report, .friends-shop-item, .friends-shop-switch-track, .friends-shop-switch-thumb { transition: none; }
+}
