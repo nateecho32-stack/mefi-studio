@@ -1370,6 +1370,53 @@ failed process stays an error and cannot produce briefing requests.
   using the host's own rules written again (a test holds the two together), and a
   name cannot change once a skill exists because it is the folder. Delete asks
   twice. The page sends names and text, never a path.
+- **How skills are used, and answer styles** (`scripts/skill-use.cjs`,
+  `scripts/builtin-skills.cjs`, `scripts/agent-addons.cjs`, main.cjs "Skills
+  and connectors everywhere"; docs/agent-tools.md "How skills are used"). Every
+  skill an agent can reach (the project's, the home folder's, and the answer
+  styles built into Studio: Explain like I'm 5, Short answers, Teach me,
+  Brainstorm, Poke holes, Expert) is used one of three ways in each of three
+  places: **always on**, **when it fits** (the model is offered its name and
+  description and loads it with the `use_skill` tool) or **only when called**
+  (`/name` in a message, or in a task's own words for its builder), in the
+  **chat**, for Studio's **helper agents** and for the **builders**. With
+  nothing saved, a skill of up to 16,000 characters is "when it fits"
+  everywhere, a bigger one "only when called", the styles "only when called",
+  and ELI5 is the chat's style. Choices are kept by skill name in
+  `settings.skillUse` (only what differs from the default), with one "picks
+  skills by itself" switch per place. A name resolves the project's skill
+  first, then the home folder's, then Studio's own, so a project's copy of
+  `eli5` replaces the built-in one. The team's own per-agent picks
+  (`agentSkills`) still apply on top. The Skills page has a **How skills are
+  used** section (a row per skill with three choices, the three switches, and
+  **Copy to this project** for a built-in one); the chat's message boxes have a
+  chip for the style (renderer/chat-tools.js).
+- **The chat's chip** (`renderer/chat-tools.js`, `chat:tools`). Vibe's box and
+  Build's Today box show how Mefi answers (ELI5 by default) beside the
+  permission mode. Its menu picks the answer style, switches "Use my skills
+  when they fit" for the chat, lists the chat's own tools, and switches each
+  connector on or off for the chat. A reply carries `used` (the skills and
+  tools it used, main.cjs `chatUsed`), drawn as chips under it in Vibe's
+  conversation and Home's thread.
+- **Connectors** (`scripts/connectors.cjs`, `scripts/agent-mcp.cjs`, Team ›
+  Connectors in `renderer/connectors.js`; docs/agent-tools.md "Connectors").
+  MCP servers kept in `~/.mefi-studio/mcp.json`. **Add a connector** (a
+  command line or an https:// address, the settings it needs and their values)
+  puts it in the file as `pending`; **Review and approve** shows the exact
+  command and stamps its fingerprint, and a changed command waits again;
+  **Test** starts it, lists its tools and saves them, so nothing has to be
+  declared by hand. **Import from other apps** reads the servers Claude Code,
+  Claude Desktop, Cursor, VS Code, Windsurf, Codex, OpenCode, Gemini CLI and the
+  open project's own files configure, and brings the picked ones in waiting for
+  approval (their saved values only when asked). Each connector is used by the
+  places it is switched on for (chat, agents, builders), its tools can be
+  turned off one by one, and an agent gets at most sixteen connector tools.
+  Values (a token) are kept encrypted with safeStorage in
+  `connector-secrets.json` in Studio's data folder, never in `mcp.json` and
+  never sent to the page; Studio's GitHub sign-in stands in for a GitHub token.
+  Studio's own models keep a server open between calls (three quiet minutes),
+  and a builder's tool server keeps one for its run.
+  `MEFI_STUDIO_NO_CONNECTORS=1` makes the page read-only.
 
 ### Command center and the node tree
 
@@ -1665,6 +1712,22 @@ failed process stays an error and cannot produce briefing requests.
   rooms hub through `scripts/hub-client.cjs`, and **Share what I'm playing**
   feeds the bot's `/nowplaying` (see [community.md](community.md)). Audio input and reactions activate only when
   enabled.
+  **Playlists** (`renderer/playlists.js`, a section of the media menu under
+  every source) are lists of up to 50 videos or links. Studio ships five
+  starting points of real YouTube uploads (Code & math explorers with
+  Sebastian Lague, 2swap, 3Blue1Brown and Emergent Garden; Visualizers; Focus
+  streams; Shaders & graphics; Simulated worlds). **Make it yours** copies
+  one; **New playlist** (optionally from Up next), the **+** Save button on a
+  Browse card or on the playing video, a pasted link, or a video dragged in
+  from Up next fills your own, which stay on this PC
+  (`mefiStudio.playlists.v1`, at most 40). **Play** starts the first video and
+  puts the rest at the front of Up next; a row plays from itself on. **Share**
+  copies the list as plain text for Discord or a room: a `Mefi Studio
+  playlist:` heading, one numbered line per video ending in its `<link>`, and,
+  when every video is on YouTube, a `watch_videos` link that plays the lot on
+  YouTube for anyone without Studio. **Add a shared playlist**, or pasting
+  that text or link into Browse's box, brings it back. A list plays only
+  through `MefiMusic.playlists`, and holds only links `mediaLink` would play.
   With the Audio link on, its **Tree motion** reaction lets the music
   smoothly quicken the Overview's spin, sway it round a small figure of eight
   and swell it on the bass, inside room the frame keeps for it.

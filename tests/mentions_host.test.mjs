@@ -93,9 +93,15 @@ test("agents:skills lists the inventory with one line each, one of each name, th
   try {
     const listed = plain(await h.context.listPickerSkills());
     assert.equal(listed.ok, true);
-    const byName = Object.fromEntries(listed.skills.map((skill) => [skill.name, skill]));
+    const own = listed.skills.filter((skill) => skill.scope !== "builtin");
+    const byName = Object.fromEntries(own.map((skill) => [skill.name, skill]));
     assert.deepEqual(Object.keys(byName).sort(), ["bug-triage", "from-home", "long-front", "only-claude", "release-notes"]);
-    assert.equal(listed.skills.length, 5, "a name appears once");
+    assert.equal(own.length, 5, "a name appears once");
+    // Studio's own answer styles come last, after every skill the project and the home folder have.
+    const builtin = listed.skills.filter((skill) => skill.scope === "builtin");
+    assert.deepEqual(builtin.map((skill) => skill.name), mainRequire("./scripts/builtin-skills.cjs").NAMES);
+    assert.deepEqual(listed.skills.slice(-builtin.length), builtin);
+    assert.ok(builtin.every((skill) => skill.description.length > 20));
     assert.deepEqual(byName["bug-triage"], { name: "bug-triage", description: "Reproduce a bug and find the smallest fix", scope: "project" }, ".agents before .claude");
     assert.equal(byName["release-notes"].description, "Write the notes", "the project before the home folder");
     assert.equal(byName["release-notes"].scope, "project");

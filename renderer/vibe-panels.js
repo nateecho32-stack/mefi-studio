@@ -563,6 +563,19 @@
       }
     }
     fold(body, "roster", "Your agents", roster, { empty: api()?.agentsState ? "Reading your agents…" : "Your agents show here in the desktop app." });
+    // How Mefi answers, the skills the chat can pick and the connectors (renderer/chat-tools.js keeps them).
+    const tools = window.MefiChatTools?.state?.();
+    if (!tools) void window.MefiChatTools?.refresh?.();
+    const kit = [];
+    if (tools) {
+      const styles = (tools.style || []).map((name) => (tools.styles || []).find((style) => style.name === name)?.title || name);
+      const picks = tools.picks || [], connectors = tools.connectors || [];
+      const forChat = connectors.filter((row) => row.on).length, forBuilders = connectors.filter((row) => (row.places || []).includes("builders")).length;
+      kit.push(row({ key: "kit:style", title: "How Mefi answers", meta: styles.length ? styles.join(" + ") : "Plain answers", onOpen: () => { close({ quiet: true }); go("skills"); } }));
+      kit.push(row({ key: "kit:skills", title: "Skills it can pick", meta: picks.length ? `${picks.length}: ${picks.slice(0, 3).map((pick) => pick.name).join(", ")}${picks.length > 3 ? "…" : ""}` : tools.auto === false ? "Only when you call one" : "None yet", onOpen: () => { close({ quiet: true }); go("skills"); } }));
+      kit.push(row({ key: "kit:connectors", title: "Connectors", meta: connectors.length ? `${forChat} for the chat · ${forBuilders} for builders` : "None yet: add a browser or GitHub", onOpen: () => { close({ quiet: true }); go("agents", { place: "connectors" }); } }));
+    }
+    fold(body, "kit", "Skills and tools", kit, { empty: window.MefiChatTools ? "Reading the skills and tools…" : "" });
   }
   function seat(role, provider, model, problem = "") {
     const item = el("li", "vibe-seat");
@@ -1076,7 +1089,7 @@
     }
     if (state.kind === "ideas") return [data.projectName, (data.ideas || []).map((idea) => [idea.id, idea.title, idea.read, idea.status, idea.taskId])];
     if (state.kind === "plans") return [data.projectName, need, running, (data.plans || []).map((plan) => [plan.id, plan.title, plan.status, plan.version]), (data.families || []).map((family) => [family.id, family.title, family.final, family.job?.step, family.steps.map((step) => `${step.id}:${step.state}:${step.job?.step || ""}`)]), (data.tasks || []).length];
-    if (state.kind === "team") return [data.projectName, running, data.gate, state.teamAt, (window.MefiVibeFlow?.active?.(data.projectId) ?? []).map((run) => `${run.id}:${run.stage}`)];
+    if (state.kind === "team") { const kit = window.MefiChatTools?.state?.(); return [data.projectName, running, data.gate, state.teamAt, (window.MefiVibeFlow?.active?.(data.projectId) ?? []).map((run) => `${run.id}:${run.stage}`), kit ? [kit.style, kit.auto, (kit.picks || []).length, (kit.connectors || []).map((row) => `${row.id}:${row.on}:${(row.places || []).join("+")}`)] : null]; }
     if (state.kind === "settings") return [data.projectName, data.person, data.companion, document.documentElement.dataset.studioTheme];
     if (state.kind === "newapp") return [data.projectName];
     if (state.kind === "decisions") return [data.projectId, data.assistant.decisions, data.assistant.todos];
@@ -1085,6 +1098,7 @@
   window.addEventListener("mefi:autonomy-changed", () => { state.signature = ""; if (["settings", "decisions", "team"].includes(state.kind)) render(); });
   // A thinking run starting, moving on or ending repaints Team's list of them.
   window.MefiVibeFlow?.on?.(() => { if (state.kind === "team") render(); });
+  window.addEventListener("mefi:chat-tools-changed", () => { if (state.kind === "team") render(); });
   let armedPaint = 0;
   function render() {
     if (aside.hidden || !state.kind) return;

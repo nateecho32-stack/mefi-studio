@@ -21,6 +21,26 @@ const reviewBody = (payload) => ({
 });
 const reviewChoices = (payload) => Object.fromEntries(["snapshots", "advisory", "advisoryBuild", "shots"].filter((key) => typeof payload?.[key] === "boolean").map((key) => [key, payload[key]]));
 
+// How skills are used and Team › Connectors (main.cjs "Skills and connectors everywhere"): plain fields only,
+// strings cut to a sane length, lists bounded. A connector's value (a token) goes in once and never comes back.
+const textList = (value, count, limit) => (Array.isArray(value) ? value.filter((item) => typeof item === "string").slice(0, count).map((item) => item.slice(0, limit)) : undefined);
+const skillUseBody = (payload) => {
+  if (payload && Object.hasOwn(payload, "style")) return { style: typeof payload.style === "string" ? payload.style.slice(0, 64) : null };
+  if (payload && typeof payload.auto === "boolean") return { place: gitText(payload.place, 20), auto: payload.auto };
+  return { name: gitText(payload?.name, 64), place: gitText(payload?.place, 20), use: gitText(payload?.use, 20) };
+};
+const stringMap = (value, count, limit) => (value && typeof value === "object" && !Array.isArray(value) ? Object.fromEntries(Object.entries(value).filter(([key, item]) => typeof key === "string" && typeof item === "string").slice(0, count).map(([key, item]) => [key.slice(0, 128), item.slice(0, limit)])) : undefined);
+const connectorDraft = (draft) => ({
+  name: gitText(draft?.name, 60), title: gitText(draft?.title, 80),
+  ...(typeof draft?.line === "string" ? { line: draft.line.slice(0, 4000) } : {}),
+  ...(typeof draft?.url === "string" ? { url: draft.url.slice(0, 2000), transport: "http" } : {}),
+  ...(textList(draft?.envKeys, 32, 128) ? { envKeys: textList(draft.envKeys, 32, 128) } : {}),
+  ...(stringMap(draft?.values, 32, 8000) ? { values: stringMap(draft.values, 32, 8000) } : {}),
+  ...(stringMap(draft?.headerKeys, 8, 128) ? { headerKeys: stringMap(draft.headerKeys, 8, 128) } : {}),
+  ...(textList(draft?.places, 3, 20) ? { places: textList(draft.places, 3, 20) } : {}),
+});
+const connectorId = (value) => ({ id: gitText(typeof value === "string" ? value : value?.id, 60) });
+
 const api = {
   mediaSceneSample: (rect) => ipcRenderer.invoke("media:scene-sample", rect),
   youtubeSearch: (query) => ipcRenderer.invoke("media:youtube-search", query),
@@ -78,6 +98,20 @@ const api = {
   skillsExport: (payload) => ipcRenderer.invoke("skills:export", { name: typeof payload?.name === "string" ? payload.name.slice(0, 100) : "", kind: payload?.kind === "zip" ? "zip" : "folder" }),
   projectFiles: (payload) => ipcRenderer.invoke("project:files", { query: typeof payload?.query === "string" ? payload.query.slice(0, 200) : "", limit: Number.isFinite(Number(payload?.limit)) ? Math.min(25, Math.max(1, Math.floor(Number(payload.limit)))) : 8 }),
   agentsSkills: () => ipcRenderer.invoke("agents:skills"),
+  skillsUse: () => ipcRenderer.invoke("skills:use"),
+  skillsSetUse: (payload) => ipcRenderer.invoke("skills:set-use", skillUseBody(payload)),
+  skillsCopyBuiltin: (name) => ipcRenderer.invoke("skills:copy-builtin", { name: gitText(name, 64) }),
+  chatTools: () => ipcRenderer.invoke("chat:tools"),
+  connectorsList: () => ipcRenderer.invoke("connectors:list"),
+  connectorsAdd: (draft) => ipcRenderer.invoke("connectors:add", connectorDraft(draft)),
+  connectorsFeatured: (id) => ipcRenderer.invoke("connectors:featured", connectorId(id)),
+  connectorsApprove: (payload) => ipcRenderer.invoke("connectors:approve", { ...connectorId(payload), fingerprint: gitText(payload?.fingerprint, 64) }),
+  connectorsTest: (id) => ipcRenderer.invoke("connectors:test", connectorId(id)),
+  connectorsUpdate: (payload) => ipcRenderer.invoke("connectors:update", { ...connectorId(payload), ...(typeof payload?.enabled === "boolean" ? { enabled: payload.enabled } : {}), ...(textList(payload?.places, 3, 20) ? { places: textList(payload.places, 3, 20) } : {}), ...(textList(payload?.off, 128, 48) ? { off: textList(payload.off, 128, 48) } : {}), ...(typeof payload?.title === "string" ? { title: payload.title.slice(0, 80) } : {}) }),
+  connectorsRemove: (id) => ipcRenderer.invoke("connectors:remove", connectorId(id)),
+  connectorsSecret: (payload) => ipcRenderer.invoke("connectors:secret", { ...connectorId(payload), key: gitText(payload?.key, 128), value: gitText(payload?.value, 8000) }),
+  connectorsCandidates: () => ipcRenderer.invoke("connectors:candidates"),
+  connectorsImport: (payload) => ipcRenderer.invoke("connectors:import", { keys: textList(payload?.keys, 32, 40) ?? [], values: payload?.values === true }),
   openrouterModels: (options = {}) => ipcRenderer.invoke("openrouter:models", { refresh: options?.refresh === true }),
   autoSetup: () => ipcRenderer.invoke("settings:auto-setup"),
   // The first launch of a fresh install runs auto setup by itself (main.cjs

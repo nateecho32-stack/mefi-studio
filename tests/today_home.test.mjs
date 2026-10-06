@@ -38,6 +38,7 @@ async function home(over = {}) {
     MefiComposerPictures: { get: () => ({ addFiles: async (list) => { log.push(["pictures", plain(list.map((file) => file.name))]); } }) },
     MefiFileInputs: { addFiles: async (_input, list) => { log.push(["files", plain(list.map((file) => file.name))]); } },
     MefiAutonomy: { mount: (root, options) => { log.push(["autonomy.mount", plain(options)]); const chip = new root.constructor("button"); chip.className = "autonomy-chip"; chip.textContent = "Auto"; root.append(chip); } },
+    MefiChatTools: { mount: (root, options) => { log.push(["chatTools.mount", plain(options)]); const chip = new root.constructor("button"); chip.className = "chat-tools-chip"; chip.textContent = "ELI5"; root.append(chip); } },
     MefiSessions: { active: () => true, open: (taskId, options) => { log.push(["sessions.open", taskId, plain(options)]); return true; } },
     ...over.extras,
   };
@@ -67,11 +68,12 @@ test("Build's Home is Today: the page goes first in Home's layer, borrows the bo
   assert.equal(byId(t, "workspace-input").placeholder, "Describe an idea, a fix or a question…", "the prototype's words in the box");
   const tools = byId(t, "today-build-tools");
   assert.equal(tools.parentNode, byId(t, "workspace-form"), "one row of controls under the words, inside the box");
-  assert.deepEqual(tools.children.map((child) => child.id), ["today-build-attach", "today-build-files", "today-build-autonomy", "today-build-talk", "today-build-build"]);
+  assert.deepEqual(tools.children.map((child) => child.id), ["today-build-attach", "today-build-files", "today-build-autonomy", "today-build-chat-tools", "today-build-talk", "today-build-build"]);
   assert.equal(words(byId(t, "today-build-attach")), "Add files or an image");
   assert.equal(words(byId(t, "today-build-talk")), "Talk it over");
   assert.equal(words(byId(t, "today-build-build")), "Build itCtrl Enter", "Build it carries its key, as the prototype's");
   assert.deepEqual(logOf(t, "autonomy.mount"), [[{ id: "today-build-autonomy-control" }]], "the permission mode is autonomy-ui.js's own control, mounted once");
+  assert.deepEqual(logOf(t, "chatTools.mount"), [[{ id: "today-build-chat-tools-chip" }]], "how Mefi answers (its style, skills and tools) is chat-tools.js's own chip, mounted once");
   assert.match(words(byId(t, "today-build-hint")), /Enter to talk it over · Shift Enter for a new line · Ctrl Enter to build/);
   assert.deepEqual(byId(t, "today-build-starts").children.map((chip) => words(chip)), ["Modify", "Experiment", "Fix", "Improve", "Suggest a next step"]);
   assert.deepEqual(byId(t, "today-build-starts").children.map((chip) => chip.title), ["Shape an existing feature", "Try a small possibility", "Make something work again", "Polish what is already here", "Mefi reads the project and suggests a few small next steps"]);
