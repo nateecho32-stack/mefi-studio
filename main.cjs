@@ -2403,6 +2403,8 @@ const HUB_ROOM_METHODS = Object.freeze({
   createRoom: 1, requestJoin: 2, requests: 0, decide: 2, cancelRequest: 1, invite: 2, invites: 0, acceptInvite: 1, declineInvite: 1,
   leave: 1, removeMember: 2, lock: 1, unlock: 1, close: 1, searchMembers: 1, messages: 2, report: 3, sendMessage: 2, editMessage: 3, deleteMessage: 2,
   roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1, front: 0,
+  // Friends › Moderation (renderer/friends-mod.js); the relay refuses anyone who is not a moderator.
+  modFlags: 0, modReview: 1, modRevoke: 2, modReports: 0, modResolve: 1, modSuspend: 2,
 });
 function hubRoom(method, args) {
   const arity = Object.hasOwn(HUB_ROOM_METHODS, method) ? HUB_ROOM_METHODS[method] : -1;
@@ -2420,7 +2422,7 @@ function hubRoom(method, args) {
 // public link in the browser and, two minutes later while Studio is still
 // running, tells the relay the play happened, which credits its owner and
 // this member. A play still waiting is kept once per project.
-const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1 });
+const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1, reportProject: 2 });
 const hubPlayTimers = new Map(); // projectId -> timeout
 function hubProjects(method, args) {
   const arity = Object.hasOwn(HUB_PROJECT_METHODS, method) ? HUB_PROJECT_METHODS[method] : -1;

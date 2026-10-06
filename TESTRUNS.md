@@ -39,6 +39,25 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Friends › Moderation, Report on projects and pop-ups from friends land on main
+
+Branch `wip/friends-mod` in `C:\wt\mod` (9e2d43d Moderation and project reports; 1679ae6 pop-ups and the relay's
+friendOnline frame), main 33c3c4e merged (b433532, clean; booklet.html regenerated).
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) runs on the landing commit and is
+green before the fast-forward. This PC was shared with other sessions' suites the whole time, so the full local gate
+was left to CI, as for 33c3c4e.
+
+Run alone here after the merge: friends_front_ui 10/10 (pop-ups grouped, invites, requests, plays and stars, the off
+switch), friends_mod_ui 4/4 (new: moderators only, farming list, reports with Resolve, Remove project and Suspend,
+lookup, Take back from one giver or all, nothing without a yes), friends_navigation 8/8 (Moderation hidden unless a
+moderator), project_hub_ui 7/7 (Report), relay_credits 11/11 (flags: one giver and mutual trading, project reports
+once each and never your own, me().moderator), relay_connect 5/5 (friendOnline to room co-members only, not the
+Lobby, not twice in 30 minutes, never when hidden), relay_core 9/9, relay_e2e 9/9, hub_client 16/16 (hello lists
+friend.online), hub_host 13/13, rooms_ui 13/13, app_rail 40/40, onboarding 43/43, module_purity 61/61,
+booklet_build 5/5; friends_render and companion_hub_render 1/1. `npm run check` ok, lint clean on the changed files.
+The relay is redeployed (version 1fe8cfc5) and `relay/scripts/smoke.mjs` passes against it.
+
 ## 2026-10-06 The Lobby, one sign-in, online at launch, credits that cannot be farmed, and no Discord roles land on main
 
 Branch `wip/credits-guard` in `C:\wt\credits` (bcc51f3 the Lobby front page, Sign in with Discord and online at launch;
@@ -509,40 +528,6 @@ memory pressure (0.68 GB free; push to a local bare repo failed): sync and
 rust_parity_repo 25/25 alone. New suites: front_page 7, news_away_host 5,
 daily_paper 10 (3 new). Before/after launch captures at 1920x1080 with a fake
 bridge: `C:\wt\shots\launch-before.png`, `launch-after.png`.
-
-## 2026-10-04 Rust stage 1 finished: the host's last Electron gaps, the portable host build and the updater bridge
-
-Branch `wip/rust-host` (main merged at 1178ac7), gated in a short-path
-worktree (`C:\wt\rust-gate`, node_modules junctioned). New on the Rust host:
-the Media browser as a child webview, evidence shots in a hidden in-private
-window, dropped files' paths, the Electron build's page localStorage carried
-over once, Zen's desktop audio from WASAPI loopback, did-fail-load,
-trashItem, the page's WebView2 profile under userData; `npm run
-package:host` builds the portable host layout and `release-updater.mjs` can
-install and roll back either kind of build.
-
-Full `npm test` at 087fa29: Node 6788 tests, 6774 pass, 0 fail, 14 skipped;
-Electron lane 74: 71 pass, 1 skipped, 2 fail (`layout_contract_render`
-viewport 1921x1081 and `shell_render`), and both fail identically on a clean
-origin/main worktree (1178ac7) on this PC, so they are this display's state;
-Python 248 OK (1 skipped); path lock ok. After the last commits (ca10561):
-`npm run check` ok (265 targets), `npm run test:fast` 6788 tests, 0 fail, 14
-skipped, `npm run audit` 0 findings, lint 0 errors. `tests/rust_host_bridge`
-8/8 (new: Media browser through the shim, drop, localStorage hand-over,
-loopback stream), `rust_modules` 5/5 (new: evidence factory),
-`package_host` and `update_host_bridge` (new) with the updater suites 48/48,
-`rust_parity_git` 2/2 with the PowerShell drive check, host unit tests 15/15.
-
-Live, debug host and then the packaged release build run as an installed copy
-(no MEFI_STUDIO_ROOT: found resources/app, ran its own node.exe), each with
-`MEFI_HOST_SELFTEST_WEB` against a local page and a scratch userData seeded by
-Electron 44: Media browser titles A/B, back/forward, mute, refused mailto:,
-close; evidence PNG 1280x800 with no third-party request leaving (the beacon
-server saw none from the shot's page); localStorage keys carried (Latin-1 and
-UTF-16); a real file dropped through the DevTools protocol got its path; a
-clicked getDisplayMedia gave 1 audio track, 0 video, no picker, and peak
-0.029 back while the page played a 440 Hz tone at gain 0.03. Release host
-build 4 min (2 jobs), portable folder 123 MB.
 
 ## Read Before Any Tests
 

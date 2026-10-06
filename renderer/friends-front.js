@@ -14,6 +14,14 @@
 // every minute while it is on screen and the window can be seen, and stops
 // when Friends lets it go (dispose). Everything is text: names and titles go
 // in with textContent, and nothing from the relay becomes a link.
+//
+// Pop-ups (popups.hear, on the module's one hub listener, Friends open or
+// not): a friend you share a room with opened Studio, someone invited you to
+// a room or asks to join yours, and someone played or starred your project.
+// Each is a toast (window.MefiToast) with a way to the right Friends place;
+// several friends coming online at once are one toast. "Pop-ups from
+// friends" at The Lobby's foot turns them off (localStorage
+// mefiStudio.friendsPopups = "0"), and none show while the window is hidden.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
@@ -98,13 +106,54 @@
     return root;
   }
 
+  // ---- Pop-ups --------------------------------------------------------------------
+  const POPUPS_KEY = "mefiStudio.friendsPopups";
+  const popups = {
+    on() { try { return globalThis.localStorage?.getItem(POPUPS_KEY) !== "0"; } catch { return true; } },
+    set(on) { try { globalThis.localStorage?.setItem(POPUPS_KEY, on ? "1" : "0"); } catch { /* this window only */ } },
+    online: [], // names waiting to be said together
+    timer: null,
+    show(text, label, place, extra = {}) {
+      if (!popups.on() || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
+      window.MefiToast?.(text, "info", { action: { label, run: () => goPlace(place, extra) } });
+    },
+    hear(event) {
+      switch (event?.type) {
+        case "friendOnline": {
+          if (!event.user?.name || popups.online.includes(event.user.name)) return;
+          popups.online.push(event.user.name);
+          // A few friends opening Studio together are one toast.
+          if (!popups.timer) popups.timer = setTimeout(() => {
+            const names = popups.online.splice(0);
+            popups.timer = null;
+            if (!names.length) return;
+            const who = names.length === 1 ? names[0] : names.length === 2 ? `${names[0]} and ${names[1]}` : `${names[0]} and ${names.length - 1} others`;
+            popups.show(`${who} ${names.length === 1 ? "is" : "are"} online`, "Say hi", "lobby");
+          }, 3000);
+          return;
+        }
+        case "invite":
+          if (event.invite?.status === "pending") popups.show(`${event.invite.invitedBy.name} invited you to ${event.invite.roomName}`, "See the invite", "rooms");
+          return;
+        case "joinRequest":
+          if (event.request?.status === "pending") popups.show(`${event.request.requester.name} asks to join one of your rooms`, "See requests", "rooms");
+          return;
+        case "credits":
+          if (event.delta > 0 && event.reason === "played") popups.show(`Someone played your project: +${event.delta} credits`, "Project hub", "hub");
+          else if (event.delta > 0 && event.reason === "starred") popups.show(`Someone starred your project: +${event.delta} credits`, "Project hub", "hub");
+          return;
+        default:
+      }
+    },
+  };
+
   // ---- The Lobby: the front page ------------------------------------------------
   let current = null; // the card on screen: { hear }
   let hearing = false;
   function listen(api) {
     if (hearing || typeof api?.onHubEvent !== "function") return;
     hearing = true;
-    api.onHubEvent((event) => { current?.hear(event); });
+    api.onHubEvent((event) => { popups.hear(event); current?.hear(event); });
   }
 
   function card() {
@@ -318,7 +367,14 @@
         }).catch(() => { tick.checked = !tick.checked; });
       });
       toggle.append(tick, node("span", "", "Show me as online"));
-      bar.append(toggle);
+      const pops = node("label", "front-visible");
+      const popTick = node("input");
+      popTick.type = "checkbox";
+      popTick.id = "friends-front-popups";
+      popTick.checked = popups.on();
+      popTick.addEventListener("change", () => { popups.set(popTick.checked); status.textContent = popTick.checked ? "Pop-ups from friends are on." : "Pop-ups from friends are off."; });
+      pops.append(popTick, node("span", "", "Pop-ups from friends"));
+      bar.append(toggle, pops);
       const invite = node("span", "front-invite");
       if (code?.code) {
         invite.append(document.createTextNode("Invite code "), node("b", "front-code", code.code));
@@ -357,5 +413,7 @@
     return root;
   }
 
-  window.MefiFriendsFront = { gate, card };
+  window.MefiFriendsFront = { gate, card, popups };
+  // Pop-ups need the hub listener with Friends closed too.
+  listen(bridge());
 })();

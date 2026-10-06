@@ -36,6 +36,22 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   nothing; it now opens a new task, as N does. The first-run key tips for
   the Map sit on its bar and its zoom, and Build's on the rail, instead of
   on hidden controls where they never showed.
+- **Moderation in Studio, and Report on projects.** Moderators get a
+  Friends › Moderation place (nobody else sees it): who looks like they are
+  farming credits (most of their credits from one person, or two people
+  trading), the open reports for messages and projects, and a lookup by name.
+  A member's review shows where their credits came from and how old each
+  account is, with Take back (from one person or everything in 30 days) and
+  Suspend for a day or a week. Anyone can now Report someone else's project
+  in the Project hub (spam or a broken link, not safe to open, someone
+  else's work), and a moderator can take a project off the hub there too.
+- **Pop-ups from friends.** Studio now says when someone you share a room
+  with opens Studio (several at once are one pop-up), when someone invites
+  you to a room or asks to join yours, and when someone plays or stars your
+  project, each with a button to the right Friends page. Nobody is announced
+  to the whole Lobby or while they hide from Who's online, and the same
+  friend at most every 30 minutes. **Pop-ups from friends** at the foot of
+  The Lobby turns them off.
 - **Credits cannot be farmed.** Credits and ranks are worked out by the
   relay, never by Studio, and they now hold up against second accounts,
   trading and replays: credits start once a Discord account is 30 days old

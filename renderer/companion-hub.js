@@ -517,8 +517,12 @@
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
     { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
+    // renderer/friends-mod.js: shown only once the relay says this member is a moderator (it checks every action again).
+    { id: "mod", label: "Moderation", glyph: "g-flag", about: "Reports, credits that look farmed, and suspensions. Only moderators see this place.", modOnly: true },
   ]);
-  // A way in may name its place by target (lobby, rooms, pcs, playground, hub).
+  // The places this member sees: Moderation only for moderators.
+  const shownPlaces = () => FRIENDS_PLACES.filter((place) => !place.modOnly || window.MefiFriendsMod?.isMod?.() === true);
+  // A way in may name its place by target (lobby, rooms, pcs, playground, hub, mod).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
   const friendsPage = { place: null, root: null, body: null, title: null, about: null, room: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
@@ -532,6 +536,8 @@
     const title = node("h1", "", "Friends"); title.id = "friends-place-title"; title.tabIndex = -1;
     const about = node("p", "muted friends-place-about");
     head.append(title, about);
+    // Moderation's row joins the list column once the relay says this member is a moderator.
+    window.MefiFriendsMod?.subscribe?.(() => window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: friendsPage.place } })));
     const body = node("div", "friends-place-body"); body.id = "friends-place-body";
     sheet.append(head, body); overlay.append(sheet); document.body.append(overlay);
     Object.assign(friendsPage, { root: overlay, body, title, about });
@@ -543,6 +549,7 @@
     if (place.id === "lobby") card = window.MefiFriendsFront?.card?.();
     else if (place.id === "rooms") card = window.MefiRooms?.panel?.({ room: friendsPage.room });
     else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
+    else if (place.id === "mod") card = window.MefiFriendsMod?.card?.();
     else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
     else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
     const parts = [card ?? node("p", "muted", "This part of Friends is not in this build.")];
@@ -572,6 +579,8 @@
     if (moved) window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: place.id } }));
     window.MefiNav?.paintCurrent?.();
     window.MefiScroll?.scan?.(friendsPage.root);
+    // Whether this member moderates, asked again each time Friends opens (cheap: one /v1/me).
+    void Promise.resolve(window.MefiFriendsMod?.learn?.()).catch(() => {});
     return true;
   }
   function closePlace() {
@@ -584,7 +593,7 @@
   // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether it shows and the way there.
   function friendsPlaces() {
     const here = friendsOpen() ? friendsPage.place : null;
-    return FRIENDS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
+    return shownPlaces().map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
   }
   // Where you are in Friends ({ id, label }), for the breadcrumb and the tab; null when the page is not up.
   function friendsPlace() {

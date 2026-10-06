@@ -58,6 +58,7 @@
     }
   }
   const why = (answer, fallback) => REASONS[answer?.reason] || REASONS[answer?.error] || fallback;
+  const why_ = why;
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   let current = null;
   let hearing = false;
@@ -107,6 +108,7 @@
     current?.dispose();
     let me = null, tab = "map", projects = [], featured = [], selected = null, busy = false;
     const draft = { url: "", title: "", blurb: "", kind: "game" };
+    const reporting = new Set(); // projects whose report reasons are open
     const call = async (method, ...args) => {
       try { return await api.hubProjects(method, ...args); } catch (error) { return { ok: false, error: "failed", message: error?.message }; }
     };
@@ -165,6 +167,22 @@
       if (!own) row.append(button(project.starred ? "Starred" : "Star", () => star(project, !project.starred)));
       if (own && !project.featuredUntil) row.append(button(`Feature (${me?.featureCost ?? 100} credits)`, () => feature(project)));
       if (own) row.append(button("Remove", () => remove(project)));
+      // Anyone may report someone else's project; a moderator may also take it off the hub.
+      if (!own) row.append(button(reporting.has(project.id) ? "Cancel report" : "Report", () => { if (reporting.has(project.id)) reporting.delete(project.id); else reporting.add(project.id); paint(); }));
+      if (!own && me?.moderator) row.append(button("Remove (moderator)", () => remove(project)));
+      if (reporting.has(project.id)) {
+        const why = node("div", "project-hub-report");
+        why.append(node("span", "muted", "What is wrong with it?"));
+        for (const reason of ["Spam or a broken link", "Not safe to open", "Someone else's work", "Something else"]) {
+          why.append(button(reason, () => guard("Sending the report…", async () => {
+            const answer = await call("reportProject", project.id, reason);
+            reporting.delete(project.id);
+            status.textContent = answer?.ok ? "Thanks. A moderator will look at it." : why_(answer, "The report did not go through.");
+            paint();
+          })));
+        }
+        row.append(why);
+      }
       return row;
     }
 

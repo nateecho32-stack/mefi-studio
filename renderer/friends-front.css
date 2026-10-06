@@ -76,3 +76,19 @@ button.front-item:hover b { text-decoration: underline; text-decoration-color: v
 
 /* The Lobby's masthead is its title: the Friends page's own heading and line step aside (still read aloud, still focused). */
 #friends-overlay[data-place="lobby"] :is(#friends-place-title, .friends-place-about) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---- Friends › Moderation (renderer/friends-mod.js): only moderators see it ---- */
+.friends-mod { display: grid; gap: 14px; min-width: 0; }
+.friends-mod-status { margin: 0; color: var(--muted); font-size: 13px; }
+.friends-mod-status:empty { display: none; }
+.friends-mod-body { display: grid; gap: 18px; min-width: 0; }
+.friends-mod-section { display: grid; gap: 6px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); }
+.friends-mod-heading { margin: 0 0 4px; font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ivory); }
+.friends-mod-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.friends-mod-words { display: grid; gap: 2px; min-width: 0; flex: 1 1 280px; }
+.friends-mod-words strong { color: var(--ivory); font-weight: 600; overflow-wrap: anywhere; }
+.friends-mod-words .muted { font-size: 12.5px; overflow-wrap: anywhere; }
+.friends-mod-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.friends-mod-facts { margin: 0; color: var(--ivory); font-size: 13px; }
+.friends-mod-lookup { display: flex; flex-wrap: wrap; gap: 8px; }
+.friends-mod-search { flex: 1 1 220px; min-width: 0; }

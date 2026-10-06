@@ -85,6 +85,9 @@ for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", 
     assert.equal(loaded.document.querySelector("#friends-place-title").textContent, title);
     assert.deepEqual(loaded.made, [kind], "only the place's own card is built");
     assert.equal(loaded.document.querySelector("#friends-place-tabs"), null, "the list column lists the places: no tabs of the page's own");
+    const places = [...loaded.hub.friendsPlaces()];
+    assert.deepEqual(places.map((place) => place.label), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub"], "Moderation shows only to moderators");
+    assert.deepEqual(places.filter((place) => place.current).map((place) => place.id), [target]);
   });
 }
 

@@ -62,6 +62,12 @@ export const GUARD = Object.freeze({
   playStartsPerHour: 30,
   starsPerHour: 30,
   reviewDays: 30, // what a moderator's credit review looks back over
+  // "Looks like farming" for moderators: someone who earned at least flagMin in reviewDays with flagShare of it from one
+  // member, or two members who each made the other earn at least flagMutual.
+  flagMin: 30,
+  flagShare: 0.6,
+  flagMutual: 10,
+  projectReportsPerHour: 10,
 });
 
 const DISCORD_EPOCH = 1_420_070_400_000n;
@@ -129,6 +135,7 @@ export function createCredits({ store, now, key, sendToUser, member }) {
   const accountRow = (uid) => store.get('SELECT * FROM accounts WHERE user_id = ?', uid);
   const playStarts = keyedBuckets({ capacity: GUARD.playStartsPerHour, refillPerSec: GUARD.playStartsPerHour / 3600, now });
   const starTaps = keyedBuckets({ capacity: GUARD.starsPerHour, refillPerSec: GUARD.starsPerHour / 3600, now });
+  const projectReports = keyedBuckets({ capacity: GUARD.projectReportsPerHour, refillPerSec: GUARD.projectReportsPerHour / 3600, now });
 
   /** Forget me's fingerprint of an account: keyed, so it names nobody without the relay's key. */
   async function fingerprint(uid) {
@@ -249,6 +256,8 @@ export function createCredits({ store, now, key, sendToUser, member }) {
       featureCost: PROJECT_LIMITS.featureCost,
       canEarn: stand.ok,
       hold: stand.ok ? null : { reason: stand.reason, until: stand.until },
+      // Studio shows Friends › Moderation only to moderators; every admin route checks again.
+      moderator: who?.isMod === true,
       projects: store.all('SELECT * FROM projects WHERE owner_id = ? ORDER BY created_at DESC', uid).map((row) => projectView(row, uid)),
     };
   }
@@ -399,6 +408,33 @@ export function createCredits({ store, now, key, sendToUser, member }) {
       { write: true, readOnlyOk: true },
     );
 
+    // Reporting a project (spam, a broken or unsafe link, someone else's work):
+    // it joins the moderators' report list with its card, once per member.
+    route(
+      'POST',
+      '/v1/projects/:id/report',
+      ({ actor, params, body }) => {
+        const row = projectRow(params.id);
+        if (!row) return fail(404, 'not-found');
+        if (row.owner_id === actor.uid) return fail(403, 'forbidden', { reason: 'self' });
+        const rate = projectReports.take(actor.uid);
+        if (!rate.ok) return fail(429, 'rate-limited', { retryAfter: rate.retryAfterMs });
+        store.run(
+          'INSERT INTO reports (id, room_id, message_id, author_id, reporter_id, reason, text, verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?) ON CONFLICT (reporter_id, message_id) DO NOTHING',
+          newId('rep'),
+          'project',
+          row.id,
+          row.owner_id,
+          actor.uid,
+          body.reason,
+          `${row.title} · ${row.url}`,
+          now(),
+        );
+        return reply(202, { ok: true });
+      },
+      { body: 'reportProject', readOnlyOk: true },
+    );
+
     // Playing: a token now, and a finish at least two minutes later counts the play.
     route(
       'POST',
@@ -488,6 +524,47 @@ export function createCredits({ store, now, key, sendToUser, member }) {
         return reply(200, { ok: true, project: projectView(projectRow(row.id), actor.uid) });
       },
       { write: true, readOnlyOk: true },
+    );
+
+    // Who to look at first: members whose last 30 days of credits came mostly
+    // from one member, and pairs who each made the other earn a lot.
+    route(
+      'GET',
+      '/v1/admin/credits/flags',
+      () => {
+        const since = now() - GUARD.reviewDays * DAY_MS;
+        const pairs = store.all(`SELECT target_id, actor_id, SUM(amount) AS amount FROM credit_events WHERE at > ? AND amount > 0 AND actor_id NOT LIKE 'gone:%' GROUP BY target_id, actor_id`, since);
+        const byTarget = new Map();
+        const given = new Map(); // "actor>target" -> amount
+        for (const row of pairs) {
+          const amount = Number(row.amount);
+          given.set(`${row.actor_id}>${row.target_id}`, amount);
+          const entry = byTarget.get(row.target_id) ?? { total: 0, top: null };
+          entry.total += amount;
+          if (!entry.top || amount > entry.top.amount) entry.top = { id: row.actor_id, amount };
+          byTarget.set(row.target_id, entry);
+        }
+        const nameOf = (uid) => member(uid)?.name ?? store.get('SELECT name FROM members WHERE user_id = ?', uid)?.name ?? 'member';
+        const flags = [];
+        for (const [uid, entry] of byTarget) {
+          const share = entry.total ? entry.top.amount / entry.total : 0;
+          const mutual = [...given.keys()].filter((key) => key.endsWith(`>${uid}`)).map((key) => key.split('>')[0])
+            .filter((other) => (given.get(`${other}>${uid}`) ?? 0) >= GUARD.flagMutual && (given.get(`${uid}>${other}`) ?? 0) >= GUARD.flagMutual);
+          const oneGiver = entry.total >= GUARD.flagMin && share >= GUARD.flagShare;
+          if (!oneGiver && !mutual.length) continue;
+          flags.push({
+            id: uid,
+            name: nameOf(uid),
+            total: entry.total,
+            top: { id: entry.top.id, name: nameOf(entry.top.id), amount: entry.top.amount, share: Math.round(share * 100), accountCreatedAt: accountCreatedAt(entry.top.id) },
+            why: oneGiver ? 'one-giver' : 'mutual',
+            mutual: mutual.slice(0, 5).map((other) => ({ id: other, name: nameOf(other) })),
+          });
+        }
+        flags.sort((x, y) => y.total - x.total);
+        return reply(200, { ok: true, days: GUARD.reviewDays, flags: flags.slice(0, 50) });
+      },
+      { mod: true },
     );
 
     // Moderators: where a member's credits came from in the last 30 days, by

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { GUARD, accountCreatedAt, rankFor, specialRanks, projectLink } from "../relay/src/credits.mjs";
-import { ALICE, BOB, MOD, makeRelay } from "./fixtures/relay-harness.mjs";
+import { ALICE, BOB, CARA, MOD, makeRelay } from "./fixtures/relay-harness.mjs";
 
 // Credits, ranks and the project hub on the relay (relay/src/credits.mjs):
 // sharing is free and pays nothing; a play of someone else's project pays
@@ -275,6 +275,50 @@ test("moderators see where a member's credits came from and take back farmed one
   clock += 2 * 60_000 + 1;
   assert.equal((await as("tok-bob", "POST", `/v1/projects/${id}/played`, { token: replay.token })).credited.owner, 0);
   assert.equal((await as("tok-mod", "POST", `/v1/admin/credits/${ALICE.id}/revoke`, { days: 0 })).status, 400);
+});
+
+test("moderators get a farming list and project reports; Studio learns who moderates", async () => {
+  let clock = morning();
+  const relay = makeRelay({ now: () => clock });
+  const as = api(relay);
+  assert.equal((await as("tok-mod", "GET", "/v1/me")).moderator, true);
+  assert.equal((await as("tok-bob", "GET", "/v1/me")).moderator, false);
+  const mine = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/one", title: "One" })).project.id;
+  const his = (await as("tok-bob", "POST", "/v1/projects", { url: "https://bob.itch.io/two", title: "Two" })).project.id;
+  // Alice and Bob trade: each plays and stars the other's project, two days running.
+  for (let day = 0; day < 2; day += 1) {
+    for (const [token, id] of [["tok-bob", mine], ["tok-alice", his]]) {
+      const play = await as(token, "POST", `/v1/projects/${id}/play`);
+      clock += 2 * 60_000 + 1;
+      await as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
+      if (day === 0) await as(token, "POST", `/v1/projects/${id}/star`);
+    }
+    clock += DAY;
+  }
+  // Cara got 40 credits from one account.
+  await as("tok-cara", "GET", "/v1/me");
+  const helper = "200000000000000077";
+  for (let n = 0; n < 8; n += 1) relay.sql("INSERT INTO credit_events (actor_id, target_id, kind, ref, uniq, day, amount, at) VALUES (?, ?, 'played', NULL, ?, 0, 5, ?)", helper, CARA.id, `t${n}`, clock - n * DAY);
+  assert.equal((await as("tok-bob", "GET", "/v1/admin/credits/flags")).status, 403, "moderators only");
+  const flags = await as("tok-mod", "GET", "/v1/admin/credits/flags");
+  const byName = Object.fromEntries(flags.flags.map((flag) => [flag.name, flag]));
+  assert.equal(byName.Cara.why, "one-giver");
+  assert.equal(byName.Cara.total, 40);
+  assert.equal(byName.Cara.top.share, 100);
+  assert.equal(byName.Alice.why, "mutual");
+  assert.deepEqual(byName.Alice.mutual.map((other) => other.name), ["Bob"]);
+  assert.equal(byName.Bob.why, "mutual");
+
+  // Reporting a project: once per member, never your own, with its card for the moderators.
+  assert.equal((await as("tok-alice", "POST", `/v1/projects/${mine}/report`, { reason: "mine" })).reason, "self");
+  assert.equal((await as("tok-cara", "POST", `/v1/projects/${mine}/report`, { reason: "Spam or a broken link" })).status, 202);
+  await as("tok-cara", "POST", `/v1/projects/${mine}/report`, { reason: "again" });
+  const reports = await as("tok-mod", "GET", "/v1/admin/reports");
+  const report = reports.reports.find((item) => item.kind === "project");
+  assert.deepEqual([report.projectId, report.author.id, report.reporter.id, report.reason, report.text], [mine, ALICE.id, CARA.id, "Spam or a broken link", "One · https://alice.itch.io/one"]);
+  assert.equal(reports.reports.filter((item) => item.kind === "project").length, 1, "once per member");
+  assert.equal((await as("tok-mod", "DELETE", `/v1/projects/${mine}`)).ok, true, "a moderator can take it off");
+  assert.equal((await as("tok-mod", "POST", `/v1/admin/reports/${report.id}/resolve`)).ok, true);
 });
 
 test("featuring spends 100 credits for a day, one per owner, three at once, with a cooldown", async () => {
