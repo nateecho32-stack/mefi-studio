@@ -8180,6 +8180,7 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 .agents-head .muted { font-size: var(--fs-sm); }
 /* Team's places as a row under the title (renderer/shell.js placeBar). */
 #agents-overlay .agents-head .shell-place-bar { margin: 10px 0 2px; }
+#agents-overlay .agents-head > div:first-child:has(> .shell-place-bar) { flex: 1 1 auto; }
 .agents-head-actions { display: flex; align-items: center; justify-content: end; flex-wrap: wrap; gap: 8px; }
 .agents-eyebrow { font-size: var(--fs-2xs); letter-spacing: .12em; color: var(--gold-bright); }
 /* Team in the 0.5 layout (renderer/agents.js openTeam): the prototype's page head, a title with the line that says what
@@ -13086,8 +13087,20 @@ html[data-frame] .shell-page .count[hidden] { display: none; }
 /* The place bar (renderer/shell.js placeBar): the same pages as one wrapping row at the top of a place's page, for when
    the list column is not showing them (Social keeps it closed; a small window folds it). While the docked column lists
    them (html[data-frame-pages]) the bar steps aside, so a place never shows its pages twice. */
-html[data-frame] .shell-place-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 14px; }
+html[data-frame] .shell-place-bar { display: block; margin: 2px 0 14px; container: shell-place / inline-size; }
 html[data-frame] .shell-place-bar[hidden], html[data-frame][data-frame-pages] .shell-place-bar { display: none; }
+html[data-frame] .shell-place-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* Too narrow for the row (Team's dozen-plus places from 760 px, any place from 440 px): the same places as one picker,
+   so the page under it keeps its room. */
+html[data-frame] .shell-place-pick { display: none; width: auto; max-width: 100%; min-height: 32px; padding: 4px 12px; border-radius: 999px; font-size: var(--frame-fs); }
+@container shell-place (max-width: 760px) {
+  html[data-frame] .shell-place-bar[data-size="many"] .shell-place-chips { display: none; }
+  html[data-frame] .shell-place-bar[data-size="many"] .shell-place-pick { display: block; }
+}
+@container shell-place (max-width: 440px) {
+  html[data-frame] .shell-place-chips { display: none; }
+  html[data-frame] .shell-place-pick { display: block; }
+}
 html[data-frame] .shell-place-chip {
   display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 999px; white-space: nowrap;
   border: 1px solid var(--hairline-strong); background: color-mix(in srgb, var(--ivory) 3%, transparent);
@@ -103176,17 +103189,40 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (bar.dataset.key === key) continue;
       bar.dataset.key = key;
       if (!model || model.section !== bar.dataset.section) { bar.hidden = true; bar.replaceChildren(); continue; }
-      const items = [];
-      for (const row of rows) {
-        if (row.sub) continue;
-        if (row.kind === "heading") { items.push(text("span", "shell-place-group", row.label)); continue; }
+      // A chip's own navigation redraws the bar under it: focus comes back to the same chip, or to the picker.
+      const held = bar.contains?.(document.activeElement) ? document.activeElement : null;
+      const heldPage = held?.classList?.contains("shell-place-pick") ? "pick" : held?.dataset?.page ?? null;
+      const chips = el("div", "shell-place-chips");
+      // The same places as one picker, for a page too narrow for the row (shell.css, @container shell-place): a row of
+      // a dozen chips would wrap into a block taller than the page under it.
+      const pick = el("select", "shell-place-pick", { "aria-label": bar.getAttribute("aria-label") || "Places" });
+      const chosen = rows.findIndex((row) => !row.sub && row.kind !== "heading" && (row.current || row.open));
+      if (chosen < 0) { const none = text("option", "", "Choose a page"); none.value = ""; none.disabled = true; pick.append(none); }
+      let group = pick, count = 0;
+      rows.forEach((row, at) => {
+        if (row.sub) return;
+        if (row.kind === "heading") {
+          chips.append(text("span", "shell-place-group", row.label));
+          group = el("optgroup", "", { label: row.label });
+          pick.append(group);
+          return;
+        }
         const chip = button(`shell-place-chip${row.current || row.open ? " is-current" : ""}`, null, (event) => row.run?.(event), { "data-page": row.key ?? row.label });
         chip.textContent = row.label;
         if (row.current || row.open) chip.setAttribute("aria-current", "page");
-        items.push(chip);
-      }
-      bar.replaceChildren(...items);
-      bar.hidden = items.length === 0;
+        chips.append(chip);
+        const option = text("option", "", row.label);
+        option.value = String(at);
+        group.append(option);
+        count += 1;
+      });
+      pick.value = chosen < 0 ? "" : String(chosen);
+      pick.addEventListener("change", () => { const row = pick.value === "" ? null : rows[Number(pick.value)]; row?.run?.(); });
+      bar.replaceChildren(chips, pick);
+      if (count > 8) bar.dataset.size = "many"; else delete bar.dataset.size;
+      bar.hidden = count === 0;
+      if (heldPage === "pick") pick.focus?.({ preventScroll: true });
+      else if (heldPage) [...chips.children].find((node) => node.dataset?.page === heldPage)?.focus?.({ preventScroll: true });
     }
   }
 

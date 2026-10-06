@@ -403,11 +403,23 @@ test("a place bar draws the same places as the list column, as one row, for the 
   const bar = page.window.MefiShell.placeBar(host, "team");
   assert.ok(bar, "Team's head gets a bar");
   page.window.dispatchEvent({ type: "mefi:nav" });
-  const chips = () => bar.children.map((node) => `${node.className.includes("shell-place-group") ? "# " : ""}${node.textContent}${node.getAttribute?.("aria-current") ? " *" : ""}`);
+  const row = () => bar.querySelector(".shell-place-chips");
+  const chips = () => row().children.map((node) => `${node.className.includes("shell-place-group") ? "# " : ""}${node.textContent}${node.getAttribute?.("aria-current") ? " *" : ""}`);
   assert.equal(bar.hidden, false);
   assert.deepEqual(chips(), ["Overview", "# Context for agents", "Rules", "# Monitor", "Models *"], "one row: the places under their headings, the one you are in marked, its own pages left to the page");
-  await bar.children.find((node) => node.textContent === "Rules").click();
+  await row().children.find((node) => node.textContent === "Rules").click();
   assert.deepEqual(ran, ["rules"], "a chip runs what the list column's row runs");
+  // The same places as one picker for a narrow page (shell.css shows one or the other): grouped the same way, the place
+  // you are in chosen, and choosing one runs the same row.
+  const pick = bar.querySelector(".shell-place-pick");
+  assert.equal(pick.tagName.toLowerCase(), "select");
+  assert.deepEqual(pick.children.map((node) => node.tagName.toLowerCase() === "optgroup" ? [node.getAttribute("label"), node.children.map((option) => option.textContent)] : node.textContent), ["Overview", ["Context for agents", ["Rules"]], ["Monitor", ["Models"]]]);
+  const value = (label) => pick.descendants().find((node) => node.tagName.toLowerCase() === "option" && node.textContent === label).value;
+  assert.equal(pick.value, value("Models"));
+  pick.value = value("Overview");
+  await pick.trigger("change");
+  assert.deepEqual(ran, ["rules", "overview"]);
+  assert.equal(bar.dataset.size, undefined, "a short row stays a row until the page is very narrow");
   // A bar for another place stays empty while Team shows.
   const other = page.window.MefiShell.placeBar(page.document.createElement("div"), "friends");
   page.window.dispatchEvent({ type: "mefi:nav" });

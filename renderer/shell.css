@@ -241,8 +241,20 @@ html[data-frame] .shell-page .count[hidden] { display: none; }
 /* The place bar (renderer/shell.js placeBar): the same pages as one wrapping row at the top of a place's page, for when
    the list column is not showing them (Social keeps it closed; a small window folds it). While the docked column lists
    them (html[data-frame-pages]) the bar steps aside, so a place never shows its pages twice. */
-html[data-frame] .shell-place-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 14px; }
+html[data-frame] .shell-place-bar { display: block; margin: 2px 0 14px; container: shell-place / inline-size; }
 html[data-frame] .shell-place-bar[hidden], html[data-frame][data-frame-pages] .shell-place-bar { display: none; }
+html[data-frame] .shell-place-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+/* Too narrow for the row (Team's dozen-plus places from 760 px, any place from 440 px): the same places as one picker,
+   so the page under it keeps its room. */
+html[data-frame] .shell-place-pick { display: none; width: auto; max-width: 100%; min-height: 32px; padding: 4px 12px; border-radius: 999px; font-size: var(--frame-fs); }
+@container shell-place (max-width: 760px) {
+  html[data-frame] .shell-place-bar[data-size="many"] .shell-place-chips { display: none; }
+  html[data-frame] .shell-place-bar[data-size="many"] .shell-place-pick { display: block; }
+}
+@container shell-place (max-width: 440px) {
+  html[data-frame] .shell-place-chips { display: none; }
+  html[data-frame] .shell-place-pick { display: block; }
+}
 html[data-frame] .shell-place-chip {
   display: inline-flex; align-items: center; height: 30px; padding: 0 12px; border-radius: 999px; white-space: nowrap;
   border: 1px solid var(--hairline-strong); background: color-mix(in srgb, var(--ivory) 3%, transparent);

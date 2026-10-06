@@ -1012,17 +1012,40 @@
       if (bar.dataset.key === key) continue;
       bar.dataset.key = key;
       if (!model || model.section !== bar.dataset.section) { bar.hidden = true; bar.replaceChildren(); continue; }
-      const items = [];
-      for (const row of rows) {
-        if (row.sub) continue;
-        if (row.kind === "heading") { items.push(text("span", "shell-place-group", row.label)); continue; }
+      // A chip's own navigation redraws the bar under it: focus comes back to the same chip, or to the picker.
+      const held = bar.contains?.(document.activeElement) ? document.activeElement : null;
+      const heldPage = held?.classList?.contains("shell-place-pick") ? "pick" : held?.dataset?.page ?? null;
+      const chips = el("div", "shell-place-chips");
+      // The same places as one picker, for a page too narrow for the row (shell.css, @container shell-place): a row of
+      // a dozen chips would wrap into a block taller than the page under it.
+      const pick = el("select", "shell-place-pick", { "aria-label": bar.getAttribute("aria-label") || "Places" });
+      const chosen = rows.findIndex((row) => !row.sub && row.kind !== "heading" && (row.current || row.open));
+      if (chosen < 0) { const none = text("option", "", "Choose a page"); none.value = ""; none.disabled = true; pick.append(none); }
+      let group = pick, count = 0;
+      rows.forEach((row, at) => {
+        if (row.sub) return;
+        if (row.kind === "heading") {
+          chips.append(text("span", "shell-place-group", row.label));
+          group = el("optgroup", "", { label: row.label });
+          pick.append(group);
+          return;
+        }
         const chip = button(`shell-place-chip${row.current || row.open ? " is-current" : ""}`, null, (event) => row.run?.(event), { "data-page": row.key ?? row.label });
         chip.textContent = row.label;
         if (row.current || row.open) chip.setAttribute("aria-current", "page");
-        items.push(chip);
-      }
-      bar.replaceChildren(...items);
-      bar.hidden = items.length === 0;
+        chips.append(chip);
+        const option = text("option", "", row.label);
+        option.value = String(at);
+        group.append(option);
+        count += 1;
+      });
+      pick.value = chosen < 0 ? "" : String(chosen);
+      pick.addEventListener("change", () => { const row = pick.value === "" ? null : rows[Number(pick.value)]; row?.run?.(); });
+      bar.replaceChildren(chips, pick);
+      if (count > 8) bar.dataset.size = "many"; else delete bar.dataset.size;
+      bar.hidden = count === 0;
+      if (heldPage === "pick") pick.focus?.({ preventScroll: true });
+      else if (heldPage) [...chips.children].find((node) => node.dataset?.page === heldPage)?.focus?.({ preventScroll: true });
     }
   }
 
