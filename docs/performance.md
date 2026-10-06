@@ -1,6 +1,40 @@
 # Agent loop and startup measurements
 
 
+## Prompts a provider can cache, and live progress from the coding CLIs, October 6, 2026
+
+A provider that caches prompt prefixes bills a repeated prefix as a cheap
+cache read, but only up to the first byte that differs. Three of Studio's
+prompts led with what changes most: a worker's prompt opened with the task's
+title, the chat payload with the owner's new message, and the tool loop grew
+its system prompt every round. With the prompt cache on (the default;
+`settings.ai.promptCache: false` or `MEFI_STUDIO_PROMPT_CACHE=0` restores the
+old bytes) the shared parts lead and the new part comes last, a Zen `gpt-*`
+call names its cache and an OpenRouter Claude or Gemini call marks its system
+prompt cacheable.
+
+The prefix two consecutive requests share, from `node --test
+tests/prompt_cache.test.mjs` (same content, same sizes):
+
+| Request | Before | After |
+| --- | ---: | ---: |
+| two workers' prompts (Windows, 4,615 characters) | 5 | 4,241 |
+| two chat turns (30-card board, 16-message thread, 4,167 characters) | 12 | 4,128 |
+| two tool rounds (a 3,080-character user message, 6,499 characters) | 3,292 | 6,373 |
+
+No prompt got longer: the worker prompt is the same words in another order
+(`executorCore.promptParts` is `promptTail` split at the run's identity), the
+chat payload the same sections, and the tool round the same transcript.
+
+Claude Code (`--output-format stream-json --verbose`) and `codex exec --json`
+now report their steps while they work, through `scripts/cli-stream.cjs`:
+the run's session, todo list, active tool and token totals reach the entry,
+its checkpoint and its attempt record as they happen instead of only the
+final text. The decoding costs one `JSON.parse` per event line, on lines the
+text mode read anyway; a stream that prints no events in its first 20 lines is
+read as text. `MEFI_STUDIO_LIVE_PROGRESS=0` or
+`settings.executor.liveProgress: false` keeps text mode.
+
 ## Startup marks and the settings cache, October 6, 2026
 
 Every launch now times itself on one timeline, milliseconds since the main

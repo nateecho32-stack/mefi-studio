@@ -7,6 +7,17 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Claude Code and Codex builders show their steps while they work.** A
+  task run on Claude Code or Codex now shows its todo list, the tool it is
+  running and its token use as it goes, as OpenCode runs already did, instead
+  of nothing until it finishes. `MEFI_STUDIO_LIVE_PROGRESS=0` (or
+  `executor.liveProgress: false` in settings) turns it off.
+- **Repeated prompts cost less where the provider caches them.** Builders'
+  prompts, the chat's context and research rounds now put the parts that stay
+  the same first, so Zen's GPT models and OpenRouter's Claude and Gemini
+  models can bill them as cache reads, and the usage page counts cached input
+  from every provider. `MEFI_STUDIO_PROMPT_CACHE=0` (or `ai.promptCache: false`)
+  turns it off.
 - **Test runs on one PC take turns.** When several sessions test Studio from
   their own folders at once, `npm test` and the new `npm run test:one --
   tests/x.test.mjs` now wait for their turn instead of starving each other:

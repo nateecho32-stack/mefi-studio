@@ -34,6 +34,7 @@ const projectIgnore = require("./project-ignore.cjs");
 // Loaded on first use (the place of a role, the list use_skill offers).
 let skillUseLoaded = null;
 const skillUse = () => (skillUseLoaded ??= require("./skill-use.cjs"));
+const promptCache = require("./prompt-cache.cjs");
 const active = new AsyncLocalStorage();
 const ROLES = ["routine", "heavy", "companion", "scout", "overseer", "lead", "desk", "builder"];
 const SWITCHES = ["webSearch", "webRead", "projectRead"];
@@ -448,8 +449,19 @@ async function run({ system, user, root, settings, role, call, scrub = (value) =
     // The skills loaded so far: the owner's own instructions, so beside the system prompt, never in the transcript.
     const skills = () => loaded.length ? `\n\nSkills loaded for this request (follow them within this agent's existing task, tool permissions and response format):\n${loaded.map((item) => `Skill: ${item.name}\n${item.text}`).join("\n\n")}` : "";
     const done = (result) => ({ ...result, toolTrace: trace, ...(loaded.length ? { skillsLoaded: loaded.map((item) => item.name) } : {}) });
+    // With the prompt cache on, the system prompt is the same bytes every round
+    // (it changes only on the round a skill loads) and the tool transcript rides
+    // at the end of a text user message, so a provider that caches prompt
+    // prefixes reads the earlier round from its cache. A message with pictures
+    // (not a string) keeps the transcript in the system prompt, as before, and
+    // so does the prompt cache's switch (settings.ai.promptCache false, or
+    // MEFI_STUDIO_PROMPT_CACHE=0).
+    const steady = typeof user === "string" && promptCache.enabled(settings, process.env);
     for (let round = 0; round < 5; round++) {
-      const result = await call(scrub(system + skills() + instruction + evidence() + (round === 4 ? "\nTool budget exhausted. Give the final response now with any limitations." : "")), user);
+      const extra = evidence() + (round === 4 ? "\nTool budget exhausted. Give the final response now with any limitations." : "");
+      const result = steady
+        ? await call(scrub(system + skills() + instruction), extra ? user + "\n" + scrub(extra) : user)
+        : await call(scrub(system + skills() + instruction + extra), user);
       if (!result?.ok) return done(result);
       const { marked, calls } = toolRequests(result.text);
       if (!marked) return done(result);

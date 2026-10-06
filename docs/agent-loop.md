@@ -290,6 +290,31 @@ delegation parent without their histories. The whole multi-megabyte
 `data/eyes-tasks.json` is named only when that write fails. Run files are
 pruned to the newest 48, never one under two hours old.
 
+With the prompt cache on (`scripts/prompt-cache.cjs`: `settings.ai.promptCache`
+unless false, `MEFI_STUDIO_PROMPT_CACHE=0` to turn it off) the same words come
+in another order, so a provider that caches prompt prefixes reads the part
+every run shares from its cache: the selected skills, the builder instructions
+and the tail's rules (`executorCore.promptParts`, word for word promptTail
+without the run's identity) lead, then the task's own parts, and the run's
+identity with the verdict sentinel closes the prompt. Two runs' prompts then
+share about 4,200 of 4,600 characters as a prefix instead of a handful. Off,
+the layout above is unchanged.
+
+**Live progress.** Claude Code and `codex exec` say nothing in text mode until
+they finish. With live progress on (`settings.executor.liveProgress` unless
+false, `MEFI_STUDIO_LIVE_PROGRESS=0` to turn it off) Claude Code runs with
+`--output-format stream-json --verbose --session-id <uuid>` (a fresh UUID per
+attempt) and `codex exec` with `--json`; Codex's app server has its own facade
+and is unchanged. `scripts/cli-stream.cjs` decodes each stream back into the
+text lines `wire()`'s `take()` always read (the sentinel, `MEFI_RESULT:` and
+the rest, once each: Claude's closing `result` repeats the last message and is
+not read again), and into the run's session, todo list and done fraction,
+active tool and token totals, which land on the entry, its checkpoint and its
+attempt record (`cliSession`, `usage`) the way an OpenCode session's do. A
+stream with no events in its first 20 lines (an older CLI) is read as text, and
+a streaming Claude run keeps the start watchdog because its session line comes
+within seconds.
+
 The run is a child process (`spawnAttempt`): `cmd.exe /c opencode run
 --auto` with the prompt on **stdin** (never the command line), tools
 auto-approved because nobody is at the keyboard. `grok`, `claude`, `codex` and
