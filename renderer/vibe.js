@@ -613,6 +613,9 @@
       const item = el("li", `vibe-msg is-${message.role}${message.kind === "notice" ? " is-notice" : ""}`);
       item.dataset.key = message.id || `${message.role}:${message.at ?? ""}:${String(message.text ?? "").slice(0, 40)}`;
       item.append(el("span", "vibe-msg-who", message.role === "user" ? person() || "You" : companion()), el("p", "vibe-msg-text", message.text));
+      // The skills and tools a reply used (renderer/chat-tools.js).
+      const used = window.MefiChatTools?.used?.(message);
+      if (used) item.append(used);
       if (message.role === "assistant" && Array.isArray(message.offers)) {
         const chips = el("div", "vibe-chat-choices");
         for (const offer of message.offers) {
@@ -1554,6 +1557,8 @@
     initialized = true;
     renderSparks();
     window.MefiAutonomy?.mount($("autonomy-control"), { id: "vibe-autonomy" });
+    // How Mefi answers, its skills and tools, beside the permission mode (renderer/chat-tools.js).
+    window.MefiChatTools?.mount?.($("chat-tools"), { id: "vibe-chat-tools-chip" });
     // The Git sync chip sits right after New app in the project cluster (renderer/git-sync.js).
     window.MefiGitSync?.mount?.($("new-app")?.parentNode, { after: $("new-app"), variant: "vibe" });
     window.addEventListener("mefi:autonomy-changed", () => { signatures.delete("ask"); renderAsk(); renderHead(); renderLanes(); });

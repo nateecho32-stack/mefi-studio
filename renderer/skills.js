@@ -15,6 +15,11 @@
 //  - Delete asks twice, and the host keeps a copy of the old text first.
 //  - Import reads a folder you choose (its SKILL.md only); Export writes a folder
 //    or a zip where you choose.
+//  - How skills are used: every skill this project can reach (its own, the home
+//    folder's and the answer styles built into Studio, like ELI5) is always on, picked
+//    when it fits, or used only when called, separately for the chat, Studio's helper
+//    agents and the builders (main.cjs "Skills and connectors everywhere", skill-use.cjs).
+//    A built-in one can be copied into the project, where it can be edited.
 // The checks here are the host's own rules written again so the editor can say
 // what is wrong as you type (tests/skills_ui.test.mjs holds the two together);
 // the host checks everything again. With MEFI_STUDIO_NO_SKILL_EDIT=1 the page is
@@ -31,7 +36,7 @@
   const AUTO_LOAD_CHARS = 16000;
   const MAX_DESCRIPTION = 300;
   const OFF = "Editing skills is switched off on this PC.";
-  const state = { list: null, error: "", loading: false, editor: null, busy: new Set(), note: null, reading: null, signature: "", project: "" };
+  const state = { list: null, error: "", loading: false, editor: null, busy: new Set(), note: null, reading: null, signature: "", project: "", use: null };
   let initialized = false;
 
   const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined) node.textContent = String(text); return node; };
@@ -88,6 +93,9 @@
           if (state.project && state.project !== asked) state.editor = null;
           state.list = result; state.error = ""; state.project = asked;
         } else { state.error = say(result?.error, "The skills could not be read."); if (result?.off) state.error = OFF; }
+        // How each skill is used: a page without it (an older host) shows the list alone.
+        const use = api().skillsUse ? await api().skillsUse().catch(() => null) : null;
+        if (asked === projectId()) state.use = use?.ok && Array.isArray(use.skills) ? use : null;
       } catch (error) {
         state.error = say(error, "The skills could not be read.");
       }
@@ -243,6 +251,90 @@
     return box;
   }
 
+  // ---- how skills are used ------------------------------------------------------------------
+  const USE_LABELS = { always: "Always on", auto: "When it fits", call: "Only when called" };
+  const PLACE_LABELS = [["chat", "Chat"], ["agents", "Agents"], ["builders", "Builders"]];
+  function useNode(use) {
+    const section = el("section", "skills-section skills-use");
+    section.id = "skills-use";
+    section.setAttribute("aria-label", "How skills are used");
+    section.append(el("h3", "skills-section-head", "How skills are used"));
+    section.append(el("p", "skills-hint", "Always on: in every request there. When it fits: the agent loads it by itself when a request matches what it is for. Only when called: when you type /name in a message, or a task's words name it."));
+    const switches = el("div", "skills-use-auto");
+    switches.id = "skills-use-auto";
+    for (const [place, label] of PLACE_LABELS) {
+      const wrap = el("label", "skills-use-switch");
+      const box = el("input"); box.type = "checkbox"; box.setAttribute("role", "switch"); box.checked = use.auto?.[place] !== false; box.dataset.place = place;
+      box.disabled = state.busy.has(`auto:${place}`);
+      box.addEventListener("change", () => void setUse({ place, auto: box.checked }, `auto:${place}`, box.checked ? `${label}: skills pick themselves when they fit.` : `${label}: skills are used only when called.`));
+      wrap.append(box, el("span", "", `${label} picks skills by itself`));
+      switches.append(wrap);
+    }
+    section.append(switches);
+    const table = el("ul", "skills-use-list");
+    table.id = "skills-use-list";
+    for (const skill of use.skills) {
+      const row = el("li", "skills-use-row");
+      row.dataset.skill = skill.name;
+      const who = el("div", "skills-use-who");
+      who.append(el("strong", "skills-name", `/${skill.name}`));
+      const where = skill.scope === "builtin" ? (skill.kind === "style" ? "Answer style, built into Studio" : "Built into Studio") : skill.scope === "user" ? "Your home folder" : "This project";
+      who.append(el("span", "skills-meta", skill.title && skill.title !== skill.name ? `${skill.title} · ${where}` : where));
+      row.append(who);
+      const picks = el("div", "skills-use-picks");
+      for (const [place, label] of PLACE_LABELS) {
+        const field = el("label", "skills-use-pick");
+        const select = el("select", "skills-input skills-use-select");
+        select.dataset.place = place;
+        select.setAttribute("aria-label", `/${skill.name} in ${label.toLowerCase()}`);
+        for (const value of ["always", "auto", "call"]) {
+          const option = el("option", "", `${USE_LABELS[value]}${skill.defaults?.[place] === value ? " (default)" : ""}`);
+          option.value = value;
+          if (value === "auto" && skill.chars > AUTO_LOAD_CHARS) option.disabled = true;
+          select.append(option);
+        }
+        select.value = skill.chosen?.[place] ?? skill.defaults?.[place] ?? skill.uses?.[place] ?? "call";
+        if (skill.uses?.[place] && skill.uses[place] !== select.value) select.title = `In force now: ${USE_LABELS[skill.uses[place]]}, because ${label.toLowerCase()} does not pick skills by itself.`;
+        select.disabled = state.busy.has(skill.name);
+        select.addEventListener("change", () => void setUse({ name: skill.name, place, use: select.value === skill.defaults?.[place] ? "default" : select.value }, skill.name, `/${skill.name} in ${label.toLowerCase()}: ${USE_LABELS[select.value].toLowerCase()}.`));
+        field.append(el("span", "skills-label", label), select);
+        picks.append(field);
+      }
+      row.append(picks);
+      if (skill.scope === "builtin") {
+        const copy = el("button", "ghost mini", "Copy to this project");
+        copy.type = "button";
+        const taken = (state.list?.skills ?? []).some((item) => item.name === skill.name);
+        copy.disabled = !writable() || taken || state.busy.has(`copy:${skill.name}`);
+        copy.title = taken ? "This project already has its own copy, and it is the one in use." : `Save /${skill.name} into .agents/skills, where you can change it. The project's copy is then the one in use.`;
+        copy.addEventListener("click", () => void copyBuiltin(skill.name));
+        row.append(copy);
+      }
+      table.append(row);
+    }
+    section.append(table);
+    return section;
+  }
+  async function setUse(payload, key, done) {
+    if (!api()?.skillsSetUse) return;
+    state.busy.add(key); state.signature = ""; render();
+    let result = null;
+    try { result = await api().skillsSetUse(payload); } catch (error) { result = { ok: false, error: say(error, "That could not be saved.") }; }
+    state.busy.delete(key); state.signature = "";
+    if (result?.ok && Array.isArray(result.skills)) { state.use = result; toast(done); render(); return; }
+    setNote({ tone: "bad", text: say(result?.error, "That could not be saved.") });
+  }
+  async function copyBuiltin(name) {
+    if (!api()?.skillsCopyBuiltin || !writable()) return;
+    const key = `copy:${name}`;
+    state.busy.add(key); state.signature = ""; render();
+    let result = null;
+    try { result = await api().skillsCopyBuiltin(name); } catch (error) { result = { ok: false, error: say(error, "The skill could not be copied.") }; }
+    state.busy.delete(key); state.signature = "";
+    if (result?.ok) { toast(`Copied /${name} into .agents/skills/${name}. Edit it there; the project's copy is now the one in use.`); await read({ quiet: true }); return; }
+    setNote({ tone: "bad", text: say(result?.error, "The skill could not be copied.") });
+  }
+
   function render() {
     const overlay = $("overlay");
     if (!overlay) return;
@@ -250,7 +342,7 @@
     const box = $("list");
     // Typing does not redraw: what marks an editor is which one it is, not what is in it.
     const editing = state.editor ? [state.editor.mode, state.editor.key, Boolean(state.editor.saving)] : null;
-    const sign = JSON.stringify([state.error, state.loading && !list, list && [list.blocked, list.writable, list.skills?.map((skill) => [skill.name, skill.description, skill.bytes, skill.updatedAt, skill.problem, skill.editable, skill.loadsByItself]), list.starters?.map((starter) => starter.name), list.others?.map((item) => [item.name, item.scope, item.source])], [...state.busy], state.note, editing]);
+    const sign = JSON.stringify([state.error, state.loading && !list, list && [list.blocked, list.writable, list.skills?.map((skill) => [skill.name, skill.description, skill.bytes, skill.updatedAt, skill.problem, skill.editable, skill.loadsByItself]), list.starters?.map((starter) => starter.name), list.others?.map((item) => [item.name, item.scope, item.source])], [...state.busy], state.note, editing, state.use && [state.use.auto, state.use.skills.map((skill) => [skill.name, skill.scope, skill.uses, skill.chosen])]]);
     if (sign === state.signature) return;
     state.signature = sign;
     const held = overlay.contains(document.activeElement) && box.contains(document.activeElement) && !document.activeElement.closest(".skills-editor") ? { name: document.activeElement.closest("[data-name]")?.dataset.name, label: document.activeElement.textContent } : null;
@@ -281,6 +373,7 @@
         nodes.push(starters);
       }
       if (list.others?.length) nodes.push(othersNode(list.others));
+      if (state.use?.skills?.length) nodes.push(useNode(state.use));
     }
     // A redraw while someone is typing keeps their place in the editor.
     const typing = document.activeElement?.closest?.(".skills-editor") && document.activeElement.id ? { id: document.activeElement.id, start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd } : null;

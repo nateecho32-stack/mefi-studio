@@ -297,7 +297,7 @@
     // Friends is a page of its own in both layouts (openPlace below): asked for, it opens there instead of a bubble.
     if (section === "friends" && !window.MefiBoot?.isActive?.()) {
       if (hub.open) close({ immediate: true, restore: false });
-      window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" });
+      window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "lobby" });
       return true;
     }
     if (!host || window.MefiBoot?.isActive?.() || otherDialog()) return false;
@@ -354,7 +354,7 @@
   }
   function select(section, target = null) {
     // The Friends bubble goes to the Friends page (openPlace), in both layouts.
-    if (section === "friends") { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "rooms" })); return; }
+    if (section === "friends") { navigate(() => window.MefiNav?.go?.("friends-page", { place: friendsPlaceOfTarget(target) ?? "lobby" })); return; }
     const previous = hub.section; hub.section = section;
     hub.friendTarget = section === "friends" && Object.hasOwn(FRIENDS_TARGETS, target) ? target : null;
     if (host.panel.parentElement === el.detail) {
@@ -548,15 +548,21 @@
   // Without the layout none of this is built and the hub's Friends bubble is as it was.
   const friendsLayout = () => document.documentElement?.dataset?.layout === "v2";
   const FRIENDS_PLACES = Object.freeze([
+    // renderer/friends-front.js: Friends' front page, and the sign-in card for anyone not signed in yet.
+    { id: "lobby", label: "The Lobby", glyph: "g-community", about: "Who's online, the rooms open now and what your friends are making." },
     { id: "rooms", label: "Rooms", glyph: "g-orbit", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
     { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
     { id: "hub", label: "Project hub", glyph: "g-orbit", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
+    // renderer/friends-mod.js: shown only once the relay says this member is a moderator (it checks every action again).
+    { id: "mod", label: "Moderation", glyph: "g-flag", about: "Reports, credits that look farmed, and suspensions. Only moderators see this place.", modOnly: true },
   ]);
-  // A Friends target names one of these places (rooms, pcs, playground, hub).
+  // The places this member sees: Moderation only for moderators.
+  const shownPlaces = () => FRIENDS_PLACES.filter((place) => !place.modOnly || window.MefiFriendsMod?.isMod?.() === true);
+  // A Friends target names one of these places (lobby, rooms, pcs, playground, hub, mod).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
-  const friendsPage = { place: null, root: null, body: null, title: null, about: null };
+  const friendsPage = { place: null, root: null, body: null, title: null, about: null, room: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
   const friendsOpen = () => Boolean(friendsPage.root && friendsPage.root.hidden === false);
   function mountFriendsPage() {
@@ -574,8 +580,15 @@
     for (const place of FRIENDS_PLACES) {
       const tab = button(place.label, () => window.MefiNav?.go?.("friends-page", { place: place.id }), "ghost friends-place-tab");
       tab.id = `friends-place-tab-${place.id}`; tab.dataset.place = place.id;
+      if (place.modOnly) tab.hidden = true;
       tabs.append(tab);
     }
+    // Moderation's tab and row appear once the relay says this member is a moderator.
+    window.MefiFriendsMod?.subscribe?.(() => {
+      const shown = new Set(shownPlaces().map((place) => place.id));
+      for (const tab of friendsPage.tabs?.children ?? []) tab.hidden = !shown.has(tab.dataset.place);
+      window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: friendsPage.place } }));
+    });
     const body = node("div", "friends-place-body"); body.id = "friends-place-body";
     sheet.append(head, tabs, body); overlay.append(sheet); document.body.append(overlay);
     Object.assign(friendsPage, { root: overlay, body, title, about, tabs });
@@ -584,8 +597,10 @@
   function paintFriendsPlace(place) {
     for (const child of [...friendsPage.body.children]) child.dispose?.();
     let card = null;
-    if (place.id === "rooms") card = window.MefiRooms?.panel?.();
+    if (place.id === "lobby") card = window.MefiFriendsFront?.card?.();
+    else if (place.id === "rooms") card = window.MefiRooms?.panel?.({ room: friendsPage.room });
     else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
+    else if (place.id === "mod") card = window.MefiFriendsMod?.card?.();
     else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
     else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
     const parts = [card ?? node("p", "muted", "This part of Friends is not in this build.")];
@@ -604,6 +619,8 @@
     const place = friendsPlaceById(params.place) ?? friendsPlaceById(friendsPlaceOfTarget(params.target)) ?? friendsPlaceById(friendsPage.place) ?? FRIENDS_PLACES[0];
     window.MefiNav?.claim?.("friends-page");
     const moved = friendsPage.place !== place.id;
+    // A room asked for by name (The Lobby's rooms and people) opens in Rooms, even when Rooms is already up.
+    friendsPage.room = place.id === "rooms" && typeof params.room === "string" ? params.room : null;
     friendsPage.root.hidden = false;
     friendsPage.root.dataset.place = place.id;
     friendsPage.title.textContent = place.label;
@@ -613,11 +630,13 @@
       tab.setAttribute("aria-current", here ? "page" : "false");
       tab.classList.toggle("active", here);
     }
-    if (moved || !friendsPage.body.childElementCount) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
+    if (moved || !friendsPage.body.childElementCount || friendsPage.room) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
     friendsPage.place = place.id;
     if (moved) window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: place.id } }));
     window.MefiNav?.paintCurrent?.();
     window.MefiScroll?.scan?.(friendsPage.root);
+    // Whether this member moderates, asked again each time Friends opens (cheap: one /v1/me).
+    void Promise.resolve(window.MefiFriendsMod?.learn?.()).catch(() => {});
     return true;
   }
   function closePlace() {
@@ -631,7 +650,7 @@
   function friendsPlaces() {
     if (!friendsLayout()) return null;
     const here = friendsOpen() ? friendsPage.place : null;
-    return FRIENDS_PLACES.map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
+    return shownPlaces().map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
   }
   // Where you are in Friends ({ id, label }), for the breadcrumb and the tab; null when the page is not up.
   function friendsPlace() {

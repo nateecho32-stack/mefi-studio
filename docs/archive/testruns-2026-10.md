@@ -6,6 +6,96 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 The Studio Daily lands: DevDay branch merged with main, Since you were away
+
+Branch `land/devday` in `C:\wt\devday-land`: origin/wip/feat/devday-2026 (the
+daily paper, GPT-6.1 Sol defaults, Codex over app-server, ChatGPT plan
+sign-in, Catalog/Performance face lift) with origin/main b98fad5 merged file
+by file (main.cjs app-wide channels and the picture-aware assistant body,
+agent-profiles FIELDS/providers/vision, main's BOOKLET_INPUTS with the paper's
+two files, booklet regenerated, TESTRUNS and archives rebuilt from both
+sides' rows with none missing). Two fixes the merge needed: the catalog
+toolbar reads --shell-y0 (layout_contract_css), and the catalog folds by its
+own width with a container query (size_render: "1100x720@1: the page
+overflows", the six columns pushed the document to 1157px). New: "Since you
+were away" above the news (scripts/front-page.cjs, main.cjs news:away,
+renderer/daily-paper.js band, MefiStartup.pick).
+
+Full `npm test` after the last commit: Node 6882 tests, 6867 pass, 14
+skipped, 1 fail (attempt_review_host "a shot that is slow", ENOENT under
+load: 28/28 alone); Electron lane 75: 71 pass, 4 fail: layout_contract_render
+and shell_render (fail identically on clean main on this PC, viewport
+1921x1081), command_render and planning_render (each passes alone); Python
+248 OK; path lock ok; `npm run audit` 0 findings; `npm run check` ok (271
+targets). The earlier test:fast run on this branch lost 5 git suites to
+memory pressure (0.68 GB free; push to a local bare repo failed): sync and
+rust_parity_repo 25/25 alone. New suites: front_page 7, news_away_host 5,
+daily_paper 10 (3 new). Before/after launch captures at 1920x1080 with a fake
+bridge: `C:\wt\shots\launch-before.png`, `launch-after.png`.
+
+## 2026-10-04 Rust stage 1 finished: the host's last Electron gaps, the portable host build and the updater bridge
+
+Branch `wip/rust-host` (main merged at 1178ac7), gated in a short-path
+worktree (`C:\wt\rust-gate`, node_modules junctioned). New on the Rust host:
+the Media browser as a child webview, evidence shots in a hidden in-private
+window, dropped files' paths, the Electron build's page localStorage carried
+over once, Zen's desktop audio from WASAPI loopback, did-fail-load,
+trashItem, the page's WebView2 profile under userData; `npm run
+package:host` builds the portable host layout and `release-updater.mjs` can
+install and roll back either kind of build.
+
+Full `npm test` at 087fa29: Node 6788 tests, 6774 pass, 0 fail, 14 skipped;
+Electron lane 74: 71 pass, 1 skipped, 2 fail (`layout_contract_render`
+viewport 1921x1081 and `shell_render`), and both fail identically on a clean
+origin/main worktree (1178ac7) on this PC, so they are this display's state;
+Python 248 OK (1 skipped); path lock ok. After the last commits (ca10561):
+`npm run check` ok (265 targets), `npm run test:fast` 6788 tests, 0 fail, 14
+skipped, `npm run audit` 0 findings, lint 0 errors. `tests/rust_host_bridge`
+8/8 (new: Media browser through the shim, drop, localStorage hand-over,
+loopback stream), `rust_modules` 5/5 (new: evidence factory),
+`package_host` and `update_host_bridge` (new) with the updater suites 48/48,
+`rust_parity_git` 2/2 with the PowerShell drive check, host unit tests 15/15.
+
+Live, debug host and then the packaged release build run as an installed copy
+(no MEFI_STUDIO_ROOT: found resources/app, ran its own node.exe), each with
+`MEFI_HOST_SELFTEST_WEB` against a local page and a scratch userData seeded by
+Electron 44: Media browser titles A/B, back/forward, mute, refused mailto:,
+close; evidence PNG 1280x800 with no third-party request leaving (the beacon
+server saw none from the shot's page); localStorage keys carried (Latin-1 and
+UTF-16); a real file dropped through the DevTools protocol got its path; a
+clicked getDisplayMedia gave 1 audio track, 0 video, no picker, and peak
+0.029 back while the page played a 440 Hz tone at gain 0.03. Release host
+build 4 min (2 jobs), portable folder 123 MB.
+
+## 2026-10-03 Rust stage 2: the Git chip's actions move into Rust
+
+Branch `wip/rust-host`, after d428f9d. `scripts/git-actions.cjs` (glance,
+glanceMany, preview, save, pushBranch, publish, link, owners, nameCheck,
+publishPreview, account, identity) and the git-link/pc-setup/redaction/
+share-review rules it reads now have a Rust port in
+`crates/mefi-core/src/git/`, reached through the `git-actions` factory under
+the Rust host only. New: `jsre.rs` (JavaScript regexes with JavaScript's
+meaning) and the `MEFI_STUDIO_RUST_OFF` kill switch.
+
+`npm run check` ok (265 targets); `npm run test:fast` 6773 tests, 0 fail,
+14 skipped; lint 0 errors, 42 warnings (all pre-existing); audit ok;
+mefi-core 26 unit tests, host 13. Parity: `tests/rust_parity_git.test.mjs`
+(2 tests: about 330 pure-helper calls, and 89 steps on two identical
+folder trees with a local bare GitHub and a fake gh: every kind of save
+row, secrets by name and content, UTF-16 keys, a junction out of the
+project, 50/100 MB files, lock retries, merge in progress, push with a
+failing and a passing check, a rejected push, every publish path including
+resume and a taken name, and link related/unrelated/empty), all identical,
+with identical commit ids; `tests/rust_modules.test.mjs` 4 tests. The Git
+chip's existing suites (git_actions, git_host, git_link, git_link_host) and
+the other three parity suites: 202 tests, 0 fail. Live self-test on the Rust
+host: `git:state`, `projects:glance` and `git:save-preview` answered through
+Rust (rustCalls core.git.glance 3, glanceMany 1, preview 1); this checkout's
+preview (17 rows) and glance were byte-identical JSON to the JavaScript's.
+Timing on this checkout: glance about 330 ms and preview about 720 ms in
+both (git's own time). `fsutil fsinfo volumeinfo` is refused without admin
+on this PC, so the weak-drive check reads unknown in both languages.
+
 ## 2026-10-03 Rust stage 2: the store and repo modules move into Rust
 
 Branch `wip/rust-host`, after 80b1e0e. The OpenCode store reads

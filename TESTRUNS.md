@@ -39,6 +39,75 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Skills everywhere, answer styles and Connectors land on main
+
+Branch `feat/skills-everywhere` in `C:\wt\skills` (fef2aef skills for the chat, the helper agents and the builders,
+answer styles with ELI5 the default, `use_skill`, Team › Connectors, the parallel tool loop, the MCP pool and
+Streamable HTTP; 6318720 the twelve fixes an independent review found), landed from `land/skills` in
+`C:\wt\skills-land` with main merged twice (648e6ea over 00d32ca, 6e11811 over 33c3c4e: no conflicts beyond
+CHANGELOG, booklet.html rebuilt) and the release scope updated (1d5334a: Connectors move from 0.5.x into 0.5.0).
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on every step of the
+branch: fef2aef (run 37395870981), 6318720 (37397466087), 1d5334a (37397753111) and the landing commit 6e11811
+(37398222559). On this PC, on the landing tree: `npm run check` ok, `npm run audit` 0 errors and 0 warnings,
+`npm run lint` 0 errors and 45 warnings (as main). The suites this change touches or the merges brought in, run
+together on 6e11811: 321 tests, 320 pass, 1 skipped (skill_use, connectors, connectors_ui, chat_tools_ui,
+agent_tools_skills, skills_connectors_host, agent_rules, agent_rules_host, mentions_host, today_home,
+module_purity, skills_ipc, app_wide_ipc, booklet_build, size_page, friends_front_ui, friends_navigation, hub_host,
+project_hub_ui, rooms_ui, app_rail, relay_credits, relay_connect). Before the second merge, 568 tests on the touched
+suites: 567 pass, 1 skipped. Real windows, one at a time while no other session's window suite ran: team_render 1/1 (84 s) and sessions_render 1/1
+(134 s), the two fixtures this change edits; today_render, skills_render, composer_render, autonomy_render,
+agent_setup_render and unified_studio_render were still queued behind other sessions' window suites at landing.
+
+Measured: offering skills to a role (`autoSkills`, 30 skills in project and home) costs about 11 ms a call warm and
+114 ms cold; a second call to a connector reuses its open session (the pool keeps it 3 minutes, four servers at most;
+a worker keeps its own for the run). The review's fixes are pinned: an online connector gets only its saved values
+(never the PC's environment or the GitHub sign-in), one connector's calls keep their order, a bare `null` line, a
+404'd session and a server still starting at quit are handled, the values file is never wiped, `%TEMP%` tool folders
+are swept after six hours, `/name` counts only in the owner's own words. Kill switches MEFI_STUDIO_NO_SKILL_USE,
+MEFI_STUDIO_NO_CONNECTORS, MEFI_STUDIO_NO_MCP_POOL and MEFI_STUDIO_SERIAL_TOOLS, each pinned.
+
+## 2026-10-06 Friends › Moderation, Report on projects and pop-ups from friends land on main
+
+Branch `wip/friends-mod` in `C:\wt\mod` (9e2d43d Moderation and project reports; 1679ae6 pop-ups and the relay's
+friendOnline frame), main 33c3c4e merged (b433532, clean; booklet.html regenerated).
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) runs on the landing commit and is
+green before the fast-forward. This PC was shared with other sessions' suites the whole time, so the full local gate
+was left to CI, as for 33c3c4e.
+
+Run alone here after the merge: friends_front_ui 10/10 (pop-ups grouped, invites, requests, plays and stars, the off
+switch), friends_mod_ui 4/4 (new: moderators only, farming list, reports with Resolve, Remove project and Suspend,
+lookup, Take back from one giver or all, nothing without a yes), friends_navigation 8/8 (Moderation hidden unless a
+moderator), project_hub_ui 7/7 (Report), relay_credits 11/11 (flags: one giver and mutual trading, project reports
+once each and never your own, me().moderator), relay_connect 5/5 (friendOnline to room co-members only, not the
+Lobby, not twice in 30 minutes, never when hidden), relay_core 9/9, relay_e2e 9/9, hub_client 16/16 (hello lists
+friend.online), hub_host 13/13, rooms_ui 13/13, app_rail 40/40, onboarding 43/43, module_purity 61/61,
+booklet_build 5/5; friends_render and companion_hub_render 1/1. `npm run check` ok, lint clean on the changed files.
+The relay is redeployed (version 1fe8cfc5) and `relay/scripts/smoke.mjs` passes against it.
+
+## 2026-10-06 The Lobby, one sign-in, online at launch, credits that cannot be farmed, and no Discord roles land on main
+
+Branch `wip/credits-guard` in `C:\wt\credits` (bcc51f3 the Lobby front page, Sign in with Discord and online at launch;
+4970d71 the anti-farming rules and moderator review; 2ba413e Flame rank lists a room, no Discord roles needed), with
+main dfda798 merged (5506e9c) and the scope note's Friends lines updated.
+
+Windows CI (`Studio checks`: build-booklet, check, lint, the full `npm test`, audit) green on 4970d71 and 2ba413e, and
+run again on the landing commit before the fast-forward. On this PC the full gate could not get the machine to itself
+(other sessions' suites ran throughout); the one full `npm test` on bcc51f3: Node 7048 tests, 7013 pass, 20 fail, every
+one in the git-heavy suites that fail when git cannot start under load (attempt_review_host, attempt_snapshots_host,
+git_actions, rust_parity_repo, sync, sync_changes, sync_lineage, worktree_actions, worktrees; they passed alone on this
+branch's parent earlier today); Electron 88: layout_contract_render and shell_render as on clean main, and
+media_browser_render (not touched here). Python contracts and the path lock pass.
+
+Run alone after each change: relay_core 9/9, relay_e2e 9/9, relay_credits 10/10 (alts, one player and many projects,
+the 15-a-week pair limit, stars once a week, midnight replay, rate limits, Forget me's 30-day hold, a moderator's review
+and take-back), relay_connect 4/4, hub_client 16/16, hub_host 13/13, friends_front_ui 9/9, project_hub_ui 6/6,
+rooms_ui 13/13, friends_navigation 8/8, app_rail 40/40, onboarding 43/43, module_purity 58/58, booklet_build 5/5,
+layout_contract_nav 15/15, shell_frame_bars 34/34, community_rules 17/17; friends_render, companion_hub_render and
+unified_studio_render 1/1 each (friends_render walks The Lobby and the signed-out card at four window sizes with no
+text under 12 px). `npm run check` ok; lint adds no warning; audit 0. The relay was redeployed (version
+4b641b0c) and `relay/scripts/smoke.mjs` passes against it.
 ## 2026-10-06 Startup marks and the settings cache (S1) land on main
 
 Branch `land/s1-boot` in a cloud session (Linux, Node 24.21.0), stacked on S3 over main dfda798: the parked slice
@@ -460,96 +529,6 @@ same picture apart from attempt_review_host "a shot that is slow" (28/28
 alone). A first run was stopped and its children kept running into a second
 one: overlapping runs failed to start processes (0xC0000142) and wrote one
 log; neither is counted here. `cargo test --lib` 26 pass.
-
-## 2026-10-04 The Studio Daily lands: DevDay branch merged with main, Since you were away
-
-Branch `land/devday` in `C:\wt\devday-land`: origin/wip/feat/devday-2026 (the
-daily paper, GPT-6.1 Sol defaults, Codex over app-server, ChatGPT plan
-sign-in, Catalog/Performance face lift) with origin/main b98fad5 merged file
-by file (main.cjs app-wide channels and the picture-aware assistant body,
-agent-profiles FIELDS/providers/vision, main's BOOKLET_INPUTS with the paper's
-two files, booklet regenerated, TESTRUNS and archives rebuilt from both
-sides' rows with none missing). Two fixes the merge needed: the catalog
-toolbar reads --shell-y0 (layout_contract_css), and the catalog folds by its
-own width with a container query (size_render: "1100x720@1: the page
-overflows", the six columns pushed the document to 1157px). New: "Since you
-were away" above the news (scripts/front-page.cjs, main.cjs news:away,
-renderer/daily-paper.js band, MefiStartup.pick).
-
-Full `npm test` after the last commit: Node 6882 tests, 6867 pass, 14
-skipped, 1 fail (attempt_review_host "a shot that is slow", ENOENT under
-load: 28/28 alone); Electron lane 75: 71 pass, 4 fail: layout_contract_render
-and shell_render (fail identically on clean main on this PC, viewport
-1921x1081), command_render and planning_render (each passes alone); Python
-248 OK; path lock ok; `npm run audit` 0 findings; `npm run check` ok (271
-targets). The earlier test:fast run on this branch lost 5 git suites to
-memory pressure (0.68 GB free; push to a local bare repo failed): sync and
-rust_parity_repo 25/25 alone. New suites: front_page 7, news_away_host 5,
-daily_paper 10 (3 new). Before/after launch captures at 1920x1080 with a fake
-bridge: `C:\wt\shots\launch-before.png`, `launch-after.png`.
-
-## 2026-10-04 Rust stage 1 finished: the host's last Electron gaps, the portable host build and the updater bridge
-
-Branch `wip/rust-host` (main merged at 1178ac7), gated in a short-path
-worktree (`C:\wt\rust-gate`, node_modules junctioned). New on the Rust host:
-the Media browser as a child webview, evidence shots in a hidden in-private
-window, dropped files' paths, the Electron build's page localStorage carried
-over once, Zen's desktop audio from WASAPI loopback, did-fail-load,
-trashItem, the page's WebView2 profile under userData; `npm run
-package:host` builds the portable host layout and `release-updater.mjs` can
-install and roll back either kind of build.
-
-Full `npm test` at 087fa29: Node 6788 tests, 6774 pass, 0 fail, 14 skipped;
-Electron lane 74: 71 pass, 1 skipped, 2 fail (`layout_contract_render`
-viewport 1921x1081 and `shell_render`), and both fail identically on a clean
-origin/main worktree (1178ac7) on this PC, so they are this display's state;
-Python 248 OK (1 skipped); path lock ok. After the last commits (ca10561):
-`npm run check` ok (265 targets), `npm run test:fast` 6788 tests, 0 fail, 14
-skipped, `npm run audit` 0 findings, lint 0 errors. `tests/rust_host_bridge`
-8/8 (new: Media browser through the shim, drop, localStorage hand-over,
-loopback stream), `rust_modules` 5/5 (new: evidence factory),
-`package_host` and `update_host_bridge` (new) with the updater suites 48/48,
-`rust_parity_git` 2/2 with the PowerShell drive check, host unit tests 15/15.
-
-Live, debug host and then the packaged release build run as an installed copy
-(no MEFI_STUDIO_ROOT: found resources/app, ran its own node.exe), each with
-`MEFI_HOST_SELFTEST_WEB` against a local page and a scratch userData seeded by
-Electron 44: Media browser titles A/B, back/forward, mute, refused mailto:,
-close; evidence PNG 1280x800 with no third-party request leaving (the beacon
-server saw none from the shot's page); localStorage keys carried (Latin-1 and
-UTF-16); a real file dropped through the DevTools protocol got its path; a
-clicked getDisplayMedia gave 1 audio track, 0 video, no picker, and peak
-0.029 back while the page played a 440 Hz tone at gain 0.03. Release host
-build 4 min (2 jobs), portable folder 123 MB.
-
-## 2026-10-03 Rust stage 2: the Git chip's actions move into Rust
-
-Branch `wip/rust-host`, after d428f9d. `scripts/git-actions.cjs` (glance,
-glanceMany, preview, save, pushBranch, publish, link, owners, nameCheck,
-publishPreview, account, identity) and the git-link/pc-setup/redaction/
-share-review rules it reads now have a Rust port in
-`crates/mefi-core/src/git/`, reached through the `git-actions` factory under
-the Rust host only. New: `jsre.rs` (JavaScript regexes with JavaScript's
-meaning) and the `MEFI_STUDIO_RUST_OFF` kill switch.
-
-`npm run check` ok (265 targets); `npm run test:fast` 6773 tests, 0 fail,
-14 skipped; lint 0 errors, 42 warnings (all pre-existing); audit ok;
-mefi-core 26 unit tests, host 13. Parity: `tests/rust_parity_git.test.mjs`
-(2 tests: about 330 pure-helper calls, and 89 steps on two identical
-folder trees with a local bare GitHub and a fake gh: every kind of save
-row, secrets by name and content, UTF-16 keys, a junction out of the
-project, 50/100 MB files, lock retries, merge in progress, push with a
-failing and a passing check, a rejected push, every publish path including
-resume and a taken name, and link related/unrelated/empty), all identical,
-with identical commit ids; `tests/rust_modules.test.mjs` 4 tests. The Git
-chip's existing suites (git_actions, git_host, git_link, git_link_host) and
-the other three parity suites: 202 tests, 0 fail. Live self-test on the Rust
-host: `git:state`, `projects:glance` and `git:save-preview` answered through
-Rust (rustCalls core.git.glance 3, glanceMany 1, preview 1); this checkout's
-preview (17 rows) and glance were byte-identical JSON to the JavaScript's.
-Timing on this checkout: glance about 330 ms and preview about 720 ms in
-both (git's own time). `fsutil fsinfo volumeinfo` is refused without admin
-on this PC, so the weak-drive check reads unknown in both languages.
 
 ## Read Before Any Tests
 

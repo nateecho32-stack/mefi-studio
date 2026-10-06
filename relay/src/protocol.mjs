@@ -83,6 +83,9 @@ export const FEATURES = Object.freeze({
   online: 'online', // GET /v1/online: who is in Studio right now
   credits: 'credits', // GET /v1/me, member cards, the credits frame
   projects: 'projects', // the project hub: share, play, star, feature
+  front: 'front', // GET /v1/front: the Lobby front page in one read
+  friendOnline: 'friend.online', // friendOnline: someone you share a room with just opened Studio (to clients that list it)
+  building: 'building', // building: what a member is making right now, with their say-so (The Lobby's Building now)
 });
 
 /** listen{action}: a room's shared player. */
@@ -103,7 +106,7 @@ export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'succ
 
 /** Project cards (feature "projects") and why a credits frame was sent (feature "credits"). */
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
-export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature']);
+export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature', 'revoked']);
 
 export const ROOM_KINDS = Object.freeze(['hangout', 'cowork']);
 export const ROOM_POLICIES = Object.freeze(['request', 'invite']);
@@ -418,6 +421,10 @@ export const CLIENT_FRAMES = Object.freeze({
   nowPlaying: {
     track: nullable(object({ label: line(1, LIMITS.listenLabelMax), provider: oneOf(NOW_PLAYING_PROVIDERS), url: optional(httpsUrl()) })),
   },
+  // What this member is building (feature "building"): the open project's name and counts only, or null to stop.
+  building: {
+    now: nullable(object({ project: line(1, 80), running: integer(0, 1000), doneToday: integer(0, 1000) })),
+  },
   // The Discord remote (feature "remote"): turn this socket's PC on or off, answer a remote frame, alert the member.
   remoteHello: { pc: remotePc(), on: boolean() },
   remoteReply: { requestId: opaqueId(), text: remoteText(), buttons: optional(list(remoteButton(), LIMITS.remoteButtons)), done: optional(boolean()) },
@@ -470,6 +477,8 @@ export const HUB_FRAMES = Object.freeze({
   historyRequest: { roomId: opaqueId(), requestId: opaqueId(), before: optional(snowflake()) },
   // To the asker: the messages a peer held, each with a checked sig, newest last.
   history: { roomId: opaqueId(), messages: list(roomMessage(), LIMITS.historyMessages), hasMore: boolean() },
+  // To the people a member shares a room with, when that member opens Studio (feature "friend.online").
+  friendOnline: { user: user() },
   // To the member who earned or spent credits (feature "credits"): the new totals and why.
   credits: {
     balance: integer(0, Number.MAX_SAFE_INTEGER),
@@ -580,6 +589,8 @@ export const HTTP_BODIES = Object.freeze({
   // POST /v1/reports
   // message: the reporter's own copy with its sig, kept as evidence only when the sig checks out.
   report: { messageId: snowflake(), roomId: opaqueId(), reason: string(1, LIMITS.reasonChars, { pattern: TEXT, nonBlank: true }), message: optional(roomMessage()) },
+  // POST /v1/projects/:id/report
+  reportProject: { reason: string(1, LIMITS.reasonChars, { pattern: TEXT, nonBlank: true }) },
   // POST /v1/rooms/:id/claims
   claim: {
     machineId: string(1, 64, { pattern: MACHINE_ID }),

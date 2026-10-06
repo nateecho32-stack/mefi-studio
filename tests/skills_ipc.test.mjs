@@ -143,5 +143,5 @@ test("the channels take names and text and never a path, are project-gated, and 
   assert.doesNotMatch(preload.match(/skillsSave:[^\n]*/)[0], /path|file|folder/i, "a save carries a name, a description and a body");
   assert.match(preload, /skillsExport: \(payload\) => ipcRenderer\.invoke\("skills:export", \{ name: typeof payload\?\.name === "string" \? payload\.name\.slice\(0, 100\) : "", kind: payload\?\.kind === "zip" \? "zip" : "folder" \}\)/);
   assert.match(source, /inventory: \(root\) => agentAddons\.inventory\(root\),/);
-  assert.match(readFileSync(new URL("../scripts/agent-addons.cjs", import.meta.url), "utf8"), /module\.exports = \{ catalog, inventory, instructions, validate, rulesState, readRuleFile \};/);
+  assert.match(readFileSync(new URL("../scripts/agent-addons.cjs", import.meta.url), "utf8"), /module\.exports = \{ catalog, inventory, instructions, validate, rulesState, readRuleFile, skillCatalog, skillText, alwaysNames, autoSkills, loadSkill, forget \};/);
 });

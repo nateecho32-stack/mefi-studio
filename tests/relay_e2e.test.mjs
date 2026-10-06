@@ -95,15 +95,17 @@ test("invites, leaving, removal, lock and close", async () => {
   for (const one of [alice, bob, cara]) await one.client.disconnect();
 });
 
-test("room rules: Room Host for listed rooms, a week in the server for your own, new members post no links", async () => {
+test("room rules: Flame rank (or a moderator or Room Host) for listed rooms, a week in the server for your own, new members post no links", async () => {
   const relay = makeRelay();
   const bob = member(relay, "tok-bob");
   const week = member(relay, "tok-week");
   const newbie = member(relay, "tok-newbie");
   const alice = member(relay, "tok-alice");
   await connectAll(bob, week, newbie, alice);
-  assert.equal((await bob.client.createRoom({ kind: "hangout", name: "Mine", policy: "request", listed: true })).reason, "room-host-role");
+  assert.equal((await bob.client.createRoom({ kind: "hangout", name: "Mine", policy: "request", listed: true })).reason, "listed-rank", "Studio's own rank, not a Discord role");
   assert.equal((await bob.client.createRoom({ kind: "hangout", name: "Mine", policy: "invite", listed: false })).ok, true);
+  relay.sql("INSERT INTO accounts (user_id, balance, lifetime) VALUES (?, 200, 200) ON CONFLICT (user_id) DO UPDATE SET lifetime = 200", BOB.id);
+  assert.equal((await bob.client.createRoom({ kind: "hangout", name: "Listed at Flame", policy: "request", listed: true })).ok, true, "Flame rank lists a room");
   assert.equal((await week.client.createRoom({ kind: "hangout", name: "Too soon", policy: "invite", listed: false })).reason, "week-member");
   assert.equal((await newbie.client.createRoom({ kind: "hangout", name: "New", policy: "invite", listed: false })).reason, "new-member");
 

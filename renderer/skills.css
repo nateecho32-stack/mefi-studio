@@ -57,7 +57,19 @@
 .skills-others summary { width: fit-content; cursor: pointer; color: var(--gold-bright); font-weight: 600; }
 .skills-other-list { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; }
 .skills-other { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; color: var(--ivory); font-family: var(--font-mono); font-size: 13px; }
+/* How skills are used: one row per skill this project can reach, its use in each place (skills.js useNode). */
+.skills-use-auto { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.skills-use-switch { display: inline-flex; align-items: center; gap: 8px; color: var(--ivory); font-size: 13px; cursor: pointer; }
+.skills-use-switch input { width: 32px; height: 18px; accent-color: var(--gold); }
+.skills-use-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.skills-use-row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr) auto; align-items: center; gap: 8px 14px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--surface-raised, var(--glass)); }
+.skills-use-who { display: grid; gap: 2px; min-width: 0; }
+.skills-use-picks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.skills-use-pick { display: grid; gap: 3px; min-width: 0; }
+.skills-use-select { min-height: 32px; padding: 4px 8px; font-size: 13px; }
+.skills-use-select:focus-visible, .skills-use-switch input:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
 @media (max-width: 900px) {
+  .skills-use-row { grid-template-columns: 1fr; }
   .skills-row { grid-template-columns: 1fr; }
   .skills-buttons { justify-content: flex-start; }
   .skills-fields { grid-template-columns: 1fr; }

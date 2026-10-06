@@ -21,7 +21,7 @@
 // it to: rate buckets refill, pending peer-history asks just lapse.
 
 import { createChat, idTime } from './chat.mjs';
-import { createCredits } from './credits.mjs';
+import { FRONT, RANKS, createCredits, rankFor } from './credits.mjs';
 import { createLeases } from './leases.mjs';
 import { createListen } from './listen.mjs';
 import { createOembed, publicLink } from './media.mjs';
@@ -56,7 +56,10 @@ export const ROOM_LIMITS = Object.freeze({
   invitesPerDay: 20,
   requestTtlMs: 7 * DAY_MS,
   inviteTtlMs: 7 * DAY_MS,
-  unlistedMinAgeMs: 7 * DAY_MS, // your own unlisted room: a week in the server (listed rooms need Room Host)
+  unlistedMinAgeMs: 7 * DAY_MS, // your own unlisted room: a week in the server
+  // A room in the public list: Studio's own rank, earned from credits (credits.mjs), so no Discord role is needed.
+  // A moderator, or a Room Host role when ROLE_IDS_JSON names one, may list a room at any rank.
+  listedRank: 'flame',
   removedCooldownMs: 30 * DAY_MS,
   postsPer10s: 5,
   postsPerMinute: 30,
@@ -205,11 +208,17 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const onlineHidden = (uid) => store.get('SELECT online_hidden FROM members WHERE user_id = ?', uid)?.online_hidden === 1;
 
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building];
 
   // ---- rooms in the store --------------------------------------------------------
 
   const roomRow = (roomId) => (isOpaqueId(roomId) ? store.get('SELECT * FROM rooms WHERE id = ?', roomId) : undefined);
+  // Whether a member's Studio rank (from lifetime credits, worked out here) is at least `key`.
+  function rankAtLeast(uid, key) {
+    const order = RANKS.map((rank) => rank.key);
+    return order.indexOf(rankFor(credits.account(uid).lifetime).key) >= order.indexOf(key);
+  }
+
   function isMember(roomId, uid) {
     if (!isOpaqueId(roomId) || !isSnowflake(uid)) return false;
     return Boolean(store.get(`SELECT 1 AS yes FROM room_members m JOIN rooms r ON r.id = m.room_id WHERE m.room_id = ? AND m.user_id = ? AND r.status <> 'closed'`, roomId, uid));
@@ -487,6 +496,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       }
       case 'nowPlaying':
         return nowPlaying(ws, a, frame.track);
+      case 'building':
+        return building(ws, a, frame.now);
       case 'companion':
         return companion(ws, a, frame);
       case 'historyRequest':
@@ -515,12 +526,42 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     const { claims } = verdict;
     const member = sessions.member(claims.uid);
     if (!member) return closeSocket(ws, a, CLOSE_CODES.unauthorized, 'unknown member');
-    if (readySockets().filter((entry) => entry.a.uid === claims.uid).length >= WS_LIMITS.socketsPerUser) return closeSocket(ws, a, CLOSE_CODES.tooManySockets, 'too many sockets');
+    const mine = readySockets().filter((entry) => entry.a.uid === claims.uid).length;
+    if (mine >= WS_LIMITS.socketsPerUser) return closeSocket(ws, a, CLOSE_CODES.tooManySockets, 'too many sockets');
     joinLobby(claims.uid);
     Object.assign(a, { s: 'ready', uid: claims.uid, sid: claims.sid, exp: claims.exp, ro: claims.readOnly || member.readOnly ? 1 : 0, name: member.name, mod: member.isMod ? 1 : 0, j: member.joinedAt, rooms: [], cf: frame.features ?? [], np: null });
     sockets.write(ws, a);
     sendReady(ws, a);
+    if (!mine) announceOnline(claims.uid, member.name);
     await schedule();
+  }
+
+  // Someone just opened Studio (their first socket): told to the people they
+  // share a room with, never the Lobby's whole crowd, never when they hide
+  // from Who's online, at most once every 30 minutes per pair, and only to
+  // Studios that said they understand friendOnline.
+  const announced = new Map(); // "uid>friend" -> when
+  function announceOnline(uid, name) {
+    if (onlineHidden(uid)) return;
+    const friends = new Set(store.all(
+      `SELECT DISTINCT b.user_id AS id FROM room_members a JOIN room_members b ON b.room_id = a.room_id JOIN rooms r ON r.id = a.room_id
+        WHERE a.user_id = ? AND b.user_id <> ? AND a.room_id <> ? AND r.status <> 'closed'`,
+      uid,
+      uid,
+      LOBBY.id,
+    ).map((row) => row.id));
+    if (!friends.size) return;
+    const at = now();
+    if (announced.size > 5000) announced.clear();
+    const told = new Set();
+    for (const { ws, a } of readySockets()) {
+      if (!friends.has(a.uid) || !(a.cf ?? []).includes(FEATURES.friendOnline)) continue;
+      const key = `${uid}>${a.uid}`;
+      if (!told.has(a.uid) && at - (announced.get(key) ?? 0) < 30 * MINUTE_MS) continue;
+      told.add(a.uid);
+      announced.set(key, at);
+      sendFrame(ws, 'friendOnline', { user: { id: uid, name } });
+    }
   }
 
   function sendReady(ws, a) {
@@ -622,6 +663,13 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       const url = track.url ? publicLink(track.url) : null;
       a.np = { label, provider: track.provider, ...(url ? { url } : {}), since: now() };
     }
+    sockets.write(ws, a);
+  }
+
+  // What a member is building, with their say-so: kept on the socket only, gone when it closes.
+  function building(ws, a, value) {
+    const project = value ? cleanLine(value.project, 80) : '';
+    a.bd = project ? { project, running: value.running, doneToday: value.doneToday, since: now() } : null;
     sockets.write(ws, a);
   }
 
@@ -771,7 +819,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     const name = cleanLine(body.name, LIMITS.roomNameChars);
     if (!name) return fromResult(fail('bad-request', 'name'));
     if (actor.isNew) return fromResult(fail('forbidden', 'new-member'));
-    if (body.listed && !actor.isRoomHost && !actor.isMod) return fromResult(fail('forbidden', 'room-host-role'));
+    if (body.listed && !actor.isRoomHost && !actor.isMod && !rankAtLeast(actor.uid, ROOM_LIMITS.listedRank)) return fromResult(fail('forbidden', 'listed-rank'));
     if (!body.listed && !actor.isRoomHost && !actor.isMod && (!Number.isFinite(actor.joinedAt) || now() - actor.joinedAt < ROOM_LIMITS.unlistedMinAgeMs)) return fromResult(fail('forbidden', 'week-member'));
     const at = now();
     const result = store.transaction(() => {
@@ -1124,6 +1172,57 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     return reply(200, { ok: true, visible: body.visible });
   }, { body: 'onlineVisible', readOnlyOk: true });
 
+  // The Lobby front page in one read: who is online and where (a listed room's
+  // name, the Lobby, or just "in Studio"; an unlisted room is never named),
+  // the rooms open now with how many are in each, the Lobby's crowd, the
+  // member's own room for an invite code, and the hub's week (credits.front).
+  route('GET', '/v1/front', ({ actor }) => {
+    joinLobby(actor.uid);
+    const ready = readySockets();
+    const listed = new Map(store.all(`SELECT id, name, kind FROM rooms WHERE status = 'active' AND listed = 1`).map((row) => [row.id, row]));
+    const here = new Map(); // room id -> uids with a socket in it
+    const rooms = new Map(); // uid -> room ids their sockets hold
+    const builds = new Map(); // uid -> what they share they are building
+    for (const { a } of ready) {
+      if (a.bd && !builds.has(a.uid)) builds.set(a.uid, a.bd);
+      if (!rooms.has(a.uid)) rooms.set(a.uid, new Set());
+      for (const roomId of a.rooms ?? []) {
+        rooms.get(a.uid).add(roomId);
+        if (!here.has(roomId)) here.set(roomId, new Set());
+        here.get(roomId).add(a.uid);
+      }
+    }
+    const visible = [...rooms.keys()].filter((uid) => uid !== actor.uid && !onlineHidden(uid));
+    const people = visible.slice(0, FRONT.people).map((uid) => {
+      const card = credits.card(uid);
+      if (!card) return null;
+      const held = [...rooms.get(uid)];
+      const named = held.map((roomId) => listed.get(roomId)).find((room) => room && room.id !== LOBBY.id);
+      const where = named ? { id: named.id, name: named.name, kind: named.kind } : held.includes(LOBBY.id) ? { id: LOBBY.id, name: LOBBY.name, kind: 'hangout' } : null;
+      const made = builds.get(uid);
+      return { id: uid, name: card.name, rank: card.rank.key, specialRanks: card.specialRanks, where, building: made ? { project: made.project, running: made.running, doneToday: made.doneToday } : null };
+    }).filter(Boolean);
+    people.sort((x, y) => Number(Boolean(y.where)) - Number(Boolean(x.where)) || x.name.localeCompare(y.name));
+    const crowd = (roomId) => [...(here.get(roomId) ?? [])].filter((uid) => isMember(roomId, uid) && (roomId !== LOBBY.id || !onlineHidden(uid))).length;
+    const open = store.all(
+      `SELECT r.* FROM rooms r LEFT JOIN room_members m ON m.room_id = r.id AND m.user_id = ?
+        WHERE r.status = 'active' AND r.id <> ? AND (r.listed = 1 OR m.user_id IS NOT NULL) LIMIT 100`,
+      actor.uid,
+      LOBBY.id,
+    ).map((row) => ({ ...summary(row, actor.uid), here: crowd(row.id) }));
+    open.sort((x, y) => y.here - x.here || y.memberCount - x.memberCount || y.createdAt - x.createdAt);
+    const own = store.get(`SELECT id, name FROM rooms WHERE owner_id = ? AND status = 'active' AND id <> ? ORDER BY created_at DESC LIMIT 1`, actor.uid, LOBBY.id);
+    return reply(200, {
+      ok: true,
+      online: { count: visible.length, people },
+      lobby: { here: crowd(LOBBY.id) },
+      rooms: open.slice(0, FRONT.rooms),
+      ownRoom: own ? { id: own.id, name: own.name } : null,
+      visible: !onlineHidden(actor.uid),
+      ...credits.front(actor.uid),
+    });
+  });
+
   route('GET', '/v1/members/search', ({ actor, query }) => {
     const checked = validateQuery('membersSearch', query);
     if (!checked.ok) return reply(400, { ok: false, error: 'bad-request' });
@@ -1205,8 +1304,11 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     return reply(410, { ok: false, error: 'gone' });
   }, { write: true, readOnlyOk: true, body: 'release' });
 
-  // Forget me: every row about this member goes, rooms they own close.
-  route('POST', '/v1/me/forget', ({ actor }) => {
+  // Forget me: every row about this member goes, rooms they own close. Only a
+  // keyed fingerprint of the account stays for 30 days, so forgetting cannot
+  // reset the credit limits (credits.forget).
+  route('POST', '/v1/me/forget', async ({ actor }) => {
+    const fingerprint = await credits.fingerprint(actor.uid);
     const owned = store.all(`SELECT id FROM rooms WHERE owner_id = ? AND status <> 'closed'`, actor.uid).map((row) => row.id);
     for (const roomId of owned) setStatus({ ...actor, isMod: true }, roomId, 'closed');
     const rooms = store.all('SELECT room_id FROM room_members WHERE user_id = ?', actor.uid).map((row) => row.room_id);
@@ -1227,7 +1329,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       store.run('DELETE FROM leases WHERE member_id = ?', actor.uid);
       store.run('DELETE FROM token_cache WHERE user_id = ?', actor.uid);
       out.projects = count('SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?', actor.uid);
-      credits.forget(actor.uid);
+      credits.forget(actor.uid, fingerprint);
       store.run('DELETE FROM members WHERE user_id = ?', actor.uid);
       return out;
     });
@@ -1254,7 +1356,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     const rows = store.all(`SELECT * FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT 100`);
     return reply(200, {
       ok: true,
-      reports: rows.map((row) => ({ id: row.id, roomId: row.room_id, messageId: row.message_id, author: row.author_id ? userView(row.author_id) : null, reporter: userView(row.reporter_id), reason: row.reason, text: row.text, verified: row.verified === 1, createdAt: row.created_at })),
+      // A project report (credits.mjs) is kept as room "project" with the project's id as its message.
+      reports: rows.map((row) => ({ id: row.id, kind: row.room_id === 'project' ? 'project' : 'message', roomId: row.room_id === 'project' ? null : row.room_id, messageId: row.room_id === 'project' ? null : row.message_id, projectId: row.room_id === 'project' ? row.message_id : null, author: row.author_id ? userView(row.author_id) : null, reporter: userView(row.reporter_id), reason: row.reason, text: row.text, verified: row.verified === 1, createdAt: row.created_at })),
     });
   }, { mod: true });
 

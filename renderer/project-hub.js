@@ -45,7 +45,20 @@
     "read-only": "Your account is read-only in the server right now.",
     paused: "The room service is paused right now.",
   };
+  // Why credits have not started (the relay's GUARD), in plain words with the day they will.
+  const dateOf = (ms) => new Date(ms).toLocaleDateString([], { day: "numeric", month: "long" });
+  const onDay = (ms) => (Number.isFinite(ms) ? ` on ${dateOf(ms)}` : "");
+  function holdWords(hold) {
+    switch (hold?.reason) {
+      case "new-account": return `Credits start when your Discord account is 30 days old${onDay(hold.until)}. Until then, plays and stars you give count for no one.`;
+      case "new-member": return `Credits start a week after you joined the Void Engine server${onDay(hold.until)}.`;
+      case "forgot-me": return `Credits are paused for 30 days after Forget me${Number.isFinite(hold.until) ? `, until ${dateOf(hold.until)}` : ""}.`;
+      case "read-only": return "Credits are paused while your account is read-only in the server.";
+      default: return "Credits start once your account is in good standing in the server.";
+    }
+  }
   const why = (answer, fallback) => REASONS[answer?.reason] || REASONS[answer?.error] || fallback;
+  const why_ = why;
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   let current = null;
   let hearing = false;
@@ -95,6 +108,7 @@
     current?.dispose();
     let me = null, tab = "map", projects = [], featured = [], selected = null, busy = false;
     const draft = { url: "", title: "", blurb: "", kind: "game" };
+    const reporting = new Set(); // projects whose report reasons are open
     const call = async (method, ...args) => {
       try { return await api.hubProjects(method, ...args); } catch (error) { return { ok: false, error: "failed", message: error?.message }; }
     };
@@ -131,7 +145,7 @@
         for (const key of me.specialRanks) chips.append(node("span", "project-hub-chip", SPECIAL_NAMES[key] ?? key));
         mine.append(chips);
       }
-      if (!me.canEarn) mine.append(node("p", "muted", "Credits start after your first day in the server."));
+      if (!me.canEarn) mine.append(node("p", "muted project-hub-hold", holdWords(me.hold)));
     }
 
     function tabs() {
@@ -153,6 +167,22 @@
       if (!own) row.append(button(project.starred ? "Starred" : "Star", () => star(project, !project.starred)));
       if (own && !project.featuredUntil) row.append(button(`Feature (${me?.featureCost ?? 100} credits)`, () => feature(project)));
       if (own) row.append(button("Remove", () => remove(project)));
+      // Anyone may report someone else's project; a moderator may also take it off the hub.
+      if (!own) row.append(button(reporting.has(project.id) ? "Cancel report" : "Report", () => { if (reporting.has(project.id)) reporting.delete(project.id); else reporting.add(project.id); paint(); }));
+      if (!own && me?.moderator) row.append(button("Remove (moderator)", () => remove(project)));
+      if (reporting.has(project.id)) {
+        const why = node("div", "project-hub-report");
+        why.append(node("span", "muted", "What is wrong with it?"));
+        for (const reason of ["Spam or a broken link", "Not safe to open", "Someone else's work", "Something else"]) {
+          why.append(button(reason, () => guard("Sending the report…", async () => {
+            const answer = await call("reportProject", project.id, reason);
+            reporting.delete(project.id);
+            status.textContent = answer?.ok ? "Thanks. A moderator will look at it." : why_(answer, "The report did not go through.");
+            paint();
+          })));
+        }
+        row.append(why);
+      }
       return row;
     }
 
@@ -393,9 +423,11 @@
     function explain(hub) {
       if (!hub?.configured) { status.textContent = "The project hub needs the room service, which this copy of Studio has no address for."; root.dataset.state = "not-configured"; body.replaceChildren(); return false; }
       if (!hub.linked) {
-        status.textContent = "Link your Discord account to share and play projects. Discord asks once in your browser.";
         root.dataset.state = "not-linked";
-        body.replaceChildren(button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
+        // Friends' one sign-in card (renderer/friends-front.js) when it is in this build.
+        const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); } });
+        status.textContent = gate ? "" : "Link your Discord account to share and play projects. Discord asks once in your browser.";
+        body.replaceChildren(gate ?? button("Link Discord", () => { void linkHere(); }, "project-hub-link"));
         return false;
       }
       if (hub.error === "not-member") { notMember(); return false; }
@@ -432,6 +464,7 @@
       if (event?.type === "credits" && me) {
         me.credits = { ...me.credits, balance: event.balance, lifetime: event.lifetime ?? me.credits.lifetime, today: event.today ?? me.credits.today };
         if (event.delta > 0) status.textContent = `+${event.delta} credits${{ played: ": someone played your project", play: " for playing", starred: ": someone starred your project" }[event.reason] ?? ""}.`;
+        else if (event.reason === "revoked") status.textContent = `A moderator took back ${-event.delta} credits that came from farming.`;
         void refresh();
       } else if (event?.type === "played") {
         status.textContent = event.counted ? `Play counted${event.credited?.you ? `: +${event.credited.you} credits for you` : ""}.` : "Play noted.";

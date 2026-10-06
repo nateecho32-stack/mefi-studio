@@ -1,0 +1,104 @@
+/* Friends' front door (renderer/friends-front.js): the sign-in card, and The
+   Lobby, Friends' front page in The Studio Daily's voice (daily-paper.css):
+   a masthead, the people online, a lead story, three columns and a foot.
+   Colours are the theme's tokens; the serif is the Daily's. */
+.friends-gate, .friends-front { --front-serif: "Iowan Old Style", "Charter", "Georgia", serif; }
+
+/* ---- signed out: one card ---- */
+.friends-gate { display: grid; justify-items: center; gap: 14px; max-width: 520px; margin: clamp(24px, 6vh, 56px) auto; text-align: center; }
+.friends-gate-title { margin: 0; font: 700 30px/1.15 var(--front-serif); color: var(--ivory); }
+.friends-gate-lead { margin: 0; max-width: 46ch; color: var(--muted); }
+.friends-gate-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.friends-gate-signin { min-height: 42px; padding: 0 20px; border: 0; border-radius: var(--r-lg); background: var(--gold); color: var(--bg); font-weight: 600; font-size: 14.5px; cursor: pointer; }
+.friends-gate-signin:hover { filter: brightness(1.08); }
+.friends-gate-signin:disabled { opacity: 0.6; cursor: default; }
+.friends-gate-status { min-height: 1.4em; margin: 0; color: var(--muted); font-size: 13px; }
+.friends-gate-status:empty { display: none; }
+.friends-gate-fine { margin: 0; max-width: 52ch; color: var(--dim); font-size: 12.5px; }
+.friends-gate-points { display: grid; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; text-align: left; color: var(--muted); font-size: 13.5px; }
+.friends-gate-points b { color: var(--ivory); }
+
+/* ---- The Lobby ---- */
+.friends-front { display: grid; gap: 0; min-width: 0; color: var(--ivory); }
+.friends-front-status { margin: 0 0 8px; color: var(--muted); font-size: 13px; }
+.friends-front-status:empty { display: none; }
+.friends-front-body { display: grid; gap: 18px; min-width: 0; }
+.front-mast { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 12px; padding-bottom: 12px; border-bottom: 3px double var(--line-strong); }
+.front-ear { display: grid; justify-items: start; gap: 4px; min-width: 0; font-size: 12.5px; color: var(--muted); }
+.front-ear p { margin: 0; }
+.front-ear-end { justify-items: end; text-align: right; }
+.front-date { color: var(--ivory); font-weight: 600; }
+.front-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--live); vertical-align: 1px; }
+.front-plate { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.front-nameplate { margin: 0; font: 700 clamp(30px, 3.4vw, 52px)/1 var(--front-serif); letter-spacing: -0.015em; color: var(--ivory); white-space: nowrap; }
+.front-motto { margin: 0; font: 600 12px/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+.front-link { padding: 0; border: 0; background: none; color: var(--gold); font: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 0.2em; }
+.front-link:focus-visible, .front-who-go:focus-visible, .front-item:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+.front-people { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.front-who { display: flex; align-items: center; gap: 9px; padding: 6px 12px 6px 6px; border: 1px solid var(--line); border-radius: 22px; background: color-mix(in srgb, var(--ivory) 2%, transparent); }
+.front-who-go { display: flex; align-items: center; justify-content: flex-start; gap: 9px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 18px; }
+.front-avatar { position: relative; display: grid; flex: none; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: hsl(var(--who-hue, 160) 45% 72%); color: var(--bg); font-size: 12px; font-weight: 700; }
+.front-avatar::after { content: ""; position: absolute; right: -1px; bottom: -1px; width: 10px; height: 10px; border: 2px solid var(--panel); border-radius: 50%; background: var(--live); }
+.front-who-text, .front-building-text { display: grid; min-width: 0; line-height: 1.2; }
+.front-who-text b, .front-building-text b { font-size: 13px; font-weight: 600; color: var(--ivory); }
+.front-who-text small, .front-building-text small { font-size: 12px; color: var(--muted); }
+.front-empty { margin: 6px 0; color: var(--muted); font-size: 13px; }
+
+/* Building now: a small tree per friend, the project at the root, a lit leaf per running task, a dim one per task done today. */
+.front-building { display: grid; gap: 6px; }
+.front-building-list { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 0; padding: 0; list-style: none; }
+.front-building-item { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.front-tree { display: flex; align-items: center; gap: 6px; }
+.front-tree-root { width: 12px; height: 12px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 22%, transparent); }
+.front-tree-leaves { display: grid; grid-template-columns: repeat(6, 7px); gap: 3px; padding-left: 8px; border-left: 1px solid var(--line-strong); }
+.front-tree-leaf { width: 7px; height: 7px; border-radius: 50%; }
+.front-tree-leaf.run { background: var(--live); }
+.front-tree-leaf.done { background: color-mix(in srgb, var(--good) 45%, transparent); }
+.front-kicker { margin: 0 0 6px; font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); }
+.front-lead-title { margin: 0; max-width: 24ch; font: 700 clamp(26px, 2.5vw, 40px)/1.08 var(--front-serif); letter-spacing: -0.015em; text-wrap: balance; }
+.front-dek { margin: 10px 0 0; max-width: 62ch; font: 400 16px/1.5 var(--front-serif); color: var(--muted); }
+.front-byline { margin: 8px 0 10px; font-size: 12.5px; color: var(--dim); }
+
+.front-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px; padding-top: 14px; border-top: 1px solid var(--line); }
+.front-col { display: grid; align-content: start; min-width: 0; }
+.front-col-title { margin: 0 0 6px; padding-bottom: 7px; border-bottom: 1px solid var(--line-strong); font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ivory); }
+.front-item { display: grid; justify-content: start; justify-items: start; gap: 2px; width: 100%; padding: 9px 0; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; font: inherit; text-align: left; }
+button.front-item { cursor: pointer; }
+button.front-item:hover b { text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 0.2em; }
+.front-item b { font: 600 16px/1.3 var(--front-serif); color: var(--ivory); }
+.front-item small { font-size: 12.5px; color: var(--muted); }
+.front-you { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 14px; padding: 8px 0; }
+.front-big { font: 700 34px/1 var(--front-serif); color: var(--ivory); font-variant-numeric: tabular-nums; }
+.front-you-words { display: grid; color: var(--muted); }
+.front-you-words small { color: var(--dim); }
+
+.front-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.front-visible { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.front-invite { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.front-code { font-family: var(--font-mono); letter-spacing: 0.08em; color: var(--ivory); }
+
+@media (max-width: 760px) {
+  .front-mast { grid-template-columns: minmax(0, 1fr); }
+  .front-ear-end { justify-items: start; text-align: left; }
+  .front-cols { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* The Lobby's masthead is its title: the Friends page's own heading and line step aside (still read aloud, still focused). */
+#friends-overlay[data-place="lobby"] :is(#friends-place-title, .friends-place-about) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---- Friends › Moderation (renderer/friends-mod.js): only moderators see it ---- */
+.friends-mod { display: grid; gap: 14px; min-width: 0; }
+.friends-mod-status { margin: 0; color: var(--muted); font-size: 13px; }
+.friends-mod-status:empty { display: none; }
+.friends-mod-body { display: grid; gap: 18px; min-width: 0; }
+.friends-mod-section { display: grid; gap: 6px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); }
+.friends-mod-heading { margin: 0 0 4px; font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ivory); }
+.friends-mod-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+.friends-mod-words { display: grid; gap: 2px; min-width: 0; flex: 1 1 280px; }
+.friends-mod-words strong { color: var(--ivory); font-weight: 600; overflow-wrap: anywhere; }
+.friends-mod-words .muted { font-size: 12.5px; overflow-wrap: anywhere; }
+.friends-mod-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.friends-mod-facts { margin: 0; color: var(--ivory); font-size: 13px; }
+.friends-mod-lookup { display: flex; flex-wrap: wrap; gap: 8px; }
+.friends-mod-search { flex: 1 1 220px; min-width: 0; }

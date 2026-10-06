@@ -111,7 +111,7 @@ test("connecting trades the Discord token for a hub session once, says hello and
   assert.equal(h.socket().url, "wss://hub.example.test/v1/ws");
   assert.equal(h.client.status().state, "connecting");
   h.socket().open();
-  assert.deepEqual(h.socket().sent, [{ type: "hello", session: "hub-session-1", protocol: 1, features: ["history.peer", "keepalive"] }], "hello names what this Studio can do; an older hub drops the field");
+  assert.deepEqual(h.socket().sent, [{ type: "hello", session: "hub-session-1", protocol: 1, features: ["history.peer", "keepalive", "friend.online"] }], "hello names what this Studio can do; an older hub drops the field");
   h.socket().receive({ type: "ready", user: USER, protocol: 1 });
   await settle();
   const status = h.client.status();

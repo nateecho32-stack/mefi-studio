@@ -322,7 +322,7 @@ function handleProjectIpc(channel, handler) {
 // the launch screen's newspaper (news:) is asked for before any project is
 // open; neither belongs to a project. (Declared beside the wrapper so the
 // tests that load it from here up to app.setName see it.)
-const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "alerts:", "chatgpt-plan:", "news:"];
+const APP_WIDE_PREFIXES = ["projects:", "project-preview:", "performance:", "startup:", "community:", "hub:", "remote:", "styler:", "catalog:", "speed:", "shell:", "pc-setup:", "models:", "alerts:", "chatgpt-plan:", "news:", "connectors:"];
 const APP_WIDE_CHANNELS = new Set(["usage:accounts", "opencode:credits", "release:status", "release:check", "update:status", "update:set", "settings:get-key", "boot:healthy", "release:whats-new", "release:whats-new-seen", "release:whats-new-set", "report:dismiss", "report:set"]);
 ipcMain.handle = handleProjectIpc;
 
@@ -2178,10 +2178,12 @@ function stopCommunityWatch() {
 // ---- Rooms hub: listen together and now playing -----------------------------
 // scripts/hub-client.cjs speaks the Void Engine hub's protocol. This block owns
 // its one client, hands it the Discord access token the community link holds,
-// and relays its events to the renderer as hub:event. Nothing connects until
-// the renderer asks: the Links tab's Listen together, or the member turning
-// on "Share what I'm playing". Discord tokens and the hub session stay in this
-// process; the renderer sees status, rooms and the public frame fields.
+// and relays its events to the renderer as hub:event. A member signed in on
+// this PC connects a few seconds after launch (startHubPresence, at the end of
+// this block); otherwise nothing connects until the renderer asks: Friends,
+// the Links tab's Listen together, or "Share what I'm playing". Discord tokens
+// and the hub session stay in this process; the renderer sees status, rooms
+// and the public frame fields.
 const hubModule = optionalHelper("./scripts/hub-client.cjs", () => require("./scripts/hub-client.cjs"), null);
 let hubClient = null;
 
@@ -2385,7 +2387,9 @@ async function hubStatus() {
   const base = client ? client.status() : { configured: false, state: "off", error: "unavailable", user: null, readOnly: false, paused: false, rooms: [] };
   let linked = false;
   try { linked = Boolean(community && (await communityRead()).state.link); } catch { linked = false; }
-  return { ...base, linked, communityConfigured: Boolean(communityClientId()) };
+  let shareBuilding = false;
+  try { shareBuilding = (await readSettings())?.friends?.shareBuilding === true; } catch { shareBuilding = false; }
+  return { ...base, linked, communityConfigured: Boolean(communityClientId()), shareBuilding };
 }
 
 async function hubCall(work) {
@@ -2394,8 +2398,8 @@ async function hubCall(work) {
   const result = await work(client);
   return { ...(result && typeof result === "object" ? result : { ok: Boolean(result) }), status: await hubStatus() };
 }
-const hubConnect = () => hubCall(async (client) => { const status = await client.connect(); return { ok: status.state === "ready" || status.state === "connecting" }; });
-const hubDisconnect = () => hubCall(async (client) => { await client.disconnect(); return { ok: true }; });
+const hubConnect = () => hubCall(async (client) => { hubPresenceHeld = false; const status = await client.connect(); return { ok: status.state === "ready" || status.state === "connecting" }; });
+const hubDisconnect = () => hubCall(async (client) => { hubPresenceHeld = true; await client.disconnect(); return { ok: true }; });
 const hubRooms = () => hubCall((client) => client.rooms());
 // The renderer holds rooms as Rooms' chat or as Listen together; each lets go
 // of its own hold only, so the open project's cowork room (held as "cowork"
@@ -2413,13 +2417,18 @@ const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying
 const HUB_ROOM_METHODS = Object.freeze({
   createRoom: 1, requestJoin: 2, requests: 0, decide: 2, cancelRequest: 1, invite: 2, invites: 0, acceptInvite: 1, declineInvite: 1,
   leave: 1, removeMember: 2, lock: 1, unlock: 1, close: 1, searchMembers: 1, messages: 2, report: 3, sendMessage: 2, editMessage: 3, deleteMessage: 2,
-  roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1,
+  roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1, front: 0,
+  // Friends › Moderation (renderer/friends-mod.js); the relay refuses anyone who is not a moderator.
+  modFlags: 0, modReview: 1, modRevoke: 2, modReports: 0, modResolve: 1, modSuspend: 2,
+  // The Lobby's "Share what I'm building" switch (hubBuildingShare below), not a hub-client method.
+  shareBuilding: 1,
 });
 function hubRoom(method, args) {
   const arity = Object.hasOwn(HUB_ROOM_METHODS, method) ? HUB_ROOM_METHODS[method] : -1;
   if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
   const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : typeof value === "object" && !Array.isArray(value) ? { ...value } : null));
   if (method === "messages") return hubCall((client) => hubRoomMessages(client, ...plain));
+  if (method === "shareBuilding") return hubBuildingShare(plain[0] === true);
   // A report carries this PC's own copy of the message, which the relay keeps
   // as evidence only when its signature checks out.
   if (method === "report") return hubCall((client) => client.report(plain[0], plain[1], plain[2], roomHistory()?.page(plain[0], null, 500).messages.find((item) => item.id === String(plain[1])) ?? null));
@@ -2431,7 +2440,7 @@ function hubRoom(method, args) {
 // public link in the browser and, two minutes later while Studio is still
 // running, tells the relay the play happened, which credits its owner and
 // this member. A play still waiting is kept once per project.
-const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1 });
+const HUB_PROJECT_METHODS = Object.freeze({ me: 0, memberCard: 1, projects: 1, shareProject: 1, removeProject: 1, playProject: 1, star: 2, feature: 1, reportProject: 2 });
 const hubPlayTimers = new Map(); // projectId -> timeout
 function hubProjects(method, args) {
   const arity = Object.hasOwn(HUB_PROJECT_METHODS, method) ? HUB_PROJECT_METHODS[method] : -1;
@@ -2457,6 +2466,61 @@ function hubProjects(method, args) {
     hubPlayTimers.set(projectId, timer);
     return { ok: true, minMs: play.minMs };
   });
+}
+// Online while Studio is open: a member signed in on this PC (a Discord link)
+// connects a few seconds after launch, so friends see them in Who's online
+// and on The Lobby front page without anyone opening Friends; the relay
+// leaves out anyone who unticked "Show me as online". hub-client reconnects
+// by itself after a drop; this look tries again every ten minutes when the
+// client has stopped (no network at launch, a sign-in the community watch
+// renews). settings.friends.connectAtLaunch false turns it off, and a
+// Disconnect in Studio holds it off until the next Connect.
+const HUB_PRESENCE_FIRST_MS = 12 * 1000;
+const HUB_PRESENCE_EVERY_MS = 10 * 60 * 1000;
+let hubPresenceTimers = null;
+let hubPresenceHeld = false;
+async function hubPresenceWanted() {
+  if (hubPresenceHeld || !community || !hubModule) return false;
+  if ((await readSettings())?.friends?.connectAtLaunch === false) return false;
+  return Boolean((await communityRead()).state.link);
+}
+async function hubPresenceLook() {
+  if (!(await hubPresenceWanted())) return false;
+  const client = hubInstance();
+  const state = client?.status?.().state;
+  if (!client || (state !== "off" && state !== "error")) return false;
+  await client.connect();
+  return true;
+}
+function startHubPresence() {
+  if (hubPresenceTimers) return;
+  const look = () => { hubPresenceLook().catch((error) => logLine(`[hub] could not connect for Friends: ${error?.message ?? error}`)); };
+  const building = () => { hubBuildingLook().catch((error) => logLine(`[hub] could not share what is being built: ${error?.message ?? error}`)); };
+  hubPresenceTimers = { first: setTimeout(look, HUB_PRESENCE_FIRST_MS), every: setInterval(look, HUB_PRESENCE_EVERY_MS), building: setInterval(building, HUB_BUILDING_EVERY_MS) };
+  hubPresenceTimers.first.unref?.();
+  hubPresenceTimers.every.unref?.();
+  hubPresenceTimers.building.unref?.();
+}
+
+// "Share what I'm building" (The Lobby's foot, off until the member turns it
+// on: settings.friends.shareBuilding): the open project's name and how many
+// tasks run and finished today, never titles or files, so friends see it
+// under Building now. Read every two minutes while connected (agentsSnapshot,
+// the same look Your PCs uses); only a change goes out, and the relay keeps
+// it on the connection only.
+const HUB_BUILDING_EVERY_MS = 2 * 60 * 1000;
+async function hubBuildingLook() {
+  const client = hubClient;
+  if (!client || client.status?.().state !== "ready") return false;
+  if ((await readSettings())?.friends?.shareBuilding !== true) { client.setBuilding?.(null); return false; }
+  const snapshot = typeof agentsSnapshot === "function" ? await agentsSnapshot() : null;
+  if (!snapshot?.project) { client.setBuilding?.(null); return false; }
+  return client.setBuilding?.({ project: snapshot.project, running: snapshot.working.length, doneToday: snapshot.done.length }) === true;
+}
+async function hubBuildingShare(on) {
+  await updateSettings((settings) => { settings.friends = { ...(settings.friends ?? {}), shareBuilding: on }; });
+  await hubBuildingLook();
+  return { ok: true, shareBuilding: on, status: await hubStatus() };
 }
 // ---- end of the rooms hub ---------------------------------------------------
 
@@ -11773,10 +11837,12 @@ function assistantMessageId() {
 // marks a post that reports on work instead of answering the owner (the
 // overseer's findings, a builder report, the resume line): it never counts as
 // the answer to what the owner last said.
-function assistantAppendReply(text, via, intent, { offers = null, notice = false } = {}) {
+function assistantAppendReply(text, via, intent, { offers = null, notice = false, used = null } = {}) {
   const entry = { id: assistantMessageId(), projectId: projects.current().id, at: Date.now(), role: "assistant", text, via, intent };
   if (notice) entry.kind = "notice";
   if (Array.isArray(offers) && offers.length) entry.offers = offers.slice(0, 4);
+  // The skills and tools the reply used (chatUsed): chips under it, never part of its words.
+  if (Array.isArray(used) && used.length) entry.used = used.slice(0, 8);
   assistantState.messages.push(entry);
   assistantTrim(assistantState.messages, assistantCaps().messages);
   assistantState.unread += 1;
@@ -12417,8 +12483,10 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
   assistantAiOk();
   const reasoning = String(call.reasoning ?? "").trim();
   if (reasoning) assistantCommitThought(assistantClip(reasoning, 400), "responder");
+  // The skills and tools this reply used, for the chips under it (the "Skills and connectors everywhere" block).
+  const used = typeof chatUsed === "function" ? await chatUsed(call).catch(() => null) : null;
   const envelope = taskOversight.parseChatEnvelope(call.text);
-  if (!envelope.ok) return envelope.reply ? { reply: envelope.reply, prose: true } : null;
+  if (!envelope.ok) return envelope.reply ? { reply: envelope.reply, prose: true, used } : null;
   const { titles, stages, taskIds, allTitles } = assistantDigestIndex(board);
   const context = assistantChatContext(user, facts, text, intent);
   const localDecisions = taskOversight.localDecisionActions(text, context);
@@ -12489,7 +12557,7 @@ async function assistantOverseerTurn({ user, text, intent, facts, did, slot, foc
     const title = assistantClip(id ? titles[id] : offer?.title, 160);
     if (title && !offers.some((entry) => entry.title === title)) offers.push(id ? { title, target: { kind: "task", id } } : { title });
   }
-  return { reply: envelope.reply, results, offers: offers.slice(0, 4), created, target };
+  return { reply: envelope.reply, results, offers: offers.slice(0, 4), created, target, used };
 }
 
 // Keyless (or model-less this turn) control: "try again", "stop the auth
@@ -12543,6 +12611,8 @@ async function assistantRespond(user, entry = null) {
   // reply survives any failure above it.
   let folderTarget = null;
   let offers = null;
+  // The skills and tools the model's reply used (chatUsed), shown as chips under it.
+  let turnUsed = null;
   // What the message brings beyond its words (a picture, the "Picture attachments" block): the model call runs inside its scope.
   let extras = null;
   const done = [];
@@ -12613,6 +12683,7 @@ async function assistantRespond(user, entry = null) {
         turn = null;
       }
     }
+    if (Array.isArray(turn?.used) && turn.used.length) turnUsed = turn.used;
     if (turn && !turn.prose) {
       // The model's own words, never the classifier's: its reply text can
       // claim actions (a pause, a filed task) that only the local path runs.
@@ -12781,8 +12852,9 @@ async function assistantRespond(user, entry = null) {
     Object.assign(placeholder, { text: reply, via, intent, at: Date.now() });
     delete placeholder.placeholderFor;
     if (offers?.length) placeholder.offers = offers.slice(0, 4);
+    if (turnUsed?.length) placeholder.used = turnUsed;
   }
-  const replyEntry = placeholder ?? assistantAppendReply(reply, via, intent, { offers });
+  const replyEntry = placeholder ?? assistantAppendReply(reply, via, intent, { offers, used: turnUsed });
   // The exchange is saved on the node it was about: the folder is what the
   // next reply — and the next agent on this node — reads back.
   if (folderTarget) assistantNodeContext(folderTarget, "chat", `asked "${assistantClip(text, 80)}" — ${assistantClip(reply, 90)}`, "responder");
@@ -13091,10 +13163,12 @@ async function searchProjectFiles(payload = {}) {
   if (!(await composerPickerOn())) return { ok: false, off: true, error: PICKER_OFF };
   return projectFilesHost().search({ query: payload?.query, limit: payload?.limit });
 }
-// The inventory's skills, one of each name: the project's before the home folder's, .agents before other tools' folders.
+// The inventory's skills, one of each name: the project's before the home folder's, .agents before other tools' folders,
+// then the ones built into Studio (scripts/builtin-skills.cjs: the answer styles), which carry their own text.
 async function mentionSkills() {
   const seen = new Set(), rows = [];
   for (const row of await agentAddons.inventory(projectRoot())) { if (!seen.has(row.name)) { seen.add(row.name); rows.push(row); } }
+  for (const skill of require("./scripts/builtin-skills.cjs").list()) if (!seen.has(skill.name)) { seen.add(skill.name); rows.push({ name: skill.name, scope: "builtin", text: skill.text }); }
   return rows;
 }
 async function listPickerSkills() {
@@ -13103,8 +13177,8 @@ async function listPickerSkills() {
   const format = require("./scripts/skill-format.cjs");
   const skills = [];
   for (const row of (await mentionSkills()).slice(0, 100)) {
-    let head = "";
-    try {
+    let head = typeof row.text === "string" ? row.text : "";
+    if (!head) try {
       const handle = await require("node:fs/promises").open(row.file, "r");
       try { const { bytesRead, buffer } = await handle.read(Buffer.alloc(4096), 0, 4096, 0); head = buffer.subarray(0, bytesRead).toString("utf8"); } finally { await handle.close(); }
     } catch { /* a skill that can not be read lists with no description */ }
@@ -13124,12 +13198,15 @@ async function mentionExtras(user) {
   const calls = lib.skillCalls(text);
   if (calls.length) {
     const rows = await mentionSkills().catch(() => []);
+    // A skill already on for the chat (its answer style, say) is in what the model is told once, not twice.
+    const on = typeof agentAddons.alwaysNames === "function" ? await agentAddons.alwaysNames(projectRoot(), await (typeof readAgentSettings === "function" ? readAgentSettings() : readSettings()), "companion").catch(() => []) : [];
     const found = [];
     for (const call of calls) {
       const row = rows.find((item) => item.name === call.name);
       if (!row) { if (call.asked) missing.push(call.name); continue; }
-      let body = "";
-      try { body = await readFile(row.file, "utf8"); } catch { /* read again next time */ }
+      if (on.includes(row.name)) continue;
+      let body = typeof row.text === "string" ? row.text : "";
+      if (!body) try { body = await readFile(row.file, "utf8"); } catch { /* read again next time */ }
       if (body) found.push({ name: row.name, text: body });
     }
     const section = lib.skillSection(found);
@@ -13145,6 +13222,162 @@ async function mentionExtras(user) {
   return { system, message, notes: () => lib.notes({ missing, skipped }) };
 }
 // ---- end of mentions in a message --------------------------------------------------------
+
+// ---- Skills and connectors everywhere (docs/agent-tools.md, "How skills are used" and "Connectors") ----
+// How each skill is used in the chat, by Studio's helper agents and by the builders (settings.skillUse,
+// scripts/skill-use.cjs; the answer styles Studio ships are scripts/builtin-skills.cjs, ELI5 the chat's
+// own until the owner picks another), and the connectors: MCP servers kept in ~/.mefi-studio/mcp.json
+// (scripts/connectors.cjs). This block:
+//  - tells the tool loop where use_skill's list and texts come from (agentTools.useSkills: only skills
+//    the agent's place lets it pick by itself), and keeps connector servers open between calls
+//    (agentTools.useMcp with a pool that lets one go after three quiet minutes, and closes them at quit);
+//  - skills:use / skills:set-use / skills:copy-builtin: the Skills page's "Used in" and the chat's style
+//    picker; chat:tools: what the message box's chip shows;
+//  - connectors:*: Team › Connectors. A value a connector needs (a token) is kept encrypted with
+//    safeStorage in connector-secrets.json beside settings.json, never in mcp.json and never sent to the
+//    page; Studio's own GitHub sign-in stands in for a GitHub token. A change closes that server's kept
+//    connection, so the next call starts it as it now is.
+// MEFI_STUDIO_NO_CONNECTORS=1 leaves Team › Connectors read-only: nothing is added, approved, tested,
+// changed or imported (servers already in the file are used as before).
+let connectorsHostLoaded = null, connectorPoolLoaded = null;
+const CONNECTORS_OFF = "Changing connectors is switched off on this PC.";
+const connectorsOn = () => process.env.MEFI_STUDIO_NO_CONNECTORS !== "1";
+const GITHUB_STAND_INS = Object.freeze(["GITHUB_PERSONAL_ACCESS_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"]);
+function connectorsHost() {
+  if (connectorsHostLoaded) return connectorsHostLoaded;
+  return (connectorsHostLoaded = require("./scripts/connectors.cjs").createConnectors({
+    projectRoot: () => (projects.open() ? projectRoot() : null),
+    secretFile: path.join(app.getPath("userData"), "connector-secrets.json"),
+    encrypt: (value) => safeStorage.encryptString(value).toString("base64"),
+    decrypt: (value) => safeStorage.decryptString(Buffer.from(value, "base64")),
+    canEncrypt: () => safeStorage.isEncryptionAvailable(),
+    fallbackEnv: async (key) => (GITHUB_STAND_INS.includes(key) && typeof resolveGithubToken === "function" ? resolveGithubToken(await readSettings()).catch(() => null) : null),
+    backups: () => path.join(app.getPath("userData"), "connector-backups"),
+  }));
+}
+function connectorPool() {
+  return (connectorPoolLoaded ??= agentTools.mcp.createPool({ idleMs: 3 * 60 * 1000, max: 4, envFor: (server) => connectorsHost().envFor(server) }));
+}
+// The tool loop asks these; the pool is made on the first connector call, not at startup.
+if (typeof agentTools !== "undefined" && typeof agentTools.useSkills === "function") {
+  agentTools.useSkills({
+    catalog: ({ root, settings, role }) => agentAddons.autoSkills(root, settings, role),
+    load: ({ root, settings, role, name }) => agentAddons.loadSkill(root, settings, role, name),
+  });
+  // MEFI_STUDIO_NO_MCP_POOL=1: every connector call starts its server and stops it, as before kept connections.
+  agentTools.useMcp(process.env.MEFI_STUDIO_NO_MCP_POOL === "1" ? { envFor: (server) => connectorsHost().envFor(server) } : { pool: { call: (...args) => connectorPool().call(...args) } });
+  if (typeof app !== "undefined" && typeof app?.on === "function") app.on("will-quit", () => { try { connectorPoolLoaded?.closeAllSync(); } catch { /* nothing left to close */ } });
+}
+// A builder run's tool folder holds the values its connectors needed; one left behind by a run Studio could not end
+// (it was closed or killed) is cleared half a minute after start (agent-tool-configs.cjs sweep: six hours old or more).
+if (typeof agentToolConfigs !== "undefined" && typeof agentToolConfigs.sweep === "function" && typeof setTimeout === "function") {
+  setTimeout(() => {
+    agentToolConfigs.sweep().then(({ removed }) => { if (removed && typeof logLine === "function") logLine(`[tools] cleared ${removed} tool folder(s) left by earlier runs`); }).catch(() => {});
+  }, 30000).unref?.();
+}
+// The Skills page's view of how every skill is used, and the chat's styles.
+async function skillUseView() {
+  const settings = await readSettings();
+  const catalog = await agentAddons.skillCatalog(projects.open() ? projectRoot() : null);
+  const lib = require("./scripts/skill-use.cjs");
+  const summary = lib.summary(settings.skillUse, catalog);
+  const styles = require("./scripts/builtin-skills.cjs").styles();
+  return {
+    ok: true, places: lib.PLACES, uses: lib.USES, words: { places: lib.PLACE_WORDS, uses: lib.USE_WORDS }, auto: summary.auto,
+    skills: catalog.map((row, index) => ({ name: row.name, title: row.title, kind: row.kind, scope: row.scope, description: row.description, chars: row.chars, ...summary.rows[index] })),
+    styles: styles.map(({ name, title, description }) => ({ name, title, description })),
+    chatStyle: lib.chatStyles(settings.skillUse, catalog.filter((row) => row.kind === "style")),
+  };
+}
+// skills:set-use: { name, place, use } for one skill, { place, auto } for a place's switch, or { style } for the chat.
+async function setSkillUse(payload = {}) {
+  const lib = require("./scripts/skill-use.cjs");
+  const styles = require("./scripts/builtin-skills.cjs").styles();
+  let refusal = null;
+  await updateSettings((settings) => {
+    let next;
+    if (Object.hasOwn(payload, "style")) {
+      if (payload.style !== null && !styles.some((style) => style.name === payload.style)) { refusal = "Choose one of the answer styles."; return false; }
+      next = lib.setStyle(settings.skillUse, { style: payload.style, styles });
+    } else if (Object.hasOwn(payload, "auto")) {
+      if (!lib.PLACES.includes(payload.place) || typeof payload.auto !== "boolean") { refusal = "Choose the chat, agents or builders, on or off."; return false; }
+      next = lib.setAuto(settings.skillUse, { place: payload.place, on: payload.auto });
+    } else {
+      if (!lib.PLACES.includes(payload.place) || ![...lib.USES, "default"].includes(payload.use) || !lib.validName(payload.name)) { refusal = "Choose a skill, a place and how it is used."; return false; }
+      next = lib.setUse(settings.skillUse, { name: payload.name, place: payload.place, use: payload.use });
+    }
+    const problem = lib.validate(next);
+    if (problem) { refusal = problem; return false; }
+    if (!Object.keys(next.skills).length && !next.auto) delete settings.skillUse; else settings.skillUse = next;
+  });
+  if (refusal) return { ok: false, error: refusal };
+  send("settings:changed", { skills: true });
+  return skillUseView();
+}
+// Copy a built-in skill into the project, where it can be edited and then stands in for Studio's own.
+async function copyBuiltinSkill(payload = {}) {
+  const skill = require("./scripts/builtin-skills.cjs").get(String(payload?.name ?? ""));
+  if (!skill) return { ok: false, error: "That is not one of Studio's own skills." };
+  return skillsHost().create({ name: skill.name, description: skill.description, body: skill.body });
+}
+// What the chat's chip shows: its style, whether it picks skills by itself, its tools and the connectors on for it.
+async function chatToolsView() {
+  const settings = await readAgentSettings();
+  const lib = require("./scripts/skill-use.cjs");
+  const root = projects.open() ? projectRoot() : null;
+  const catalog = await agentAddons.skillCatalog(root);
+  const policy = lib.normalize(settings.skillUse);
+  const auto = await agentAddons.autoSkills(root, settings, "companion").catch(() => []);
+  const tools = agentTools.policy(settings, "companion");
+  const shorts = new Map(require("./scripts/builtin-skills.cjs").list().map((skill) => [skill.name, skill.short]));
+  let connectors = [];
+  try { connectors = ((await connectorsHost().list()).servers ?? []).map((row) => ({ id: row.id, title: row.title, status: row.status, places: row.places, on: row.places.includes("chat"), tools: row.tools.filter((tool) => !tool.off).length })); } catch { /* the list stays empty */ }
+  return {
+    ok: true,
+    styles: catalog.filter((row) => row.kind === "style").map(({ name, title, description }) => ({ name, title, short: shorts.get(name) || title, description })),
+    style: lib.chatStyles(settings.skillUse, catalog.filter((row) => row.kind === "style")),
+    auto: policy.auto.chat !== false, picks: auto.map(({ name, title, description }) => ({ name, title, description })),
+    tools: { webSearch: tools.webSearch, webRead: tools.webRead, projectRead: tools.projectRead },
+    connectors, editable: connectorsOn(),
+  };
+}
+// What a chat reply used, for the chips under it: the skills on for it (not the answer style, which the message box's chip
+// already shows on every reply), the ones it loaded, and its tools.
+const CHAT_TOOL_WORDS = Object.freeze({ web_search: "Searched the web", web_read: "Read a web page", project_read: "Read a project file", project_list: "Looked through the project", project_search: "Searched the project" });
+async function chatUsed(call) {
+  const used = [];
+  const builtins = require("./scripts/builtin-skills.cjs").list();
+  const titles = new Map(builtins.map((skill) => [skill.name, skill.title]));
+  const styles = new Set(builtins.filter((skill) => skill.kind === "style").map((skill) => skill.name));
+  try {
+    for (const name of await agentAddons.alwaysNames(projectRoot(), await readAgentSettings(), "companion")) if (!styles.has(name)) used.push({ kind: "skill", name, label: titles.get(name) || name });
+  } catch { /* the chips are a courtesy */ }
+  for (const name of Array.isArray(call?.skillsLoaded) ? call.skillsLoaded : []) if (!used.some((row) => row.name === name)) used.push({ kind: "skill", name, label: titles.get(name) || name, loaded: true });
+  for (const entry of Array.isArray(call?.toolTrace) ? call.toolTrace : []) {
+    if (!entry?.name || entry.name === "use_skill") continue;
+    const mcpTool = /^mcp__([A-Za-z0-9_-]+)__(.+)$/.exec(entry.name);
+    const label = CHAT_TOOL_WORDS[entry.name] ?? (mcpTool ? `${mcpTool[1]}: ${mcpTool[2].replace(/_/g, " ")}` : entry.name.replace(/_/g, " "));
+    const same = used.find((row) => row.kind === "tool" && row.name === entry.name);
+    if (same) { same.count = (same.count ?? 1) + 1; same.ok = same.ok && entry.ok; } else used.push({ kind: "tool", name: entry.name, label, ok: entry.ok === true });
+  }
+  return used.length ? used.slice(0, 8) : null;
+}
+// connectors:* answer like the module does, and a change lets go of that server's kept connection.
+async function connectorCall(name, payload = {}) {
+  const host = connectorsHost();
+  if (!["list", "candidates"].includes(name) && !connectorsOn()) return { ok: false, off: true, error: CONNECTORS_OFF };
+  const result = await host[name](payload ?? {});
+  if (name === "list" && result?.ok && !connectorsOn()) result.off = true;
+  if (!["list", "candidates"].includes(name)) {
+    const ids = name === "importFrom" ? result?.added ?? [] : [payload?.id ?? result?.server?.id].filter(Boolean);
+    for (const id of ids) connectorPoolLoaded?.close(id);
+    if (result?.ok) send("settings:changed", { connectors: true });
+    // Names only: never a command line's arguments, a value or a path.
+    if (typeof logLine === "function") logLine(`[connectors] ${name}${ids.length ? ` ${ids.slice(0, 8).join(", ")}` : ""}: ${result?.ok ? "done" : `refused (${String(result?.error ?? "").slice(0, 120)})`}`);
+  }
+  return result;
+}
+// ---- end of skills and connectors everywhere ----------------------------------------------
 
 // The card's Work on it: the node becomes the assistant's NEXT piece of work.
 // It is focused (follow-ups and the gold ring follow), pinned to the front of
@@ -18287,13 +18520,17 @@ async function spawnNextJob(options) {
   // the worker would declare success on a job it never saw.
   let prompt = "";
   try {
+    // The run's team (captured at dispatch) with how the owner uses skills today: settings.skillUse
+    // is not a team setting, so the snapshot does not carry it (the "Skills and connectors everywhere" block).
+    const builderSettings = entry.agentConfiguration?.configuration ? { ...entry.agentConfiguration.configuration, skillUse: typeof readSettings === "function" ? (await readSettings().catch(() => ({})))?.skillUse : undefined } : await readAgentSettings();
     // OpenCode, Claude Code and Codex take the Studio tools attachment
     // (cliInvocation); a Grok or Antigravity run prepares it only for its
     // OpenCode fallback.
     if (typeof agentToolConfigs !== "undefined" && (!(runRoute?.grok || runRoute?.antigravity) || runRoute?.opencode && !runRoute.opencode.error)) {
       // A folder that cannot be written is no reason to drop the work: the
       // run goes ahead without Studio tools, and the log says so.
-      entry.toolConfigs = await agentToolConfigs.prepare({ root: entry.worktree?.path || projectRoot(), settings: entry.agentConfiguration?.configuration || await readAgentSettings(), desk: entry.deskTool,
+      entry.toolConfigs = await agentToolConfigs.prepare({ root: entry.worktree?.path || projectRoot(), settings: builderSettings, desk: entry.deskTool,
+        ...(typeof connectorsHost === "function" ? { envFor: (server) => connectorsHost().envFor(server) } : {}),
         script: path.join(STUDIO_ROOT, "scripts", "agent-tools-mcp.cjs"), ...(typeof reviewToolOptions === "function" ? reviewToolOptions(entry) : {}) }).catch((error) => {
         logLine(`[autopilot] Studio tools not attached to "${assistantClip(job.title, 60)}": ${String(error?.message ?? error).slice(0, 160)}`);
         return null;
@@ -18302,7 +18539,10 @@ async function spawnNextJob(options) {
     // The route's CLI decides how the project's rules reach this builder: Claude Code,
     // Codex and OpenCode read AGENTS.md and CLAUDE.md themselves, so they get the owner's
     // own rules text only (agent-rules.cjs deliversFiles).
-    const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), entry.agentConfiguration?.configuration || await readAgentSettings(), "builder", { cli: runRoute?.cli }));
+    // A skill the owner's own words for the task name (/name) comes along too (agent-addons.cjs namedSkills): only a
+    // task the owner wrote (origin.by "owner"), never words a planner or a hand-off wrote.
+    const ownerWords = job.ref?.origin?.by === "owner" && typeof job.ref?.prompt === "string" ? job.ref.prompt : "";
+    const skillInstructions = typeof agentAddons === "undefined" ? "" : scrubOutbound(await agentAddons.instructions(projectRoot(), builderSettings, "builder", { cli: runRoute?.cli, text: ownerWords }));
     // A task's saved record goes to the worker as its own small run file
     // (writeTaskRunContext); the handoff header points at it. Only when that
     // write fails is the builder sent to the whole board file, as before.
@@ -23517,6 +23757,21 @@ function registerIpc() {
   // The @ # / picker (the "Mentions in a message" block).
   ipcMain.handle("project:files", (_event, payload) => searchProjectFiles(payload ?? {}));
   ipcMain.handle("agents:skills", () => listPickerSkills());
+  // How skills are used, the chat's chip and Team › Connectors (the "Skills and connectors everywhere" block).
+  ipcMain.handle("skills:use", () => skillUseView());
+  ipcMain.handle("skills:set-use", (_event, payload) => setSkillUse(payload ?? {}));
+  ipcMain.handle("skills:copy-builtin", (_event, payload) => copyBuiltinSkill(payload ?? {}));
+  ipcMain.handle("chat:tools", () => chatToolsView());
+  ipcMain.handle("connectors:list", () => connectorCall("list"));
+  ipcMain.handle("connectors:add", (_event, payload) => connectorCall("add", payload ?? {}));
+  ipcMain.handle("connectors:featured", (_event, payload) => connectorCall("addFeatured", payload ?? {}));
+  ipcMain.handle("connectors:approve", (_event, payload) => connectorCall("approve", payload ?? {}));
+  ipcMain.handle("connectors:test", (_event, payload) => connectorCall("test", payload ?? {}));
+  ipcMain.handle("connectors:update", (_event, payload) => connectorCall("update", payload ?? {}));
+  ipcMain.handle("connectors:remove", (_event, payload) => connectorCall("remove", payload ?? {}));
+  ipcMain.handle("connectors:secret", (_event, payload) => connectorCall("setSecret", payload ?? {}));
+  ipcMain.handle("connectors:candidates", () => connectorCall("candidates"));
+  ipcMain.handle("connectors:import", (_event, payload) => connectorCall("importFrom", payload ?? {}));
 
   // The patch lands on the queue's fresh read, so a save landing beside it
   // keeps its change; a refusal writes nothing. The two endpoints are this
@@ -25716,6 +25971,8 @@ app.whenReady().then(() => {
   if (!SMOKE && !CAPTURE && !CLI_MODE) startCowork();
   // The Discord remote: when the owner turned it on, this PC answers their DMs.
   if (!SMOKE && !CAPTURE && !CLI_MODE) setTimeout(() => { remoteApply(); }, 20000).unref?.();
+  // Friends: a signed-in member shows as online while Studio is open (the "Rooms hub" block).
+  if (!SMOKE && !CAPTURE && !CLI_MODE && typeof startHubPresence === "function") startHubPresence();
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRestart().catch(() => {}));
   if (!SMOKE && !CAPTURE && !CLI_MODE) window.webContents.once("did-finish-load", () => announceRelease().catch(() => {}));
   // "Studio closed unexpectedly", once, after the page has had a moment to come up.
