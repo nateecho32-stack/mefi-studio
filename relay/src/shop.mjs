@@ -1,9 +1,10 @@
 // The Shop: new things for Studio that members get with credits, and style
 // packs members make for each other.
 //
-// Two kinds of item. Studio's own (CATALOG below, ids "studio:<slug>"): a
-// dragon that flies around the studio and its scales, menu effects and three
-// style packs, defined here in code and shown by Studio by id. And community
+// Two kinds of item. Studio's own (CATALOG below, ids "studio:<slug>"):
+// scales for Ember (the dragon that flies around every Studio, free and built
+// in), menu effects and three style packs, defined here in code and shown by
+// Studio by id. And community
 // packs: a member's own style pack, data only (shop-pack.mjs checks it: a few
 // colours and keys from Studio's lists, never CSS, links or images), free or
 // priced from 10 to 250 credits. Everything free in Studio today stays free:
@@ -52,45 +53,49 @@ export const PACK_STATUSES = Object.freeze(['listed', 'unlisted', 'removed']);
 /** A Studio item's id; a community pack's is the relay's own id (newId('pack')). */
 export const STUDIO_ITEM = /^studio:[a-z0-9-]{1,40}$/;
 export const PACK_ID = /^pack_[A-Za-z0-9_-]{16}$/;
-/** The buy route's :id, which may be a Studio item's ("studio:pet-dragon") as well as a pack's. */
+/** The buy route's :id, which may be a Studio item's ("studio:skin-frost") as well as a pack's. */
 export const ITEM_PARAM = 'studio:[a-z0-9-]{1,40}|[A-Za-z0-9_-]{1,64}';
 
 // When the catalog's items were last changed: Studio compares it with what it keeps.
 const CATALOG_AT = Date.UTC(2026, 9, 6);
-const studio = (id, kind, name, price, blurb, { requires = null, data = null } = {}) => Object.freeze({ id, kind, name, price, requires, blurb, data, at: CATALOG_AT });
+const studioItem = (id, kind, name, price, blurb, { requires = null, data = null } = {}) => Object.freeze({ id, kind, name, price, requires, blurb, data, at: CATALOG_AT });
 const studioPack = ({ accent, accent2, background, surface, text, nodeStyle, material, font }) =>
   Object.freeze({ v: 1, palette: Object.freeze({ accent, background, surface, text, accent2 }), nodeStyle, material, font });
 
-/** Studio's own items. Studio knows how to show each one by its id; the packs carry their data, as members' do. */
+/**
+ * Studio's own items. Studio knows how to show each one by its id; the packs carry their data, as members' do.
+ * Ember the dragon is free in every Studio, so it is not sold here and its scales need nothing first. An item may
+ * still name another it needs (`requires`, refused as "needs" until that one is owned); none does today.
+ */
 export const CATALOG = Object.freeze([
-  studio('studio:pet-dragon', 'pet', 'Ember the dragon', 150, 'A little dragon that flies around your studio, naps on the edges of your windows and cheers when work is done.'),
-  studio('studio:skin-frost', 'skin', 'Frost scales', 40, 'Ember in icy blue.', { requires: 'studio:pet-dragon' }),
-  studio('studio:skin-jade', 'skin', 'Jade scales', 40, 'Ember in green and gold.', { requires: 'studio:pet-dragon' }),
-  studio('studio:skin-void', 'skin', 'Void scales', 60, 'Ember in black with a violet glow.', { requires: 'studio:pet-dragon' }),
-  studio('studio:skin-gold', 'skin', 'Gold scales', 60, 'Ember in shining gold.', { requires: 'studio:pet-dragon' }),
-  studio('studio:fx-dissolve', 'effect', 'Dissolve', 60, 'Menus crumble into pixels when they close.'),
-  studio('studio:fx-embers', 'effect', 'Burn away', 90, 'Menus burn away from the edges with glowing embers.'),
-  studio('studio:fx-stardust', 'effect', 'Stardust', 90, 'Menus scatter into drifting stars.'),
-  studio('studio:pack-synthwave', 'pack', 'Synthwave', 50, 'Hot pink and violet on midnight blue.', {
+  studioItem('studio:skin-frost', 'skin', 'Frost scales', 40, 'Ember in icy blue.'),
+  studioItem('studio:skin-jade', 'skin', 'Jade scales', 40, 'Ember in green and gold.'),
+  studioItem('studio:skin-void', 'skin', 'Void scales', 60, 'Ember in black with a violet glow.'),
+  studioItem('studio:skin-gold', 'skin', 'Gold scales', 60, 'Ember in shining gold.'),
+  studioItem('studio:fx-dissolve', 'effect', 'Dissolve', 60, 'Menus crumble into pixels when they close.'),
+  studioItem('studio:fx-embers', 'effect', 'Burn away', 90, 'Menus burn away from the edges with glowing embers.'),
+  studioItem('studio:fx-stardust', 'effect', 'Stardust', 90, 'Menus scatter into drifting stars.'),
+  studioItem('studio:pack-synthwave', 'pack', 'Synthwave', 50, 'Hot pink and violet on midnight blue.', {
     data: studioPack({ accent: '#ff4fa3', accent2: '#8b5cff', background: '#0d0b1f', surface: '#17132e', text: '#f3ecff', nodeStyle: 'halo', material: 'atmosphere', font: 'display' }),
   }),
-  studio('studio:pack-deep-sea', 'pack', 'Deep sea', 50, 'Teal light on deep ocean blue.', {
+  studioItem('studio:pack-deep-sea', 'pack', 'Deep sea', 50, 'Teal light on deep ocean blue.', {
     data: studioPack({ accent: '#2fd6c3', accent2: '#3a7bff', background: '#04131c', surface: '#0a2230', text: '#e2f6f7', nodeStyle: 'glass', material: 'studio', font: 'studio' }),
   }),
-  studio('studio:pack-sakura', 'pack', 'Sakura (light)', 50, 'Soft pink on warm white, a light look.', {
+  studioItem('studio:pack-sakura', 'pack', 'Sakura (light)', 50, 'Soft pink on warm white, a light look.', {
     data: studioPack({ accent: '#d6457a', accent2: '#8a6bd1', background: '#fbf6f4', surface: '#ffffff', text: '#2b1f24', nodeStyle: 'minimal', material: 'focus', font: 'studio' }),
   }),
 ]);
 
-const STUDIO = new Map(CATALOG.map((item) => [item.id, item]));
 const isPackId = (value) => typeof value === 'string' && PACK_ID.test(value);
 
 /**
- * createShop({ store, now, credits })
+ * createShop({ store, now, credits, catalog })
  *   credits: createCredits(...) (account, standing, heldUntil, spend, sale, tell)
+ *   catalog: Studio's items, CATALOG unless a test gives its own
  * -> { routes(route), remove(packId, modId, reason), forget(uid), upkeep() }
  */
-export function createShop({ store, now, credits }) {
+export function createShop({ store, now, credits, catalog = CATALOG }) {
+  const studioItems = new Map(catalog.map((item) => [item.id, item]));
   const publishes = keyedBuckets({ capacity: SHOP.publishesPerDay, refillPerSec: SHOP.publishesPerDay / (DAY_MS / 1000), now });
   const reportTaps = keyedBuckets({ capacity: SHOP.reportsPerHour, refillPerSec: SHOP.reportsPerHour / (HOUR_MS / 1000), now });
   const count = (sql, ...args) => Number(store.get(sql, ...args)?.n ?? 0);
@@ -130,7 +135,7 @@ export function createShop({ store, now, credits }) {
     const sales = studioSales();
     const out = [];
     for (const row of store.all('SELECT item_id, at FROM shop_owned WHERE user_id = ?', uid)) {
-      const item = STUDIO.get(row.item_id);
+      const item = studioItems.get(row.item_id);
       const pack = item ? null : packRow(row.item_id);
       if (item) out.push({ at: row.at, view: studioView(item, owned, sales) });
       else if (pack && pack.status !== 'removed') out.push({ at: row.at, view: packView(pack, owned) });
@@ -217,7 +222,7 @@ export function createShop({ store, now, credits }) {
       let next = null;
       if (view === 'studio') {
         const sales = studioSales();
-        items = CATALOG.map((item) => studioView(item, owned, sales));
+        items = catalog.map((item) => studioView(item, owned, sales));
       } else if (view === 'owned') {
         const all = ownedList(actor.uid);
         items = all.slice(offset, offset + SHOP.pageSize);
@@ -243,7 +248,7 @@ export function createShop({ store, now, credits }) {
       'POST',
       '/v1/shop/:id/buy',
       async ({ actor, params, body }) => {
-        const item = STUDIO.get(params.id) ?? null;
+        const item = studioItems.get(params.id) ?? null;
         const first = item ? null : packRow(params.id);
         if (!item && first?.status !== 'listed') return fail(404, 'gone');
         // The holds are read first (heldUntil is async); the sale checks them inside the transaction.

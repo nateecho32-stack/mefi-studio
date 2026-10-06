@@ -161,9 +161,10 @@ Credits are spent in the Shop (`src/shop.mjs`, feature `shop`). They are
 still only earned: there is no way to pay money in or take credits out, and
 everything free in Studio stays free, since the Shop sells new things only:
 
-- **Studio's own items**, defined in code (`CATALOG`): Ember, a dragon that
-  flies around the studio, and four scales for Ember; three ways for menus to
-  leave; and three style packs. What they cost leaves the economy.
+- **Studio's own items**, defined in code (`CATALOG`): four scales for Ember,
+  the dragon that flies around every Studio (Ember is free and built in);
+  three ways for menus to leave; and three style packs. What they cost
+  leaves the economy.
 - **Style packs** members make. A pack is data only (`src/shop-pack.mjs`):
   four or five colours, and a node style, a material and a font from Studio's
   own lists, at most 2 KB. A key the schema does not name is refused, so a

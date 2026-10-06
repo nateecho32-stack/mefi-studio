@@ -821,7 +821,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
 
   const ROUTES = [];
   // A :name in a pattern is an opaque id, unless the route names its own pattern in options.param (the Shop's
-  // buy route, whose items may be Studio's own, "studio:pet-dragon").
+  // buy route, whose items may be Studio's own, "studio:skin-frost").
   const route = (method, pattern, handler, options = {}) => {
     const names = [];
     const param = options.param ?? '[A-Za-z0-9_-]{1,64}';

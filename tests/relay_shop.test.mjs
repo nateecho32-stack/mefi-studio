@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { GUARD } from "../relay/src/credits.mjs";
+import { GUARD, createCredits } from "../relay/src/credits.mjs";
 import { CREDIT_REASONS, FEATURES } from "../relay/src/protocol.mjs";
-import { CATALOG, PACK_ID, SHOP } from "../relay/src/shop.mjs";
+import { CATALOG, PACK_ID, SHOP, createShop } from "../relay/src/shop.mjs";
 import { MIGRATIONS, SCHEMA_VERSION, createStore } from "../relay/src/store.mjs";
+import { hmacKey, randomBytes } from "../relay/src/util.mjs";
 import { ALICE, BOB, CARA, MOD, makeRelay, member, connectAll, rawSocket, until } from "./fixtures/relay-harness.mjs";
 
 // The Shop on the relay (relay/src/shop.mjs): Studio's own items and members'
@@ -51,6 +52,23 @@ const give = (relay, uid, amount) => relay.sql("INSERT INTO accounts (user_id, b
 const balanceOf = (relay, uid) => relay.sql("SELECT balance FROM accounts WHERE user_id = ?", uid)[0]?.balance ?? 0;
 const publish = (as, token, fields) => as(token, "POST", "/v1/shop/packs", { name: "Neon night", price: 0, data: PACK, ...fields });
 
+/** The store's SQL port over a node:sqlite database, as relay/node/adapter.mjs gives it. */
+const sqlPort = (db) => ({
+  exec: (query, ...bindings) => db.prepare(query).all(...bindings),
+  transaction: (fn) => {
+    db.exec("BEGIN");
+    try {
+      const out = fn();
+      db.exec("COMMIT");
+      return out;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  },
+});
+const studioItem = (id) => CATALOG.find((item) => item.id === id);
+
 /** A member with Studio connected, hearing their credits frames. */
 async function connected(relay, token) {
   const raw = await rawSocket(relay, token);
@@ -59,18 +77,17 @@ async function connected(relay, token) {
   return raw;
 }
 
-test("the Studio catalog: eleven items as the spec lists them, the packs with their data, nothing owned yet", async () => {
+test("the Studio catalog: ten items as the spec lists them (Ember is free, so not sold), the packs with their data, nothing owned yet", async () => {
   const clock = morning();
   const relay = makeRelay({ now: () => clock });
   const as = api(relay);
   const shop = await as("tok-alice", "GET", "/v1/shop?view=studio");
   assert.equal(shop.status, 200);
   assert.deepEqual(shop.items.map((item) => [item.id, item.kind, item.name, item.price, item.requires]), [
-    ["studio:pet-dragon", "pet", "Ember the dragon", 150, null],
-    ["studio:skin-frost", "skin", "Frost scales", 40, "studio:pet-dragon"],
-    ["studio:skin-jade", "skin", "Jade scales", 40, "studio:pet-dragon"],
-    ["studio:skin-void", "skin", "Void scales", 60, "studio:pet-dragon"],
-    ["studio:skin-gold", "skin", "Gold scales", 60, "studio:pet-dragon"],
+    ["studio:skin-frost", "skin", "Frost scales", 40, null],
+    ["studio:skin-jade", "skin", "Jade scales", 40, null],
+    ["studio:skin-void", "skin", "Void scales", 60, null],
+    ["studio:skin-gold", "skin", "Gold scales", 60, null],
     ["studio:fx-dissolve", "effect", "Dissolve", 60, null],
     ["studio:fx-embers", "effect", "Burn away", 90, null],
     ["studio:fx-stardust", "effect", "Stardust", 90, null],
@@ -83,10 +100,11 @@ test("the Studio catalog: eleven items as the spec lists them, the packs with th
     assert.equal(item.data === null, item.kind !== "pack", `${item.id}: only packs carry data`);
     assert.ok(item.blurb.endsWith("."), item.id);
   }
-  assert.equal(shop.items[0].blurb, "A little dragon that flies around your studio, naps on the edges of your windows and cheers when work is done.");
+  assert.deepEqual(shop.items.map((item) => item.blurb).slice(0, 4), ["Ember in icy blue.", "Ember in green and gold.", "Ember in black with a violet glow.", "Ember in shining gold."]);
+  assert.ok(!shop.items.some((item) => item.id === "studio:pet-dragon"), "Ember the dragon is free in every Studio");
   assert.deepEqual(shop.items.find((item) => item.id === "studio:pack-sakura").data, { v: 1, palette: { accent: "#d6457a", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" });
   assert.deepEqual([shop.view, shop.next, shop.balance, shop.canEarn, shop.hold], ["studio", null, 0, true, null]);
-  assert.equal((await as("tok-alice", "GET", "/v1/shop")).items.length, 11, "the catalog is the default list");
+  assert.equal((await as("tok-alice", "GET", "/v1/shop")).items.length, 10, "the catalog is the default list");
   assert.equal((await as("tok-alice", "GET", "/v1/shop?view=everything")).status, 400);
   assert.equal((await as("tok-newbie", "GET", "/v1/shop")).hold.reason, "new-member", "the list says why a member cannot earn yet");
   assert.ok(Object.isFrozen(CATALOG) && CATALOG.every((item) => Object.isFrozen(item)), "the catalog is fixed in code");
@@ -100,43 +118,66 @@ test("buying a Studio item takes the credits in one go, owns it on every PC, and
   const as = api(relay);
   const studio = await connected(relay, "tok-alice");
   give(relay, ALICE.id, 200);
-  const bought = await as("tok-alice", "POST", "/v1/shop/studio:pet-dragon/buy", { price: 150 });
+  const bought = await as("tok-alice", "POST", "/v1/shop/studio:fx-embers/buy", { price: 90 });
   assert.equal(bought.status, 200, JSON.stringify(bought));
-  assert.deepEqual([bought.balance, bought.item.id, bought.item.owned, bought.item.sales], [50, "studio:pet-dragon", true, 1]);
+  assert.deepEqual([bought.balance, bought.item.id, bought.item.owned, bought.item.sales], [110, "studio:fx-embers", true, 1]);
   const frame = await until(() => studio.of("credits").find((item) => item.reason === "shop"), "the credits frame");
-  assert.deepEqual([frame.delta, frame.balance, frame.lifetime], [-150, 50, 200], "spent off the balance, never the lifetime total (a rank never drops)");
+  assert.deepEqual([frame.delta, frame.balance, frame.lifetime], [-90, 110, 200], "spent off the balance, never the lifetime total (a rank never drops)");
   const owned = await as("tok-alice", "GET", "/v1/shop/owned");
-  assert.deepEqual(owned.items, [{ id: "studio:pet-dragon", kind: "pet", name: "Ember the dragon", data: null, updatedAt: CATALOG[0].at }]);
-  assert.equal((await as("tok-alice", "GET", "/v1/shop?view=studio")).items[0].owned, true);
-  const again = await as("tok-alice", "POST", "/v1/shop/studio:pet-dragon/buy", { price: 150 });
+  assert.deepEqual(owned.items, [{ id: "studio:fx-embers", kind: "effect", name: "Burn away", data: null, updatedAt: studioItem("studio:fx-embers").at }]);
+  assert.equal((await as("tok-alice", "GET", "/v1/shop?view=studio")).items.find((item) => item.id === "studio:fx-embers").owned, true);
+  const again = await as("tok-alice", "POST", "/v1/shop/studio:fx-embers/buy", { price: 90 });
   assert.deepEqual([again.status, again.error], [409, "owned"]);
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM credit_events")[0].n, 0, "a purchase is kept as what it bought, never as a credit row");
-  assert.deepEqual(relay.sql("SELECT user_id, item_id, price, at FROM shop_owned").map((row) => ({ ...row })), [{ user_id: ALICE.id, item_id: "studio:pet-dragon", price: 150, at: clock }]);
-  assert.equal(balanceOf(relay, ALICE.id), 50);
+  assert.deepEqual(relay.sql("SELECT user_id, item_id, price, at FROM shop_owned").map((row) => ({ ...row })), [{ user_id: ALICE.id, item_id: "studio:fx-embers", price: 90, at: clock }]);
+  assert.equal(balanceOf(relay, ALICE.id), 110);
   studio.socket.close();
 });
 
-test("a purchase is refused, and nothing moves, when it needs another item first, the price changed or the balance is short", async () => {
+test("a purchase is refused, and nothing moves, when the price changed or the balance is short", async () => {
   const clock = morning();
   const relay = makeRelay({ now: () => clock });
   const as = api(relay);
   give(relay, BOB.id, 30);
-  const skin = await as("tok-bob", "POST", "/v1/shop/studio:skin-frost/buy", { price: 40 });
-  assert.deepEqual([skin.status, skin.error, skin.needs], [409, "needs", "studio:pet-dragon"], "scales need the dragon");
   const changed = await as("tok-bob", "POST", "/v1/shop/studio:fx-dissolve/buy", { price: 50 });
   assert.deepEqual([changed.status, changed.error, changed.price], [409, "price-changed", 60]);
   const short = await as("tok-bob", "POST", "/v1/shop/studio:fx-dissolve/buy", { price: 60 });
   assert.deepEqual([short.status, short.error, short.balance, short.price], [409, "short", 30, 60]);
   assert.deepEqual([(await as("tok-bob", "POST", "/v1/shop/studio:not-a-thing/buy", { price: 1 })).error, (await as("tok-bob", "POST", "/v1/shop/pack_AAAAAAAAAAAAAAAA/buy", { price: 1 })).error], ["gone", "gone"]);
-  assert.equal((await as("tok-bob", "POST", "/v1/shop/studio:pet-dragon/buy", {})).status, 400, "the price the member was shown is required");
-  assert.equal((await as("tok-bob", "POST", "/v1/shop/studio:pet-dragon/buy", { price: "150" })).status, 400);
+  assert.equal((await as("tok-bob", "POST", "/v1/shop/studio:pet-dragon/buy", { price: 150 })).error, "gone", "Ember is free in every Studio, so not for sale");
+  assert.equal((await as("tok-bob", "POST", "/v1/shop/studio:skin-frost/buy", {})).status, 400, "the price the member was shown is required");
+  assert.equal((await as("tok-bob", "POST", "/v1/shop/studio:skin-frost/buy", { price: "40" })).status, 400);
   assert.equal((await as("tok-bob", "POST", "/v1/shop/Studio:Pet/buy", { price: 1 })).status, 404, "an id of neither shape matches no route");
   assert.equal(balanceOf(relay, BOB.id), 30);
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM shop_owned")[0].n, 0);
-  // With the dragon, the scales may be bought.
-  give(relay, BOB.id, 200);
-  assert.equal((await as("tok-bob", "POST", "/v1/shop/studio:pet-dragon/buy", { price: 150 })).balance, 50);
-  assert.equal((await as("tok-bob", "POST", "/v1/shop/studio:skin-frost/buy", { price: 40 })).balance, 10);
+  // Scales need nothing first: Ember is already in every Studio.
+  give(relay, BOB.id, 100);
+  assert.equal((await as("tok-bob", "POST", "/v1/shop/studio:skin-frost/buy", { price: 40 })).balance, 60);
+});
+
+test("an item may need another first: the refusal names it, and once that one is owned the purchase goes through", async () => {
+  // Nothing sold today needs anything first (Ember is free), so this Shop gets a catalog of its own.
+  assert.equal(CATALOG.filter((item) => item.requires).length, 0);
+  const clock = morning();
+  const db = new DatabaseSync(":memory:");
+  const store = createStore(sqlPort(db));
+  store.migrate();
+  const member = (uid) => ({ id: uid, name: "Alice", roleKeys: [], isMod: false, readOnly: false, joinedAt: clock - 30 * DAY });
+  const credits = createCredits({ store, now: () => clock, key: await hmacKey(randomBytes(32)), sendToUser: () => {}, member });
+  const hat = Object.freeze({ id: "studio:hat-party", kind: "skin", name: "Party hat", price: 20, requires: "studio:fx-embers", blurb: "A hat for Ember.", data: null, at: 1 });
+  const shop = createShop({ store, now: () => clock, credits, catalog: [...CATALOG, hat] });
+  const routes = [];
+  shop.routes((method, pattern, handler, options) => routes.push({ method, pattern, handler, options }));
+  const buy = routes.find((entry) => entry.method === "POST" && entry.pattern === "/v1/shop/:id/buy").handler;
+  store.run("INSERT INTO accounts (user_id, balance, lifetime) VALUES (?, 200, 200)", ALICE.id);
+  const actor = { uid: ALICE.id };
+  const first = await buy({ actor, params: { id: hat.id }, body: { price: 20 } });
+  assert.deepEqual([first.status, first.body.error, first.body.needs], [409, "needs", "studio:fx-embers"]);
+  assert.equal(credits.account(ALICE.id).balance, 200, "nothing moved");
+  assert.equal((await buy({ actor, params: { id: "studio:fx-embers" }, body: { price: 90 } })).status, 200);
+  const second = await buy({ actor, params: { id: hat.id }, body: { price: 20 } });
+  assert.deepEqual([second.status, second.body.item.owned, second.body.item.requires, second.body.balance], [200, true, "studio:fx-embers", 90]);
+  db.close();
 });
 
 test("a community pack: its maker owns it and cannot buy it; a buyer pays and the maker earns 75% when both are in good standing", async () => {
@@ -400,8 +441,8 @@ test("Forget me takes what the member owned and their packs, with no id or name 
   const as = api(relay);
   const glow = (await publish(as, "tok-bob", { name: "Bob's glow", blurb: "Made by Bob" })).pack.id;
   const dusk = (await publish(as, "tok-bob", { name: "Bob's dusk", price: 20 })).pack.id;
-  give(relay, BOB.id, 150);
-  await as("tok-bob", "POST", "/v1/shop/studio:pet-dragon/buy", { price: 150 });
+  give(relay, BOB.id, 60);
+  await as("tok-bob", "POST", "/v1/shop/studio:fx-dissolve/buy", { price: 60 });
   give(relay, ALICE.id, 20);
   await as("tok-alice", "POST", `/v1/shop/${glow}/buy`, { price: 0 });
   await as("tok-alice", "POST", `/v1/shop/${dusk}/buy`, { price: 20 });
@@ -427,20 +468,7 @@ test("Forget me takes what the member owned and their packs, with no id or name 
 
 test("schema v6: a v5 database gains the Shop's tables and keeps every row it had", () => {
   const db = new DatabaseSync(":memory:");
-  const sql = {
-    exec: (query, ...bindings) => db.prepare(query).all(...bindings),
-    transaction: (fn) => {
-      db.exec("BEGIN");
-      try {
-        const out = fn();
-        db.exec("COMMIT");
-        return out;
-      } catch (error) {
-        db.exec("ROLLBACK");
-        throw error;
-      }
-    },
-  };
+  const sql = sqlPort(db);
   // A v5 relay's database, as a v5 relay made it.
   for (const step of MIGRATIONS.filter((item) => item.version <= 5)) for (const statement of step.statements) sql.exec(statement);
   sql.exec(`INSERT INTO meta (key, value) VALUES ('schema_version', '5')`);
@@ -463,7 +491,7 @@ test("schema v6: a v5 database gains the Shop's tables and keeps every row it ha
   db.close();
 });
 
-test("Studio's client: the Shop's lists, a purchase that needs the dragon first, a pack published, bought and removed, refusals with their details", async () => {
+test("Studio's client: the Shop's lists, a price that changed, a pack published, bought and removed, refusals with their details", async () => {
   let clock = morning();
   const relay = makeRelay({ now: () => clock });
   const alice = member(relay, "tok-alice");
@@ -474,13 +502,12 @@ test("Studio's client: the Shop's lists, a purchase that needs the dragon first,
   assert.equal(alice.client.status().shop, true, "the relay lists the Shop in ready.features");
   give(relay, BOB.id, 300);
   const studio = await bob.client.shop("studio");
-  assert.deepEqual([studio.ok, studio.view, studio.items.length, studio.balance, studio.canEarn, studio.hold, studio.next], [true, "studio", 11, 300, true, null, null]);
-  assert.deepEqual(studio.items[8].data.palette, CATALOG[8].data.palette);
-  assert.deepEqual(await bob.client.shopBuy("studio:skin-gold", 60), { ok: false, error: "needs", needs: "studio:pet-dragon" });
-  assert.deepEqual(await bob.client.shopBuy("studio:pet-dragon", 100), { ok: false, error: "price-changed", price: 150 });
-  const dragon = await bob.client.shopBuy("studio:pet-dragon", 150);
-  assert.deepEqual([dragon.ok, dragon.item.owned, dragon.balance], [true, true, 150]);
-  await until(() => bob.of("credits").some((event) => event.reason === "shop" && event.delta === -150), "bob's credits event");
+  assert.deepEqual([studio.ok, studio.view, studio.items.length, studio.balance, studio.canEarn, studio.hold, studio.next], [true, "studio", 10, 300, true, null, null]);
+  assert.deepEqual(studio.items.find((item) => item.id === "studio:pack-synthwave").data.palette, studioItem("studio:pack-synthwave").data.palette);
+  assert.deepEqual(await bob.client.shopBuy("studio:fx-embers", 80), { ok: false, error: "price-changed", price: 90 });
+  const gold = await bob.client.shopBuy("studio:skin-gold", 60);
+  assert.deepEqual([gold.ok, gold.item.owned, gold.balance], [true, true, 240]);
+  await until(() => bob.of("credits").some((event) => event.reason === "shop" && event.delta === -60), "bob's credits event");
 
   const made = await alice.client.shopPublish({ name: "Neon night", blurb: "Blue on black", price: 100, data: PACK });
   assert.equal(made.ok, true, JSON.stringify(made));
@@ -490,11 +517,12 @@ test("Studio's client: the Shop's lists, a purchase that needs the dragon first,
   assert.deepEqual(await alice.client.shopPublish({ name: "Big", price: 0, data: { ...PACK, note: "x".repeat(3000) } }), { ok: false, error: "too-big" });
   const held = await newbie.client.shopPublish({ name: "Starter", price: 20, data: PACK });
   assert.deepEqual([held.ok, held.error, held.hold, typeof held.until], [false, "hold", "new-member", "number"]);
-  assert.equal((await bob.client.shopBuy(made.pack.id, 100)).balance, 50);
+  assert.equal((await bob.client.shopBuy(made.pack.id, 100)).balance, 140);
   await until(() => alice.of("credits").some((event) => event.reason === "sale" && event.delta === 75), "alice hears the sale");
-  assert.deepEqual(await bob.client.shopBuy("studio:skin-gold", 60), { ok: false, error: "short", price: 60, balance: 50 });
+  assert.equal((await bob.client.shopBuy("studio:fx-embers", 90)).balance, 50);
+  assert.deepEqual(await bob.client.shopBuy("studio:fx-stardust", 90), { ok: false, error: "short", price: 90, balance: 50 });
   const owned = await bob.client.shopOwned();
-  assert.deepEqual(owned.items.map((item) => [item.id, item.kind, item.data === null]), [[made.pack.id, "pack", false], ["studio:pet-dragon", "pet", true]]);
+  assert.deepEqual(owned.items.map((item) => [item.id, item.kind, item.data === null]), [[made.pack.id, "pack", false], ["studio:fx-embers", "effect", true], ["studio:skin-gold", "skin", true]]);
   assert.deepEqual((await bob.client.shop("new")).items.map((item) => [item.id, item.owned, item.sales]), [[made.pack.id, true, 1]]);
 
   assert.equal((await alice.client.shopUpdate(made.pack.id, { name: "Neon dawn" })).pack.name, "Neon dawn");
@@ -505,7 +533,7 @@ test("Studio's client: the Shop's lists, a purchase that needs the dragon first,
   assert.deepEqual(reports.reports.filter((item) => item.kind === "shop").map((item) => [item.packId, item.author.id, item.text]), [[made.pack.id, ALICE.id, "Neon dawn · From a game"]]);
   assert.deepEqual(await alice.client.modShopRemove(made.pack.id, { reason: "mine" }), { ok: false, error: "forbidden" });
   assert.deepEqual(await mod.client.modShopRemove(made.pack.id, { reason: "a copy" }), { ok: true });
-  assert.deepEqual((await bob.client.shopOwned()).items.map((item) => item.id), ["studio:pet-dragon"], "a removed pack leaves its owners too");
+  assert.deepEqual((await bob.client.shopOwned()).items.map((item) => item.id), ["studio:fx-embers", "studio:skin-gold"], "a removed pack leaves its owners too");
   assert.equal((await mod.client.modReports()).reports.filter((item) => item.kind === "shop").length, 0);
   for (const one of [alice, bob, mod, newbie]) await one.client.disconnect();
 });

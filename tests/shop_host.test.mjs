@@ -43,14 +43,14 @@ test("main lets the renderer call only the Shop's methods, with the hub client's
   assert.equal((main.match(/process\.env\.MEFI_STUDIO_SHOP_ALL/g) ?? []).length, 1, "the switch is read once");
   const h = host();
   assert.deepEqual(Object.keys(h.api.HUB_SHOP_METHODS), METHODS);
-  for (const [method, args] of [["nope", []], ["__proto__", []], ["toString", []], ["shopOwned", ["x"]], ["shopBuy", ["studio:pet-dragon", 150, "extra"]], ["shopPublish", [{}, {}]], ["shop", "studio"]]) {
+  for (const [method, args] of [["nope", []], ["__proto__", []], ["toString", []], ["shopOwned", ["x"]], ["shopBuy", ["studio:fx-embers", 90, "extra"]], ["shopPublish", [{}, {}]], ["shop", "studio"]]) {
     assert.deepEqual(plain(await h.api.hubShop(method, args)), { ok: false, error: "bad-request" }, `${method} with ${JSON.stringify(args)}`);
   }
   assert.equal(h.calls.length, 0);
   await h.api.hubShop("shop", ["top", "30"]);
-  await h.api.hubShop("shopBuy", ["studio:pet-dragon", 150]);
+  await h.api.hubShop("shopBuy", ["studio:fx-embers", 90]);
   await h.api.hubShop("shopUnlist", ["pack_AbCdEfGhIjKlMnOp"]);
-  assert.deepEqual(plain(h.calls), [["shop", "top", "30"], ["shopBuy", "studio:pet-dragon", 150], ["shopUnlist", "pack_AbCdEfGhIjKlMnOp"]]);
+  assert.deepEqual(plain(h.calls), [["shop", "top", "30"], ["shopBuy", "studio:fx-embers", 90], ["shopUnlist", "pack_AbCdEfGhIjKlMnOp"]]);
 });
 
 test("one object of fields crosses as plain data: a pack's data and its palette copied, anything deeper null with its key kept", async () => {
@@ -85,8 +85,10 @@ test("MEFI_STUDIO_SHOP_ALL=1 answers every Studio item as owned with no relay, a
   assert.equal(answer.all, true);
   assert.deepEqual(plain(answer.items), studio.map((item) => ({ ...item, data: item.data ?? null, updatedAt: null })));
   assert.equal(all.calls.length, 0, "no relay asked");
-  answer.items[8].data.palette.accent = "#000000";
-  assert.equal(all.api.SHOP_STUDIO_ITEMS[8].data.palette.accent, "#ff4fa3", "each answer is a copy");
+  const synthwave = (items) => items.find((item) => item.id === "studio:pack-synthwave");
+  synthwave(answer.items).data.palette.accent = "#000000";
+  assert.equal(synthwave(all.api.SHOP_STUDIO_ITEMS).data.palette.accent, "#ff4fa3", "each answer is a copy");
+  assert.ok(!answer.items.some((item) => item.id === "studio:pet-dragon"), "Ember is free in every Studio, so not a Shop item");
   await all.api.hubShop("shop", ["studio"]);
   assert.deepEqual(plain(all.calls), [["shop", "studio"]], "only shopOwned is answered here; the rest still asks the relay");
   const off = host({ MEFI_STUDIO_SHOP_ALL: "true" });
@@ -102,6 +104,6 @@ test("the preload bridge copies a Shop call's arguments by the same rule", () =>
   vm.runInContext(`${preload.slice(start, end)}\nthis.shopArg = shopArg;`, context);
   const { shopArg } = context;
   assert.deepEqual(plain(shopArg({ name: "Neon", data: { v: 1, palette: { accent: "#4f8cff", deeper: { x: 1 } }, font: ["mono"] }, other: { x: 1 } })), { name: "Neon", data: { v: 1, palette: { accent: "#4f8cff", deeper: null }, font: null }, other: null });
-  assert.deepEqual([shopArg("studio:pet-dragon"), shopArg(150), shopArg(null), shopArg(() => 1), shopArg([1])], ["studio:pet-dragon", 150, null, null, null]);
+  assert.deepEqual([shopArg("studio:skin-frost"), shopArg(150), shopArg(null), shopArg(() => 1), shopArg([1])], ["studio:skin-frost", 150, null, null, null]);
   assert.match(preload, /args: args\.slice\(0, 2\)\.map\(shopArg\),/);
 });

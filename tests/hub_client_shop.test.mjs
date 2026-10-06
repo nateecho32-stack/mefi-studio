@@ -50,7 +50,7 @@ test("a relay that does not list the Shop is never asked", async () => {
   await h.ready();
   assert.equal(h.client.status().shop, false);
   const answers = await Promise.all([
-    h.client.shop("studio"), h.client.shopOwned(), h.client.shopBuy("studio:pet-dragon", 150), h.client.shopPublish({ name: "Neon", price: 0, data: PACK }),
+    h.client.shop("studio"), h.client.shopOwned(), h.client.shopBuy("studio:fx-embers", 90), h.client.shopPublish({ name: "Neon", price: 0, data: PACK }),
     h.client.shopUpdate(PACK_ID, { name: "Neon" }), h.client.shopUnlist(PACK_ID), h.client.shopReport(PACK_ID, { reason: "spam" }), h.client.modShopRemove(PACK_ID),
   ]);
   assert.ok(answers.every((answer) => answer.ok === false && answer.error === "unsupported"));
@@ -63,8 +63,8 @@ test("ids, views and fields are checked before anything leaves", async () => {
   assert.equal(h.client.status().shop, true);
   const refused = [
     h.client.shop("studio", "not a cursor!"),
-    h.client.shopBuy("nope", 10), h.client.shopBuy("studio:Pet", 10), h.client.shopBuy("studio:pet-dragon", -1), h.client.shopBuy("studio:pet-dragon", 1.5), h.client.shopBuy("pack_short", 0),
-    h.client.shopUpdate("studio:pet-dragon", { name: "Neon" }), h.client.shopUpdate(PACK_ID, { price: 5 }), h.client.shopUpdate(PACK_ID, { listed: "yes" }), h.client.shopUpdate(PACK_ID, { name: "A" }),
+    h.client.shopBuy("nope", 10), h.client.shopBuy("studio:Skin", 10), h.client.shopBuy("studio:fx-embers", -1), h.client.shopBuy("studio:fx-embers", 1.5), h.client.shopBuy("pack_short", 0),
+    h.client.shopUpdate("studio:skin-frost", { name: "Neon" }), h.client.shopUpdate(PACK_ID, { price: 5 }), h.client.shopUpdate(PACK_ID, { listed: "yes" }), h.client.shopUpdate(PACK_ID, { name: "A" }),
     h.client.shopUnlist("../admin"),
     h.client.shopPublish({ name: "Neon", price: 0 }), h.client.shopPublish({ name: "Neon", price: 0, data: [] }), h.client.shopPublish({ name: "Neon", price: 251, data: PACK }),
     h.client.shopPublish({ name: "x".repeat(41), price: 0, data: PACK }), h.client.shopPublish({ name: "Two\nlines", price: 0, data: PACK }), h.client.shopPublish({ name: "Neon", price: 0, data: PACK, blurb: "a\nb" }),
@@ -82,7 +82,7 @@ test("each call goes where the relay expects it, with only the fields it takes",
   await h.client.shop("top", "30");
   await h.client.shop("everything");
   await h.client.shopOwned();
-  await h.client.shopBuy("studio:pet-dragon", 150);
+  await h.client.shopBuy("studio:fx-embers", 90);
   await h.client.shopBuy(PACK_ID, 0);
   await h.client.shopPublish({ name: "Neon night", blurb: " ", price: 0, data: { ...PACK, css: "x" }, listed: true, extra: 1 });
   await h.client.shopUpdate(PACK_ID, { blurb: "", listed: false, sales: 99 });
@@ -94,7 +94,7 @@ test("each call goes where the relay expects it, with only the fields it takes",
     { method: "GET", path: "/v1/shop?view=top&cursor=30", body: undefined },
     { method: "GET", path: "/v1/shop?view=studio", body: undefined },
     { method: "GET", path: "/v1/shop/owned", body: undefined },
-    { method: "POST", path: "/v1/shop/studio:pet-dragon/buy", body: { price: 150 } },
+    { method: "POST", path: "/v1/shop/studio:fx-embers/buy", body: { price: 90 } },
     { method: "POST", path: `/v1/shop/${PACK_ID}/buy`, body: { price: 0 } },
     { method: "POST", path: "/v1/shop/packs", body: { name: "Neon night", price: 0, data: { ...PACK, css: "x" } } },
     { method: "PUT", path: `/v1/shop/packs/${PACK_ID}`, body: { blurb: "", listed: false } },
@@ -106,7 +106,7 @@ test("each call goes where the relay expects it, with only the fields it takes",
 });
 
 test("results keep an item's known fields only: a pack's data has the schema's keys, numbers and strings are capped", async () => {
-  const studio = { id: "studio:pet-dragon", kind: "pet", name: "Ember the dragon", blurb: "A little dragon.", price: 150, requires: null, maker: null, data: { v: 1 }, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2, html: "<b>x</b>" };
+  const studio = { id: "studio:skin-frost", kind: "skin", name: "Frost scales", blurb: "Ember in icy blue.", price: 40, requires: null, maker: null, data: { v: 1 }, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2, html: "<b>x</b>" };
   const pack = {
     id: PACK_ID, kind: "pack", name: "Neon night", blurb: "x".repeat(161), price: -5, requires: "javascript:alert(1)", maker: { id: "200000000000000001", name: "Alice", email: "a@example.com" },
     data: { v: 1, palette: { ...PACK.palette, accent: "#4F8CFF", glow: "#ffffff" }, nodeStyle: "halo", material: "nope", font: "mono", css: "body{}" },
@@ -120,7 +120,7 @@ test("results keep an item's known fields only: a pack's data has the schema's k
   assert.deepEqual(page, {
     ok: true, view: "new",
     items: [
-      { id: "studio:pet-dragon", kind: "pet", name: "Ember the dragon", blurb: "A little dragon.", price: 150, requires: null, maker: null, data: null, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2 },
+      { id: "studio:skin-frost", kind: "skin", name: "Frost scales", blurb: "Ember in icy blue.", price: 40, requires: null, maker: null, data: null, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2 },
       {
         id: PACK_ID, kind: "pack", name: "Neon night", blurb: "", price: 0, requires: null, maker: { id: "200000000000000001", name: "Alice" },
         data: { v: 1, palette: PACK.palette, nodeStyle: "halo", font: "mono" }, sales: 0, owned: false, status: "listed", createdAt: null, updatedAt: 5,
@@ -154,8 +154,8 @@ test("refusals keep needs, price, balance, hold and until, and nothing else", as
   await h.ready();
   reply = { status: 409, body: { ok: false, error: "short", reason: "credits", balance: 10, price: 60, needs: "javascript:alert(1)", hold: "nope", extra: "x" } };
   assert.deepEqual(await h.client.shopBuy("studio:fx-dissolve", 60), { ok: false, error: "short", reason: "credits", balance: 10, price: 60 });
-  reply = { status: 409, body: { ok: false, error: "needs", needs: "studio:pet-dragon" } };
-  assert.deepEqual(await h.client.shopBuy("studio:skin-gold", 60), { ok: false, error: "needs", needs: "studio:pet-dragon" });
+  reply = { status: 409, body: { ok: false, error: "needs", needs: "studio:fx-embers" } };
+  assert.deepEqual(await h.client.shopBuy("studio:hat-party", 20), { ok: false, error: "needs", needs: "studio:fx-embers" }, "no item needs another today, but the refusal keeps its shape");
   reply = { status: 403, body: { ok: false, error: "hold", hold: "new-member", until: 123 } };
   assert.deepEqual(await h.client.shopPublish({ name: "Neon", price: 20, data: PACK }), { ok: false, error: "hold", hold: "new-member", until: 123 });
   reply = { status: 429, body: { ok: false, error: "rate-limited", retryAfter: 5000 } };

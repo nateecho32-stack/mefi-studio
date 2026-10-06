@@ -2626,7 +2626,6 @@ function hubEvents(method, args) {
 const HUB_SHOP_METHODS = Object.freeze({ shop: 2, shopOwned: 0, shopBuy: 2, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2 });
 const SHOP_ALL = process.env.MEFI_STUDIO_SHOP_ALL === "1";
 const SHOP_STUDIO_ITEMS = Object.freeze([
-  { id: "studio:pet-dragon", kind: "pet", name: "Ember the dragon" },
   { id: "studio:skin-frost", kind: "skin", name: "Frost scales" },
   { id: "studio:skin-jade", kind: "skin", name: "Jade scales" },
   { id: "studio:skin-void", kind: "skin", name: "Void scales" },
