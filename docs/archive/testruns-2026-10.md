@@ -6,6 +6,15 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-05 Linux CI: two Rust-side tests stop assuming Windows
+
+Branch `fix/linux-ci` (60b90a1, off main dfda798), test expectations only: rust_modules feeds the image-store
+factory's folder() a platform-native absolute folder (a `C:\` path is relative on Linux), and package_host names
+the Rust host program mefi-studio.exe on Windows and mefi-studio elsewhere, as rust-host.mjs does. Here (Windows):
+rust_modules and package_host pass alone. Hosted CI on the branch (run 37395258702, Windows): the whole chain green.
+studio-linux.yml runs on the main push this lands with; it failed on every main push since 4 October on exactly
+these two tests.
+
 ## 2026-10-05 The Mefi Studio relay, the Project hub, the Lobby and one Friends page land on main
 
 Branch `wip/friends-ux` in `C:\wt\fux`: wip/relay (the Cloudflare relay under `relay/`, hub-client, room history,
