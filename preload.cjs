@@ -462,8 +462,17 @@ const api = {
   machineGet: () => ipcRenderer.invoke("machine:get"),
   machineSet: (prefs) => ipcRenderer.invoke("machine:set", prefs),
   machineKill: (pid) => ipcRenderer.invoke("machine:kill", { pid }),
+  // The resource manager for other apps (Team › Resources): an app is named by
+  // its key, never by a pid; the host finds its processes itself.
+  resourcesState: () => ipcRenderer.invoke("resources:state"),
+  resourcesWatch: (payload) => ipcRenderer.invoke("resources:watch", { id: typeof payload?.id === "string" ? payload.id.slice(0, 40) : "resources", on: payload?.on !== false }),
+  resourcesAct: (key, op) => ipcRenderer.invoke("resources:act", { key: typeof key === "string" ? key.slice(0, 64) : "", op: typeof op === "string" ? op.slice(0, 16) : "" }),
+  resourcesRestoreAll: () => ipcRenderer.invoke("resources:restore-all"),
+  resourcesSet: (patch) => ipcRenderer.invoke("resources:set", patch && typeof patch === "object" ? patch : {}),
   onAssistantStatus: (callback) => ipcRenderer.on("assistant:status", (_event, status) => callback(status)),
   onMachineStatus: (callback) => ipcRenderer.on("machine:status", (_event, status) => callback(status)),
+  onResources: (callback) => ipcRenderer.on("resources:update", (_event, view) => callback(view)),
+  onResourcesActed: (callback) => ipcRenderer.on("resources:acted", (_event, entry) => callback(entry)),
   onTasks: (callback) => ipcRenderer.on("eyes:tasks", (_event, tasks) => callback(tasks)),
   // A running card's newest runProgress, { projectId, byTask: { id: runProgress } }
   // (main.cjs persistExecutorCheckpoint), instead of the whole board.

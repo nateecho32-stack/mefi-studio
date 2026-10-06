@@ -776,6 +776,12 @@ test("the machine's load comes from the resource watcher's push: CPU and memory 
   listed.flush();
   await item(listed, "machine").click();
   assert.deepEqual(listed.calls.go.at(-1), ["machine"]);
+  // With Team › Resources registered, the load opens it: that is where the PC's apps can be held back for the agents.
+  const managed = loadShell({ registry: { machine: { id: "machine", kind: "action" }, resources: { id: "resources", kind: "overlay" } }, extra: { mefiStudio: { onMachineStatus: (callback) => { callback({ capacity: { resources: { cpuPercent: 5 } } }); return () => {}; } } } });
+  managed.flush();
+  assert.match(item(managed, "machine").getAttribute("aria-label"), /\. Open Resources$/);
+  await item(managed, "machine").click();
+  assert.deepEqual(managed.calls.go.at(-1), ["resources"]);
   // A removed frame repaints nothing for it.
   page.window.MefiShell.disable();
   push({ capacity: { resources: { cpuPercent: 77 } } });

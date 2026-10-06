@@ -1878,6 +1878,69 @@
     </div>
   </div>
 </div>
+<div class="overlay explorer" id="resources-overlay" hidden>
+  <div class="explorer-sheet resources-sheet" role="dialog" aria-modal="true" aria-labelledby="resources-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="resources" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Team</div>
+        <h2 id="resources-heading">Resources</h2>
+      </div>
+      <div class="sheet-links" data-sheet-links="resources" role="group" aria-label="Other tools"></div>
+      <div class="sheet-actions">
+        <button id="resources-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="resources-body" id="resources-body">
+      <section class="resources-top" aria-label="This PC right now">
+        <div class="resources-modes" id="resources-modes" role="radiogroup" aria-label="How Studio manages other apps">
+          <button type="button" class="resources-mode" id="resources-mode-manual" data-mode="manual" role="radio" aria-checked="true">Manual</button>
+          <button type="button" class="resources-mode" id="resources-mode-auto" data-mode="auto" role="radio" aria-checked="false" tabindex="-1">Auto</button>
+        </div>
+        <p id="resources-mode-note" class="resources-mode-note"></p>
+        <p id="resources-headline" class="resources-headline" role="status" aria-live="polite">Looking at this PC…</p>
+        <p id="resources-problem" class="resources-problem" role="alert" hidden></p>
+        <div id="resources-meters" class="resources-meters" role="group" aria-label="This PC's load"></div>
+        <div class="resources-tools" id="resources-tools">
+          <button id="resources-focus" class="mini" type="button" title="One round of what auto mode does while agents build: slow heavy apps you are not using, and give memory back if building is short of it">Make room now</button>
+          <button id="resources-restore" class="ghost mini" type="button" title="Every app Studio slowed or paused goes back to how it was">Restore all</button>
+          <input id="resources-filter" class="resources-filter" type="search" placeholder="Find an app" aria-label="Find an app" autocomplete="off" spellcheck="false">
+          <span class="resources-sorts" role="group" aria-label="Sort apps by">Sort by
+            <button id="resources-sort-memory" class="ghost mini" type="button" aria-pressed="true">Memory</button>
+            <button id="resources-sort-cpu" class="ghost mini" type="button" aria-pressed="false">CPU</button>
+            <button id="resources-sort-name" class="ghost mini" type="button" aria-pressed="false">Name</button>
+          </span>
+        </div>
+      </section>
+      <div id="resources-suggest" class="resources-suggest" role="group" aria-label="What would free memory for building" hidden></div>
+      <ol id="resources-list" class="resources-list" aria-label="Apps on this PC"></ol>
+      <button id="resources-more" class="ghost mini" type="button" aria-expanded="false" aria-controls="resources-list" hidden>Show all apps</button>
+      <section id="resources-left" class="resources-left" aria-label="What Studio never touches" hidden></section>
+      <details class="resources-settings" id="resources-settings">
+        <summary>How auto mode decides</summary>
+        <div id="resources-settings-body" class="resources-settings-body"></div>
+      </details>
+      <details class="resources-log-box" id="resources-log-box">
+        <summary>What Studio did</summary>
+        <ol id="resources-log" class="resources-log" aria-label="What Studio did, newest first"></ol>
+      </details>
+      <details class="resources-about">
+        <summary>How it works</summary>
+        <p>Studio's agents build best with the PC to themselves. This page lets Studio make room for them by holding back the other apps on this PC, either when you press a button (Manual) or by itself while agents build (Auto).</p>
+        <ul>
+          <li><b>Slow down</b> gives an app the lowest priority and Windows' efficiency mode. It keeps working, but only gets the CPU the agents leave.</li>
+          <li><b>Pause</b> freezes an app and hands its memory back to Windows. It carries on exactly where it was when you put it back or switch to it.</li>
+          <li><b>Free memory</b> hands an app's memory back to Windows without stopping it. It takes back what it needs as you use it.</li>
+          <li><b>Close</b> asks an app to close, as its own close button would. It may ask you to save first, or keep running in the tray.</li>
+          <li><b>End</b> stops an app at once, after a second press. Anything unsaved in it is lost.</li>
+          <li><b>Put back</b> and <b>Restore all</b> undo slowing and pausing.</li>
+        </ul>
+        <p><b>Auto mode</b> only acts while agents build or wait for the machine. It slows heavy apps you are not using, gives memory back when building runs short of the amount you chose, and pauses or closes only the apps whose menu says so. It never touches the app in front of you or one you used in the last two minutes, and it puts everything back once the agents finish. Calls, music, recording, remote access and terminals are left alone unless you choose otherwise.</p>
+        <p><b>Always safe:</b> Studio never touches itself, its agents, Windows or its services, another person's apps, what Studio was started from, console windows or security software. A paused app runs again the moment you switch to it, and everything Studio slowed or paused goes back when Studio closes, even if it crashes.</p>
+      </details>
+    </div>
+  </div>
+</div>
 <div class="overlay explorer" id="skills-overlay" hidden>
   <div class="explorer-sheet skills-sheet" role="dialog" aria-modal="true" aria-labelledby="skills-heading" tabindex="-1">
     <header class="explorer-head sheet-head">
