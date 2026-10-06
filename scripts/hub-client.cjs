@@ -1051,7 +1051,14 @@ function createHubClient(options = {}) {
     async voteEvent(eventId, userId, on = true) {
       if (!features.includes("events") || !id(eventId) || !SNOWFLAKE.test(String(userId ?? ""))) return { ok: false, error: "bad-request" };
       const answer = on === false ? await authed("DELETE", `/v1/events/${eventId}/votes/${userId}`) : await authed("POST", `/v1/events/${eventId}/votes`, { userId: String(userId) });
-      return answer.ok ? { ok: true, jam: jamOf(answer.data.jam) } : refused(answer);
+      if (answer.ok) return { ok: true, jam: jamOf(answer.data.jam) };
+      // Why this member's votes do not count yet (credits.mjs standing()), so Studio can say when they will.
+      return { ...refused(answer), ...(CREDIT_HOLDS.includes(answer.data?.hold) ? { hold: answer.data.hold } : {}) };
+    },
+    // A moderator takes an entry out of a jam that is still running.
+    removeEntry(eventId, userId) {
+      if (!features.includes("events") || !id(eventId) || !SNOWFLAKE.test(String(userId ?? ""))) return bad();
+      return simple("DELETE", `/v1/events/${eventId}/entries/${userId}`);
     },
     // A co-work hour's room, joined straight away. The caller keeps it open (subscribe) while attending.
     async joinEvent(eventId) {

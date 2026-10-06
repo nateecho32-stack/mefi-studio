@@ -186,7 +186,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     credits = createCredits({ store, now, key: keys.play, sendToUser, member: (uid) => sessions.member(uid), economy });
     credits.routes(route);
     // Community events the relay runs by itself (events.mjs): the weekly Build Jam, co-work hours, building together.
-    events = createEvents({ store, now, credits, economy, rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
+    events = createEvents({ store, now, credits, economy, paused, rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
     events.routes(route);
     const at = now();
     store.run(
@@ -328,12 +328,15 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     return [...new Set(readySockets().filter(({ a }) => members.has(a.uid)).map(({ a }) => a.uid))];
   }
 
-  /** A listed co-work room the relay itself opens for an event (events.mjs); nobody owns it. */
+  /**
+   * A co-work room the relay itself opens for an event (events.mjs). Nobody owns it and it is not in the
+   * room list (a request to join would go to nobody): Friends › Events joins it straight away.
+   */
   function openEventRoom({ name, maxMembers }) {
     const id = newId('room');
     const at = now();
     store.run(
-      `INSERT INTO rooms (id, kind, name, owner_id, policy, listed, max_members, status, member_count, created_at, updated_at) VALUES (?, 'cowork', ?, NULL, 'request', 1, ?, 'active', 0, ?, ?)`,
+      `INSERT INTO rooms (id, kind, name, owner_id, policy, listed, max_members, status, member_count, created_at, updated_at) VALUES (?, 'cowork', ?, NULL, 'request', 0, ?, 'active', 0, ?, ?)`,
       id, cleanLine(name, LIMITS.roomNameChars), maxMembers, at, at,
     );
     return id;
@@ -409,7 +412,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     if (sockets.list().length > 0) candidates.push(at + RETENTION.sweepEveryMs);
     const lastUpkeep = Number(store.meta('upkeep_at') ?? 0);
     candidates.push(Math.max(at + MINUTE_MS, lastUpkeep + RETENTION.maintenanceEveryMs));
-    if (events) candidates.push(events.nextDue());
+    const eventsDue = events?.nextDue();
+    if (Number.isFinite(eventsDue)) candidates.push(eventsDue);
     return Math.max(at + SECOND_MS, Math.min(...candidates));
   }
 

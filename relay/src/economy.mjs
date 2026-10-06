@@ -9,6 +9,10 @@
 //
 //   budget(day) = 200 + 25 for every member seen in the last 7 days, at most 5,000
 //
+// A member counts only once their Discord account is 30 days old and they
+// have been in the server a week (credits.mjs GUARD): new second accounts
+// signing in cannot grow the budget, or the jam's pot with it.
+//
 // Together and co-work rewards pay only from what is left of the day's
 // budget, so on a busy day the last ones pay less, and never more than the
 // budget. The Build Jam's prize pool is half of what the budget left unspent
@@ -18,6 +22,7 @@
 // that fixes the day's active count, so a day's budget never moves under it.
 // Nothing here is per member, and nothing is shown to anyone but as totals.
 
+import { GUARD, accountCreatedAt } from './credits.mjs';
 import { DAY_MS } from './util.mjs';
 
 export const ECONOMY = Object.freeze({
@@ -44,9 +49,10 @@ export function createEconomy({ store, now }) {
   const kinds = ECONOMY.dailyKinds;
   const marks = kinds.map(() => '?').join(', ');
 
-  /** Members seen in the window before `at` (their Studio signed in or renewed). */
+  /** Members seen in the window before `at` (their Studio signed in or renewed), old enough to earn. */
   function activeAt(at) {
-    return Number(store.get('SELECT COUNT(*) AS n FROM members WHERE last_seen > ?', at - ECONOMY.activeWindowMs)?.n ?? 0);
+    const seen = store.all('SELECT user_id FROM members WHERE last_seen > ? AND joined_at IS NOT NULL AND joined_at <= ?', at - ECONOMY.activeWindowMs, at - GUARD.serverAgeMs);
+    return seen.filter((row) => { const made = accountCreatedAt(row.user_id); return made !== null && made <= at - GUARD.accountAgeMs; }).length;
   }
 
   /** The day's active count, fixed the first time the day is asked about. */

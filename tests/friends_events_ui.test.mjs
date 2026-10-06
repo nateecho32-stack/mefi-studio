@@ -64,7 +64,7 @@ function eventsPage({ joined = false, entered = false, now = Date.now() } = {}) 
   };
 }
 
-function environment({ hub = { configured: true, linked: true, state: "ready", events: true }, page = eventsPage(), answers = {} } = {}) {
+function environment({ hub = { configured: true, linked: true, state: "ready", events: true }, page = eventsPage(), answers = {}, me = {} } = {}) {
   const calls = [];
   let listener = null;
   const went = [];
@@ -72,10 +72,10 @@ function environment({ hub = { configured: true, linked: true, state: "ready", e
     hubStatus: async () => ({ ok: true, status: hub }),
     hubConnect: async () => ({ ok: true }),
     hubEvents: async (method, ...args) => { calls.push([method, ...args]); if (method === "events") return page; return answers[method] ?? { ok: true }; },
-    hubProjects: async (method, ...args) => { calls.push([`projects:${method}`, ...args]); return method === "me" ? { ok: true, projects: [{ id: "proj_a1", title: "Void Runner" }, { id: "proj_a2", title: "Lantern" }] } : { ok: true, minMs: 120000 }; },
+    hubProjects: async (method, ...args) => { calls.push([`projects:${method}`, ...args]); return method === "me" ? { ok: true, projects: [{ id: "proj_a1", title: "Void Runner" }, { id: "proj_a2", title: "Lantern" }], canEarn: true, ...me } : { ok: true, minMs: 120000 }; },
     onHubEvent: (fn) => { listener = fn; },
   };
-  const window = { mefiStudio: api, MefiNav: { go: (...args) => went.push(args) } };
+  const window = { mefiStudio: api, MefiNav: { go: (...args) => went.push(args) }, MefiCommunity: { join: async () => calls.push(["community:join"]), check: async () => ({ ok: true }) } };
   const timers = [];
   const context = vm.createContext({
     window, document: { createElement: (tag) => new Element(tag), activeElement: null }, Date, Number, Array, Set, Map, Promise, JSON, Object, String, Math,
@@ -133,7 +133,10 @@ test("the jam: the theme and when it closes, your entry from your own projects, 
   await flush();
   assert.deepEqual(env.calls.find((call) => call[0] === "projects:playProject"), ["projects:playProject", "proj_cara"]);
   assert.match(card.find("friends-events-status").textContent, /Play it for two minutes/);
-  assert.match(card.find("friends-events-jam").textContent, /3 votes left\. Votes stay hidden until Monday/);
+  assert.match(card.find("friends-events-jam").textContent, /3 votes left\. Votes stay hidden until the results, .+, and count only for entries you played\./);
+  assert.match(card.find("friends-events-jam").textContent, /Tiny Farm|Glow Worm/);
+  assert.match(card.find("friends-events-entries").textContent, /1 player · play it to vote/, "why a vote is locked shows as text, not only as a tooltip");
+  assert.equal(card.find(`friends-events-vote-${CARA.id}`).getAttribute("aria-label"), "Vote for Glow Worm by Cara", "each button says which entry it is for");
 });
 
 test("an entered member can withdraw; a refusal says why in plain words", async () => {
@@ -145,7 +148,7 @@ test("an entered member can withdraw; a refusal says why in plain words", async 
   assert.equal(card.find("friends-events-entries").buttons("Vote").length, 2, "no vote button on your own entry");
   card.find("friends-events-withdraw").click();
   await flush();
-  assert.equal(card.find("friends-events-status").textContent, "Entries closed on Saturday. You can still play and vote until Monday.");
+  assert.match(card.find("friends-events-status").textContent, /^Entries are closed\. You can still play and vote until .+\.$/);
 });
 
 test("the co-work hour: Join keeps you counted, then Open the room goes to Rooms", async () => {
@@ -160,7 +163,7 @@ test("the co-work hour: Join keeps you counted, then Open the room goes to Rooms
   const joined = environment({ page: eventsPage({ joined: true }) });
   const joinedCard = joined.events.card();
   await flush();
-  assert.match(joinedCard.find("friends-events-cowork").textContent, /You are in\. Keep Studio open: you are counted at 15, 35 and 55 minutes past the start\. Seen 1 of 2 times needed for 4 credits\./);
+  assert.match(joinedCard.find("friends-events-cowork").textContent, /You are in\. Keep Studio open, on any page: you are counted at 15, 35 and 55 minutes past the start\. Seen 1 of 2 times needed for 4 credits\./);
   joinedCard.find("friends-events-open-room").click();
   assert.deepEqual(JSON.parse(JSON.stringify(joined.went.at(-1))), ["friends-page", { place: "rooms", room: "room_hour" }]);
 });
@@ -190,6 +193,52 @@ test("build together explains where credits come from; last week's results and t
   assert.equal(env.timers[0].ms, 60_000, "it moves once a minute, not per frame");
 });
 
+test("a member whose votes do not count yet hears why and when, and the locked votes say so", async () => {
+  const until = Date.UTC(2026, 9, 14, 12);
+  const env = environment({ me: { canEarn: false, hold: { reason: "new-member", until } }, answers: { voteEvent: { ok: false, error: "forbidden", reason: "standing", hold: "new-member" } } });
+  const card = env.events.card();
+  await flush();
+  assert.match(card.find("friends-events-hold").textContent, /^Your votes and credits start a week after you joined the Void Engine server on /);
+  const bob = card.find(`friends-events-vote-${BOB.id}`);
+  assert.equal(bob.disabled, true, "even a played entry cannot be voted for yet");
+  assert.match(bob.title, /start a week after you joined/);
+  assert.equal(env.events.holdWords("new-account"), "Your votes and credits start when your Discord account is 30 days old.");
+});
+
+test("a moderator can take an entry out of the jam, asked once more first", async () => {
+  const env = environment({ page: eventsPage({ entered: true }), me: { moderator: true }, answers: { removeEntry: { ok: true } } });
+  const card = env.events.card();
+  await flush();
+  const removes = card.find("friends-events-entries").buttons("Remove from the jam");
+  assert.equal(removes.length, 2, "on the others' entries, not on your own");
+  removes[0].click();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "removeEntry"), ["removeEntry", "jam_w2909", BOB.id]);
+  assert.equal(card.find("friends-events-status").textContent, "Tiny Farm is out of the jam.");
+  const member = environment();
+  const plain = member.events.card();
+  await flush();
+  assert.equal(plain.find("friends-events-entries").buttons("Remove from the jam").length, 0, "members never see it");
+});
+
+test("a connection problem names the one thing to do: join the server, update Studio, or sign in again", async () => {
+  const notMember = environment({ hub: { configured: true, linked: true, state: "error", error: "not-member" } });
+  const outside = notMember.events.card();
+  await flush();
+  assert.equal(outside.dataset.state, "not-member");
+  assert.equal(outside.buttons("Join the Discord").length, 1);
+  assert.equal(outside.buttons("Connect").length, 0, "Connect cannot fix this, so it is not offered");
+  const old = environment({ hub: { configured: true, linked: true, state: "error", error: "version" } });
+  const update = old.events.card();
+  await flush();
+  assert.equal(update.find("friends-events-status").textContent, "This Studio is older than the room service. Update Studio to join events.");
+  const expired = environment({ hub: { configured: true, linked: true, state: "error", error: "auth" } });
+  const again = expired.events.card();
+  await flush();
+  assert.equal(again.dataset.state, "signed-out");
+  assert.match(again.find("friends-events-status").textContent, /Your Discord sign-in has run out\. Sign in again to join events\. Sign in with Discord in Friends\./);
+});
+
 test("a partial answer still draws, and countdowns read in whole days, hours or minutes", async () => {
   const env = environment({ page: { ok: true } });
   const card = env.events.card();
@@ -204,9 +253,9 @@ test("a partial answer still draws, and countdowns read in whole days, hours or 
 });
 
 test("main lets the renderer call only the event methods; the bridge, the place and the bundle know the page", () => {
-  assert.match(main, /const HUB_EVENT_METHODS = Object\.freeze\(\{ events: 0, enterEvent: 2, leaveEvent: 1, voteEvent: 3, joinEvent: 1 \}\);/);
+  assert.match(main, /const HUB_EVENT_METHODS = Object\.freeze\(\{ events: 0, enterEvent: 2, leaveEvent: 1, voteEvent: 3, joinEvent: 1, removeEntry: 2 \}\);/);
   assert.match(main, /ipcMain\.handle\("hub:events", async \(_event, payload\) => hubEvents\(String\(payload\?\.method \?\? ""\), Array\.isArray\(payload\?\.args\) \? payload\.args : \[\]\)\);/);
-  assert.match(main, /if \(joined\.ok\) client\.subscribe\(joined\.roomId, "default"\);/, "joining a co-work hour keeps its room open");
+  assert.doesNotMatch(main, /client\.subscribe\(joined\.roomId/, "joining a co-work hour holds no room: the relay counts members who are connected");
   assert.match(preload, /hubEvents: \(method, \.\.\.args\) => ipcRenderer\.invoke\("hub:events"/);
   assert.match(hubSource, /\{ id: "events", label: "Events", glyph: "g-bolt"/);
   assert.match(hubSource, /else if \(place\.id === "events"\) card = window\.MefiFriendsEvents\?\.card\?\.\(\);/);

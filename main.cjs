@@ -2470,20 +2470,15 @@ function hubProjects(method, args) {
 // Friends › Events (renderer/friends-events.js): the community events the
 // relay runs by itself (relay/src/events.mjs): the weekly Build Jam, the
 // co-work hours and building together. Same gate as the project hub: a
-// listed method and plain arguments. Joining a co-work hour also keeps its
-// room open in this Studio until the hour ends, which is what the relay
-// counts as being there.
-const HUB_EVENT_METHODS = Object.freeze({ events: 0, enterEvent: 2, leaveEvent: 1, voteEvent: 3, joinEvent: 1 });
+// listed method and plain arguments. Nothing here holds a room open: the
+// relay counts a co-work hour's members while their Studio is connected,
+// and Rooms opens the room when someone wants its chat.
+const HUB_EVENT_METHODS = Object.freeze({ events: 0, enterEvent: 2, leaveEvent: 1, voteEvent: 3, joinEvent: 1, removeEntry: 2 });
 function hubEvents(method, args) {
   const arity = Object.hasOwn(HUB_EVENT_METHODS, method) ? HUB_EVENT_METHODS[method] : -1;
   if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
   const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null));
-  if (method !== "joinEvent") return hubCall((client) => client[method](...plain));
-  return hubCall(async (client) => {
-    const joined = await client.joinEvent(plain[0]);
-    if (joined.ok) client.subscribe(joined.roomId, "default");
-    return joined;
-  });
+  return hubCall((client) => client[method](...plain));
 }
 // Online while Studio is open: a member signed in on this PC (a Discord link)
 // connects a few seconds after launch, so friends see them in Who's online

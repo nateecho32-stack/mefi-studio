@@ -9,6 +9,8 @@
 .friends-events-heading { margin: 0; font-size: 14px; font-weight: 650; color: var(--ivory); }
 .friends-events-lead { margin: 0; font-size: 13.5px; }
 .friends-events-pot, .friends-events-fine, .friends-events-budget { margin: 0; font-size: 12.5px; }
+/* Why this member's votes do not count yet, and when they will. */
+.friends-events-hold { margin: 0; padding: 6px 10px; border-left: 2px solid var(--gold); color: var(--ivory); font-size: 12.5px; }
 .friends-events-section p { margin: 0; }
 /* A button on its own line keeps its own width: the section is a grid, which would stretch it across the card. */
 .friends-events-section > :is(.friends-events-button, .friends-events-primary) { justify-self: start; padding: 0 14px; }

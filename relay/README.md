@@ -103,27 +103,38 @@ plays and stars, with both sides in good standing, once each, under the caps:
   standing who played that entry during the jam, and votes stay hidden until
   the results. On Monday an entry played by three or more members earns a
   showcase reward (5 each, at most 30% of the pot), then the top three with
-  two votes or more share the rest 50/30/20. A prize's giver is the event,
-  and moderators see it as "a community event", never as farming.
-- **Co-work hours** at 02:00, 10:00 and 18:00 UTC: a listed co-work room the
-  relay opens ten minutes early and closes after the hour. At 15, 35 and 55
+  three votes or more share the rest 50/30/20, at most 40 credits a vote.
+  Whoever took a place sits out the places of the next two jams, an entry
+  whose project left the hub drops out, and a moderator can take an entry
+  out from Friends › Events. A prize's giver is the event, and moderators
+  see it as "a community event", never as farming.
+- **Co-work hours** at 02:00, 10:00 and 18:00 UTC: a co-work room the relay
+  opens ten minutes early and closes after the hour. It is not in the room
+  list (a request to join would reach nobody); Friends › Events joins it
+  straight away, after a member's first day in the server. At 15, 35 and 55
   minutes it looks who joined that hour's room and has Studio connected (on
   any page, so a restart costs nobody their place); everyone seen twice, with
   at least one other member seen too, earns 4 credits (twice a day at most).
 - **Building together** in members' own co-work rooms: each look (at most
-  every 10 minutes) that finds two or more members in the room counts once
-  for each; three in a day pay 4 credits, once a day.
+  every 10 minutes) that finds two or more members of the room with Studio
+  connected counts once for each; three in a day pay 4 credits, once a day.
 
 The giver of a co-work or together reward is a member who was there with the
-earner, so the 15-a-week limit between two members applies to them as to
-plays: two old accounts sitting in a room together are capped like anything
-else. There are no rewards for inviting anyone: credits come from building and
-playing together.
+earner (of those, the one who has given them least this week), so the
+15-a-week limit between two members applies to them as to plays: two old
+accounts sitting in a room together are capped like anything else. Moderators'
+"looks like farming" list leaves these out, since two people co-working
+always earn from each other; a member's review still shows them. There are no
+rewards for inviting anyone: credits come from building and playing together.
+While the relay is paused, no event starts, runs or pays, and its alarm does
+not wake for them.
 
 **The community budget** (`src/economy.mjs`) keeps the event rewards in step
 with the community: each day the together and co-work rewards may pay out at
-most 200 credits plus 25 for every member seen in the last 7 days (5,000 at
-most), fixed for the day the first time it is read. When it is used up, those
+most 200 credits plus 25 for every member seen in the last 7 days whose
+Discord account is 30 days old and who has been in the server a week (5,000
+at most), fixed for the day the first time it is read, so new second accounts
+cannot grow it. When it is used up, those
 rewards pay nothing until tomorrow. The jam's pot is half of what the budget
 left unspent over the jam's days, at least 60 and at most 450, so a quiet week
 grows the prizes and a busy one shrinks them. Plays and stars keep their own

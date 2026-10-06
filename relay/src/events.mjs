@@ -10,7 +10,10 @@
 //   plays from members in good standing, once per player and day). On Monday
 //   the results are paid from the jam's pool (economy.mjs): an entry played
 //   by three or more members earns a showcase reward, and the top three with
-//   at least two votes share the rest 50/30/20. Votes stay hidden until then.
+//   at least three votes share the rest 50/30/20, at most 40 credits a vote,
+//   with no place for anyone who took one in the two jams before (the
+//   prizes go round). An entry whose project left the hub drops out. Votes
+//   stay hidden until then.
 // - Co-work hours. Three times a day (02:00, 10:00 and 18:00 UTC) the relay
 //   opens a listed co-work room for an hour. It looks who is there at three
 //   moments (15, 35 and 55 minutes in): a member who joined that hour's room
@@ -19,15 +22,17 @@
 //   the three, with at least one other member seen too, earns 4 credits. The
 //   room closes at the end of the hour.
 // - Building together. In any member's co-work room, two or more members with
-//   the room open at once earn a tick each time the relay looks (at most every
-//   10 minutes); three ticks in a day pay 4 credits, once a day.
+//   Studio connected at once earn a tick each time the relay looks (at most
+//   every 10 minutes); three ticks in a day pay 4 credits, once a day.
 //
 // Every reward goes through credits.award(): both sides in good standing, paid
 // once per (giver, earner, kind, what), under the kind's caps and, for the
 // together and co-work rewards, the day's community budget. The giver of a
 // together or co-work reward is a member who was there with the earner, so
 // the 15-a-week limit between two members applies: two aged accounts sitting
-// in a room are capped like everything else. A jam prize's giver is the event.
+// in a room are capped like everything else; of the members there, the giver
+// is the one who has given the earner least this week. A jam prize's giver is
+// the event. While the relay is paused, nothing here starts, runs or pays.
 // There are no rewards for inviting or bringing anyone (Discord's platform
 // rules): credits come from building and playing together.
 
@@ -43,7 +48,9 @@ export const weekStart = (week) => FIRST_MONDAY + week * WEEK_MS;
 export const JAM = Object.freeze({
   entriesMs: 5 * DAY_MS, // Monday to Saturday 00:00: enter, play and vote
   votesPerMember: 3,
-  placeMinVotes: 2,
+  placeMinVotes: 3,
+  placePerVote: 40, // a place pays at most this many credits for each vote it got
+  placeRestJams: 2, // a member who took a place sits out the places of this many jams after
   shares: Object.freeze([0.5, 0.3, 0.2]),
   showcasePlayers: 3, // members who played an entry, for its showcase reward
   showcaseAmount: 5,
@@ -59,7 +66,7 @@ export const COWORK = Object.freeze({
   checksNeeded: 2,
   minAttendees: 2,
   amount: 4,
-  maxMembers: 25,
+  maxMembers: 100,
   name: 'Co-work hour',
 });
 
@@ -117,7 +124,8 @@ export function nextCoworkStart(at) {
 /**
  * How a jam's pool is paid: showcase rewards first (at most 30% of the pool,
  * 5 each, less each when many earn one), then the places 50/30/20 from the
- * rest. `ranked` is the entries in final order: [{ userId, votes, players }].
+ * rest, each at most 40 credits a vote. `ranked` is the entries in final order:
+ * [{ userId, votes, players, resting }] (a resting entry may take a showcase reward, never a place).
  * -> [{ userId, place|null, amount, why: 'place'|'showcase' }]
  */
 export function splitPool(pool, ranked) {
@@ -136,28 +144,30 @@ export function splitPool(pool, ranked) {
   const each = showcase.length ? Math.min(JAM.showcaseAmount, Math.floor((pool * JAM.showcaseShareMax) / showcase.length)) : 0;
   for (const entry of showcase) add(entry.userId, each, 'showcase');
   const rest = pool - each * showcase.length;
-  const placed = ranked.filter((entry) => entry.votes >= JAM.placeMinVotes).slice(0, JAM.shares.length);
-  placed.forEach((entry, index) => add(entry.userId, Math.floor(rest * JAM.shares[index]), 'place', index + 1));
+  const placed = ranked.filter((entry) => entry.votes >= JAM.placeMinVotes && !entry.resting).slice(0, JAM.shares.length);
+  placed.forEach((entry, index) => add(entry.userId, Math.min(Math.floor(rest * JAM.shares[index]), entry.votes * JAM.placePerVote), 'place', index + 1));
   return [...payouts.values()];
 }
 
 /**
- * createEvents({ store, now, credits, economy, rooms })
+ * createEvents({ store, now, credits, economy, rooms, paused })
  *   credits: { award(o) -> Promise<number>, standing(uid, held), heldUntil(uid) -> Promise<number>, card(uid) }
  *   economy: createEconomy(...)
  *   rooms:   { present(roomId) -> uid[] (members with the room open), online(roomId) -> uid[] (members with Studio connected),
  *              open({ name, maxMembers }) -> roomId, join(roomId, uid) -> result, close(roomId), member(roomId, uid) -> bool }
+ *   paused:  () -> bool, the relay's pause: nothing is made, run or paid while it is on
  * -> { routes(route), tick(), nextDue(), forget(uid), upkeep(), summary(uid) }
  */
-export function createEvents({ store, now, credits, economy, rooms }) {
+export function createEvents({ store, now, credits, economy, rooms, paused = () => false }) {
   const eventRow = (id) => (isOpaqueId(id) ? store.get('SELECT * FROM events WHERE id = ?', id) : undefined);
   const nameOf = (uid) => store.get('SELECT name FROM members WHERE user_id = ?', uid)?.name ?? 'member';
 
   // ---- the weekly Build Jam -------------------------------------------------------
 
-  /** This week's jam, made the first time anyone or the alarm asks. */
+  /** This week's jam, made the first time anyone or the alarm asks (never while the relay is paused). */
   function currentJam(at = now()) {
     const window = jamWindow(weekOf(at));
+    if (paused()) return eventRow(window.id) ?? null;
     store.run(
       `INSERT INTO events (id, kind, title, theme, starts_at, entries_until, ends_at, status) VALUES (?, 'jam', ?, ?, ?, ?, ?, 'open') ON CONFLICT (id) DO NOTHING`,
       window.id, `Build Jam: ${window.theme}`, window.theme, window.startsAt, window.entriesUntil, window.endsAt,
@@ -227,7 +237,8 @@ export function createEvents({ store, now, credits, economy, rooms }) {
   async function closeJam(row) {
     if (row.status === 'closed') return;
     if (row.status === 'open') {
-      const entries = store.all('SELECT * FROM event_entries WHERE event_id = ?', row.id);
+      // An entry whose project left the hub (removed, reported away, or its owner forgotten) drops out.
+      const entries = store.all('SELECT e.* FROM event_entries e JOIN projects p ON p.id = e.project_id WHERE e.event_id = ?', row.id);
       const votes = store.all('SELECT voter_id, entrant_id FROM event_votes WHERE event_id = ?', row.id);
       const voters = [...new Set(votes.map((vote) => vote.voter_id))];
       const held = new Map();
@@ -243,8 +254,13 @@ export function createEvents({ store, now, credits, economy, rooms }) {
           if (!playedDuring(fresh, entry.project_id, vote.voter_id)) continue;
           tally[entry.user_id] = (tally[entry.user_id] ?? 0) + 1;
         }
+        // Who took a place in the jams just before sits this one's places out.
+        const resting = new Set();
+        for (const before of store.all(`SELECT results FROM events WHERE kind = 'jam' AND status = 'closed' AND ends_at <= ? ORDER BY ends_at DESC LIMIT ?`, fresh.starts_at, JAM.placeRestJams)) {
+          for (const payout of JSON.parse(before.results ?? '{}').payouts ?? []) if (payout.place && payout.userId) resting.add(payout.userId);
+        }
         const ranked = entries
-          .map((entry) => ({ userId: entry.user_id, projectId: entry.project_id, votes: tally[entry.user_id] ?? 0, players: playersOf(fresh, entry), at: entry.at }))
+          .map((entry) => ({ userId: entry.user_id, projectId: entry.project_id, votes: tally[entry.user_id] ?? 0, players: playersOf(fresh, entry), at: entry.at, resting: resting.has(entry.user_id) }))
           .sort((a, b) => b.votes - a.votes || b.players - a.players || a.at - b.at);
         const { from, to } = jamDays(fresh);
         const pool = entries.length ? economy.jamPool(from, to) : 0;
@@ -269,7 +285,7 @@ export function createEvents({ store, now, credits, economy, rooms }) {
     const slot = coworkSlot(at);
     if (!slot) return null;
     let row = eventRow(slot.id);
-    if (!row) {
+    if (!row && !paused()) {
       store.transaction(() => {
         if (eventRow(slot.id)) return;
         const roomId = rooms.open({ name: COWORK.name, maxMembers: COWORK.maxMembers });
@@ -277,7 +293,7 @@ export function createEvents({ store, now, credits, economy, rooms }) {
       });
       row = eventRow(slot.id);
     }
-    return row;
+    return row ?? null;
   }
 
   function coworkView(row, uid, at = now()) {
@@ -323,13 +339,29 @@ export function createEvents({ store, now, credits, economy, rooms }) {
     const paid = {};
     if (good.length >= COWORK.minAttendees) {
       for (const one of good) {
-        // The giver is the member who was there longest with them, so two accounts are capped as a pair.
-        const partner = good.find((other) => other.user_id !== one.user_id);
-        paid[one.user_id] = await credits.award({ actor: partner.user_id, target: one.user_id, kind: 'cowork', uniq: row.id, ref: row.id });
+        const partner = giverFor(one.user_id, good.map((other) => other.user_id));
+        paid[one.user_id] = await credits.award({ actor: partner, target: one.user_id, kind: 'cowork', uniq: row.id, ref: row.id });
       }
     }
     store.run(`UPDATE events SET status = 'closed', results = ?, closed_at = ? WHERE id = ? AND status = 'open'`, JSON.stringify({ attended: attended.length, paid }), now(), row.id);
     if (row.room_id) rooms.close(row.room_id);
+  }
+
+  /**
+   * Of the members who were there with `uid`, the one who has given them the
+   * least in the last 7 days (ties: the lowest id). Every reward between two
+   * members counts toward their 15-a-week limit, so a pair that used theirs
+   * up leaves the others to give, and nobody is stuck behind one partner.
+   */
+  function giverFor(uid, there) {
+    const others = there.filter((other) => other !== uid).sort();
+    const given = (other) => Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE actor_id = ? AND target_id = ? AND at > ?', other, uid, now() - 7 * DAY_MS)?.n ?? 0);
+    let best = others[0] ?? null, least = Infinity;
+    for (const other of others) {
+      const amount = given(other);
+      if (amount < least) { least = amount; best = other; }
+    }
+    return best;
   }
 
   // ---- building together ------------------------------------------------------------
@@ -341,22 +373,24 @@ export function createEvents({ store, now, credits, economy, rooms }) {
     const groups = [];
     for (const room of store.all(`SELECT id FROM rooms WHERE kind = 'cowork' AND status = 'active'`)) {
       if (eventRooms.has(room.id)) continue;
-      const here = rooms.present(room.id);
+      // Members of the room with Studio connected: working on anything, together.
+      const here = rooms.online(room.id);
       if (here.length >= 2) groups.push(here);
     }
     if (!groups.length) return;
     const held = new Map();
     for (const uid of new Set(groups.flat())) held.set(uid, await credits.heldUntil(uid));
     const day = dayOf(at);
-    const ticked = new Map(); // uid -> partner
+    const ticked = new Map(); // uid -> the members in good standing with them
     for (const group of groups) {
       const good = group.filter((uid) => credits.standing(uid, held.get(uid)).ok).sort();
       if (good.length < 2) continue;
-      for (const uid of good) if (!ticked.has(uid)) ticked.set(uid, good.find((other) => other !== uid));
+      for (const uid of good) ticked.set(uid, [...new Set([...(ticked.get(uid) ?? []), ...good])]);
     }
     const reached = [];
     store.transaction(() => {
-      for (const [uid, partner] of ticked) {
+      for (const [uid, there] of ticked) {
+        const partner = giverFor(uid, there);
         const row = store.get(
           `INSERT INTO together_ticks (day, user_id, ticks, partner_id, last_at) VALUES (?, ?, 1, ?, ?)
            ON CONFLICT (day, user_id) DO UPDATE SET ticks = ticks + 1, partner_id = excluded.partner_id, last_at = excluded.last_at RETURNING ticks`,
@@ -380,17 +414,24 @@ export function createEvents({ store, now, credits, economy, rooms }) {
     await together(at);
   }
 
-  /** The next moment tick() has something to do. */
+  /**
+   * The next moment tick() has something to do, always in the future: a time
+   * already past (an hour whose room opened, a jam not paid yet) would wake
+   * the relay every second, so work that is due runs again a minute later,
+   * and nothing is due while the relay is paused (null).
+   */
   function nextDue() {
+    if (paused()) return null;
     const at = now();
+    const soon = at + MINUTE_MS;
     const candidates = [weekStart(weekOf(at) + 1)];
     const start = nextCoworkStart(at);
-    if (start) candidates.push(start - COWORK.opensEarlyMs);
+    if (start) candidates.push(start - COWORK.opensEarlyMs > at ? start - COWORK.opensEarlyMs : soon);
     for (const row of store.all(`SELECT * FROM events WHERE kind = 'cowork' AND status = 'open'`)) {
       for (const offset of COWORK.checksAt) if (row.starts_at + offset > at) candidates.push(row.starts_at + offset);
-      candidates.push(row.ends_at);
+      candidates.push(row.ends_at > at ? row.ends_at : soon);
     }
-    if (store.get(`SELECT 1 AS yes FROM events WHERE kind = 'jam' AND status <> 'closed' AND ends_at <= ?`, at)) candidates.push(at);
+    if (store.get(`SELECT 1 AS yes FROM events WHERE kind = 'jam' AND status <> 'closed' AND ends_at <= ?`, at)) candidates.push(soon);
     return Math.min(...candidates);
   }
 
@@ -516,6 +557,7 @@ export function createEvents({ store, now, credits, economy, rooms }) {
     route('POST', '/v1/events/:id/join', ({ actor, params }) => {
       const row = eventRow(params.id);
       if (!row || row.kind !== 'cowork') return fail(404, 'not-found');
+      if (actor.isNew) return fail(403, 'forbidden', { reason: 'new-member' });
       if (row.status !== 'open' || !row.room_id || now() >= row.ends_at) return fail(410, 'gone', { reason: 'over' });
       const joined = rooms.join(row.room_id, actor.uid);
       if (!joined.ok) return reply(joined.status ?? 409, { ok: false, error: joined.error ?? 'conflict', reason: joined.reason });
@@ -525,12 +567,20 @@ export function createEvents({ store, now, credits, economy, rooms }) {
 
   // ---- keeping the store small -------------------------------------------------------
 
-  /** Forget me: the member's entries, votes, attendance and ticks. */
+  /** Forget me: the member's entries, votes, attendance and ticks, and their id and name in every result. */
   function forget(uid) {
     store.run('DELETE FROM event_votes WHERE voter_id = ? OR entrant_id = ?', uid, uid);
     store.run('DELETE FROM event_entries WHERE user_id = ?', uid);
     store.run('DELETE FROM event_attendance WHERE user_id = ?', uid);
     store.run('DELETE FROM together_ticks WHERE user_id = ?', uid);
+    store.run('UPDATE together_ticks SET partner_id = NULL WHERE partner_id = ?', uid);
+    for (const row of store.all('SELECT id, results FROM events WHERE results LIKE ?', `%${uid}%`)) {
+      const results = JSON.parse(row.results ?? '{}');
+      if (results.votes) delete results.votes[uid];
+      if (results.paid) delete results.paid[uid];
+      for (const payout of results.payouts ?? []) if (payout.userId === uid) Object.assign(payout, { userId: null, name: 'a former member', projectId: null });
+      store.run('UPDATE events SET results = ? WHERE id = ?', JSON.stringify(results), row.id);
+    }
   }
 
   /** Daily: events after 180 days, together ticks after a week. */

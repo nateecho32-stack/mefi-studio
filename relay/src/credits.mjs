@@ -573,7 +573,9 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
       '/v1/admin/credits/flags',
       () => {
         const since = now() - GUARD.reviewDays * DAY_MS;
-        const pairs = store.all(`SELECT target_id, actor_id, SUM(amount) AS amount FROM credit_events WHERE at > ? AND amount > 0 AND actor_id NOT LIKE 'gone:%' AND actor_id NOT LIKE 'event:%' GROUP BY target_id, actor_id`, since);
+        // Left out: a community event's prizes (no member gave them), and co-working rewards, which two people
+        // working together always earn from each other; the pair limit caps those, and a review still lists them.
+        const pairs = store.all(`SELECT target_id, actor_id, SUM(amount) AS amount FROM credit_events WHERE at > ? AND amount > 0 AND actor_id NOT LIKE 'gone:%' AND actor_id NOT LIKE 'event:%' AND kind NOT IN ('together', 'cowork') GROUP BY target_id, actor_id`, since);
         const byTarget = new Map();
         const given = new Map(); // "actor>target" -> amount
         for (const row of pairs) {

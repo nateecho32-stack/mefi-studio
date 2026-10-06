@@ -81,10 +81,10 @@ test("themes, jam weeks and co-work slots follow the UTC calendar", () => {
   assert.deepEqual(COWORK.hoursUtc, [2, 10, 18]);
 });
 
-test("a jam's pool pays showcase rewards first, then 50/30/20 to entries with two votes or more", () => {
+test("a jam's pool pays showcase rewards first, then 50/30/20 to entries with three votes or more, 40 a vote at most", () => {
   const ranked = [
     { userId: "a", votes: 5, players: 6 },
-    { userId: "b", votes: 2, players: 3 },
+    { userId: "b", votes: 3, players: 3 },
     { userId: "c", votes: 1, players: 4 },
     { userId: "d", votes: 0, players: 1 },
   ];
@@ -100,14 +100,24 @@ test("a jam's pool pays showcase rewards first, then 50/30/20 to entries with tw
   const thin = splitPool(60, crowd);
   assert.ok(thin.every((payout) => payout.amount === Math.floor((60 * JAM.showcaseShareMax) / 20)), "many showcase rewards share at most 30% of the pool");
   assert.ok(thin.reduce((sum, payout) => sum + payout.amount, 0) <= 60);
+  // A big pot does not make three votes worth 220 credits: 40 a vote at most.
+  const capped = Object.fromEntries(splitPool(450, [{ userId: "x", votes: 3, players: 0 }, { userId: "y", votes: 9, players: 0 }]).map((payout) => [payout.userId, payout]));
+  assert.equal(capped.x.amount, 3 * JAM.placePerVote);
+  assert.equal(capped.y.amount, Math.min(Math.floor(450 * 0.3), 9 * JAM.placePerVote));
+  // Someone who took a place lately sits this one's places out; the next entry moves up, and their showcase reward stays.
+  const rested = Object.fromEntries(splitPool(100, [{ userId: "a", votes: 9, players: 4, resting: true }, { userId: "b", votes: 3, players: 0 }]).map((payout) => [payout.userId, payout]));
+  assert.equal(rested.a.why, "showcase");
+  assert.equal(rested.a.place, null);
+  assert.equal(rested.b.place, 1);
 });
 
 test("the community budget grows with the members seen this week, and plays and stars keep their own amounts", async () => {
   const clock = { at: mondayMorning() };
   const relay = makeRelay({ now: () => clock.at });
   const as = api(relay);
-  for (const token of ["tok-alice", "tok-bob", "tok-cara"]) await as(token, "GET", "/v1/me");
+  for (const token of ["tok-alice", "tok-bob", "tok-cara", "tok-newbie"]) await as(token, "GET", "/v1/me");
   const events = await as("tok-alice", "GET", "/v1/events");
+  // The new member (two hours in the server) signed in too, and does not count: second accounts cannot grow the pot.
   assert.equal(events.status, 200);
   assert.deepEqual(events.budget, { day: Math.floor(clock.at / DAY), budget: ECONOMY.basePerDay + 3 * ECONOMY.perActiveMember, paid: 0, left: ECONOMY.basePerDay + 3 * ECONOMY.perActiveMember, active: 3 });
   // A play still pays its fixed amounts and does not touch the community budget.
@@ -145,7 +155,7 @@ test("the Build Jam: enter until Saturday, vote only for what you played, hidden
     assert.equal((await as(token, "POST", `/v1/events/${jamId}/votes`, { userId: ALICE.id })).status, 200, `${token} votes for Alice`);
   }
   assert.equal((await as("tok-alice", "POST", `/v1/events/${jamId}/votes`, { userId: ALICE.id })).reason, "self");
-  for (const token of ["tok-alice", "tok-cara"]) {
+  for (const token of ["tok-alice", "tok-cara", "tok-mod"]) {
     await playFor(as, clock, token, bob);
     await as(token, "POST", `/v1/events/${jamId}/votes`, { userId: BOB.id });
   }
@@ -155,7 +165,7 @@ test("the Build Jam: enter until Saturday, vote only for what you played, hidden
 
   const running = await as("tok-cara", "GET", "/v1/events");
   assert.ok(running.jam.entries.every((entry) => entry.votes === undefined), "votes stay hidden while the jam runs");
-  assert.deepEqual(running.jam.entries.map((entry) => [entry.user.id, entry.players, entry.voted, entry.played]), [[ALICE.id, 3, true, true], [BOB.id, 2, true, true]]);
+  assert.deepEqual(running.jam.entries.map((entry) => [entry.user.id, entry.players, entry.voted, entry.played]), [[ALICE.id, 3, true, true], [BOB.id, 3, true, true]]);
   assert.equal(running.jam.you.votesLeft, JAM.votesPerMember - 2);
 
   // Saturday: no more entries, voting goes on.
@@ -174,16 +184,19 @@ test("the Build Jam: enter until Saturday, vote only for what you played, hidden
   const pool = after.lastJam.pool;
   assert.ok(pool >= ECONOMY.jamPoolMin && pool <= ECONOMY.jamPoolMax, `pool ${pool}`);
   assert.equal(results[ALICE.id].place, 1);
-  assert.equal(results[BOB.id].place, 2, "two votes is enough for a place");
-  const showcase = Math.min(JAM.showcaseAmount, Math.floor((pool * JAM.showcaseShareMax) / 1));
-  assert.equal(results[ALICE.id].amount, showcase + Math.floor((pool - showcase) * 0.5), "Alice: played by three, a showcase reward and first place");
-  assert.equal(results[BOB.id].amount, Math.floor((pool - showcase) * 0.3));
+  assert.equal(results[BOB.id].place, 2, "three votes is enough for a place");
+  // Both were played by three: a showcase reward each, then the places from the rest, 40 credits a vote at most.
+  const showcase = Math.min(JAM.showcaseAmount, Math.floor((pool * JAM.showcaseShareMax) / 2));
+  const rest = pool - 2 * showcase;
+  assert.equal(results[ALICE.id].amount, showcase + Math.min(Math.floor(rest * 0.5), 3 * JAM.placePerVote), "Alice: a showcase reward and first place");
+  assert.equal(results[BOB.id].amount, showcase + Math.min(Math.floor(rest * 0.3), 3 * JAM.placePerVote));
   assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.balance - before["tok-alice"], results[ALICE.id].paid);
   assert.equal(results[ALICE.id].paid, results[ALICE.id].amount, "a prize is outside the daily cap");
   assert.equal((await as("tok-bob", "GET", "/v1/me")).credits.balance - before["tok-bob"], results[BOB.id].amount);
   // Running the alarm again pays nothing twice.
   await relay.runAlarm();
   assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.balance - before["tok-alice"], results[ALICE.id].amount);
+  // A prize place rests for two jams: next week's places go to someone else.
   const rows = relay.sql(`SELECT actor_id, target_id, kind, amount FROM credit_events WHERE kind = 'jam'`);
   assert.equal(rows.length, 2);
   assert.ok(rows.every((row) => row.actor_id === `event:${jamId}`), "the giver of a prize is the event");
@@ -207,12 +220,13 @@ test("a co-work hour: the relay opens the room, looks three times, pays who stay
   const roomId = listed.cowork.roomId;
   assert.ok(roomId, "the room is open ten minutes early");
   const room = relay.sql("SELECT kind, listed, owner_id FROM rooms WHERE id = ?", roomId)[0];
-  assert.deepEqual({ ...room }, { kind: "cowork", listed: 1, owner_id: null });
+  assert.deepEqual({ ...room }, { kind: "cowork", listed: 0, owner_id: null }, "not in the room list, where a request to join would go to nobody");
 
-  for (const token of ["tok-alice", "tok-bob", "tok-cara", "tok-newbie"]) assert.equal((await as(token, "POST", `/v1/events/${eventId}/join`)).status, 200, token);
+  for (const token of ["tok-alice", "tok-bob", "tok-cara"]) assert.equal((await as(token, "POST", `/v1/events/${eventId}/join`)).status, 200, token);
+  assert.equal((await as("tok-newbie", "POST", `/v1/events/${eventId}/join`)).reason, "new-member", "a day in the server first, so fresh accounts cannot fill the room");
   // Alice keeps the room open, Bob has Studio connected on another page (that counts: a restart mid-hour reconnects by
-  // itself), the new member keeps it open too, and Cara joined but never connected.
-  const sockets = [await present(relay, "tok-alice", roomId), await present(relay, "tok-bob"), await present(relay, "tok-newbie", roomId)];
+  // itself), the new member is connected but not in the room, and Cara joined but never connected.
+  const sockets = [await present(relay, "tok-alice", roomId), await present(relay, "tok-bob"), await present(relay, "tok-newbie")];
   const before = Object.fromEntries(await Promise.all(["tok-alice", "tok-bob", "tok-cara", "tok-newbie"].map(async (token) => [token, (await as(token, "GET", "/v1/me")).credits.balance])));
   for (const offset of [...COWORK.checksAt, COWORK.lengthMs]) {
     clock.at = start + offset;
@@ -222,7 +236,7 @@ test("a co-work hour: the relay opens the room, looks three times, pays who stay
   const done = relay.sql("SELECT status, checks_done, results FROM events WHERE id = ?", eventId)[0];
   assert.equal(done.status, "closed");
   assert.equal(done.checks_done, 3);
-  assert.equal(JSON.parse(done.results).attended, 3, "three were seen at two checks or more");
+  assert.equal(JSON.parse(done.results).attended, 2, "two were seen at two checks or more");
   const gained = async (token) => (await as(token, "GET", "/v1/me")).credits.balance - before[token];
   assert.equal(await gained("tok-alice"), COWORK.amount);
   assert.equal(await gained("tok-bob"), COWORK.amount);
@@ -234,6 +248,30 @@ test("a co-work hour: the relay opens the room, looks three times, pays who stay
   assert.equal(relay.sql("SELECT status FROM rooms WHERE id = ?", roomId)[0].status, "closed", "the room closes at the end of the hour");
   assert.equal((await as("tok-alice", "POST", `/v1/events/${eventId}/join`)).reason, "over");
   assert.equal((await as("tok-alice", "GET", "/v1/events")).budget.paid, 2 * COWORK.amount, "co-work hours draw on the community budget");
+});
+
+test("the alarm never wakes the relay every second, and a paused relay makes and pays nothing", async () => {
+  const day = Math.floor(mondayMorning() / DAY);
+  const start = day * DAY + 10 * HOUR;
+  const clock = { at: start - 5 * MINUTE };
+  const relay = makeRelay({ now: () => clock.at });
+  const as = api(relay);
+  await as("tok-alice", "GET", "/v1/events");
+  await relay.runAlarm();
+  assert.ok(relay.alarmAt() >= clock.at + MINUTE - 1, `inside the hour's opening minutes the next alarm is a minute away, not a second (${relay.alarmAt() - clock.at} ms)`);
+  clock.at = start + 15 * MINUTE + 1;
+  await relay.runAlarm();
+  assert.ok(relay.alarmAt() > clock.at + 1000, "after a look, the next alarm is the next look");
+  // Paused: GET /v1/events reads, and makes no jam and no co-work room.
+  const pausedClock = { at: start + 5 * MINUTE };
+  const paused = makeRelay({ now: () => pausedClock.at, env: { PAUSED: "true" } });
+  const read = await api(paused)("tok-alice", "GET", "/v1/events");
+  assert.equal(read.status, 200);
+  assert.equal(read.jam, null);
+  assert.equal(read.cowork, null);
+  await paused.runAlarm();
+  assert.equal(paused.sql("SELECT COUNT(*) AS n FROM events")[0].n, 0);
+  assert.equal(paused.sql("SELECT COUNT(*) AS n FROM rooms WHERE owner_id IS NULL AND id <> 'lobby'")[0].n, 0);
 });
 
 test("one member alone in a co-work hour earns nothing", async () => {
@@ -290,7 +328,14 @@ test("Forget me takes a member's entries, votes and ticks with it", async () => 
   const project = (await as("tok-cara", "POST", "/v1/projects", { url: "https://cara.itch.io/glow", title: "Glow" })).project.id;
   await as("tok-cara", "POST", `/v1/events/${jam.id}/entry`, { projectId: project });
   relay.sql("INSERT INTO together_ticks (day, user_id, ticks, partner_id, last_at) VALUES (?, ?, 1, ?, ?)", Math.floor(clock.at / DAY), CARA.id, MOD.id, clock.at);
+  relay.sql("INSERT INTO together_ticks (day, user_id, ticks, partner_id, last_at) VALUES (?, ?, 1, ?, ?)", Math.floor(clock.at / DAY), MOD.id, CARA.id, clock.at);
+  relay.sql("INSERT INTO events (id, kind, title, theme, starts_at, ends_at, status, pool, results) VALUES ('jam_w1', 'jam', 'Build Jam: Old', 'Old', 0, 1, 'closed', 60, ?)",
+    JSON.stringify({ votes: { [CARA.id]: 3 }, payouts: [{ userId: CARA.id, name: "Cara", place: 1, amount: 30, paid: 30, projectId: "proj_old", why: "place" }] }));
   assert.equal((await as("tok-cara", "POST", "/v1/me/forget")).status, 200);
+  const kept = relay.sql("SELECT results FROM events WHERE id = 'jam_w1'")[0].results;
+  assert.ok(!kept.includes(CARA.id) && !kept.includes("Cara"), `no id or name left in the results: ${kept}`);
+  assert.match(kept, /a former member/);
+  assert.equal(relay.sql("SELECT partner_id FROM together_ticks WHERE user_id = ?", MOD.id)[0].partner_id, null, "nobody else's ticks name them");
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM event_entries WHERE user_id = ?", CARA.id)[0].n, 0);
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM together_ticks WHERE user_id = ?", CARA.id)[0].n, 0);
   assert.ok(NEWBIE.id && BOB.id);

@@ -4,22 +4,30 @@
 // people in (Discord's platform rules forbid invite rewards).
 //
 // One card, five parts:
-//   - This week's Build Jam: the theme, when entries and votes close, the
-//     prize pot, your entry (one of your shared projects) and every entry
-//     with Play and Vote. A vote needs a two-minute play first, counts only
-//     from members in good standing, and stays hidden until Monday.
-//   - The co-work hour: when the next one starts, Join (Studio keeps the
-//     room open for the hour, which is what counts) and how many are there.
+//   - This week's Build Jam: the theme, when entries and votes close (in the
+//     member's own time), the prize pot, your entry (one of your shared
+//     projects) and every entry with Play and Vote. A vote needs a two-minute
+//     play first, counts only from members in good standing (the page says
+//     when yours start), and stays hidden until the results. A moderator can
+//     take an entry out.
+//   - The co-work hour: when the next one starts, Join, and how many are
+//     there. The relay counts members of that hour's room while their Studio
+//     is connected, on any page, so nothing has to stay open.
 //   - Build together: credits for working in a co-work room with friends,
 //     and the way to bring one (a room's join code, in Rooms).
 //   - Last week's results.
 //   - Today's community pot in one line.
 // Everything goes through main's hub:events channel (HUB_EVENT_METHODS) and
-// hub:projects (me, playProject); text only.
+// hub:projects (me, playProject); text only. A repaint keeps the focused
+// control focused.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
   const button = (text, run, id = null, cls = "ghost friends-events-button") => { const el = node("button", cls, text); el.type = "button"; if (id) el.id = id; el.addEventListener("click", run); return el; };
+  const confirmed = (label, armed, ask, run, id) => {
+    if (window.MefiUi?.arm) { const el = window.MefiUi.arm(button(label, () => {}, id), { run, armed }); return el; }
+    return button(label, () => { if (window.confirm?.(ask) !== false) run(); }, id);
+  };
   const bridge = () => window.mefiStudio;
   const MINUTE = 60_000, HOUR = 60 * MINUTE, DAY = 24 * HOUR;
   const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -31,10 +39,11 @@
     return plural(Math.max(1, Math.round(gap / MINUTE)), "minute");
   }
   const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const weekday = (ms) => new Date(ms).toLocaleDateString([], { weekday: "long" });
+  // A moment in the member's own time, with its day: the jam's days are UTC, and "until Saturday" read wrong in the Americas.
+  const when = (ms) => new Date(ms).toLocaleString([], { weekday: "long", hour: "numeric", minute: "2-digit" });
+  const dateOf = (ms) => new Date(ms).toLocaleDateString([], { day: "numeric", month: "long" });
   const PLACES = ["", "1st", "2nd", "3rd"];
   const REASONS = {
-    "entries-closed": "Entries closed on Saturday. You can still play and vote until Monday.",
     "not-yours": "Enter one of your own shared projects.",
     project: "That project is no longer on the hub.",
     "play-first": "Play it for two minutes first, then vote.",
@@ -44,17 +53,31 @@
     entry: "That entry was withdrawn.",
     "voting-closed": "Voting has closed. The results are below.",
     over: "That co-work hour has ended.",
+    "new-member": "Co-work hours open after your first day in the server.",
     "room-full": "That co-work hour is full.",
     removed: "You cannot join that room right now.",
     locked: "That room is locked.",
     unsupported: "This room service has no events yet.",
     "rate-limited": "Slow down a moment, then try again.",
     "read-only": "Your account is read-only in the server right now.",
-    paused: "The room service is paused right now.",
+    paused: "The room service is paused right now. Events start again when it is back.",
     offline: "Not connected to the room service.",
+    network: "Studio could not reach the room service. Check the connection and try again.",
+    forbidden: "Only moderators can do that.",
   };
-  const why = (answer, fallback) => REASONS[answer?.reason] || REASONS[answer?.error] || fallback;
+  // Why credits and votes have not started for this member (credits.mjs standing()), with the day they will.
+  function holdWords(hold) {
+    const on = Number.isFinite(hold?.until) ? ` on ${dateOf(hold.until)}` : "";
+    switch (hold?.reason ?? hold) {
+      case "new-account": return `Your votes and credits start when your Discord account is 30 days old${on}.`;
+      case "new-member": return `Your votes and credits start a week after you joined the Void Engine server${on}.`;
+      case "forgot-me": return `Your votes and credits are paused for 30 days after Forget me${Number.isFinite(hold?.until) ? `, until ${dateOf(hold.until)}` : ""}.`;
+      case "read-only": return "Your votes and credits are paused while your account is read-only in the server.";
+      default: return "Your votes and credits start once your account is in good standing in the server.";
+    }
+  }
   const EARNED = { together: "for building together today", cowork: "for the co-work hour", jam: "from the Build Jam" };
+  const TRANSIENT = new Set(["Checking the room service…", "Connecting to the room service…", "Connecting…"]);
   let current = null;
   let hearing = false;
 
@@ -83,8 +106,13 @@
     }
     listen(api);
     current?.dispose();
-    let page = null, me = null, choice = "", busy = false, gone = false, ticking = null;
+    let page = null, me = null, choice = "", busy = false, gone = false, ticking = null, autoConnected = false;
     const call = async (method, ...args) => { try { return await api.hubEvents(method, ...args); } catch { return { ok: false, error: "failed" }; } };
+    const why = (answer, fallback) => {
+      if (answer?.reason === "entries-closed") return page?.jam?.endsAt ? `Entries are closed. You can still play and vote until ${when(page.jam.endsAt)}.` : "Entries are closed. You can still play and vote.";
+      if (answer?.reason === "standing" && answer.hold) return holdWords(answer.hold);
+      return REASONS[answer?.reason] || REASONS[answer?.error] || fallback;
+    };
     const guard = async (label, work) => {
       if (busy) return;
       busy = true;
@@ -94,30 +122,61 @@
       busy = false;
       root.removeAttribute("aria-busy");
     };
+    const connectNow = () => guard("Connecting…", async () => {
+      const answer = await api.hubConnect?.();
+      if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+    });
+
+    // What the room service's state means for this page, and the one thing to do about it. -> ready or not.
+    function explain(hub) {
+      if (!hub?.configured) { root.dataset.state = "not-configured"; status.textContent = "Events need the room service, which this copy of Studio has no address for."; body.replaceChildren(); return false; }
+      const gate = (words) => {
+        const signIn = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = false; void load(); } });
+        status.textContent = signIn ? words : [words, "Sign in with Discord in Friends."].filter(Boolean).join(" ");
+        body.replaceChildren(...(signIn ? [signIn] : []));
+      };
+      if (!hub.linked) { root.dataset.state = "not-linked"; gate(""); return false; }
+      if (hub.error === "auth") { root.dataset.state = "signed-out"; gate("Your Discord sign-in has run out. Sign in again to join events."); return false; }
+      if (hub.error === "not-member") {
+        root.dataset.state = "not-member";
+        status.textContent = "Your Discord account isn't in the Void Engine server yet. Join it, then check again.";
+        body.replaceChildren(button("Join the Discord", () => { void window.MefiCommunity?.join?.(); }, "friends-events-join-discord"), button("I've joined, check again", () => guard("Checking…", async () => {
+          await window.MefiCommunity?.check?.();
+          autoConnected = true;
+          const answer = await api.hubConnect?.();
+          if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+        }), "friends-events-recheck"));
+        return false;
+      }
+      if (hub.error === "version") {
+        root.dataset.state = "update";
+        status.textContent = "This Studio is older than the room service. Update Studio to join events.";
+        body.replaceChildren();
+        return false;
+      }
+      // Linked and simply not connected yet: opening Events is the ask, so connect once by itself.
+      if (hub.state === "off" && !hub.error && !autoConnected) {
+        autoConnected = true;
+        root.dataset.state = "connecting";
+        status.textContent = "Connecting to the room service…";
+        void connectNow();
+        return false;
+      }
+      if (hub.state !== "ready") {
+        root.dataset.state = hub.state || "off";
+        status.textContent = hub.state === "connecting" ? "Connecting to the room service…" : hub.error ? `Not connected. ${REASONS[hub.error] ?? "Try Connect again."}` : "Connect to see this week's events.";
+        body.replaceChildren(button("Connect", () => { void connectNow(); }, "friends-events-connect"));
+        return false;
+      }
+      if (!hub.events) { root.dataset.state = "unsupported"; status.textContent = REASONS.unsupported; body.replaceChildren(); return false; }
+      root.dataset.state = "ready";
+      return true;
+    }
 
     async function load() {
       let hub = null;
       try { hub = (await api.hubStatus())?.status; } catch { hub = null; }
-      if (gone) return;
-      if (!hub?.configured) { root.dataset.state = "not-configured"; status.textContent = "Events need the room service, which this copy of Studio has no address for."; body.replaceChildren(); return; }
-      if (!hub.linked) {
-        root.dataset.state = "not-linked";
-        const gate = window.MefiFriendsFront?.gate?.({ onSignedIn: () => { void load(); } });
-        status.textContent = gate ? "" : "Sign in with Discord in Friends to join events.";
-        body.replaceChildren(...(gate ? [gate] : []));
-        return;
-      }
-      if (hub.state !== "ready") {
-        root.dataset.state = hub.state || "off";
-        status.textContent = hub.state === "connecting" ? "Connecting to the room service…" : "Connect to see this week's events.";
-        body.replaceChildren(button("Connect", () => guard("Connecting…", async () => {
-          const answer = await api.hubConnect?.();
-          if (answer?.status?.state === "ready" || answer?.ok) await load(); else status.textContent = "Not connected yet. Try again in a moment.";
-        }), "friends-events-connect"));
-        return;
-      }
-      if (!hub.events) { root.dataset.state = "unsupported"; status.textContent = REASONS.unsupported; body.replaceChildren(); return; }
-      root.dataset.state = "ready";
+      if (gone || !explain(hub)) return;
       await refresh();
     }
 
@@ -135,7 +194,7 @@
         budget: { budget: 0, paid: 0, left: 0, active: 0, ...(events.budget ?? {}) },
       };
       if (mine?.ok) me = mine;
-      if (status.textContent === "Checking the room service…") status.textContent = "";
+      if (TRANSIENT.has(status.textContent)) status.textContent = "";
       paint();
     }
 
@@ -159,12 +218,20 @@
       const jam = page.jam;
       if (!jam) return section("Build Jam", "friends-events-jam", [node("p", "muted", "This week's jam is not open yet.")]);
       const now = Date.now();
-      const when = jam.phase === "entries"
-        ? `Enter until ${weekday(jam.entriesUntil)} (${timeLeft(jam.entriesUntil, now)} left). Play and vote until ${weekday(jam.endsAt)}.`
-        : jam.phase === "voting" ? `Entries are closed. Play and vote until ${weekday(jam.endsAt)} (${timeLeft(jam.endsAt, now)} left).` : "The results are being counted.";
-      const lead = node("p", "friends-events-lead", when);
-      const pot = node("p", "muted friends-events-pot", `Prize pot so far: ${plural(jam.pool, "credit")}. It grows on quiet days and shrinks on busy ones. Next week's theme: ${jam.nextTheme || "a surprise"}.`);
-      const parts = [lead, pot];
+      const lead = jam.phase === "entries"
+        ? `Enter until ${when(jam.entriesUntil)} (${timeLeft(jam.entriesUntil, now)} left). Play and vote until ${when(jam.endsAt)}.`
+        : jam.phase === "voting" ? `Entries are closed. Play and vote until ${when(jam.endsAt)} (${timeLeft(jam.endsAt, now)} left).` : "The results are being counted.";
+      const parts = [
+        node("p", "friends-events-lead", lead),
+        node("p", "muted friends-events-pot", `Prize pot so far: ${plural(jam.pool, "credit")}. It grows on quiet days and shrinks on busy ones. Next week's theme: ${jam.nextTheme || "a surprise"}.`),
+      ];
+      // A member whose votes do not count yet hears why, and when they will.
+      const held = me && me.canEarn === false;
+      if (held) {
+        const hold = node("p", "friends-events-hold", holdWords(me.hold));
+        hold.id = "friends-events-hold";
+        parts.push(hold);
+      }
 
       // Your entry: one of your shared projects.
       const yours = me?.projects ?? [];
@@ -207,31 +274,44 @@
       const list = node("div", "friends-events-entries");
       list.id = "friends-events-entries";
       if (!jam.entries.length) list.append(node("p", "muted", "No entries yet. Be the first."));
+      const moderator = me?.moderator === true;
       for (const entry of jam.entries) {
-        const name = node("strong", "", entry.project?.title ?? "A project");
-        const meta = `by ${entry.user.name}${entry.project?.host ? ` · ${entry.project.host}` : ""} · ${plural(entry.players, "player")}`;
+        const name = entry.project?.title ?? "A project that left the hub";
         const tools = [];
+        let hint = "";
         if (!entry.mine && entry.project && jam.phase !== "results") {
-          tools.push(button(entry.played ? "Play again" : "Play", () => guard("Opening it…", async () => {
+          const play = button(entry.played ? "Play again" : "Play", () => guard("Opening it…", async () => {
             const answer = await api.hubProjects?.("playProject", entry.project.id);
             status.textContent = answer?.ok ? "Play it for two minutes. Studio counts it, then you can vote." : why(answer, "It could not be opened.");
-          })));
+          }), `friends-events-play-${entry.user.id}`);
+          play.setAttribute("aria-label", `Play ${name} by ${entry.user.name}`);
+          tools.push(play);
           const vote = button(entry.voted ? "Voted" : "Vote", () => guard(entry.voted ? "Taking your vote back…" : "Voting…", async () => {
             const answer = await call("voteEvent", jam.id, entry.user.id, !entry.voted);
-            status.textContent = answer?.ok ? (entry.voted ? "Vote taken back." : `Voted for ${entry.project?.title ?? "it"}.`) : why(answer, "The vote did not go through.");
+            status.textContent = answer?.ok ? (entry.voted ? "Vote taken back." : `Voted for ${name}.`) : why(answer, "The vote did not go through.");
             await refresh();
-          }), null, entry.voted ? "friends-events-primary" : "ghost friends-events-button");
+          }), `friends-events-vote-${entry.user.id}`, entry.voted ? "friends-events-primary" : "ghost friends-events-button");
           vote.setAttribute("aria-pressed", entry.voted ? "true" : "false");
-          if (!entry.played && !entry.voted) {
+          vote.setAttribute("aria-label", `${entry.voted ? "Take back your vote for" : "Vote for"} ${name} by ${entry.user.name}`);
+          if (!entry.voted && (held || !entry.played)) {
             vote.disabled = true;
-            vote.title = REASONS["play-first"];
+            vote.title = held ? holdWords(me.hold) : REASONS["play-first"];
+            hint = held ? "" : " · play it to vote";
           }
           tools.push(vote);
         }
-        list.append(row(name, meta, tools));
+        if (moderator && jam.phase !== "results" && !entry.mine) {
+          tools.push(confirmed("Remove from the jam", "Take it out?", `Take ${name} by ${entry.user.name} out of this week's jam?`, () => guard("Removing…", async () => {
+            const answer = await call("removeEntry", jam.id, entry.user.id);
+            status.textContent = answer?.ok ? `${name} is out of the jam.` : why(answer, "It could not be removed.");
+            await refresh();
+          }), `friends-events-remove-${entry.user.id}`));
+        }
+        const meta = `by ${entry.user.name}${entry.project?.host ? ` · ${entry.project.host}` : ""} · ${plural(entry.players, "player")}${hint}`;
+        list.append(row(node("strong", "", name), meta, tools));
       }
       parts.push(list);
-      if (jam.phase !== "results") parts.push(node("p", "muted friends-events-fine", `${plural(jam.you.votesLeft, "vote")} left. Votes stay hidden until Monday, and count only for entries you played.`));
+      if (jam.phase !== "results") parts.push(node("p", "muted friends-events-fine", `${plural(jam.you.votesLeft, "vote")} left. Votes stay hidden until the results, ${when(jam.endsAt)}, and count only for entries you played.`));
       return section(`Build Jam: ${jam.theme || "this week"}`, "friends-events-jam", parts);
     }
 
@@ -246,11 +326,11 @@
       }
       const lead = hour.started
         ? `On now until ${clock(hour.endsAt)} · ${plural(hour.here, "member")} here.`
-        : `Starts at ${clock(hour.startsAt)} (in ${timeLeft(hour.startsAt, now)}) · the room is open.`;
+        : `Starts at ${clock(hour.startsAt)} (in ${timeLeft(hour.startsAt, now)}) · you can join now.`;
       parts.push(node("p", "friends-events-lead", lead));
       if (hour.joined) {
-        parts.push(node("p", "muted", `You are in. Keep Studio open: you are counted at 15, 35 and 55 minutes past the start. Seen ${hour.checks} of ${hour.checksNeeded} times needed for ${plural(hour.amount, "credit")}.`));
-        if (hour.roomId) parts.push(button("Open the room", () => window.MefiNav?.go?.("friends-page", { place: "rooms", room: hour.roomId }), "friends-events-open-room"));
+        parts.push(node("p", "muted", `You are in. Keep Studio open, on any page: you are counted at 15, 35 and 55 minutes past the start. Seen ${hour.checks} of ${hour.checksNeeded} times needed for ${plural(hour.amount, "credit")}.`));
+        if (hour.roomId) parts.push(button("Open the room's chat", () => window.MefiNav?.go?.("friends-page", { place: "rooms", room: hour.roomId }), "friends-events-open-room"));
       } else {
         parts.push(button("Join the co-work hour", () => guard("Joining…", async () => {
           const answer = await call("joinEvent", hour.id);
@@ -265,7 +345,7 @@
     function togetherPart() {
       const together = page.together;
       const parts = [
-        node("p", "", `Work in a co-work room with a friend. After about half an hour together you each earn ${plural(together.amount, "credit")}, once a day.`),
+        node("p", "", `Join a co-work room with a friend and keep Studio open while you both work. After about half an hour together you each earn ${plural(together.amount, "credit")}, once a day.`),
         node("p", "muted", `Today: ${together.ticks} of ${together.needed} looks together.`),
         node("p", "muted friends-events-fine", "To bring a friend, make a co-work room in Rooms and send them its join code. Credits come from building together, never from inviting."),
         button("Go to Rooms", () => window.MefiNav?.go?.("friends-page", { place: "rooms" }), "friends-events-to-rooms"),
@@ -295,7 +375,11 @@
 
     function paint() {
       if (!page) return;
+      // The control that had the keyboard keeps it: every Play and Vote has an id that survives the repaint.
+      const active = document.activeElement;
+      const focusedId = active && active !== root && root.contains?.(active) ? active.id : "";
       body.replaceChildren(...[jamPart(), coworkPart(), togetherPart(), resultsPart(), budgetPart()].filter(Boolean));
+      if (focusedId) document.getElementById?.(focusedId)?.focus?.();
     }
 
     function hear(event) {
@@ -325,5 +409,5 @@
     return root;
   }
 
-  window.MefiFriendsEvents = { card, timeLeft };
+  window.MefiFriendsEvents = { card, timeLeft, holdWords };
 })();
