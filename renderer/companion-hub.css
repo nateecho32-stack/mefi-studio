@@ -164,32 +164,91 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 /* Friends › Rooms (renderer/rooms.js). */
 .rooms { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; }
 .rooms-title { margin: 0; font-size: 13px; font-weight: 600; }
-.rooms-body { display: grid; gap: 8px; min-width: 0; }
-.rooms-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.rooms-tabs [aria-selected=true] { border-color: var(--gold); color: var(--gold-bright); }
+.rooms-status:empty { display: none; }
+.rooms-body { display: grid; gap: 10px; min-width: 0; }
+/* The Rooms | Online | Requests | Invites switch: one segmented control, the chosen part filled. */
+.rooms-tabs { display: inline-flex; flex-wrap: wrap; gap: 2px; width: fit-content; max-width: 100%; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; }
+.rooms-tabs [role=tab] { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); }
+.rooms-tabs [role=tab][aria-selected=true] { background: color-mix(in srgb, var(--gold) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent); color: var(--ivory); font-weight: 600; }
 .rooms-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .rooms-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 12px; overflow-wrap: anywhere; }
 .rooms-row-text { min-width: 0; flex: 1 1 160px; }
 .rooms-row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .rooms-button { white-space: normal; }
+/* Rooms as cards, like The Lobby's "Rooms open now". */
+.rooms-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 10px; }
+.rooms-card { display: grid; align-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 12px; }
+.rooms-card .rooms-row-text { display: grid; gap: 2px; }
+.rooms-card-name { font-size: 15px; color: var(--ivory); }
+.rooms-card-meta { font-size: 12px; }
+.rooms-empty { padding: 6px 2px; font-size: 13px; }
+.rooms-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rooms-tools .rooms-join { flex: 1 1 320px; }
 .rooms-join, .rooms-invite { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .rooms-join input { flex: 1 1 200px; min-width: 0; }
 .rooms-invite { padding: 8px 10px; border: 1px dashed var(--hairline-strong); border-radius: 10px; font-size: 12px; }
 .rooms-code { font-size: 15px; letter-spacing: .08em; color: var(--gold-bright); }
 .rooms-online-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; }
-.rooms-note, .rooms-name, .rooms-compose { flex: 1 1 100%; min-width: 0; box-sizing: border-box; }
+.rooms-note, .rooms-name { flex: 1 1 100%; min-width: 0; box-sizing: border-box; }
 .rooms-quote { display: block; margin-top: 4px; color: var(--muted); font-style: italic; }
-.rooms-create { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--hairline); }
-.rooms-create h5 { margin: 0; font-size: 12px; font-weight: 600; }
+/* New room: a small form, not a settings page. */
+.rooms-create { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 8px; max-width: 640px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 12px; }
+.rooms-create > :is(h5, .rooms-name, .rooms-check, .rooms-row-actions) { grid-column: 1 / -1; }
+.rooms-create h5 { margin: 0; font-size: 13px; font-weight: 600; }
 .rooms-check { font-size: 12px; }
-.rooms-room-head { display: flex; align-items: center; gap: 8px; }
-.rooms-messages { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; max-height: 260px; overflow-y: auto; }
-.rooms-message { padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, var(--gold) 3%, transparent); font-size: 12px; }
+/* One room: a header, the options menu, the chat that fills the page, one composer. */
+.rooms[data-view="room"] { display: flex; flex-direction: column; min-height: 0; }
+.rooms[data-view="room"] > .rooms-body { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.rooms-room-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-bottom: 10px; border-bottom: 1px solid var(--hairline); }
+.rooms-room-title { display: grid; flex: 1 1 200px; min-width: 0; }
+.rooms-room-name { font-size: 15px; color: var(--ivory); overflow-wrap: anywhere; }
+.rooms-privacy { margin: 0; font-size: 12px; }
+.rooms-here { display: flex; align-items: center; }
+.rooms-here-chip { display: grid; place-items: center; width: 26px; height: 26px; margin-left: -6px; border: 2px solid var(--panel-solid, var(--bg)); border-radius: 50%; background: color-mix(in srgb, var(--gold) 32%, var(--panel-solid, var(--bg))); color: var(--ivory); font-size: 12px; font-weight: 700; }
+.rooms-here-chip:first-child { margin-left: 0; }
+.rooms-here-words { margin-left: 8px; font-size: 12px; }
+.rooms-room-tools { display: flex; gap: 6px; }
+.rooms-room-panel { display: grid; gap: 10px; padding: 10px 12px; border: 1px solid var(--hairline); border-radius: 10px; }
+.rooms-chat { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 140px; }
+.rooms-chat #rooms-earlier { align-self: center; min-height: 0; padding: 2px 6px; border: 0; background: none; box-shadow: none; color: var(--muted); font-size: 12px; text-decoration: underline; text-underline-offset: .2em; }
+.rooms-chat #rooms-earlier[hidden] { display: none; }
+/* The room's own controls are small: the chat is the point. */
+.rooms-room-head button, .rooms-composer button, .rooms-message-actions button { min-height: 30px; padding: 0 10px; }
+.rooms-messages { list-style: none; margin: 0; padding: 6px 2px; display: grid; align-content: start; gap: 6px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.rooms-message { position: relative; padding: 6px 10px; border-radius: 10px; background: color-mix(in srgb, var(--gold) 4%, transparent); font-size: 13px; }
+.rooms-message.mine { background: color-mix(in srgb, var(--gold) 12%, transparent); }
+.rooms-message-head { display: flex; align-items: baseline; gap: 6px; font-size: 12px; }
 .rooms-message-text { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-/* The privacy line and a cowork room's shared file claims. */
-.rooms-privacy { margin: 0; font-size: 11px; }
+.rooms-message-more { margin-left: auto; min-height: 0; padding: 0 8px; border: 0; background: none; color: var(--muted); line-height: 1.4; opacity: 0; }
+.rooms-message:is(:hover, :focus-within) .rooms-message-more, .rooms-message-more[aria-expanded=true] { opacity: 1; }
+@media (hover: none) { .rooms-message-more { opacity: 1; } }
+.rooms-message-actions { margin-top: 4px; }
+.rooms-composer { display: flex; align-items: flex-end; gap: 6px; margin-top: 8px; padding: 6px 6px 6px 12px; border: 1px solid var(--hairline-strong); border-radius: 12px; background: color-mix(in srgb, var(--panel-solid, var(--bg)) 85%, transparent); }
+.rooms-composer:focus-within { border-color: var(--gold); }
+.rooms-composer .rooms-compose, .rooms-composer .rooms-compose:focus, #friends-overlay .rooms-composer .rooms-compose { flex: 1 1 auto; min-width: 0; min-height: 24px; max-height: 140px; padding: 4px 0; border: 0; border-radius: 0; background: transparent; color: var(--ivory); font: inherit; line-height: 1.45; resize: none; outline: none; box-shadow: none; }
+.rooms-composer #rooms-send { flex: none; }
 .rooms-cowork { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--hairline); border-radius: 10px; font-size: 12px; overflow-wrap: anywhere; }
 .rooms-cowork > p { margin: 0; }
+/* In the Friends page an open room takes the whole height: the log grows and the composer stays at the bottom. */
+#friends-overlay:has(.rooms[data-view="room"]) .friends-place-sheet { height: 100%; grid-template-rows: auto minmax(0, 1fr); padding-bottom: 12px; }
+#friends-overlay:has(.rooms[data-view="room"]) .friends-place-about { display: none; }
+#friends-overlay:has(.rooms[data-view="room"]) .friends-place-body { display: flex; flex-direction: column; min-height: 0; }
+#friends-overlay .friends-place-body > .rooms[data-view="room"] { flex: 1 1 auto; padding: 12px 14px; }
+@media (max-width: 700px) {
+  #friends-overlay .friends-place-sheet { padding: 12px 10px 16px; }
+  #friends-overlay .friends-place-body > .rooms { padding: 10px; }
+  .rooms-here-words { display: none; }
+}
+/* A short window gives the chat every line it can: the page title steps aside (still read aloud), and so does the privacy line. */
+@media (max-height: 560px) {
+  #friends-overlay:has(.rooms[data-view="room"]) .friends-place-sheet { grid-template-rows: minmax(0, 1fr); gap: 0; padding-top: 6px; padding-bottom: 6px; }
+  #friends-overlay:has(.rooms[data-view="room"]) .friends-place-head { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #friends-overlay .friends-place-body > .rooms[data-view="room"] { padding: 8px 10px; }
+  .rooms[data-view="room"] .rooms-privacy { display: none; }
+  .rooms[data-view="room"] .rooms-room-head { gap: 6px; padding-bottom: 6px; }
+  .rooms[data-view="room"] .rooms-chat { min-height: 60px; }
+  .rooms[data-view="room"] .rooms-composer { margin-top: 6px; }
+}
 .agent-hub .companion-panel.companion-in-hub { position: relative; inset: auto; width: 100%; min-height: 160px; max-height: min(510px, calc(100dvh - 290px)); flex: 0 1 auto; background: color-mix(in srgb, var(--theme-panel-solid) 24%, transparent); backdrop-filter: blur(10px); box-shadow: none; transition: height var(--motion-slow) var(--ease-emphasized); }
 .companion-in-hub .companion-shell-head { display: none; }
 /* In the hub the bubbles are the menu; the panel's own tabs would repeat them. */

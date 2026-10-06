@@ -27,6 +27,7 @@ class Element {
   removeAttribute(key) { delete this.attrs[key]; }
   addEventListener(type, listener) { (this.listeners[type] ??= []).push(listener); }
   click() { for (const listener of this.listeners.click ?? []) listener({ type: "click" }); }
+  key(key, extra = {}) { let stopped = false; for (const listener of this.listeners.keydown ?? []) listener({ type: "keydown", key, ...extra, preventDefault() { stopped = true; } }); return stopped; }
   all() { return [this, ...this.children.flatMap((child) => child.all?.() ?? [])]; }
   find(id) { return this.all().find((item) => item.id === id) ?? null; }
   buttons(label) { return this.all().filter((item) => item.tagName === "BUTTON" && item.textContent === label); }
@@ -161,6 +162,8 @@ test("asking to join, deciding, answering invites and making a room go through h
   await flush();
   assert.deepEqual(env.calls.find((call) => call[0] === "acceptInvite"), ["acceptInvite", "inv_1"]);
   panel.find("rooms-tab-rooms").click();
+  assert.equal(panel.find("rooms-create-name"), null, "the form waits behind New room");
+  panel.find("rooms-new").click();
   panel.find("rooms-create-name").value = "  Night owls  ";
   panel.find("rooms-create-kind").value = "cowork";
   panel.find("rooms-create-policy").value = "invite";
@@ -168,7 +171,9 @@ test("asking to join, deciding, answering invites and making a room go through h
   panel.find("rooms-create").click();
   await flush();
   assert.deepEqual(JSON.parse(JSON.stringify(env.calls.find((call) => call[0] === "createRoom"))), ["createRoom", { name: "Night owls", kind: "cowork", policy: "invite", listed: false }]);
-  assert.equal(panel.find("rooms-status").textContent, "Night owls is ready.");
+  assert.equal(panel.find("rooms-status").textContent, "Night owls is ready. Open it, then share its invite code.");
+  assert.equal(panel.find("rooms-create-name"), null, "the form closes once the room is made");
+  panel.find("rooms-new").click();
   panel.find("rooms-create-name").value = "Nope";
   panel.find("rooms-create").click();
   await flush();
@@ -192,7 +197,11 @@ test("a room shows chat as text with @names, follows live frames, and sends or s
   const texts = () => panel.byClass("rooms-message-text").map((item) => item.textContent);
   assert.deepEqual(texts(), ["hey @Mefi", "<img src=x onerror=alert(1)>"], "mentions read as names; markup stays text");
   assert.equal(panel.buttons("Load earlier").length, 1);
-  assert.deepEqual(panel.byClass("rooms-message").map((item) => item.byClass("rooms-button").map((b) => b.textContent)), [["Report"], ["Delete"]]);
+  assert.deepEqual(panel.byClass("rooms-message").map((item) => item.byClass("rooms-button").map((b) => b.textContent)), [["⋯"], ["⋯"]], "a message's actions wait in its small menu");
+  panel.byClass("rooms-message")[0].buttons("⋯")[0].click();
+  panel.byClass("rooms-message")[1].buttons("⋯")[0].click();
+  assert.deepEqual(panel.byClass("rooms-message").map((item) => item.byClass("rooms-button").map((b) => b.textContent)), [["⋯", "Report"], ["⋯", "Delete"]]);
+  assert.equal(panel.find("rooms-status").textContent, "", "the room's name is in its header only, not the status line too");
   env.push({ type: "message", roomId: "room_mine", message: message({ id: "723456789012345678", text: "new one" }) });
   env.push({ type: "message", roomId: "room_other", message: message({ id: "823456789012345678", text: "elsewhere" }) });
   env.push({ type: "messageDelete", roomId: "room_mine", messageId: "423456789012345678" });
@@ -212,6 +221,38 @@ test("a room shows chat as text with @names, follows live frames, and sends or s
   await flush();
   assert.deepEqual(env.calls.filter((call) => call[0] === "subscribe").at(-1), ["subscribe", "room_mine", false, "rooms"]);
   assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML|outerHTML/, "rooms.js never builds markup from strings");
+});
+
+test("one header, a chat that reads as names, faces of who is here, and one composer where Enter sends", async () => {
+  const env = environment({
+    rooms: [room()],
+    replies: {
+      messages: { ok: true, messages: [message(), message({ id: "523456789012345678", text: "ask <@999999999999999999> and <@223456789012345678>", mentions: [] })], hasMore: false },
+      sendMessage: { ok: true, messageId: "623456789012345678" },
+    },
+  });
+  const panel = env.rooms.panel();
+  await flush();
+  panel.buttons("Open")[0].click();
+  await flush();
+  assert.equal(panel.byClass("rooms-room-name").length, 1, "the room's name once");
+  assert.deepEqual(panel.byClass("rooms-message-text").map((item) => item.textContent), ["hey @Mefi", "ask @someone and @Aksana"], "a mention nobody named reads @someone; a known author by name");
+  assert.equal(panel.find("rooms-earlier").hidden, true, "no earlier page: no link");
+  assert.match(panel.byClass("rooms-here")[0].textContent, /Just you here/);
+  env.push({ type: "presence", roomId: "room_mine", inStudio: [ME.id, FRIEND.id] });
+  const here = panel.byClass("rooms-here")[0];
+  assert.deepEqual(here.byClass("rooms-here-chip").map((chip) => [chip.textContent, chip.title]), [["A", "Aksana"]]);
+  assert.match(here.textContent, /1 here/);
+  assert.equal(panel.find("rooms-room-panel"), null, "the room's options wait behind ⋯");
+  const box = panel.find("rooms-compose");
+  box.value = "line one";
+  assert.equal(box.key("Enter", { shiftKey: true }), false, "Shift+Enter is a new line");
+  assert.equal(env.calls.some((call) => call[0] === "sendMessage"), false);
+  assert.equal(box.key("Enter"), true, "Enter sends");
+  await flush();
+  assert.deepEqual(env.calls.filter((call) => call[0] === "sendMessage").at(-1), ["sendMessage", "room_mine", "line one"]);
+  assert.equal(box.value, "");
+  assert.equal(panel.find("rooms-send").parentElement.className, "rooms-composer", "Send sits inside the composer");
 });
 
 test("a room opened while another one's messages load shows its own, and a late page is dropped", async () => {
@@ -236,7 +277,7 @@ test("a room opened while another one's messages load shows its own, and a late 
   gates.get("room_a")({ ok: true, messages: [message({ text: "in A" })], hasMore: false });
   await flush();
   assert.deepEqual(texts(), ["in B"], "A's page arrived after B opened and is dropped");
-  assert.equal(panel.find("rooms-status").textContent, "B");
+  assert.equal(panel.find("rooms-status").textContent, "");
   panel.buttons("Load earlier")[0].click();
   await flush();
   assert.deepEqual(env.calls.filter((call) => call[0] === "messages").at(-1), ["messages", "room_b", "923456789012345678"], "Load earlier pages the room on screen");
@@ -268,14 +309,17 @@ test("hub frames keep what the owner is typing, and the owner's controls", async
   const env = environment({ rooms: [room()], replies: { messages: { ok: true, messages: [message()], hasMore: false } } });
   const panel = env.rooms.panel();
   await flush();
+  panel.find("rooms-new").click();
   panel.find("rooms-create-name").value = "Half a na";
   env.push({ type: "invite", invite: {} });
   await flush();
   assert.equal(panel.find("rooms-create-name").value, "Half a na", "a list refresh keeps the room name being typed");
   panel.buttons("Open")[0].click();
   await flush();
+  panel.find("rooms-room-menu").click();
   const box = panel.find("rooms-compose");
   box.value = "a draft";
+  panel.byClass("rooms-message")[0].buttons("⋯")[0].click();
   panel.buttons("Report")[0].click();
   panel.byClass("rooms-note").find((item) => item.dataset.draft?.startsWith("report:")).value = "spam";
   env.push({ type: "room", room: room({ memberCount: 4, you: "none" }) });
@@ -324,12 +368,14 @@ test("the hub's own codes read as sentences, and closing, leaving and deleting a
   await flush();
   panel.buttons("Open")[0].click();
   await flush();
+  panel.byClass("rooms-message")[0].buttons("⋯")[0].click();
   panel.buttons("Delete")[0].click();
   await flush();
   assert.equal(env.calls.some((call) => call[0] === "deleteMessage"), false, "the first press asks");
   panel.buttons("Delete it?")[0].click();
   await flush();
   assert.ok(env.calls.some((call) => call[0] === "deleteMessage"));
+  panel.find("rooms-room-menu").click();
   panel.buttons("Leave room")[0].click();
   await flush();
   assert.equal(env.calls.some((call) => call[0] === "leave"), false);
@@ -371,6 +417,9 @@ test("every room says moderators can read it; a cowork room offers to carry the 
   panel.all().find((item) => item.dataset?.room === "room_work")?.children.flatMap((child) => child.all?.() ?? [child]).find((item) => item.tagName === "BUTTON")?.click();
   await flush();
   assert.equal(panel.find("rooms-privacy").textContent, "Void Engine moderators can read every room.");
+  assert.equal(panel.find("rooms-cowork"), null, "agents working together waits in the room's menu");
+  panel.find("rooms-room-menu").click();
+  await flush();
   const box = panel.find("rooms-cowork");
   assert.ok(box, "a cowork room shows its part in the open project");
   assert.match(box.textContent, /Let owner\/app's agents claim the files they edit here/);
@@ -403,7 +452,8 @@ test("connecting made simple: the Lobby opens by itself, a code joins, a room sh
   const panel = env.rooms.panel();
   await flush();
   assert.equal(panel.dataset.view, "room", "Friends opens straight into the Lobby");
-  assert.match(panel.find("rooms-privacy").textContent, /Everyone signed in to Studio/);
+  assert.match(panel.find("rooms-privacy").textContent, /Everyone signed in from the Void Engine server is here/);
+  assert.equal(panel.find("rooms-room-menu"), null, "the Lobby has no options to hide");
   assert.equal(panel.buttons("Leave room").length, 0, "nobody leaves the Lobby");
   assert.equal(panel.find("rooms-invite"), null, "the Lobby needs no invite");
 
@@ -423,6 +473,7 @@ test("connecting made simple: the Lobby opens by itself, a code joins, a room sh
   await flush();
   panel.all().find((item) => item.dataset?.room === "room_mine")?.children.flatMap((child) => child.all?.() ?? [child]).find((item) => item.tagName === "BUTTON")?.click();
   await flush();
+  panel.find("rooms-room-menu").click();
   assert.equal(panel.byClass("rooms-code")[0].textContent, "7K3Q-M2XR");
   panel.find("rooms-copy-invite").click();
   await flush();

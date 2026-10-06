@@ -20,8 +20,10 @@
 .project-hub-rank.rank-star { color: var(--gold-bright); background: color-mix(in srgb, var(--gold) 16%, transparent); }
 .project-hub-rank.rank-nova { color: var(--ivory); background: color-mix(in srgb, var(--gold-bright) 22%, transparent); }
 .project-hub-rank.rank-void { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 14%, transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--gold-bright) 40%, transparent); }
-.project-hub-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.project-hub-tabs [aria-selected=true] { border-color: var(--gold); color: var(--gold-bright); }
+/* One segmented control, like Rooms': the chosen view is filled. */
+.project-hub-tabs { display: inline-flex; flex-wrap: wrap; gap: 2px; width: fit-content; max-width: 100%; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; }
+.project-hub-tabs [role=tab] { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); }
+.project-hub-tabs [role=tab][aria-selected=true] { background: color-mix(in srgb, var(--gold) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 50%, transparent); color: var(--ivory); font-weight: 600; }
 .project-hub-button { white-space: normal; }
 .project-hub-list, .project-hub-map-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .project-hub-featured { padding: 6px; border: 1px dashed var(--warn); border-radius: 12px; }

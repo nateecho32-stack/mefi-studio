@@ -39,7 +39,7 @@
     credits: "You need 100 credits to feature a project.",
     self: "You cannot star your own project.",
     title: "Give it a title.",
-    unsupported: "This room service has no project hub yet.",
+    unsupported: "The Project hub isn't on this room service yet. Rooms and chat still work.",
     offline: "Not connected to the room service.",
     "rate-limited": "Slow down a moment, then try again.",
     "read-only": "Your account is read-only in the server right now.",

@@ -6,6 +6,34 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
+
+Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,
+node_modules junctioned), three commits: 70bc565 Settings filed into the
+prototype's places (booklet.js, styles.css, template wrappers, report.js),
+4ac04f8 the three-step first run (setup-helper.js/.css), 7d268b0 a Backlog
+plan opens as its own draft page (planning.js/.css, one line of sessions.js).
+New Electron fixture `settings_render` (MEFI_SETTINGS_CAPTURE_DIR); the
+setup_helper_render and planning_render fixtures gained a v2 phase each; new
+shared `tests/fixtures/text-probe.cjs` (no text under 12 px, 4.5:1 against
+what is painted behind it).
+
+`npm run check` ok (271 targets), `npm run audit` 0 findings, lint: no
+warning in a changed file. `npm run test:fast` before each commit: 6923/6909
+pass/0 fail; 6929/6913 pass/2 fail (attempt_review_host and
+attempt_snapshots_host under load: 55 tests, 52 pass, 0 fail alone); 6933/6919
+pass/0 fail (14 skipped each). Full `npm test` on 7d268b0: Node 6933 tests,
+6917 pass, 14 skipped, 2 fail under load (update_host_bridge 8/8 and
+rust_parity_snapshots 3/3 alone); Electron lane 76: 72 pass, 1 skipped, 3
+fail: layout_contract_render (viewport 1921x1081) and shell_render (as on
+clean main on this PC), tree_dynamics_render (fails alone, and on c01604e
+too); command_render 1/1; eyes_toggle_electron 0/1 (fails on c01604e too);
+occlusion_probe 2/2; Python 248 OK (1 skipped); path lock ok.
+settings_render, setup_helper_render and planning_render pass in the run.
+Captures in `C:\wt\gap\after-settings\v2\` (settings, first-run,
+plan-draft); prototype captures in `C:\wt\gap\after-settings\proto\`; the
+prototype beside v2 in `C:\wt\gap\after-settings\compare\`.
+
 ## 2026-10-04 The v2 status bar, Search and one Inbox land on main
 
 Branch `land/ui-chrome` in `C:\wt\land-ui`: origin/main c01604e with

@@ -39,6 +39,33 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
+
+Branch `wip/social-polish` in `C:\wt\polish` (bea5ec9 an open room like a chat app, rooms as cards, Friends icons,
+plain words; 671b1b8 the two-Studio proof and The Lobby following who arrives), main merged (1de784f, clean;
+booklet.html regenerated and equal).
+
+The two-person flow, recorded (tests/friends_two_render.test.mjs, new): one Electron process plays two PCs, two real
+windows in the 0.5 layout with their own user data (separate session partitions), each bridge reaching its own copy
+of main.cjs's real Rooms hub block, and the real relay between them (relay/node/adapter.mjs: the Worker, the Hub
+object, SQLite, scripted Discord). Both meet in The Lobby and see each other online; PC one makes "Two PC test" from
+New room and reads its invite code from the room's menu; PC two joins with the code typed in lower case with a space;
+they chat both ways with Enter and see each other's face in the room; PC two closes Studio, PC one sends two more, PC
+two comes back and the two missed messages are filled in from PC one's copy (the relay keeps none); PC one starts
+Listen together and PC two hears the shared player; PC one shares a project from the Project hub and PC two plays it:
+the link opens in the browser, two minutes on PC one gets "Someone played your project: +5 credits" and its Lobby
+shows 5 credits, PC two's shows 2. 1/1, about 40 s.
+
+Polish checked in real windows (friends_render): an open room with five messages (a mention of this member, one of
+someone unnamed, and this member's own) at 1920x1080, 1100x720 and 600x560 at 150%: the room's name once, the chat
+taking most of the height, the composer on screen with Send inside it, Load earlier at the top of the log, mentions as
+names and "@someone"; every Friends place at 1920x1080, 1440x900, 1100x720 and 600x560 at 150% in Chrome, and every
+place plus an open room in a light palette, with no text under 12 px and nothing wider than the page.
+
+Run alone here on the merge: friends_render, companion_hub_render, friends_two_render and unified_studio_render 1/1
+each; rooms_ui 14/14, friends_front_ui 12/12, friends_mod_ui 4/4, friends_navigation 8/8, project_hub_ui 7/7, app_rail
+40/40, onboarding 43/43, tabs_strip 66/66, module_purity 63/63, booklet_build 5/5, hub_host 14/14, relay_connect 6/6.
+`npm run check` ok. Windows CI runs the full gate on the landing commit before the fast-forward.
 ## 2026-10-06 The studio log kept on disk and Trace's Load older (S2) land on main
 
 Branch `land/s2-log` in a cloud session (Linux, Node 24.21.0), stacked on S12 over main f1934aa (first gated over 00d32ca): the parked "not
@@ -505,34 +532,6 @@ tree_dynamics_render, which fails now and then on this PC (failed once alone
 here, then passed 3 times alone; the branch's own run saw it fail on c01604e
 too). Python 248 OK; path lock ok; `npm run audit` 0 findings; `npm run
 check` ok. Side-by-sides: `C:\wt\gap\after-settings\compare\`.
-
-## 2026-10-04 The v2 Settings, first run and plan draft page closer to the 0.5 prototype
-
-Branch `wip/ui-settings` (worktree `C:\wt\ui-settings` off main c01604e,
-node_modules junctioned), three commits: 70bc565 Settings filed into the
-prototype's places (booklet.js, styles.css, template wrappers, report.js),
-4ac04f8 the three-step first run (setup-helper.js/.css), 7d268b0 a Backlog
-plan opens as its own draft page (planning.js/.css, one line of sessions.js).
-New Electron fixture `settings_render` (MEFI_SETTINGS_CAPTURE_DIR); the
-setup_helper_render and planning_render fixtures gained a v2 phase each; new
-shared `tests/fixtures/text-probe.cjs` (no text under 12 px, 4.5:1 against
-what is painted behind it).
-
-`npm run check` ok (271 targets), `npm run audit` 0 findings, lint: no
-warning in a changed file. `npm run test:fast` before each commit: 6923/6909
-pass/0 fail; 6929/6913 pass/2 fail (attempt_review_host and
-attempt_snapshots_host under load: 55 tests, 52 pass, 0 fail alone); 6933/6919
-pass/0 fail (14 skipped each). Full `npm test` on 7d268b0: Node 6933 tests,
-6917 pass, 14 skipped, 2 fail under load (update_host_bridge 8/8 and
-rust_parity_snapshots 3/3 alone); Electron lane 76: 72 pass, 1 skipped, 3
-fail: layout_contract_render (viewport 1921x1081) and shell_render (as on
-clean main on this PC), tree_dynamics_render (fails alone, and on c01604e
-too); command_render 1/1; eyes_toggle_electron 0/1 (fails on c01604e too);
-occlusion_probe 2/2; Python 248 OK (1 skipped); path lock ok.
-settings_render, setup_helper_render and planning_render pass in the run.
-Captures in `C:\wt\gap\after-settings\v2\` (settings, first-run,
-plan-draft); prototype captures in `C:\wt\gap\after-settings\proto\`; the
-prototype beside v2 in `C:\wt\gap\after-settings\compare\`.
 
 ## Read Before Any Tests
 

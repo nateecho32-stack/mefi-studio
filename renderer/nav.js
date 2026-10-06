@@ -203,10 +203,10 @@
     ...[
       ["friends", "Friends", "g-orbit", "Rooms, your PCs and companion playdates", null],
       ["the-lobby", "The Lobby", "g-community", "Who's online, rooms open now and what friends are making", "lobby"],
-      ["rooms", "Rooms", "g-orbit", "Room chat, invitations and requests to join", "rooms"],
+      ["rooms", "Rooms", "g-chat", "Room chat, invitations and requests to join", "rooms"],
       ["your-pcs", "Your PCs", "g-explorer", "Connect your PCs and sync work through GitHub", "pcs"],
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
-      ["project-hub", "Project hub", "g-orbit", "Share and play members' projects, credits and ranks", "hub"],
+      ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
     ].map(([id, label, glyph, desc, target]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
       searchTerms: `friends ${label} ${desc}`,

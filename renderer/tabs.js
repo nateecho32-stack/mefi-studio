@@ -131,7 +131,7 @@
       const at = teamPlaceOf(params.place) ? params.place : safe(() => window.MefiAgents?.teamPlace?.("agents", params)?.id ?? null, null);
       return { id, params: teamPlaceOf(at) && at !== "overview" ? { place: at } : {} };
     }
-    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "rooms" } };
+    if (id === "friends-page") return { id, params: { place: friendsPlaceOf(params.place) ? params.place : "lobby" } };
     return { id, params };
   }
   // The key two routes share when they are the same place (the project is fixed by the set, so it is not in it).
@@ -196,7 +196,9 @@
     let title = words(dest?.short || dest?.label || rec.title || route.id, 40);
     if (route.id === "agents" && route.params.place) title = words(teamPlaceOf(route.params.place)?.label || title, 40);
     else if (route.id === "friends-page") title = words(friendsPlaceOf(route.params.place)?.label || title, 40);
-    return { title, glyph: dest?.glyph || "g-frame" };
+    // A Friends tab wears its place's own icon (The Lobby's people, Rooms' chat), not the page's.
+    const placeGlyph = route.id === "friends-page" ? friendsPlaceOf(route.params.place)?.glyph : null;
+    return { title, glyph: placeGlyph || dest?.glyph || "g-frame" };
   }
 
   // ---- the model ---------------------------------------------------------------------
