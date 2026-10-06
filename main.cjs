@@ -5163,7 +5163,8 @@ async function pcsPowerLook() {
   }
   let onBatteryPower = null;
   try { onBatteryPower = powerMonitor?.isOnBatteryPower?.() === true; } catch {}
-  const reading = await pcPower.readBattery({ spawn: require("node:child_process").spawn, onBatteryPower, setTimer: setTimeout, clearTimer: clearTimeout });
+  // This block's platform, not pc-power's own default: tests/pcs_host runs it in a vm that plays Windows on any host.
+  const reading = await pcPower.readBattery({ spawn: require("node:child_process").spawn, platform: process.platform, onBatteryPower, setTimer: setTimeout, clearTimer: clearTimeout });
   const kindBefore = mem.power.reading ? "laptop" : "desktop";
   const unpluggedBefore = Boolean(mem.power.reading?.onBattery);
   if (!reading?.error) mem.power.reading = reading;
