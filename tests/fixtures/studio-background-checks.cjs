@@ -81,6 +81,9 @@ module.exports = async function backgroundChecks({ session, window, contents, ru
   for (const mode of ['build','vibe']) for (const light of [false,true]) for (const glass of [0,45,100]) for (const noBlur of [false,true]) {
     await run(`window.MefiVibe.setMode('${mode}');`);
     await run(`window.MefiMusic.${light ? "applyCustomColors({background:'#f4f4f4',surface:'#ffffff',text:'#202020',accent:'#704000'})" : "applyTheme('gold')"};window.MefiAppearance.apply({glass:${glass}});document.documentElement.toggleAttribute('data-no-blur',${noBlur});`);
+    // Settings' strip is read where it is seen. The mode switch shows that mode's home, and the frame then leaves the tab
+    // pages (Settings among them) out of the layout, where Chromium reports no fill for the strip at all.
+    await run("if (!document.querySelector('.settings-nav')?.getClientRects().length) { await window.MefiNav.go('studio',{category:'general'}); await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))); }");
     const rows = await run(`
       const probe=document.createElement('div');probe.style.cssText='position:fixed;left:-100px;width:1px;height:1px';document.getElementById('vibe-layer').append(probe);
       const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const ctx=canvas.getContext('2d');
