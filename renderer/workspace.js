@@ -260,6 +260,9 @@
       const head = text("div", "ws-message-head", "");
       head.append(text("strong", "", message.role === "user" ? person() || "You" : companion()), text("time", "", when(message.at)));
       row.append(head, text("div", "ws-message-body", message.text));
+      // The skills and tools a reply used (renderer/chat-tools.js).
+      const used = window.MefiChatTools?.used?.(message);
+      if (used) row.append(used);
       const pictures = (Array.isArray(message.images) ? message.images : []).map((image) => String(image?.name ?? "").trim()).filter(Boolean);
       if (pictures.length) row.append(text("div", "ws-message-images", `${pictures.length === 1 ? "Picture" : "Pictures"} attached: ${pictures.join(", ")}`));
       list.append(row);

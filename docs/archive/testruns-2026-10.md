@@ -6,6 +6,33 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-04 The Studio Daily lands: DevDay branch merged with main, Since you were away
+
+Branch `land/devday` in `C:\wt\devday-land`: origin/wip/feat/devday-2026 (the
+daily paper, GPT-6.1 Sol defaults, Codex over app-server, ChatGPT plan
+sign-in, Catalog/Performance face lift) with origin/main b98fad5 merged file
+by file (main.cjs app-wide channels and the picture-aware assistant body,
+agent-profiles FIELDS/providers/vision, main's BOOKLET_INPUTS with the paper's
+two files, booklet regenerated, TESTRUNS and archives rebuilt from both
+sides' rows with none missing). Two fixes the merge needed: the catalog
+toolbar reads --shell-y0 (layout_contract_css), and the catalog folds by its
+own width with a container query (size_render: "1100x720@1: the page
+overflows", the six columns pushed the document to 1157px). New: "Since you
+were away" above the news (scripts/front-page.cjs, main.cjs news:away,
+renderer/daily-paper.js band, MefiStartup.pick).
+
+Full `npm test` after the last commit: Node 6882 tests, 6867 pass, 14
+skipped, 1 fail (attempt_review_host "a shot that is slow", ENOENT under
+load: 28/28 alone); Electron lane 75: 71 pass, 4 fail: layout_contract_render
+and shell_render (fail identically on clean main on this PC, viewport
+1921x1081), command_render and planning_render (each passes alone); Python
+248 OK; path lock ok; `npm run audit` 0 findings; `npm run check` ok (271
+targets). The earlier test:fast run on this branch lost 5 git suites to
+memory pressure (0.68 GB free; push to a local bare repo failed): sync and
+rust_parity_repo 25/25 alone. New suites: front_page 7, news_away_host 5,
+daily_paper 10 (3 new). Before/after launch captures at 1920x1080 with a fake
+bridge: `C:\wt\shots\launch-before.png`, `launch-after.png`.
+
 ## 2026-10-04 Rust stage 1 finished: the host's last Electron gaps, the portable host build and the updater bridge
 
 Branch `wip/rust-host` (main merged at 1178ac7), gated in a short-path

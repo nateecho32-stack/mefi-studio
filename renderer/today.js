@@ -1195,14 +1195,17 @@
     const attachWords = el("span", "", "Add files or an image");
     attach.append(glyph("g-clip"), attachWords);
     const autonomy = el("span", "today-b-autonomy"); autonomy.id = "today-build-autonomy";
+    // How Mefi answers (ELI5 and the other styles), its skills and tools (renderer/chat-tools.js), beside the mode.
+    const chatTools = el("span", "today-b-autonomy today-b-chat-tools"); chatTools.id = "today-build-chat-tools";
     const talk = button("", "today-b-talk", () => void homeSend("chat"), { title: "Talk it over with Mefi first: the words go to the conversation, and its page opens" });
     talk.id = "today-build-talk"; talk.append(glyph("g-chat"), el("span", "", "Talk it over"));
     const build = button("", "today-b-send", () => void homeSend("work"), { title: "Build it: the words become a task, and a worker picks it up" });
     build.id = "today-build-build"; build.append(el("span", "", "Build it"), el("kbd", "today-key", "Ctrl Enter"));
-    tools.append(attach, picker, autonomy, talk, build);
+    tools.append(attach, picker, autonomy, chatTools, talk, build);
     window.MefiAutonomy?.mount?.(autonomy, { id: "today-build-autonomy-control" });
+    window.MefiChatTools?.mount?.(chatTools, { id: "today-build-chat-tools-chip" });
     state.home.tools = tools;
-    state.home.toolParts = { attach, attachWords, picker, autonomy, talk, build };
+    state.home.toolParts = { attach, attachWords, picker, autonomy, chatTools, talk, build };
     return tools;
   }
   // Borrow Home's box (and the line that says how a send went) into Today; unmountHome() gives each back where it was.

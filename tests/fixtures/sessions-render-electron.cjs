@@ -595,7 +595,7 @@ app.whenReady().then(async () => {
     assert.match(wide.kicker, /^(Up late|Good morning|Good afternoon|Good evening)$/);
     assert.equal(wide.boxed, "today-build-box", "Home's own box is Today's");
     assert.equal(wide.placeholder, "Describe an idea, a fix or a question…");
-    assert.deepEqual(wide.tools, ["today-build-attach", "today-build-autonomy", "today-build-talk", "today-build-build"], "Add files or an image, the mode, Talk it over, Build it");
+    assert.deepEqual(wide.tools, ["today-build-attach", "today-build-autonomy", "today-build-chat-tools", "today-build-talk", "today-build-build"], "Add files or an image, the mode, how Mefi answers, Talk it over, Build it");
     assert.equal(wide.autonomy, "Auto", "the permission mode reads as the prototype's");
     assert.deepEqual(wide.starts, ["Modify", "Experiment", "Fix", "Improve", "Suggest a next step"]);
     assert.deepEqual(wide.need, { key: "question:q_1", head: "Add an empty state to the notes list", words: "Should the empty state also appear when a search has no matches?", buttons: ["Yes, reuse it", "Only when there are no notes", "Open task"] }, "the open question, as the prototype's Needs you card");

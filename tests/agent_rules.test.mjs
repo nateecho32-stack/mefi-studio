@@ -15,6 +15,11 @@ const rules = require("../scripts/agent-rules.cjs");
 const addons = require("../scripts/agent-addons.cjs");
 const profiles = require("../scripts/agent-profiles.cjs");
 const habits = require("../scripts/habits.cjs");
+const skillUse = require("../scripts/skill-use.cjs");
+const builtins = require("../scripts/builtin-skills.cjs");
+// The chat's own answer style rides the companion's prompt with nothing set (ELI5 until the owner picks another,
+// scripts/skill-use.cjs). It is a skill, not a rule: the rules tests below expect it there and nothing else.
+const CHAT_STYLE = skillUse.alwaysBlock([{ name: "eli5", text: builtins.get("eli5").text }], "chat");
 
 const ROLES = ["routine", "heavy", "companion", "scout", "overseer", "lead", "desk", "builder"];
 async function project(fn) {
@@ -266,7 +271,7 @@ test("every role on Studio's own models gets the text and the files; a builder o
     assert.match(text, /AGENTS-FILE-CONTENT/, JSON.stringify(options)); assert.match(text, /CLAUDE-FILE-CONTENT/);
   }
   // Nothing set, nothing sent, for every role.
-  for (const role of ROLES) assert.equal(await addons.instructions(root, {}, role), "", role);
+  for (const role of ROLES) assert.equal(await addons.instructions(root, {}, role), role === "companion" ? CHAT_STYLE : "", role);
   assert.equal(await addons.instructions(root, { agentRules: { text: "", agents: false, claude: false } }, "lead"), "");
   // A stored value that is not valid rules (a hand-edited settings file) sends nothing and does not throw.
   for (const bad of ["text", 7, [], { text: "a".repeat(4001) }, { text: 5 }, { agents: "yes" }]) assert.equal(await addons.instructions(root, { agentRules: bad }, "lead"), "", JSON.stringify(bad).slice(0, 30));
@@ -290,7 +295,7 @@ test("MEFI_STUDIO_NO_AGENT_RULES=1 sends no rules to any role and keeps the save
   const before = process.env.MEFI_STUDIO_NO_AGENT_RULES;
   try {
     process.env.MEFI_STUDIO_NO_AGENT_RULES = "1";
-    for (const role of ROLES) for (const cli of [undefined, "grok", "claude"]) assert.equal(await addons.instructions(root, { agentRules: RULES }, role, { cli }), "", `${role} on ${cli}`);
+    for (const role of ROLES) for (const cli of [undefined, "grok", "claude"]) assert.equal(await addons.instructions(root, { agentRules: RULES }, role, { cli }), role === "companion" ? CHAT_STYLE : "", `${role} on ${cli}`);
     assert.equal((await addons.rulesState(root)).disabled, true);
     // The field is only not sent: the team still holds it, valid and unchanged.
     const settings = { agentRules: RULES };

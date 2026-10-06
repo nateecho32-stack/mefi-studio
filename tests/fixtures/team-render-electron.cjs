@@ -102,6 +102,11 @@ app.whenReady().then(async () => {
     learningState: { ok: true, projectId, decisions: { enabled: true, scope: "blend" }, models: "blend", profiles: {} },
     brainState: { ok: true, tasks: [], recent: [], pipelines: {} }, brainPlaybook: { ok: true, shelf: [], recipes: [] }, brainMap: { ok: true, map: { systems: [], edges: [], files: [] } },
     worktreesList: { ok: true, repo: false, projectId, enabled: { on: false, forced: false } }, skillsList: { ok: true, skills: [], roots: [] },
+    // Team › Connectors (renderer/connectors.js): one ready server with two tools, one waiting for approval.
+    connectorsList: { ok: true, file: "~/.mefi-studio/mcp.json", secretsSafe: true, limits: { toolsPerAgent: 16 }, featured: [{ id: "playwright", title: "Playwright browser", description: "Lets a builder open your app in a real browser.", line: "npx -y @playwright/mcp@latest", needs: "Node.js", added: false }],
+      servers: [{ id: "docs", title: "docs", transport: "stdio", line: "node docs-server.js", status: "ready", fingerprint: "a", enabled: true, places: ["builders"], envKeys: [], saved: [], standIns: [], missing: [], handWritten: true, tested: null, approvedAt: 0, source: "", addedAt: 0,
+        tools: [{ name: "search", description: "Search fixture documentation", off: false }, { name: "read", description: "Read a fixture page", off: false }] },
+        { id: "github", title: "GitHub", transport: "stdio", line: "npx -y @modelcontextprotocol/server-github", status: "needs-approval", fingerprint: "b", enabled: true, places: ["builders"], envKeys: ["GITHUB_PERSONAL_ACCESS_TOKEN"], saved: [], standIns: ["GITHUB_PERSONAL_ACCESS_TOKEN"], missing: [], handWritten: false, tested: null, approvedAt: 0, source: "Featured in Studio", addedAt: 1, tools: [] }] },
     alertsGet: { ok: true, supported: true, killed: false, prefs: { on: true, need: true, fail: true, done: false, flash: true, badge: true, sound: false, titles: "generic" }, quiet: { on: false, from: "22:00", to: "07:00" } },
   };
   const names = await bridgeNames();
@@ -229,12 +234,14 @@ app.whenReady().then(async () => {
   report.content = await run(`return {
     perms: Boolean(document.querySelector('#agents-permissions h3')) && document.querySelector('#agents-permissions h3').textContent,
     rules: Boolean(document.querySelector('#agents-rules-place #agents-rules')),
-    connectors: [...document.querySelectorAll('#agents-connector-rows .agents-connector')].map((row) => row.dataset.server + ':' + row.querySelector('small').textContent),
+    connectors: [...document.querySelectorAll('#connectors-rows .connectors-row-card')].map((row) => row.dataset.id + ':' + row.dataset.status + ':' + [...row.querySelectorAll('.connectors-tool')].map((tool) => tool.textContent).join(',')),
+    connectorParts: ['connectors-import-open', 'connectors-add-open', 'connectors-budget', 'connectors-featured', 'connectors-own'].filter((id) => document.getElementById(id)),
     folders: Boolean(document.getElementById('agents-folders-gap')),
   };`);
   assert.equal(report.content.perms, "Mefi's permissions", "Permissions holds the full permission control");
   assert.equal(report.content.rules, true, "Rules holds the rules card");
-  assert.deepEqual(report.content.connectors, ["docs:2 tools: search, read"], "Connectors lists each server with its tools");
+  assert.deepEqual(report.content.connectors, ["docs:ready:search,read", "github:needs-approval:"], "Connectors lists each server with its state and tools");
+  assert.deepEqual(report.content.connectorParts, ["connectors-import-open", "connectors-add-open", "connectors-budget", "connectors-featured", "connectors-own"], "Connectors can add, import and feature servers, and counts each place's tools");
   assert.equal(report.content.folders, true, "Related folders says what Studio cannot do yet");
   // Every place that is pages of its own: its first page, with the place open in the list.
   for (const [id, label, route, rows] of VIEWS) {

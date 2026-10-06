@@ -10,7 +10,11 @@
 // read from the relay in one call (main's hub:room "front", the relay's
 // GET /v1/front): who is online and where, the week's top project, the rooms
 // open now, what was shared this week, rank-ups and the member's own week,
-// with "Show me as online" and an invite code at the foot. It reads again
+// with "Show me as online" and an invite code at the foot. Building now shows
+// friends who share what they are making (their open project's name and how
+// many tasks run and finished today, as a small tree); "Share what I'm
+// building" at the foot is this member's own switch (main's
+// hubBuildingShare), off until they turn it on. It reads again
 // every minute while it is on screen and the window can be seen, and stops
 // when Friends lets it go (dispose). Everything is text: names and titles go
 // in with textContent, and nothing from the relay becomes a link.
@@ -174,6 +178,7 @@
     listen(api);
     let timer = null, seq = 0, tried = false, gone = false;
     let page = null; // the last front page read
+    let sharing = false; // "Share what I'm building", as main's hub:status says
     let code = null; // { roomId, code, link } for the member's own room
 
     const schedule = () => {
@@ -222,6 +227,7 @@
         body.replaceChildren(button("Connect", () => { tried = false; void Promise.resolve(api.hubConnect()).finally(() => load()); }, "ghost", "friends-front-connect"));
         return;
       }
+      sharing = hub.shareBuilding === true;
       if (!hub.front) {
         root.dataset.state = "unsupported";
         status.textContent = "This room service has no front page yet. Rooms and the Project hub still work.";
@@ -292,6 +298,33 @@
       }
       if (!page.online.people.length) list.append(node("li", "front-empty", "Nobody else is in Studio right now. Share your invite code below to bring friends in."));
       return list;
+    }
+
+    // Friends sharing what they build: a small tree each, the project at the root, a lit leaf per running task and a dim one per task finished today.
+    function buildingNow() {
+      const makers = page.online.people.filter((person) => person.building);
+      if (!makers.length) return null;
+      const box = node("section", "front-building");
+      box.setAttribute("aria-label", "Building now");
+      box.append(node("h3", "front-col-title", "Building now"));
+      const list = node("ul", "front-building-list");
+      for (const person of makers) {
+        const made = person.building;
+        const item = node("li", "front-building-item");
+        const tree = node("span", "front-tree");
+        tree.setAttribute("aria-hidden", "true");
+        tree.append(node("span", "front-tree-root"));
+        const leaves = node("span", "front-tree-leaves");
+        for (let n = 0; n < Math.min(made.running, 6); n += 1) leaves.append(node("span", "front-tree-leaf run"));
+        for (let n = 0; n < Math.min(made.doneToday, 6); n += 1) leaves.append(node("span", "front-tree-leaf done"));
+        tree.append(leaves);
+        const words = node("span", "front-building-text");
+        words.append(node("b", "", `${person.name} · ${made.project}`), node("small", "", `${made.running} running · ${made.doneToday} done today`));
+        item.append(tree, words);
+        list.append(item);
+      }
+      box.append(list);
+      return box;
     }
 
     function lead() {
@@ -374,7 +407,19 @@
       popTick.checked = popups.on();
       popTick.addEventListener("change", () => { popups.set(popTick.checked); status.textContent = popTick.checked ? "Pop-ups from friends are on." : "Pop-ups from friends are off."; });
       pops.append(popTick, node("span", "", "Pop-ups from friends"));
-      bar.append(toggle, pops);
+      const share = node("label", "front-visible");
+      const shareTick = node("input");
+      shareTick.type = "checkbox";
+      shareTick.id = "friends-front-building";
+      shareTick.checked = sharing;
+      shareTick.addEventListener("change", () => {
+        void Promise.resolve(api.hubRoom("shareBuilding", shareTick.checked)).then((answer) => {
+          if (answer?.ok) { sharing = answer.shareBuilding === true; status.textContent = sharing ? "Friends see your project's name and how many tasks run, never what they are." : "You stopped sharing what you're building."; }
+          else { shareTick.checked = !shareTick.checked; status.textContent = "That didn't save. Try again."; }
+        }).catch(() => { shareTick.checked = !shareTick.checked; });
+      });
+      share.append(shareTick, node("span", "", "Share what I'm building"));
+      bar.append(toggle, pops, share);
       const invite = node("span", "front-invite");
       if (code?.code) {
         invite.append(document.createTextNode("Invite code "), node("b", "front-code", code.code));
@@ -390,7 +435,7 @@
 
     function paint() {
       if (!page) return;
-      body.replaceChildren(mast(), onlineRow(), lead(), columns(), foot());
+      body.replaceChildren(...[mast(), onlineRow(), buildingNow(), lead(), columns(), foot()].filter(Boolean));
       window.MefiScroll?.scan?.(root);
     }
 

@@ -90,10 +90,12 @@ export const BOOKLET_INPUTS = {
     "community.js",
     "demo-panel.js",
     "autonomy-ui.js",
+    "chat-tools.js",
     "companion-ui.js",
     "companion-hub.js",
     "project-map-view.js",
     "agent-brain.js",
+    "connectors.js",
     "agents.js",
     "setup-helper.js",
     "vibe-flow.js",
@@ -143,6 +145,8 @@ export const BOOKLET_INPUTS = {
     "shell.css",
     "tabs.css",
     "sessions.css",
+    "chat-tools.css",
+    "connectors.css",
     "daily-paper.css",
     "chrome.css"
   ]
