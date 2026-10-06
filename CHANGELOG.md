@@ -7,6 +7,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Friends › Events: the community runs its own events.** Every week a
+  **Build Jam** opens on Monday with a theme (and shows next week's): enter
+  one of your shared projects until Saturday, play the others and vote for up
+  to three until Monday, when the results are paid. A vote counts only for an
+  entry you played for two minutes, and votes stay hidden until the results.
+  Three times a day (02:00, 10:00 and 18:00 UTC) a **co-work hour** opens a
+  room: join it, keep Studio open and work on anything, and everyone who
+  stays with others earns 4 credits. **Building together** in your own
+  co-work room with a friend earns you both 4 credits a day. Credits still come
+  from making and playing things together, never from inviting people
+  (Discord's rules forbid invite rewards): to bring a friend, send them your
+  room's join code. The prizes and co-work rewards share a daily community
+  pot that grows with the number of people active that week, so the credits
+  keep their worth as the community grows; plays and stars pay as before.
 - **Moderation in Studio, and Report on projects.** Moderators get a
   Friends › Moderation place (nobody else sees it): who looks like they are
   farming credits (most of their credits from one person, or two people

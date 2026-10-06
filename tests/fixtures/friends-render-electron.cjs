@@ -37,7 +37,7 @@ function finish(error) {
 process.on("uncaughtException", finish); process.on("unhandledRejection", finish);
 
 // The prototype's places, in its order, and the card each shows.
-const PLACES = [["lobby", "The Lobby", "friends-front"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pc-sync"], ["playground", "Playground", "friends-card"], ["hub", "Project hub", "project-hub"]];
+const PLACES = [["lobby", "The Lobby", "friends-front"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pc-sync"], ["playground", "Playground", "friends-card"], ["hub", "Project hub", "project-hub"], ["events", "Events", "friends-events"]];
 
 async function bridgeNames() {
   const source = fs.readFileSync(path.join(studio, "preload.cjs"), "utf8");
@@ -81,7 +81,7 @@ app.whenReady().then(async () => {
     syncStatus: { ok: true, checkedAt: now, headline: "GitHub has 2 commits this PC has not pulled yet.", lines: ["GitHub has 2 commits this PC has not pulled yet."], pending: [{ kind: "github-branch" }], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 2 } },
     hubFriends: friendsView, hubSharingSet: friendsView,
     hubRooms: { ok: true, rooms: [{ id: "room_jam", name: "Friday jam", kind: "hangout", policy: "request", listed: true, status: "active", you: "owner", ownerId: "123456789012345678", memberCount: 2, maxMembers: 25 }] },
-    hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [], front: true } },
+    hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [], front: true, events: true } },
     pcSetupStatus: { ok: true, ready: true, account: "fixture-owner", tools: [{ id: "git", name: "Git", installed: true, version: "2.47.1" }, { id: "gh", name: "GitHub CLI", installed: true, version: "2.63.0" }], project: { root: "C:/Notes app", github: "fixture-owner/notes-app", hook: true }, steps: [], notes: [] },
     vaultStatus: { ok: true, linked: false, pcs: [], shelves: [] },
   };
@@ -104,16 +104,26 @@ app.whenReady().then(async () => {
     rankUps: [{ id: "200000000000000002", name: "Jabilee", rank: { key: "flame", name: "Flame" } }, { id: "200000000000000005", name: "Sol", rank: { key: "ember", name: "Ember" } }],
     you: { balance: 45, lifetime: 95, rank: { key: "ember", name: "Ember", next: { key: "flame", name: "Flame", at: 200 }, progress: 0.3 }, week: { earned: 15, plays: 3, stars: 1 } },
   };
+  // Friends › Events as hub-client hands it over (scripts/hub-client.cjs eventsPage): a jam taking entries, a co-work hour on now.
+  const eventReplies = { events: { ok: true, now,
+    jam: { id: "jam_w2909", theme: "Glow", nextTheme: "Signals", phase: "entries", startsAt: now - 86_400_000, entriesUntil: now + 3 * 86_400_000, endsAt: now + 5 * 86_400_000, pool: 140,
+      entries: [{ user: { id: "200000000000000001", name: "Maxwell" }, project: { id: "proj_a", title: "Pixel Forge", url: "https://maxwell.itch.io/pixel-forge", host: "maxwell.itch.io", kind: "tool" }, players: 4, votes: null, mine: false, voted: false, played: true },
+        { user: { id: "200000000000000004", name: "Tess" }, project: { id: "proj_b", title: "Tiny Tides", url: "https://tess.itch.io/tiny-tides", host: "tess.itch.io", kind: "game" }, players: 1, votes: null, mine: false, voted: false, played: false }],
+      you: { entered: null, votesLeft: 3 }, results: null },
+    lastJam: { id: "jam_w2908", theme: "Echoes", endsAt: now - 86_400_000, pool: 120, results: [{ userId: "200000000000000002", name: "Jabilee", place: 1, why: "place", amount: 57, paid: 57, projectId: "proj_c" }] },
+    cowork: { id: "cowork_d1h18", roomId: "room_hour", startsAt: now - 1_200_000, endsAt: now + 2_400_000, started: true, joined: false, here: 3, checks: 0, checksDone: 1, checksNeeded: 2, attendees: 0, amount: 4 },
+    nextCowork: now + 8 * 3_600_000, together: { ticks: 1, needed: 3, amount: 4, everyMs: 600_000 }, budget: { budget: 275, paid: 8, left: 267, active: 3 } } };
   const roomReplies = { requests: { ok: true, requests: [] }, invites: { ok: true, invites: [] }, messages: { ok: true, hasMore: false, messages: [] }, front, roomCode: { ok: true, code: "KQ7M-2PXD", link: "https://mefi-relay.mefi-studio.workers.dev/join/KQ7M2PXD" } };
   const names = await bridgeNames();
   const preload = path.join(root, "friends-preload.cjs");
-  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const roomReplies=${JSON.stringify(roomReplies)};const names=${JSON.stringify(names)};const calls=[];
+  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const roomReplies=${JSON.stringify(roomReplies)};const eventReplies=${JSON.stringify(eventReplies)};const names=${JSON.stringify(names)};const calls=[];
     const bridge={};
     for(const name of names){
       if(/^on[A-Z]/.test(name))bridge[name]=()=>()=>{};
       else bridge[name]=async(...args)=>{calls.push(name);return name in responses?JSON.parse(JSON.stringify(responses[name])):{ok:true};};
     }
     bridge.hubRoom=async(method)=>{calls.push('hubRoom:'+method);return roomReplies[method]??{ok:true};};
+    bridge.hubEvents=async(method)=>{calls.push('hubEvents:'+method);return eventReplies[method]??{ok:true};};
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
     contextBridge.exposeInMainWorld('friendsFixture',{calls:()=>calls.slice(),signedIn:(on)=>{responses.hubStatus.status.linked=on===true;}});
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));localStorage.setItem('mefiStudio.whatsNew.seen','vibe-build-1');localStorage.setItem('mefiStudio.setupHelper.seen','setup-helper-1');
@@ -195,7 +205,7 @@ app.whenReady().then(async () => {
     return { bubble: document.getElementById('agent-hub')?.hidden === false, places: window.MefiCompanionHub.friendsPlaces(), route: window.MefiNav.get('friends-page')?.hidden?.(),
       tabs: [...document.querySelectorAll('#friends-place-tabs .friends-place-tab')].filter(shown).map((tab) => tab.textContent + (tab.getAttribute('aria-current') === 'page' ? ' *' : '')),
       close: shown(document.getElementById('friends-place-close')) };`);
-  assert.deepEqual(report.v1, { bubble: false, places: null, route: true, tabs: ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub"], close: true }, "with the layout off, Friends is the same page: tabs for its places and a Close, no bubble");
+  assert.deepEqual(report.v1, { bubble: false, places: null, route: true, tabs: ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub", "Events"], close: true }, "with the layout off, Friends is the same page: tabs for its places and a Close, no bubble");
   await click("#friends-place-tab-hub");
   await until("document.getElementById('friends-overlay').dataset.place === 'hub' && document.getElementById('project-hub')", "the Project hub tab");
   await capture("friends-v1-hub-1920x1080.png");
@@ -216,7 +226,7 @@ app.whenReady().then(async () => {
   const first = await run(measure);
   assert.equal(first.hub, false, "the companion's bubbles stay closed");
   assert.equal(first.listTitle, "Friends", "the list column is Friends'");
-  assert.deepEqual(first.list, ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub"], "the list column holds The Lobby, the prototype's three places and the Project hub, The Lobby current");
+  assert.deepEqual(first.list, ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub", "Events"], "the list column holds The Lobby, the prototype's three places, the Project hub and Events, The Lobby current");
   for (const [id, title, card] of PLACES) {
     await click(`#shell-pages-list [data-page="friends:${id}"]`);
     await until(placeIs(id), `${title} is the place`);
@@ -249,7 +259,7 @@ app.whenReady().then(async () => {
   assert.equal(await run("return document.getElementById('agent-hub')?.hidden !== false;"), true, "the bubble did not stay open over the page");
   // A tab per place.
   report.tabs = await run("return (window.MefiTabs?.list?.() ?? []).filter((tab) => tab.route.id === 'friends-page').map((tab) => tab.title).sort();");
-  assert.ok(report.tabs.length >= 1 && report.tabs.every((title) => ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub"].includes(title)), `Friends tabs are named by their place: ${JSON.stringify(report.tabs)}`);
+  assert.ok(report.tabs.length >= 1 && report.tabs.every((title) => ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events"].includes(title)), `Friends tabs are named by their place: ${JSON.stringify(report.tabs)}`);
   report.steps.push("ways in land");
   // The Lobby, read once: the front page's parts, its invite code, and a person or room that opens Rooms there.
   await go("friends-page", { place: "lobby" });

@@ -33,6 +33,9 @@ that comes back has to match what was actually said.
 | Credits: balance, rank, streak, and who credited whom (ids, kind, amount) | earning, the anti-farming limits, a moderator's credit review | 180 days for each credit |
 | Which member played which project on which day | a play counts once per player and day | 8 days |
 | After Forget me: a keyed fingerprint of the account (not its id) | forgetting cannot reset the credit limits | 30 days |
+| Community events: each week's Build Jam (theme, entries as member and project ids, votes as voter and entrant ids, the results) and each co-work hour (its room, and how many of its three looks saw each member) | the events run by themselves | 180 days |
+| Building together: per member and day, how many looks found them in a co-work room with another member | the once-a-day together reward | 7 days |
+| Each day's count of members seen in the last 7 days | the day's community budget stays fixed once read | 400 days |
 | Reports: the reason, plus the reported message only when its relay signature checks out | moderation | 30 days |
 | Moderator actions (ids only) | accountability | 90 days |
 
@@ -87,6 +90,46 @@ alt accounts, trading and replays:
   credits too. `POST /v1/projects/:id/report` (anyone, not their own, once
   each, 10 an hour) puts a project in `GET /v1/admin/reports` with its card.
 
+## Community events and the community budget
+
+The relay runs three kinds of event by itself, on its alarm (`src/events.mjs`),
+with nobody to organise them. Every reward goes through the same pay path as
+plays and stars, with both sides in good standing, once each, under the caps:
+
+- **The weekly Build Jam.** A jam opens every Monday 00:00 UTC with a theme
+  from a rotating list (next week's is shown too). Until Saturday a member
+  may enter one of their own shared projects; until Monday members play the
+  entries and vote for up to three. A vote counts only from a member in good
+  standing who played that entry during the jam, and votes stay hidden until
+  the results. On Monday an entry played by three or more members earns a
+  showcase reward (5 each, at most 30% of the pot), then the top three with
+  two votes or more share the rest 50/30/20. A prize's giver is the event,
+  and moderators see it as "a community event", never as farming.
+- **Co-work hours** at 02:00, 10:00 and 18:00 UTC: a listed co-work room the
+  relay opens ten minutes early and closes after the hour. It looks who has
+  the room open at 15, 35 and 55 minutes; everyone seen twice, with at least
+  one other member seen too, earns 4 credits (twice a day at most).
+- **Building together** in members' own co-work rooms: each look (at most
+  every 10 minutes) that finds two or more members in the room counts once
+  for each; three in a day pay 4 credits, once a day.
+
+The giver of a co-work or together reward is a member who was there with the
+earner, so the 15-a-week limit between two members applies to them as to
+plays: two old accounts sitting in a room together are capped like anything
+else. There are no rewards for inviting anyone: credits come from building and
+playing together.
+
+**The community budget** (`src/economy.mjs`) keeps the event rewards in step
+with the community: each day the together and co-work rewards may pay out at
+most 200 credits plus 25 for every member seen in the last 7 days (5,000 at
+most), fixed for the day the first time it is read. When it is used up, those
+rewards pay nothing until tomorrow. The jam's pot is half of what the budget
+left unspent over the jam's days, at least 60 and at most 450, so a quiet week
+grows the prizes and a busy one shrinks them. Plays and stars keep their own
+fixed amounts and caps. `GET /v1/events` returns the week's jam, the co-work
+hour, the member's together count and today's budget; `GET /v1/front` carries
+a one-line summary.
+
 ## Layout
 
 | File | Purpose |
@@ -99,6 +142,7 @@ alt accounts, trading and replays:
 | `src/chat.mjs` | Message ids that prove their author, and message signatures. |
 | `src/listen.mjs` · `src/media.mjs` | Listen together, and which links are allowed (`publicHost`). |
 | `src/leases.mjs` · `src/paths.mjs` | Cowork claims, carried over from the hub. |
+| `src/events.mjs` · `src/economy.mjs` | Community events the relay runs by itself, and the daily community budget they draw on. |
 | `src/store.mjs` | The schema and its migrations. |
 | `node/adapter.mjs` | The real Worker and Hub under Node with in-memory sockets and a scripted Discord, for Studio's tests. |
 | `scripts/smoke.mjs` | A real-network check of a running relay. |
