@@ -5070,7 +5070,7 @@
 
 // ===== style: constellation =====
 
-  // Constellation, a Shop style (studio:style-constellation): every node a
+  // Star chart, a Shop style (studio:style-constellation): every node a
   // star. A soft glow in the node's colour round a small bright core (white
   // hot at its heart, the tint at its edge), crossed by four thin
   // diffraction spikes whose length breathes (6.5 s). A lit star burns
@@ -5254,7 +5254,7 @@
     return true;
   }
 
-  // Constellation's finish beats: done, a nova (the star flares into a long
+  // Star chart's finish beats: done, a nova (the star flares into a long
   // four-point burst while eight tiny stars fly out and fade), all in the
   // beat's ink (the theme's done green, amber for a failed check); absorb, six
   // tiny stars in the agent's tint spiral in and the receiving star flashes.
@@ -6606,7 +6606,7 @@
   // gap: just inside its narrowest edge (Sigil's flat sides .85, Crystal's
   // tilting octagon .86, Prism's kite .58, Minimal's breathing dot .4).
   // Singularity keeps its whole bend: its pulses ride that same curve.
-  // Dragon scales' dome is round. Constellation's lines stop past the star,
+  // Dragon scales' dome is round. Star chart's lines stop past the star,
   // as a chart's do: a small gap round every star (its glow fades there).
   const WIRE_INSET = Object.freeze(Object.assign(Object.create(null), {
     orbs: 0.96, glass: 0.96, minimal: 0.38, halo: 0.96, crystal: 0.85, singularity: 0, prism: 0.56, sigil: 0.84,

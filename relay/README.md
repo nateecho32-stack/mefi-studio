@@ -171,7 +171,7 @@ everything free in Studio stays free, since the Shop sells new things only:
 - **Studio's own items**, defined in code (`CATALOG`): four scales for Ember,
   the dragon that flies around every Studio (Ember is free and built in);
   three ways for menus to leave; two node styles (Dragon scales and
-  Constellation); and three style packs. What they cost leaves the economy.
+  Star chart); and three style packs. What they cost leaves the economy.
 - **Style packs** members make. A pack is data only (`src/shop-pack.mjs`):
   four or five colours, and a node style, a material and a font from Studio's
   own lists, at most 2 KB. A key the schema does not name is refused, so a

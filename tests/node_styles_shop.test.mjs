@@ -4,7 +4,7 @@
 // wears them once they are owned). Dragon scales: a domed gem in rows of
 // overlapping scales, a shimmer flashing scale after scale, fire in the seams
 // and embers at work, a twisting ribbon for a wire, embers for pulses and a
-// coiling tail round the chosen gem. Constellation: a star with a soft glow,
+// coiling tail round the chosen gem. Star chart: a star with a soft glow,
 // a bright core and four breathing diffraction spikes, a diagonal pair at
 // work, dotted star-chart wires that stop short of every star, shooting
 // stars, and a ring of tiny stars round the selection. Loaded whole through
@@ -180,7 +180,7 @@ test("Dragon scales: rows of scales by tier, a shimmer that flashes scale after 
   assert.ok(luminance(channels(rim.style)) < 90 && rim.width >= 1.4, `a firm, deep rim on a pale page (${rim.style}, ${rim.width})`);
 });
 
-test("Constellation: a core, a glow and four spikes that breathe; the diagonal pair at work; a stale star's broken ring", () => {
+test("Star chart: a core, a glow and four spikes that breathe; the diagonal pair at work; a stale star's broken ring", () => {
   const styles = loadNodeStyles();
   // The four spikes: one closed star of eight points, its arms along the axes, breathing between .98 and 1.38 radii at rest.
   const arms = [];
@@ -205,7 +205,7 @@ test("Constellation: a core, a glow and four spikes that breathe; the diagonal p
   assert.deepEqual([dashes(0), dashes(1), dashes(3)], [0, 1, 1]);
 });
 
-test("selection: Dragon scales' ring and the chosen gem's coiling tail; Constellation's ring of tiny stars, more round the chosen one", () => {
+test("selection: Dragon scales' ring and the chosen gem's coiling tail; Star chart's ring of tiny stars, more round the chosen one", () => {
   const styles = loadNodeStyles();
   const select = (style, options, radius = 12) => { const ctx = recordingContext({ center: P }); assert.equal(styles.select(ctx, style, P, radius, TINT, { time: 0, still: true, ...options }), true); return ctx; };
   // Nothing marked, nothing drawn.
@@ -292,7 +292,7 @@ test("Dragon scales' wire is the caller's line with a twisting ribbon on a livel
   assert.deepEqual(plain(dashed.calls.log.find(([name]) => name === "setLineDash")).slice(1), [2, 4]);
 });
 
-test("Constellation's wire is a dotted chart line that stops short of each star; a dash of the caller's own is kept; a running star on a wire that carries work", () => {
+test("Star chart's wire is a dotted chart line that stops short of each star; a dash of the caller's own is kept; a running star on a wire that carries work", () => {
   const styles = loadNodeStyles();
   const a = { x: 20, y: 200 }, b = { x: 220, y: 40 };
   const run = (extra) => { const ctx = recordingContext({ center: b }); styles.wire(ctx, "constellation", a, b, { kind: "session", tint: [220, 180, 110], alpha: 0.3, width: 1, dash: [], active: false, flow: false, detail: 3, seed: 0.2, time: 500, theme: null, rA: 10, rB: 10, ...extra }); return ctx; };

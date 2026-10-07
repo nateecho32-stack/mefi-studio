@@ -1747,7 +1747,7 @@ test("the Shop's node styles are listed in Settings, said to be in the Shop and 
   const group = env.ids.get("music-shop-styles");
   assert.equal(env.ids.get("music-shop-style-label").text, "From the Shop");
   assert.deepEqual(group.children.map((choice) => choice.dataset.nodeStyle), ["dragonscale", "constellation"]);
-  assert.deepEqual(group.children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [true, "Constellation (in the Shop)"]]);
+  assert.deepEqual(group.children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [true, "Star chart (in the Shop)"]]);
   assert.deepEqual(env.ids.get("music-node-styles").children.map((choice) => choice.dataset.nodeStyle), ["orbs", "glass", "minimal", "halo", "crystal"], "the free styles keep their own group");
   assert.ok([...env.ids.get("music-node-styles").children, ...env.ids.get("music-void-styles").children].every((choice) => !choice.disabled), "every other style stays free to choose");
   assert.equal(env.ids.get("music-shop-line").hidden, false, "a way to the Shop while one is still there to get");
@@ -1763,7 +1763,7 @@ test("the Shop's node styles are listed in Settings, said to be in the Shop and 
   assert.deepEqual([...env.music.nodeStyles().map((style) => style.key)], ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"], "the setup helper is offered only what this PC can wear");
   assert.deepEqual(JSON.parse(JSON.stringify(env.music.shopStyles())), [
     { key: "dragonscale", item: "studio:style-dragonscale", name: "Dragon scales", detail: "Scaled gems with ember sparks", owned: false },
-    { key: "constellation", item: "studio:style-constellation", name: "Constellation", detail: "Stars on star-chart lines", owned: false },
+    { key: "constellation", item: "studio:style-constellation", name: "Star chart", detail: "Bright stars and shooting stars", owned: false },
   ]);
   assert.equal(env.music.isNodeStyle("dragonscale"), true, "the tree painters know both");
   // A style pack never carries a Shop style (the relay's pack check allows the free ones only).
@@ -1774,7 +1774,7 @@ test("the Shop's node styles are listed in Settings, said to be in the Shop and 
 test("an owned Shop style is chosen and saved like any other, and the Shop hearing of one later puts it on", () => {
   const owned = new Set([SHOP_STYLES.constellation]);
   const env = environment({ shop: owned });
-  assert.deepEqual(env.ids.get("music-shop-styles").children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [false, "Constellation"]]);
+  assert.deepEqual(env.ids.get("music-shop-styles").children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [false, "Star chart"]]);
   env.ids.get("music-node-style-constellation").click();
   assert.equal(env.music.graphPreferences().nodeStyle, "constellation");
   assert.equal(env.music.nodeStyle(), "constellation");

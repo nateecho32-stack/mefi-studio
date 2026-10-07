@@ -61,7 +61,7 @@
     sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", collection: "void" },
     // The two the Shop sells (`shop` is the item: relay/src/shop.mjs CATALOG).
     dragonscale: { name: "Dragon scales", detail: "Scaled gems with ember sparks", shop: "studio:style-dragonscale" },
-    constellation: { name: "Constellation", detail: "Stars on star-chart lines", shop: "studio:style-constellation" },
+    constellation: { name: "Star chart", detail: "Bright stars and shooting stars", shop: "studio:style-constellation" },
   };
   // Every theme and node style is free but the two the Shop sells; `collection`
   // only groups the pickers. A Shop style is worn once MefiShop says it is owned.

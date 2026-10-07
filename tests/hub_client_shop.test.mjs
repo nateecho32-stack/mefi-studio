@@ -137,8 +137,8 @@ test("results keep an item's known fields only: a pack's data has the schema's k
   assert.equal(hub.packData({ v: 2, palette: PACK.palette }), null);
   assert.equal(hub.itemCard({ ...studio, kind: "hat" }), null);
   // A node style is one of Studio's own items: kept, its data dropped like a skin's.
-  const style = { ...studio, id: "studio:style-constellation", kind: "nodestyle", name: "Constellation", price: 80, data: { v: 1, palette: PACK.palette } };
-  assert.deepEqual(hub.itemCard(style), { id: "studio:style-constellation", kind: "nodestyle", name: "Constellation", blurb: "Ember in icy blue.", price: 80, requires: null, maker: null, data: null, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2 });
+  const style = { ...studio, id: "studio:style-constellation", kind: "nodestyle", name: "Star chart", price: 80, data: { v: 1, palette: PACK.palette } };
+  assert.deepEqual(hub.itemCard(style), { id: "studio:style-constellation", kind: "nodestyle", name: "Star chart", blurb: "Ember in icy blue.", price: 80, requires: null, maker: null, data: null, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2 });
   assert.deepEqual([...hub.SHOP_ITEM_KINDS], ["pet", "skin", "effect", "nodestyle", "pack"]);
 });
 

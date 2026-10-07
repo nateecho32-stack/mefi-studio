@@ -24,9 +24,12 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Appearance › Interface. In a room, friends' dragons fly in and play with
   yours. The new **Shop** (Friends › Shop, also from Settings › Appearance)
   has skins for Ember, menu effects that make menus **Dissolve**, **Burn
-  away** or turn to **Stardust** when they close, node styles and style
-  packs, all for credits you earn on the social side; credits can't be
-  bought or cashed out. Try anything free for two minutes first. Anyone can
+  away** or turn to **Stardust** when they close, two node styles for the
+  Map (**Dragon scales**, whose seams glow like fire while a job runs, and
+  **Star chart**, stars on dotted chart lines with shooting-star pulses) and
+  style packs, all for credits you earn on the social side; credits can't be
+  bought or cashed out. Every theme and node style Studio already had stays
+  free. Try anything free for two minutes first. Anyone can
   make a style pack (colours, node style, font) and list it free or for
   credits; buyers can add a tip, the maker gets three quarters, and the rest
   is taken out of circulation.

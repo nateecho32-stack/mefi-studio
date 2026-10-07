@@ -92,7 +92,7 @@ test("the Studio catalog: twelve items as the spec lists them (Ember is free, so
     ["studio:fx-embers", "effect", "Burn away", 90, null],
     ["studio:fx-stardust", "effect", "Stardust", 90, null],
     ["studio:style-dragonscale", "nodestyle", "Dragon scales", 80, null],
-    ["studio:style-constellation", "nodestyle", "Constellation", 80, null],
+    ["studio:style-constellation", "nodestyle", "Star chart", 80, null],
     ["studio:pack-synthwave", "pack", "Synthwave", 50, null],
     ["studio:pack-deep-sea", "pack", "Deep sea", 50, null],
     ["studio:pack-sakura", "pack", "Sakura (light)", 50, null],
@@ -148,7 +148,7 @@ test("a node style is bought like any Studio item: its price, no tip, owned on e
   const bought = await as("tok-alice", "POST", "/v1/shop/studio:style-constellation/buy", { price: 80 });
   assert.equal(bought.status, 200, JSON.stringify(bought));
   assert.deepEqual([bought.balance, bought.item.kind, bought.item.owned, bought.item.data], [20, "nodestyle", true, null]);
-  assert.deepEqual((await as("tok-alice", "GET", "/v1/shop/owned")).items, [{ id: "studio:style-constellation", kind: "nodestyle", name: "Constellation", data: null, updatedAt: studioItem("studio:style-constellation").at }]);
+  assert.deepEqual((await as("tok-alice", "GET", "/v1/shop/owned")).items, [{ id: "studio:style-constellation", kind: "nodestyle", name: "Star chart", data: null, updatedAt: studioItem("studio:style-constellation").at }]);
   const short = await as("tok-alice", "POST", "/v1/shop/studio:style-dragonscale/buy", { price: 80 });
   assert.deepEqual([short.status, short.error, short.balance, short.price], [409, "short", 20, 80]);
 });

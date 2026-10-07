@@ -270,7 +270,7 @@ settings and per-model work-kind summaries for the shared controls.
 | **Fleet / seat / pod / generation** | Live › Fleet (OpenRig's vocabulary, built natively): a **seat** is one agent's stable address on the team (`builder-2@project`), a **generation** is one run it took, and seats sit in four **pods** (Lead, Build, Check, Keep) wired by handoffs, checks and asks. A retry returns to the seat that last worked the task. |
 | **Companion** | The roaming character (named under General): click it to talk, see what it and the team are doing, handle its needs-you queue, suggest work or take its picks, meet friends' companions, or set its personality (Straight work, Balanced, Friendly & expressive). It also gives a welcome-back digest, can be petted, and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
-| **Node style / `MefiNodeStyles`** | How a node is drawn: one of ten looks (five classic, three in the two-tone Void collection, and Dragon scales and Constellation, which the Shop sells for credits), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, the finish beats (`done` at a step whose work came back, `absorb` at the lead taking an agent in), wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
+| **Node style / `MefiNodeStyles`** | How a node is drawn: one of ten looks (five classic, three in the two-tone Void collection, and Dragon scales and Star chart, which the Shop sells for credits), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, the finish beats (`done` at a step whose work came back, `absorb` at the lead taking an agent in), wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
 | **Void collection** | Four two-tone themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil), free for everyone like every look Studio comes with. Settings › Appearance lists them under their own small heading, and a choice saves like any other. A theme with a second hue sets `data-studio-theme-tier="duo"`, which the stylesheets paint with. |
@@ -580,7 +580,7 @@ settings and per-model work-kind summaries for the shared controls.
   does, Friends says so and Pip is there to practice.
 - **Friends › Shop** (`renderer/friends-shop.js`, `window.MefiShop`; main's
   `hub:shop` channel; the relay's `relay/src/shop.mjs`): scales for Ember,
-  menu effects, two node styles (**Dragon scales** and **Constellation**) and
+  menu effects, two node styles (**Dragon scales** and **Star chart**) and
   style packs for the credits members earn (never bought with money), and the
   style packs members make. Every theme and node style Studio comes with
   stays free: the Shop sells new things only. Ember the dragon itself
@@ -1722,7 +1722,7 @@ failed process stays an error and cannot produce briefing requests.
 - **Follow** frames the active task; **Fit** repairs the layout. Pick node style
   (**Classic orbs**, **Soft glass**, **Minimal**, **Halo**, **Crystal**, plus
   the Void collection's **Singularity**, **Prism** and **Sigil**, and once
-  bought in the Shop **Dragon scales** and **Constellation**) and
+  bought in the Shop **Dragon scales** and **Star chart**) and
   arrangement (**Constellation**, **Branches**, **Rings**,
   **Helix**, **Terraces**) per project, in 2D or real 3D. Every node style
   moves all the time and faster while its node works (a Sigil's hex cells

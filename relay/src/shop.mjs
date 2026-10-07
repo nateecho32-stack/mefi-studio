@@ -81,7 +81,7 @@ export const CATALOG = Object.freeze([
   studioItem('studio:fx-embers', 'effect', 'Burn away', 90, 'Menus burn away from the edges with glowing embers.'),
   studioItem('studio:fx-stardust', 'effect', 'Stardust', 90, 'Menus scatter into drifting stars.'),
   studioItem('studio:style-dragonscale', 'nodestyle', 'Dragon scales', 80, 'Nodes covered in shimmering dragon scales, with ember sparks along the wires.'),
-  studioItem('studio:style-constellation', 'nodestyle', 'Constellation', 80, 'Nodes as bright stars joined by star-chart lines, with shooting stars.'),
+  studioItem('studio:style-constellation', 'nodestyle', 'Star chart', 80, 'Nodes as bright stars joined by star-chart lines, with shooting stars.'),
   studioItem('studio:pack-synthwave', 'pack', 'Synthwave', 50, 'Hot pink and violet on midnight blue.', {
     data: studioPack({ accent: '#ff4fa3', accent2: '#8b5cff', background: '#0d0b1f', surface: '#17132e', text: '#f3ecff', nodeStyle: 'halo', material: 'atmosphere', font: 'display' }),
   }),

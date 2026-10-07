@@ -39,7 +39,7 @@ const CATALOG = [
   studioItem("studio:fx-dissolve", "effect", "Dissolve", 60, { blurb: "Menus crumble into pixels when they close." }),
   studioItem("studio:fx-embers", "effect", "Burn away", 90, { blurb: "Menus burn away from the edges with glowing embers." }),
   studioItem("studio:style-dragonscale", "nodestyle", "Dragon scales", 80, { blurb: "Nodes covered in shimmering dragon scales, with ember sparks along the wires." }),
-  studioItem("studio:style-constellation", "nodestyle", "Constellation", 80, { blurb: "Nodes as bright stars joined by star-chart lines, with shooting stars." }),
+  studioItem("studio:style-constellation", "nodestyle", "Star chart", 80, { blurb: "Nodes as bright stars joined by star-chart lines, with shooting stars." }),
   studioItem("studio:pack-synthwave", "pack", "Synthwave", 50, { blurb: "Hot pink and violet on midnight blue.", data: SYNTHWAVE }),
 ];
 const EMBER = "studio:pet-dragon";
@@ -132,7 +132,7 @@ function environment({ hub = { configured: true, linked: true, state: "ready", u
   };
   // music.js wears a Shop node style only once MefiShop owns it (as renderer/music.js applyNodeStyle does).
   let wornStyle = "orbs";
-  const SHOP_STYLES = [["dragonscale", "studio:style-dragonscale", "Dragon scales"], ["constellation", "studio:style-constellation", "Constellation"]];
+  const SHOP_STYLES = [["dragonscale", "studio:style-dragonscale", "Dragon scales"], ["constellation", "studio:style-constellation", "Star chart"]];
   if (modules.music) window.MefiMusic = {
     applyPack: (data, save) => { shown.push(["music.applyPack", clone(data), save]); applied = clone(data); },
     previewPack: (data) => shown.push(["music.previewPack", clone(data)]),
@@ -541,7 +541,7 @@ test("buying a node style while trying it keeps it on, and an owned one in the O
   await flush();
   assert.ok(env.shown.some(([what]) => what === "music.endPreview"), "the try ends first");
   assert.deepEqual(acted(env), ["music.applyNodeStyle", "constellation", true]);
-  assert.equal(status(card), "Constellation is yours, and in use.");
+  assert.equal(status(card), "Star chart is yours, and in use.");
   // The relay says a style is owned before this PC's list does (another PC bought it): Use still wears it.
   const other = environment({ views: { owned: { ok: true, items: [{ ...CATALOG.find((entry) => entry.id === "studio:style-dragonscale"), owned: true }], next: null, balance: 240, canEarn: true, hold: null } }, answers: { shopOwned: { ok: true, items: [] } } });
   const ownedCard = await open(other, "owned");

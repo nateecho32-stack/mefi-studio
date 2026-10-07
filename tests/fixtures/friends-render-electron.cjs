@@ -144,7 +144,7 @@ app.whenReady().then(async () => {
       shopItem("studio:fx-dissolve", "effect", "Dissolve", 60, "Menus crumble into pixels when they close."),
       shopItem("studio:fx-embers", "effect", "Burn away", 90, "Menus burn away from the edges with glowing embers."),
       shopItem("studio:style-dragonscale", "nodestyle", "Dragon scales", 80, "Nodes covered in shimmering dragon scales, with ember sparks along the wires."),
-      shopItem("studio:style-constellation", "nodestyle", "Constellation", 80, "Nodes as bright stars joined by star-chart lines, with shooting stars."),
+      shopItem("studio:style-constellation", "nodestyle", "Star chart", 80, "Nodes as bright stars joined by star-chart lines, with shooting stars."),
       shopItem("studio:pack-synthwave", "pack", "Synthwave", 50, "Hot pink and violet on midnight blue.", { data: { v: 1, palette: { accent: "#ff4fa3", accent2: "#8b5cff", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } }),
       shopItem("studio:pack-sakura", "pack", "Sakura (light)", 50, "Soft pink on warm white, a light look.", { data: { v: 1, palette: { accent: "#b8325f", accent2: "#8a6bd1", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24" }, nodeStyle: "minimal", material: "focus", font: "studio" } }),
     ] },
