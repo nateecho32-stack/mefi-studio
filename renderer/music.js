@@ -596,7 +596,9 @@
   //     material in MefiAppearance's own store.
   //   look() -> the id of the look the theme on screen belongs to, or null
   //     (Custom, a pack).
-  //   fonts() -> [{ key, name, detail, stack }]; applyFont(key, save = true).
+  //   fonts() -> [{ key, name, detail, stack }]; applyFont(key, save = true)
+  //     -> the key it applied ("studio" for one it does not know); font() ->
+  //     the face that is kept.
   //   applyPack({ id, name, palette, nodeStyle?, material?, font? }, save = true)
   //     -> true, or false (nothing changes) for a pack it cannot paint. The
   //     pack becomes the theme "pack", painted from its palette the way Custom

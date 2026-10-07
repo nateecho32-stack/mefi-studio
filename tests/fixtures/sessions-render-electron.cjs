@@ -252,6 +252,9 @@ const measure = `
 function readableProbe(rootSelector) {
   const parse = (value) => {
     const text = String(value || "").trim();
+    // music.js writes --bg as #rrggbb: without this the page underneath read as transparent black, which a light theme is not.
+    const hex = /^#([0-9a-f]{6})$/i.exec(text);
+    if (hex) return { r: parseInt(hex[1].slice(0, 2), 16), g: parseInt(hex[1].slice(2, 4), 16), b: parseInt(hex[1].slice(4, 6), 16), a: 1 };
     let match = /^rgba?\(([^)]+)\)$/.exec(text);
     if (match) { const parts = match[1].split(/[\s,/]+/).filter(Boolean).map(Number); return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }; }
     match = /^color\(srgb ([^)]+)\)$/.exec(text);
@@ -259,11 +262,20 @@ function readableProbe(rootSelector) {
     return null;
   };
   const over = (top, under) => ({ r: top.r * top.a + under.r * (1 - top.a), g: top.g * top.a + under.g * (1 - top.a), b: top.b * top.a + under.b * (1 - top.a), a: 1 });
+  const lightPage = document.documentElement.dataset.studioThemeTone === "light";
   const gradient = (image) => {
     const stops = String(image || "").match(/rgba?\([^)]+\)|color\(srgb [^)]+\)/g);
     if (!stops || !/gradient/.test(image)) return null;
     const colors = stops.map(parse).filter(Boolean);
     if (!colors.length) return null;
+    // On a light page each stop weighs by its alpha, so a transparent stop (rgba(0, 0, 0, 0)) thins the fill instead
+    // of darkening it: a straight mean turned the page's washes grey there. Dark pages keep the measure they are
+    // gated with (the weighted one reads Studio gold's Inbox times at 4.48 there, today.css's to settle).
+    const weight = colors.reduce((sum, color) => sum + color.a, 0);
+    if (lightPage && weight > 0) {
+      const weighted = (key) => colors.reduce((sum, color) => sum + color[key] * color.a, 0) / weight;
+      return { r: weighted("r"), g: weighted("g"), b: weighted("b"), a: weight / colors.length };
+    }
     const mean = (key) => colors.reduce((sum, color) => sum + color[key], 0) / colors.length;
     return { r: mean("r"), g: mean("g"), b: mean("b"), a: mean("a") };
   };
