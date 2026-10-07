@@ -93,6 +93,55 @@ test("every launch opens in Vibe, even after closing in Build; a reload resumes,
   assert.equal(fresh.window.MefiVibe.mode(), "vibe");
 });
 
+test("a wide Home keeps the conversation docked: Esc and a decision leave it, and closing it keeps it away until it is opened again", async () => {
+  const storage = new Map();
+  const loaded = await load({ storage, needsYou: { items: [{ kind: "review", taskId: "t2", title: "Fix the login redirect loop" }] } });
+  const layer = loaded.get("vibe-layer"), chat = loaded.get("vibe-chat"), toggle = loaded.get("vibe-chat-toggle");
+  const placed = [];
+  loaded.window.MefiToday = { show: () => { layer.dataset.today = "on"; return true; }, hide() {}, placeBox: () => placed.push(layer.dataset.dock ?? "page") };
+  layer.clientWidth = 1848;
+  await loaded.window.MefiVibe.enter(); await settle();
+  assert.equal(layer.dataset.side, "on", "a wide Home has a column at the right, for Friends");
+  assert.equal(layer.dataset.dock, "chat", "and docks the conversation in it");
+  assert.equal(chat.hidden, false);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.deepEqual(placed, ["chat"], "Today moves Friends and the box (under the thread) into it");
+  await layer.trigger("keydown", { key: "Escape" });
+  assert.equal(chat.hidden, false, "Esc closes drawers, not the docked conversation");
+  await loaded.get("vibe-pulse").click();
+  assert.equal(loaded.get("vibe-ask").hidden, false, "a decision opens over it");
+  assert.equal(chat.hidden, false, "and leaves it docked under it");
+  await layer.trigger("keydown", { key: "Escape" });
+  assert.equal(loaded.get("vibe-ask").hidden, true, "Esc closes the decision first");
+  assert.equal(chat.hidden, false);
+  loaded.window.MefiVibe.openPanel("tasks");
+  assert.equal(chat.hidden, false, "a panel opens over it too");
+  loaded.window.MefiVibePanels.close();
+  await loaded.get("vibe-chat-close").click();
+  assert.equal(layer.dataset.dock, undefined);
+  assert.equal(chat.hidden, true, "its close button puts it away");
+  assert.equal(layer.dataset.side, "on", "Friends keeps the column");
+  assert.equal(storage.get("mefiStudio.social.chatDock"), "off", "and that is remembered");
+  assert.deepEqual(placed, ["chat", "page"], "the box goes back to the page");
+  loaded.window.MefiVibe.syncDock();
+  assert.equal(chat.hidden, true, "it stays away while nothing changes");
+  await toggle.click();
+  assert.equal(layer.dataset.dock, "chat", "opening it on a wide Home docks it again");
+  assert.equal(storage.get("mefiStudio.social.chatDock"), "on");
+  layer.clientWidth = 1200;
+  loaded.window.MefiVibe.syncDock();
+  assert.equal(layer.dataset.dock, undefined, "a window too narrow for it undocks it");
+  assert.equal(layer.dataset.side, undefined, "and the column goes: Friends is the page's again");
+  assert.equal(chat.hidden, true, "rather than leaving a drawer over the page");
+  assert.equal(storage.get("mefiStudio.social.chatDock"), "on", "a narrow window is not a choice to close it");
+  layer.clientWidth = 1848;
+  loaded.window.MefiVibe.syncDock();
+  assert.equal(chat.hidden, false, "it comes back with the room");
+  loaded.window.MefiVibe.exit();
+  assert.equal(layer.dataset.dock, undefined, "leaving Social undocks it");
+  assert.equal(layer.dataset.side, undefined, "and takes the column away");
+});
+
 test("a new project's dock still offers Watch, so its tree is one click away", async () => {
   const loaded = await load();
   await loaded.window.MefiVibe.enter(); await settle();

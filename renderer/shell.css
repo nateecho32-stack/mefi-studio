@@ -247,13 +247,18 @@ html[data-frame] .shell-place-chips { display: flex; flex-wrap: wrap; align-item
 /* Too narrow for the row (Team's dozen-plus places from 760 px, any place from 440 px): the same places as one picker,
    so the page under it keeps its room. */
 html[data-frame] .shell-place-pick { display: none; width: auto; max-width: 100%; min-height: 32px; padding: 4px 12px; border-radius: 999px; font-size: var(--frame-fs); }
+/* renderer/studio-ui.js draws an enhanced picker (button.studio-select) right after the native one and hides the native one: the
+   button shows and hides with it, or a wide page showed its places twice, as chips and as "The Lobby" picker under them. */
+html[data-frame] .shell-place-pick + .studio-select { display: none; }
 @container shell-place (max-width: 760px) {
   html[data-frame] .shell-place-bar[data-size="many"] .shell-place-chips { display: none; }
   html[data-frame] .shell-place-bar[data-size="many"] .shell-place-pick { display: block; }
+  html[data-frame] .shell-place-bar[data-size="many"] .shell-place-pick + .studio-select { display: inline-flex; }
 }
 @container shell-place (max-width: 440px) {
   html[data-frame] .shell-place-chips { display: none; }
   html[data-frame] .shell-place-pick { display: block; }
+  html[data-frame] .shell-place-pick + .studio-select { display: inline-flex; }
 }
 /* A window this short needs every row for the page itself (the Rules box, a form): the list toggle and Search reach
    the same places. */
@@ -358,7 +363,8 @@ html[data-frame] .shell-menu-row + .shell-menu-row { border-top: 1px solid color
 html[data-frame] .shell-menu-words { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 html[data-frame] .shell-menu-words b { font-weight: 600; }
 html[data-frame] .shell-menu-words small { color: var(--dim); font-size: var(--frame-fs-s); }
-html[data-frame] .shell-switch { flex: none; width: 36px; height: 20px; padding: 0; border: 1px solid var(--hairline-strong); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 6%, transparent); position: relative; }
+/* min-height: 0: styles.css gives every button a 36 px minimum, which drew this 36 x 20 switch as a square with its knob in a corner. */
+html[data-frame] .shell-switch { flex: none; width: 36px; height: 20px; min-height: 0; padding: 0; border: 1px solid var(--hairline-strong); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 6%, transparent); position: relative; }
 html[data-frame] .shell-switch i { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform var(--motion-fast, 140ms) var(--ease-out, ease-out), background var(--motion-fast, 140ms); }
 html[data-frame] .shell-switch[aria-checked="true"] { background: color-mix(in srgb, var(--gold) 30%, transparent); border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
 html[data-frame] .shell-switch[aria-checked="true"] i { transform: translateX(16px); background: var(--gold-bright); }

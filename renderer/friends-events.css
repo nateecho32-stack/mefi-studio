@@ -30,3 +30,10 @@
 .friends-events-primary:focus-visible, .friends-events-pick:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 /* On the Friends page the page title says "Events": the card's own small title steps aside, as the other places' do. */
 #friends-overlay .friends-place-body .friends-events-title { display: none; }
+/* A wide Friends page (2026-10-07) sets the Build Jam, the co-work hour and building together side by side; the lines about
+   the whole week run under them. */
+.friends-events { container: friends-events / inline-size; }
+@container friends-events (min-width: 1100px) {
+  .friends-events-body { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); align-items: start; }
+  .friends-events-body > :not(.friends-events-section) { grid-column: 1 / -1; }
+}

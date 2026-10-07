@@ -447,7 +447,18 @@ app.whenReady().then(async () => {
       assert.ok(layer.compose.y >= 0 && layer.compose.b <= layer.layer.b, `the box is on screen without scrolling at ${label}@${zoom}`);
       assert.ok(layer.firstCard.y < layer.layer.b, `the first card starts on screen at ${label}@${zoom}`);
     }
-    if (width === 1920) assert.ok(layer.col.w <= 1181 && layer.col.x > layer.layer.x + 100, `a wide window keeps the column readable, with the tree showing either side: ${JSON.stringify(layer.col)}`);
+    // A wide window is for the page and the conversation, not empty sides (2026-10-07): the column runs from the layer's left
+    // edge to the conversation, docked at the right with the box at the foot of its thread (renderer/vibe.js syncDock).
+    if (width === 1920) {
+      const wide = await run("const box = (node) => { const r = node.getBoundingClientRect(); return { x: r.left, y: r.top, r: r.right, b: r.bottom, w: r.width, h: r.height }; }; const layer = document.getElementById('vibe-layer'); return { dock: layer.dataset.dock || null, layer: box(layer), col: box(document.querySelector('#today-page .today-col')), chat: box(document.getElementById('vibe-chat')), compose: box(document.getElementById('vibe-compose')), boxIn: document.getElementById('vibe-compose').parentNode.id, toggle: getComputedStyle(document.getElementById('vibe-chat-toggle')).display, last: document.getElementById('vibe-last').hidden };");
+      report.wide = wide;
+      assert.equal(wide.dock, "chat", `a wide Home docks the conversation: ${JSON.stringify(wide)}`);
+      assert.equal(wide.boxIn, "today-chat-box", "with the box at the foot of its thread");
+      assert.ok(wide.col.x - wide.layer.x < 60 && wide.col.r <= wide.chat.x - 8 && wide.layer.r - wide.chat.r < 40, `the page, then the conversation, edge to edge: ${JSON.stringify(wide)}`);
+      assert.ok(wide.compose.x >= wide.chat.x && wide.compose.r <= wide.chat.r && wide.compose.b <= wide.chat.b, `the box sits inside the conversation: ${JSON.stringify(wide)}`);
+      assert.equal(wide.toggle, "none", "its own close button stands for the toggle while it is docked");
+      assert.equal(wide.last, true, "and Mefi's last line under the box has nothing to add while the thread shows");
+    }
     await capture(`today-${label}@${zoom}.png`);
 
     // The Inbox popover under the pill, then from the status-bar item, then as a page.
@@ -495,7 +506,8 @@ app.whenReady().then(async () => {
     await until("document.getElementById('inbox-overlay').hidden", "the Inbox page closes");
     await until("!document.getElementById('vibe-layer').hidden && document.getElementById('vibe-layer').dataset.today === 'on'", "Vibe is back under it");
     // A drawer (the conversation) moves Today over from 1400 px instead of covering the board, as it does Vibe's own stage; under 1400 it lies over it, as in v1.
-    if (width === 1920 || width === 1440) {
+    // From a layer 1440 px wide it is docked instead (1920 below).
+    if (width === 1440) {
       await click("#vibe-chat-toggle");
       await until("!document.getElementById('vibe-chat').hidden", `the conversation drawer opens over Today at ${label}`);
       await sleep(500);
@@ -508,8 +520,24 @@ app.whenReady().then(async () => {
       assert.ok(await run(`return document.querySelector('#today-page .today-col').getBoundingClientRect().right > ${drawer.colRight} + 40;`), `the board takes its room back when the drawer closes at ${label}`);
       report.drawer = { ...(report.drawer || {}), [label]: drawer };
     }
+    // Docked, its close button puts the conversation away (and the box back on the page, the page taking the room), and the
+    // toggle docks it again.
+    if (width === 1920) {
+      const docked = await run("const c = document.getElementById('vibe-chat').getBoundingClientRect(), k = document.querySelector('#today-page .today-col').getBoundingClientRect(); return { chatLeft: c.left, colRight: k.right };");
+      await click("#vibe-chat-close");
+      await until("document.getElementById('vibe-chat').hidden && !document.getElementById('vibe-layer').dataset.dock", `its close button puts the docked conversation away at ${label}`);
+      await sleep(400);
+      const away = await run("const k = document.querySelector('#today-page .today-col').getBoundingClientRect(); return { colRight: k.right, boxIn: document.getElementById('vibe-compose').parentNode.className, toggle: getComputedStyle(document.getElementById('vibe-chat-toggle')).display };");
+      assert.ok(away.colRight > docked.colRight + 200, `the page takes the room back at ${label}: ${JSON.stringify({ docked, away })}`);
+      assert.equal(away.boxIn, "today-box", "and the box is the page's again");
+      assert.notEqual(away.toggle, "none", "the toggle is back in the top bar");
+      await click("#vibe-chat-toggle");
+      await until("document.getElementById('vibe-layer').dataset.dock === 'chat' && !document.getElementById('vibe-chat').hidden && document.getElementById('vibe-compose').parentNode.id === 'today-chat-box'", `the toggle docks it again at ${label}`);
+      await sleep(400);
+      report.dock = { docked, away };
+    }
   }
-  check("a drawer moves Today over from 1400 px");
+  check("a drawer moves Today over from 1400 px; a wide Home docks the conversation with its box, and its close button gives the room back");
   check("five sizes: Today, the popover (under the pill and upward from the status bar) and the Inbox page");
 
   // ---- detail follows html[data-detail] even when only the attribute changes (a preview on the Size and density page sends no event) ----

@@ -71,7 +71,7 @@ test("Today is drawn inside Vibe's own layer, after its sky, with the pieces in 
   const page = byId(t, "today-page");
   assert.equal(page.parentNode, layer);
   assert.equal(page.getAttribute("aria-label"), "Today");
-  assert.deepEqual(layer.children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-sky", "vibe-top", "today-page", "vibe-stage", "vibe-dock"], "under the top bar that stays (so Tab reads the page top to bottom), over the backdrop's sky, so the node tree stays behind it");
+  assert.deepEqual(layer.children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-sky", "vibe-top", "today-page", "vibe-stage", "vibe-dock", "today-side"], "under the top bar that stays (so Tab reads the page top to bottom), over the backdrop's sky, so the node tree stays behind it; the column at the right of a wide Home waits after it, empty");
   assert.equal(page.querySelector("#today-scroll").tabIndex, -1, "the scroller is not a tab stop of its own");
   assert.equal(page.querySelector(".today-head"), null, "no second top bar: Vibe's own keeps the project, New app and the conversation toggle");
   assert.deepEqual(t.front.order(t.front.top), ["vibe-top-left", "mode-switch", "vibe-top-actions"], "and is left exactly as it was");
@@ -86,6 +86,52 @@ test("Today is drawn inside Vibe's own layer, after its sky, with the pieces in 
   assert.equal(byId(t, "vibe-compose").parentNode, page.querySelector(".today-box"));
   // The layer that is left behind holds what v1 had in it, minus what moved.
   assert.deepEqual(t.front.order(t.front.stage), ["vibe-lanes", "vibe-quiet"], "only v1's own lanes and quiet line stay behind (CSS hides them: Today draws its own)");
+});
+
+test("docked, the box and its status line go under the conversation's thread, back to the page in order, and home on stop()", async () => {
+  const t = await up();
+  const layer = byId(t, "vibe-layer"), slot = byId(t, "today-page").querySelector(".today-box"), holder = byId(t, "today-chat-box");
+  const inSlot = () => slot.children.map((child) => child.id).filter((id) => id.startsWith("vibe-"));
+  assert.equal(holder.parentNode, byId(t, "vibe-chat"), "the holder waits in the conversation (renderer/vibe.js docks it on a wide Home)");
+  assert.deepEqual(holder.children, [], "empty while the box is the page's");
+  layer.dataset.dock = "chat";
+  t.today.placeBox();
+  assert.deepEqual(holder.children.map((child) => child.id), ["vibe-feedback", "vibe-compose"], "docked: the line that says how a send went, then the box, at the foot of the thread");
+  assert.deepEqual(inSlot(), ["vibe-hint", "vibe-flow", "vibe-sparks", "vibe-gate", "vibe-last"], "what holds the agents back and a build's sizing stay with the page's work");
+  t.today.placeBox();
+  assert.deepEqual(holder.children.map((child) => child.id), ["vibe-feedback", "vibe-compose"], "a second ask moves nothing");
+  delete layer.dataset.dock;
+  t.today.placeBox();
+  assert.deepEqual(holder.children, []);
+  assert.deepEqual(inSlot(), ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-gate", "vibe-last"], "undocked, the page's own order again");
+  // Friends goes to the column at the right while it stands (data-side), over the docked conversation, and back after Your work.
+  const grid = byId(t, "today-page").querySelector(".today-social"), side = byId(t, "today-side");
+  assert.equal(side.parentNode, layer, "the column's holder is the layer's own, beside the page");
+  const people = t.document.createElement("section"); people.id = "social-people";
+  grid.append(people);
+  layer.dataset.side = "on";
+  t.today.placeBox();
+  assert.equal(people.parentNode, side, "a wide Home puts Friends in the column");
+  assert.deepEqual(inSlot()[0], "vibe-compose", "the box stays the page's while the conversation is not docked");
+  layer.dataset.dock = "chat";
+  t.today.placeBox();
+  assert.equal(people.parentNode, side);
+  assert.deepEqual(holder.children.map((child) => child.id), ["vibe-feedback", "vibe-compose"]);
+  delete layer.dataset.dock; delete layer.dataset.side;
+  t.today.placeBox();
+  assert.deepEqual(grid.children.map((child) => child.id), ["today-work", "social-people"], "narrower, Friends is the page's again, after Your work");
+  people.remove();
+  // Docked when Today stops: every piece still goes home and the holder goes.
+  layer.dataset.dock = "chat";
+  t.today.placeBox();
+  t.today.stop();
+  await t.settle();
+  assert.equal(byId(t, "vibe-compose").parentNode, t.front.stage);
+  assert.equal(byId(t, "vibe-feedback").parentNode, t.front.stage);
+  assert.equal(byId(t, "today-chat-box"), null, "the holder leaves with the page");
+  assert.equal(byId(t, "today-side"), null, "and so does the column's");
+  const plainLoad = await loadToday({ layer: true, data: everything() });
+  assert.deepEqual(t.front.order(t.front.stage), plainLoad.front.order(plainLoad.front.stage), "the front door is exactly as v1 draws it");
 });
 
 test("hide() keeps the page for next time, show() does not build a second one, and v1's front door is back on stop()", async () => {

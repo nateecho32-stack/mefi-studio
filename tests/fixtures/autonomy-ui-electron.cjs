@@ -171,7 +171,8 @@ app.whenReady().then(async () => {
   await run("document.querySelector('#today-inbox [data-option=instruct]').click();");
   assert.ok(await run(`const card=${scopeCard};return document.activeElement?.classList.contains('today-need-input')&&card.contains(document.activeElement);`),'the one-line option puts the caret in the card\'s answer box');
   await capture('vibe-one-line.png');
-  await run("window.MefiToday.closeInbox();window.MefiVibe.closeDrawers();document.getElementById('vibe-chat-toggle').click();");
+  // A wide Home has the conversation docked already (renderer/vibe.js syncDock); a narrower one opens it as the drawer.
+  await run("window.MefiToday.closeInbox();window.MefiVibe.closeDrawers();if(document.getElementById('vibe-chat').hidden)document.getElementById('vibe-chat-toggle').click();");
   await until("document.querySelector('.vibe-inline-confirm')",'inline confirmation');
   assert.equal(await run("return document.querySelectorAll('#vibe-thread .vibe-spark').length;"),1);
   await capture('vibe-chat-confirm.png');

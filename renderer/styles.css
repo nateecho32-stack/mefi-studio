@@ -3537,7 +3537,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 /* Models > Community: the community feed and Studio's probes (renderer/model-community.js). */
 .mc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .mc-card { border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--panel-solid); padding: 16px; min-width: 0; }
-.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0; border: 0; } /* a <header>: not the page heading's spacing (section 7) */
 .mc-head h4 { margin: 0; font-size: 14px; color: var(--gold-bright); }
 .mc-actions { display: flex; gap: 6px; }
 .mc-summary { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; overflow-wrap: anywhere; }
@@ -3849,7 +3849,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .walkthrough-assist-list li[aria-current="step"] { color: var(--gold-bright); }
 @keyframes walkthrough-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 .walkthrough-coach { position: fixed; right: calc(18px + var(--shell-x1)); bottom: calc(18px + var(--shell-y1)); z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
-.walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0; border: 0; } /* a <header>: not the page heading's spacing (section 7) */
 .walkthrough-coach-tools { display: flex; flex-wrap: wrap; gap: 4px; }
 #walkthrough-coach-title { color: var(--ivory); font-size: 14px; }
 #walkthrough-coach-copy { margin: 0; color: var(--ivory); font-size: 12px; line-height: 1.65; }

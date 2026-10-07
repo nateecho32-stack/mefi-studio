@@ -7,7 +7,7 @@
    tokens where they exist (--d-gap, --d-pad). Nothing reserves scrollbar
    width: the page and the popover scroll under the shared slim indicator. */
 
-.today, .today-inbox, .today-sheet, .inbox-sheet {
+.today, .today-chat-box, .today-inbox, .today-sheet, .inbox-sheet {
   --t-f12: max(12px, calc(12px * var(--text-scale, 1)));
   --t-f13: max(12px, calc(13px * var(--text-scale, 1)));
   --t-f14: max(12px, calc(14px * var(--text-scale, 1)));
@@ -31,7 +31,7 @@
   --t-warn: var(--warn); --t-live: var(--live); --t-info: var(--info); --t-good: var(--good); --t-bad: var(--bad);
 }
 /* The dark themes' pale status hues wash out on a light page (only --bad is adjusted for that app-wide), so as text they take the page's ink. */
-:root[data-studio-theme-tone="light"] :is(.today, .today-inbox, .today-sheet, .inbox-sheet) {
+:root[data-studio-theme-tone="light"] :is(.today, .today-chat-box, .today-inbox, .today-sheet, .inbox-sheet) {
   --t-warn: color-mix(in srgb, var(--warn) 38%, var(--ivory));
   --t-live: color-mix(in srgb, var(--live) 40%, var(--ivory));
   --t-info: color-mix(in srgb, var(--info) 50%, var(--ivory));
@@ -41,11 +41,17 @@
 /* ---- Vibe's Home in v2: the front door's own stage and dock step aside (its top bar stays: the project, New app, the conversation, Settings) ---- */
 #vibe-layer[data-today="on"] > :is(.vibe-stage, .vibe-dock) { display: none; }
 #vibe-layer[data-today="on"] > .vibe-top { grid-row: 1; grid-column: 1; }
-/* Its row lines up with the page's column (the project picker over the greeting, the conversation and Settings over the chips), so the
-   page reads as one column on a wide window rather than a bar across it with a column under it. */
-#vibe-layer[data-today="on"] > .vibe-top { padding: 12px max(clamp(14px, 3vw, 28px), calc((100% - 1180px) / 2)) 0; }
+/* Its row lines up with the page's column (the project picker at its left edge, the conversation and Settings at its right), so
+   the page reads as one column rather than a bar across it with a column under it. The column takes the window's width up to
+   --today-max: a wide window is for the page, its Friends column and the docked conversation (2026-10-07), not empty sides. */
+#vibe-layer[data-today="on"] { --today-max: 2200px; }
+#vibe-layer[data-today="on"] > .vibe-top { padding: 12px max(clamp(14px, 3vw, 28px), calc((100% - var(--today-max)) / 2)) 0; }
+/* With the column at the right (vibe.css, data-side) the bar runs over both, its end over the column's edge, and the page
+   takes the rows under it. */
+#vibe-layer[data-today="on"][data-side="on"] > .vibe-top { grid-column: 1 / -1; padding-right: 16px; }
+#vibe-layer[data-today="on"][data-side="on"] > .today { grid-row: 2 / -1; }
 @media (min-width: 1400px) {
-  #vibe-layer[data-today="on"]:has(> .vibe-chat:not([hidden])) > .vibe-top { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
+  #vibe-layer[data-today="on"]:not([data-side="on"]):has(> .vibe-chat:not([hidden])) > .vibe-top { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
 }
 #vibe-layer[data-today="on"] .vibe-project-text small { font-size: max(12px, calc(12px * var(--text-scale, 1))); }
 /* The project picker on one line ("Project  Sunrise"), the height of the buttons beside it, so its row is no taller than they are. */
@@ -53,12 +59,15 @@
 #vibe-layer[data-today="on"] .vibe-project-mark { width: 28px; height: 28px; border-radius: 8px; }
 #vibe-layer[data-today="on"] .vibe-project-text { display: flex; align-items: baseline; gap: 6px; }
 .today { grid-row: 2; grid-column: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
-.today-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--t-gap) clamp(14px, 3vw, 28px) 28px; overscroll-behavior: contain; }
+/* The page's width is a container (today-page): Social's Home lays its column out by the room it has (social.css), which the
+   docked conversation and a drawer change without the window changing. */
+.today-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--t-gap) clamp(14px, 3vw, 28px) 28px; overscroll-behavior: contain; container: today-page / inline-size; }
 /* minmax(0, 1fr): an automatic column is as wide as its widest item's smallest size, which at 400px pushed every row past the window. */
-.today-col { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--t-gap); width: min(1180px, 100%); margin: 0 auto; }
-/* A drawer (the conversation, a panel) moves the page over on a wide window instead of covering the board. */
+.today-col { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--t-gap); width: min(var(--today-max, 1180px), 100%); margin: 0 auto; }
+/* A drawer (the conversation, a panel) moves the page over on a wide window instead of covering the board; with the column at
+   the right, a drawer opens over the column and the page keeps its room. */
 @media (min-width: 1400px) {
-  #vibe-layer:has(> .vibe-chat:not([hidden])) .today-scroll { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
+  #vibe-layer:not([data-side="on"]):has(> .vibe-chat:not([hidden])) .today-scroll { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
 }
 .today-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; min-width: 0; }
 .today-page-lead { flex: 1 1 260px; margin: 0; color: var(--t-soft); font-size: var(--t-f14); line-height: 1.5; }
@@ -87,10 +96,16 @@
 /* The box, the starting points and the line that says what holds the agents back: Vibe's own, sized for this column. */
 .today-box { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
 .today-box > * { min-width: 0; }
-.today .vibe-compose { width: 100% !important; margin-top: 0; padding: 14px 16px 12px 18px; border-radius: 18px; animation: none; }
-.today .vibe-compose textarea { font-size: var(--t-f15); line-height: 1.5; }
+/* The box is the page's, or the docked conversation's while it is docked (.today-chat-box, renderer/today.js placeBox): one set of rules for both. */
+:is(.today, .today-chat-box) .vibe-compose { width: 100% !important; margin-top: 0; padding: 14px 16px 12px 18px; border-radius: 18px; animation: none; }
+/* Docked, the conversation is a chat of its own: the thread, then its status line and the box at the foot of the column; the
+   note that points to the box in the middle steps aside. Empty (the box is the page's), the holder takes no room. */
+#vibe-chat > .today-chat-box { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; padding: 6px 14px 14px; }
+#vibe-chat > .today-chat-box:empty { display: none; }
+#vibe-chat:has(> .today-chat-box:not(:empty)) > .vibe-chat-note { display: none; }
+:is(.today, .today-chat-box) .vibe-compose textarea { font-size: var(--t-f15); line-height: 1.5; }
 .today .vibe-hint, .today .vibe-hint .key { font-size: var(--t-f12); }
-.today .vibe-feedback { margin: 0; text-align: left; font-size: var(--t-f13); }
+:is(.today, .today-chat-box) .vibe-feedback { margin: 0; text-align: left; font-size: var(--t-f13); }
 .today .vibe-gate { width: 100% !important; margin: 0; }
 .today .vibe-last { width: 100% !important; margin-top: 0; animation: none; }
 .today .vibe-last-open { font-size: var(--t-f12); }
@@ -125,25 +140,25 @@
 #vibe-layer[data-today="on"] .today .vibe-kicker::after { content: " · Social"; }
 /* The question in plain ink, as the prototype's (the front door's gradient lettering stays the front door's own, in v1). */
 #vibe-layer[data-today="on"] .today .vibe-hero h1 { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--t-ink); }
-#vibe-layer[data-today="on"] .today .vibe-compose { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 6px; padding: 14px 16px 12px; }
-#vibe-layer[data-today="on"] .today .vibe-compose > textarea { grid-column: 1 / -1; grid-row: 1; min-height: 56px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools { display: contents; }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > [role="status"] { grid-column: 1 / -1; grid-row: 2; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button,
-#vibe-layer[data-today="on"] .today .vibe-compose .autonomy-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button { grid-column: 1; grid-row: 3; justify-self: start; }
-#vibe-layer[data-today="on"] .today .vibe-compose > .vibe-compose-foot { grid-column: 2; grid-row: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
-#vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { margin-left: auto; }
-#vibe-layer[data-today="on"] .today .vibe-compose :is(#vibe-talk, #vibe-build) { min-height: 32px; height: 32px; padding: 0 13px; border-radius: 10px; font-size: var(--t-f13); }
-#vibe-layer[data-today="on"] .today #vibe-build .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 6px; padding: 14px 16px 12px; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > textarea { grid-column: 1 / -1; grid-row: 1; min-height: 56px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools { display: contents; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools > [role="status"] { grid-column: 1 / -1; grid-row: 2; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools > button,
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose .autonomy-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools > button { grid-column: 1; grid-row: 3; justify-self: start; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .vibe-compose-foot { grid-column: 2; grid-row: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose #vibe-talk { margin-left: auto; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose :is(#vibe-talk, #vibe-build) { min-height: 32px; height: 32px; padding: 0 13px; border-radius: 10px; font-size: var(--t-f13); }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) #vibe-build .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
 #vibe-layer[data-today="on"] .today-box > .vibe-hint { display: none; }
-#vibe-layer[data-today="on"] .today #vibe-talk .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > [role="status"][data-idle] { display: none; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) #vibe-talk .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools > [role="status"][data-idle] { display: none; }
 #vibe-layer[data-today="on"] .today .vibe-evolution-scope[data-whole] { display: none; }
 /* Nothing floats between the box and the board: the starting points sit right under the box, and a status line with nothing to say
    takes no room (it stays in the page, at no height, so what it says later is still announced). */
 #vibe-layer[data-today="on"] .today .vibe-sparks { margin: 0; }
-#vibe-layer[data-today="on"] .today .vibe-feedback:empty { min-height: 0; height: 0; margin: 0 0 -8px; overflow: hidden; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-feedback:empty { min-height: 0; height: 0; margin: 0 0 -8px; overflow: hidden; }
 #vibe-layer[data-today="on"] .today .vibe-last { margin: 2px 0 0; padding: 8px 10px 8px 14px; border-radius: 12px; }
 #vibe-layer[data-today="on"] .today-box > .vibe-hint .key { min-width: 0; height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font: inherit; }
 /* A card that waits on you: the question in its own warm box (the prototype's .bq), the answers under it. */
@@ -167,7 +182,9 @@
 .today-count { min-width: 22px; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--ivory) 9%, transparent); font: 650 var(--t-f12)/1.6 var(--font-ui); text-align: center; }
 .today-count:empty { display: none; }
 .today-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
-.today-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; padding: var(--t-pad); border: 1px solid var(--t-edge); border-radius: 12px; background: var(--t-card); transition: border-color var(--motion-fast, 140ms); }
+/* align-content: start: cards side by side share their row's height, and a short one kept its lines together at the top
+   instead of spreading them over the height (a title, a hole, then its time). */
+.today-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; min-width: 0; padding: var(--t-pad); border: 1px solid var(--t-edge); border-radius: 12px; background: var(--t-card); transition: border-color var(--motion-fast, 140ms); }
 .today-card:hover { border-color: color-mix(in srgb, var(--ivory) 22%, transparent); }
 .today-card-head { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
 .today-card-head .today-dot { margin-top: 6px; }
@@ -220,7 +237,9 @@
 .today-btn.primary { border-color: transparent; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); }
 .today-btn:disabled { opacity: .5; cursor: not-allowed; }
 .today-btn.danger-armed { border-color: color-mix(in srgb, var(--bad) 55%, transparent); background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--t-ink); }
-.today-link { padding: 4px 2px; border: 0; background: none; color: var(--t-soft); font: 600 var(--t-f12)/1.3 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ivory) 28%, transparent); text-underline-offset: 3px; cursor: pointer; }
+/* A link that is a button: 24 px tall, its words' own height plus room to aim, not the 36 px every button gets (styles.css), which
+   stacked two lines of links 40 px apart in the Inbox's cards. */
+.today-link { min-height: 24px; padding: 4px 2px; border: 0; background: none; color: var(--t-soft); font: 600 var(--t-f12)/1.3 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ivory) 28%, transparent); text-underline-offset: 3px; cursor: pointer; }
 .today-link:hover:not(:disabled) { color: var(--t-ink); text-decoration-color: var(--gold-bright); }
 .today-link:disabled { opacity: .5; cursor: progress; }
 .today :is(.today-btn, .today-link, .today-option, .today-card-open, .today-chip):focus-visible,

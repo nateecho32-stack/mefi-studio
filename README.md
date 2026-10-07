@@ -64,8 +64,8 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/0.5/today.webp" alt="Social's Home in the 0.5 layout: its rail with Home, Friends, Projects and Activity; What's next for Notes app? with one box and its Send button; Your work as a short list of what needs you, beside the Friends card with who is online, the rooms open now and what friends shared this week">
-      <p><strong>Home.</strong> Social's home: one box to talk with Mefi, your work in short, and who is online.</p>
+      <img src="docs/images/0.5/today.webp" alt="Social's Home in the 0.5 layout on a wide window: its rail with Home, Friends, Projects and Activity; What's next for Notes app? over Your work, its cards side by side; and a column at the right with the Friends card (who is online, the rooms open now, what friends shared this week) over the conversation with Mefi, the box and its Send button at its foot">
+      <p><strong>Home.</strong> Social's home: your work in short, and beside it who is online and the conversation with Mefi.</p>
     </td>
     <td width="50%" valign="top">
       <img src="docs/images/0.5/inbox.webp" alt="The Inbox over Social's Home: a failed check with Try a different approach, a permission request with Deny recommended, and a question with Mefi's suggestion and numbered options">
