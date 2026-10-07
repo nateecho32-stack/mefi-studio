@@ -1115,7 +1115,10 @@
     window.removeEventListener("focusin", onOutside, true);
     if (pop.anchor?.getAttribute?.("aria-haspopup")) pop.anchor.setAttribute("aria-expanded", "false");
     const held = pop.el.contains(document.activeElement);
-    pop.el.remove();
+    // A menu effect from the Shop plays it away (renderer/effects.js: out of the keyboard's and screen readers' way at
+    // once, removed after); without one it simply goes. Focus goes back now either way.
+    const effects = window.MefiEffects;
+    if (typeof effects?.leave === "function") effects.leave(pop.el); else pop.el.remove();
     if ((restore || held) && pop.opener?.focus && pop.opener.isConnected !== false) pop.opener.focus({ preventScroll: true });
     return true;
   }

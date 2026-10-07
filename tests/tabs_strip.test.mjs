@@ -771,6 +771,27 @@ test("a right-click opens the tab's menu at the pointer: what can be done to tha
   assert.equal(t.document.activeElement, menuItems(t)[0], "focus is on the first item, so the keyboard can carry on");
 });
 
+test("a closing menu is handed to a menu effect from the Shop when there is one (MefiEffects.leave); focus is back on the tab at once", async () => {
+  const handed = [];
+  // The effect's own leave() takes the menu out of the keyboard's way at once and removes it later; this one keeps it.
+  const leave = (node) => { handed.push(node); node.setAttribute("inert", ""); return true; };
+  const t = await tabsEnv({ extras: { MefiEffects: { leave } } });
+  page(t, "fleet"); page(t, "plans");
+  await t.settle();
+  await openTabMenu(t, "Plans");
+  const pop = t.popover();
+  await press(pop, "Escape");
+  assert.deepEqual(handed, [pop], "the menu leaves through the effect");
+  assert.equal(t.document.activeElement, t.tabOf("Plans"), "focus went back to the tab without waiting for the effect");
+  // Without an effect (none chosen, motion Off, or no effects.js) the menu simply goes, as before.
+  const bare = await tabsEnv();
+  page(bare, "fleet");
+  await bare.settle();
+  await openTabMenu(bare, "Fleet");
+  await press(bare.popover(), "Escape");
+  assert.equal(bare.popover(), null);
+});
+
 test("Pin, Unpin, Keep open, Move left and Move right do what they say; the ends of a group cannot move past it", async () => {
   const t = await tabsEnv();
   page(t, "fleet"); page(t, "plans");
