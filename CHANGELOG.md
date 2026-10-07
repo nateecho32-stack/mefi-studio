@@ -7,6 +7,21 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The Shop is a page of its own, with a new drop every month.** Friends ›
+  Shop (and Settings › Appearance's **Open the Shop**) now open a roomy,
+  storefront-like page: the month's drop as a banner with its pieces moving
+  inside it and how long it has left ("Leaves in 24 days"), **Featured this
+  week**, and **Pets**, **Menu effects**, **Node styles**, **Themes**,
+  **Community** and **Owned** along the top. Cards show each item large and
+  live, with its price and a **New**, **Leaving soon** or **In use** badge;
+  click one for its details, **Try for 2 minutes**, and **Buy** or **Use**.
+  A drop's pieces are on sale for their month and then rotate out; everyone
+  who got one keeps it, and a later drop may bring one back. Signed out, the
+  same page lets you look around and try anything, with **Sign in to get
+  it** in place of Buy. When a member gets one of your style packs, a pop-up
+  says what it brought you ("+12 credits"), and **Your packs** says how many
+  times each was got. In Social, the Shop stays in Social.
+
 - **Sign in to GitHub can finish.** Its setup window opened blank: the
   GitHub CLI never showed its one-time code or opened the browser, so the
   sign-in behind the Git chip, Publish to GitHub, Link to a repository, the

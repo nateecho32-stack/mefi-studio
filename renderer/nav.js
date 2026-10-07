@@ -208,7 +208,7 @@
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
       ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
       ["friends-events", "Events", "g-bolt", "This week's Build Jam, co-work hours and building together", "events"],
-      // renderer/friends-shop.js; Settings › Appearance's Theme section has a way in too.
+      // renderer/friends-shop.js, a page of its own (route "shop", go() below); Settings › Appearance's Theme section has a way in too.
       ["friends-shop", "Shop", "g-shop", "Scales for Ember, menu effects and style packs for the credits you earn", "shop", "shop store buy credits pet dragon effects dissolve style pack theme make sell scales tip"],
     ].map(([id, label, glyph, desc, target, terms]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
@@ -896,6 +896,8 @@
   // So are Social's own Activity (renderer/today.js) and Projects (renderer/social.js).
   WORKSPACE_PAGES.add("activity");
   WORKSPACE_PAGES.add("projects");
+  // And the Shop (renderer/friends-shop.js registers the route "shop"; Friends lists it among its places).
+  WORKSPACE_PAGES.add("shop");
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
     for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #vibe-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
@@ -1155,8 +1157,8 @@
       // it goes there instead of stopping on Build's section home.
       if (vibeMode()) return go("vibe");
       // A page of Settings (Size and density) has no history when it was opened from Configuration or Search: back to Settings.
-      // Fleet and the live pipelines are pages of the Map, so the Map is what is behind them.
-      const home = placeOf(get(id)) === "map" ? "command" : sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
+      // Fleet and the live pipelines are pages of the Map, so the Map is what is behind them; a page of Friends' (the Shop) has Friends.
+      const home = placeOf(get(id)) === "map" ? "command" : sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : sectionOf(get(id)) === "friends" ? "friends-page" : "tasks";
       if (id !== home) return go(home);
       return;
     }
@@ -1191,6 +1193,12 @@
     if (Object.hasOwn(friendsPages, id)) {
       params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
+    }
+    // The Shop is a page of its own (renderer/friends-shop.js, route "shop"): Friends' place, its Search row and every
+    // older way in land there, unless "mefiStudio.shop.page" = "off" keeps it a Friends place (MefiShop.pageOn).
+    if (id === "friends-page" && params?.place === "shop" && window.MefiShop?.pageOn?.() === true && get("shop")) {
+      params = typeof params.view === "string" ? { view: params.view } : {};
+      id = "shop";
     }
     const redirected = window.MefiAgents?.redirect?.(id, params);
     if (redirected) return go(redirected.id, redirected.params, options);
@@ -1491,8 +1499,8 @@
     // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
     work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "resources", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
-    // The Friends page (its places are drawn by renderer/shell.js friendsModel).
-    friends: ["friends-page"],
+    // The Friends page (its places are drawn by renderer/shell.js friendsModel), and the Shop, a place of Friends' with a page of its own.
+    friends: ["friends-page", "shop"],
     settings: ["studio"],
   });
 

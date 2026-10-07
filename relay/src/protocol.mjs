@@ -103,6 +103,7 @@ export const FEATURES = Object.freeze({
   building: 'building', // building: what a member is making right now, with their say-so (The Lobby's Building now)
   pcs: 'pcs', // My PCs: pcHello / pcState / pcSend, and the pcs / pcState / pcMsg frames (relay/src/pcs.mjs)
   shop: 'shop', // GET /v1/shop: Studio's own items and members' style packs, bought with credits (relay/src/shop.mjs)
+  shopDrops: 'shop.drops', // GET /v1/shop also says each item's drop, whether it is on sale and when it leaves, the drops and the week's Featured shelf (relay/src/shop-drops.mjs)
   pets: 'pets', // pet / roomPets: a member's pet visits the rooms they have open (relay/src/pets.mjs); also a hello feature
 });
 
@@ -202,6 +203,7 @@ export const HTTP_ERRORS = Object.freeze([
   'price-changed',
   'short',
   'no-tip',
+  'not-available', // a Studio item whose drop has rotated out (or not started yet), with its drop
   'hold',
   'bad-pack',
   'too-big',

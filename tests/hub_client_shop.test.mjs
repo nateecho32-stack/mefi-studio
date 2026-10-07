@@ -6,8 +6,9 @@ import hub from "../scripts/hub-client.cjs";
 // asked of a relay that does not list "shop", ids and fields are checked
 // before anything leaves, a pack's data goes whole (so the relay's check can
 // refuse a key instead of it being dropped here), results keep only the
-// fields Studio knows (a pack's data only the schema's keys), and refusals
-// keep what Studio needs to say why.
+// fields Studio knows (a pack's data only the schema's keys; an item's place
+// in the rotation, and the drops and the Featured shelf a list carries), and
+// refusals keep what Studio needs to say why.
 
 const USER = { id: "123456789012345678", name: "Mefi" };
 const PACK_ID = "pack_AbCdEfGhIjKlMnOp";
@@ -125,21 +126,48 @@ test("results keep an item's known fields only: a pack's data has the schema's k
   assert.deepEqual(page, {
     ok: true, view: "new",
     items: [
-      { id: "studio:skin-frost", kind: "skin", name: "Frost scales", blurb: "Ember in icy blue.", price: 40, requires: null, maker: null, data: null, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2 },
+      { id: "studio:skin-frost", kind: "skin", name: "Frost scales", blurb: "Ember in icy blue.", price: 40, requires: null, maker: null, data: null, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2, drop: null, available: true, leaves: null },
       {
         id: PACK_ID, kind: "pack", name: "Neon night", blurb: "", price: 0, requires: null, maker: { id: "200000000000000001", name: "Alice" },
-        data: { v: 1, palette: PACK.palette, nodeStyle: "halo", font: "mono" }, sales: 0, owned: false, status: "listed", createdAt: null, updatedAt: 5,
+        data: { v: 1, palette: PACK.palette, nodeStyle: "halo", font: "mono" }, sales: 0, owned: false, status: "listed", createdAt: null, updatedAt: 5, drop: null, available: true, leaves: null,
       },
     ],
-    next: null, balance: 40, canEarn: true, hold: null,
-  }, "a pack without a whole palette, an odd id and an over-long name are left out");
+    next: null, balance: 40, canEarn: true, hold: null, drops: null, featured: [], featuredUntil: null,
+  }, "a pack without a whole palette, an odd id and an over-long name are left out; a relay from before drops sends no rotation");
   assert.deepEqual(hub.packData({ v: 1, palette: { ...PACK.palette, accent2: null } }), PACK, "accent2 may be missing");
   assert.equal(hub.packData({ v: 2, palette: PACK.palette }), null);
   assert.equal(hub.itemCard({ ...studio, kind: "hat" }), null);
   // A node style is one of Studio's own items: kept, its data dropped like a skin's.
   const style = { ...studio, id: "studio:style-constellation", kind: "nodestyle", name: "Star chart", price: 80, data: { v: 1, palette: PACK.palette } };
-  assert.deepEqual(hub.itemCard(style), { id: "studio:style-constellation", kind: "nodestyle", name: "Star chart", blurb: "Ember in icy blue.", price: 80, requires: null, maker: null, data: null, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2 });
+  assert.deepEqual(hub.itemCard(style), { id: "studio:style-constellation", kind: "nodestyle", name: "Star chart", blurb: "Ember in icy blue.", price: 80, requires: null, maker: null, data: null, sales: 3, owned: true, status: "listed", createdAt: 1, updatedAt: 2, drop: null, available: true, leaves: null });
   assert.deepEqual([...hub.SHOP_ITEM_KINDS], ["pet", "skin", "effect", "nodestyle", "pack"]);
+});
+
+test("the rotation passes through checked: an item's drop, whether it is on sale and when it leaves, the drops with their colours, and the Featured shelf", async () => {
+  const wisp = { id: "studio:pet-wisp", kind: "pet", name: "Will-o'-wisp", blurb: "A little light.", price: 70, requires: null, maker: null, data: null, sales: 0, owned: false, status: "listed", createdAt: 1, updatedAt: 1, drop: "2026-10", available: true, leaves: "2026-11-01T00:00:00Z" };
+  const colors = { accent: "#FF8A3D", accent2: "#9b6bff", background: "#140d1c" };
+  const h = harness({
+    answer: () => ({ status: 200, body: {
+      ok: true, items: [wisp, { ...wisp, id: "studio:fx-spirits", kind: "effect", drop: "2026-13", available: false, leaves: "Tuesday" }], next: null, balance: 10, canEarn: true, hold: null,
+      drops: {
+        current: { id: "2026-10", name: "Haunted Hollow", blurb: "Spooky.", from: "2026-10-01T00:00:00Z", until: "2026-11-01T00:00:00Z", colors: { ...colors, glow: "#ffffff", accent2: "violet" }, items: ["studio:pet-wisp", "javascript:x"], extra: 1 },
+        next: { id: "2026-11", name: "Frost Fair", blurb: "", from: "2026-11-01T00:00:00Z", until: "2026-12-01T00:00:00Z", colors, items: ["studio:pet-wisp"] },
+        last: { id: "2026-09", name: "Two\nlines", from: "2026-09-01T00:00:00Z", until: "2026-10-01T00:00:00Z", colors },
+      },
+      featured: ["studio:skin-frost", "../x", "studio:fx-dissolve", 5], featuredUntil: "2026-10-12T00:00:00.000Z",
+    } }),
+  });
+  await h.ready();
+  const page = await h.client.shop("studio");
+  assert.deepEqual(page.items.map((item) => [item.id, item.drop, item.available, item.leaves]), [["studio:pet-wisp", "2026-10", true, "2026-11-01T00:00:00Z"], ["studio:fx-spirits", null, false, null]], "a drop id and a time that are not one are dropped");
+  assert.deepEqual(page.drops, {
+    current: { id: "2026-10", name: "Haunted Hollow", blurb: "Spooky.", from: "2026-10-01T00:00:00Z", until: "2026-11-01T00:00:00Z", colors: { accent: "#ff8a3d", background: "#140d1c" }, items: ["studio:pet-wisp"] },
+    next: { id: "2026-11", name: "Frost Fair", blurb: "", from: "2026-11-01T00:00:00Z", until: "2026-12-01T00:00:00Z", colors: { accent: "#ff8a3d", accent2: "#9b6bff", background: "#140d1c" } },
+    last: null,
+  }, "colours lower-cased and checked; the teaser carries no items; a drop with a two-line name is left out");
+  assert.deepEqual([page.featured, page.featuredUntil], [["studio:skin-frost", "studio:fx-dissolve"], "2026-10-12T00:00:00.000Z"]);
+  assert.equal(hub.dropCard({ id: "2026-10", name: "Backwards", from: "2026-11-01T00:00:00Z", until: "2026-10-01T00:00:00Z", colors }), null, "a drop that ends before it starts");
+  assert.equal(hub.shopDrops(null), null);
 });
 
 test("shopOwned keeps id, kind, name, data and when it changed, and a pack only with a pack's data", async () => {
@@ -178,6 +206,10 @@ test("refusals keep needs, price, balance, tip, hold and until, and nothing else
   assert.deepEqual(await h.client.shopPublish({ name: "Neon", price: 0, data: PACK }), { ok: false, error: "rate-limited", retryAfter: 5000 });
   reply = { status: 200, body: { ok: true, pack: { id: "not-a-pack" } } };
   assert.deepEqual(await h.client.shopUnlist(PACK_ID), { ok: false, error: "failed" }, "an answer that is not a pack is a failure");
+  reply = { status: 409, body: { ok: false, error: "not-available", drop: "2026-10" } };
+  assert.deepEqual(await h.client.shopBuy("studio:pet-wisp", 70), { ok: false, error: "not-available", drop: "2026-10" }, "an item that has rotated out names its drop");
+  reply = { status: 409, body: { ok: false, error: "not-available", drop: "October" } };
+  assert.deepEqual(await h.client.shopBuy("studio:pet-wisp", 70), { ok: false, error: "not-available" });
 });
 
 test("a moderator's report list keeps a Shop report's pack", async () => {

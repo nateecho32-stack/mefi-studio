@@ -2638,23 +2638,95 @@ function hubEvents(method, args) {
 // every Studio item and no relay, so fixtures and screenshots can show
 // everything. SHOP_STUDIO_ITEMS mirrors the relay's CATALOG for that (the
 // packs with their data); tests/shop_host.test.mjs keeps the two the same.
-const HUB_SHOP_METHODS = Object.freeze({ shop: 2, shopOwned: 0, shopBuy: 3, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2 });
+// shopCatalog never asks the relay either: it is the signed-out showroom's
+// list (Studio's items on sale now, with their prices and lines, the drops
+// and the week's Featured shelf), from SHOP_STUDIO_ITEMS and SHOP_DROPS.
+const HUB_SHOP_METHODS = Object.freeze({ shop: 2, shopOwned: 0, shopBuy: 3, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2, shopCatalog: 0 });
 // Read guarded: tests run slices of this file in a vm with no process.
 const SHOP_ALL = typeof process !== "undefined" && process.env.MEFI_STUDIO_SHOP_ALL === "1";
+// `drop` names the monthly drop an item comes out in (SHOP_DROPS); an item without one is classic, always on sale.
 const SHOP_STUDIO_ITEMS = Object.freeze([
-  { id: "studio:skin-frost", kind: "skin", name: "Frost scales" },
-  { id: "studio:skin-jade", kind: "skin", name: "Jade scales" },
-  { id: "studio:skin-void", kind: "skin", name: "Void scales" },
-  { id: "studio:skin-gold", kind: "skin", name: "Gold scales" },
-  { id: "studio:fx-dissolve", kind: "effect", name: "Dissolve" },
-  { id: "studio:fx-embers", kind: "effect", name: "Burn away" },
-  { id: "studio:fx-stardust", kind: "effect", name: "Stardust" },
-  { id: "studio:style-dragonscale", kind: "nodestyle", name: "Dragon scales" },
-  { id: "studio:style-constellation", kind: "nodestyle", name: "Star chart" },
-  { id: "studio:pack-synthwave", kind: "pack", name: "Synthwave", data: { v: 1, palette: { accent: "#ff4fa3", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff", accent2: "#8b5cff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } },
-  { id: "studio:pack-deep-sea", kind: "pack", name: "Deep sea", data: { v: 1, palette: { accent: "#2fd6c3", background: "#04131c", surface: "#0a2230", text: "#e2f6f7", accent2: "#3a7bff" }, nodeStyle: "glass", material: "studio", font: "studio" } },
-  { id: "studio:pack-sakura", kind: "pack", name: "Sakura (light)", data: { v: 1, palette: { accent: "#b8325f", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" } },
+  { id: "studio:skin-frost", kind: "skin", name: "Frost scales", price: 40, blurb: "Ember in icy blue." },
+  { id: "studio:skin-jade", kind: "skin", name: "Jade scales", price: 40, blurb: "Ember in green and gold." },
+  { id: "studio:skin-void", kind: "skin", name: "Void scales", price: 60, blurb: "Ember in black with a violet glow." },
+  { id: "studio:skin-gold", kind: "skin", name: "Gold scales", price: 60, blurb: "Ember in shining gold." },
+  { id: "studio:fx-dissolve", kind: "effect", name: "Dissolve", price: 60, blurb: "Menus crumble into pixels when they close." },
+  { id: "studio:fx-embers", kind: "effect", name: "Burn away", price: 90, blurb: "Menus burn away from the edges with glowing embers." },
+  { id: "studio:fx-stardust", kind: "effect", name: "Stardust", price: 90, blurb: "Menus scatter into drifting stars." },
+  { id: "studio:style-dragonscale", kind: "nodestyle", name: "Dragon scales", price: 80, blurb: "Nodes covered in shimmering dragon scales, with ember sparks along the wires." },
+  { id: "studio:style-constellation", kind: "nodestyle", name: "Star chart", price: 80, blurb: "Nodes as bright stars joined by star-chart lines, with shooting stars." },
+  { id: "studio:pack-synthwave", kind: "pack", name: "Synthwave", price: 50, blurb: "Hot pink and violet on midnight blue.", data: { v: 1, palette: { accent: "#ff4fa3", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff", accent2: "#8b5cff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } },
+  { id: "studio:pack-deep-sea", kind: "pack", name: "Deep sea", price: 50, blurb: "Teal light on deep ocean blue.", data: { v: 1, palette: { accent: "#2fd6c3", background: "#04131c", surface: "#0a2230", text: "#e2f6f7", accent2: "#3a7bff" }, nodeStyle: "glass", material: "studio", font: "studio" } },
+  { id: "studio:pack-sakura", kind: "pack", name: "Sakura (light)", price: 50, blurb: "Soft pink on warm white, a light look.", data: { v: 1, palette: { accent: "#b8325f", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" } },
 ]);
+// The monthly drops (relay/src/shop-drops.mjs DROPS), oldest first, for the
+// showroom: a drop's items are shown only while it (or a later drop that
+// brings one back, `returning`) runs; the next drop is a teaser.
+const SHOP_DROPS = Object.freeze([
+  { id: "2026-10", name: "Haunted Hollow", blurb: "Pumpkins, lanterns and friendly spirits for October.", from: "2026-10-01T00:00:00Z", until: "2026-11-01T00:00:00Z", colors: { accent: "#ff8a3d", accent2: "#9b6bff", background: "#140d1c" }, returning: [] },
+]);
+// The relay's rotation rules (shop-drops.mjs windowsOf, saleOf, dropsAt,
+// isoWeek, featuredAt) in CommonJS; tests/shop_host.test.mjs runs both on the
+// same items, drops and times.
+const shopTime = (iso) => Date.parse(iso);
+function shopWindows(item, drops = SHOP_DROPS) {
+  if (!item?.drop) return [];
+  return drops.filter((entry) => entry.id === item.drop || entry.returning.includes(item.id)).map((entry) => ({ drop: entry.id, from: entry.from, until: entry.until })).sort((a, b) => shopTime(a.from) - shopTime(b.from));
+}
+function shopSaleOf(item, now, drops = SHOP_DROPS) {
+  if (!item?.drop) return { classic: true, released: true, available: true, leaves: null, current: null };
+  const windows = shopWindows(item, drops);
+  const open = windows.find((entry) => shopTime(entry.from) <= now && now < shopTime(entry.until)) ?? null;
+  return { classic: false, released: windows.some((entry) => shopTime(entry.from) <= now), available: Boolean(open), leaves: open?.until ?? null, current: open?.drop ?? null };
+}
+const shopDropView = (entry) => ({ id: entry.id, name: entry.name, blurb: entry.blurb, from: entry.from, until: entry.until, colors: { ...entry.colors } });
+function shopDropsAt(now, drops = SHOP_DROPS, catalog = SHOP_STUDIO_ITEMS) {
+  const sorted = [...drops].sort((a, b) => shopTime(a.from) - shopTime(b.from));
+  const current = sorted.find((entry) => shopTime(entry.from) <= now && now < shopTime(entry.until)) ?? null;
+  const next = sorted.find((entry) => shopTime(entry.from) > now) ?? null;
+  const last = sorted.filter((entry) => shopTime(entry.until) <= now).at(-1) ?? null;
+  return {
+    current: current ? { ...shopDropView(current), items: catalog.filter((item) => shopSaleOf(item, now, drops).current === current.id).map((item) => item.id) } : null,
+    next: next ? shopDropView(next) : null,
+    last: last ? shopDropView(last) : null,
+  };
+}
+function shopIsoWeek(now) {
+  const date = new Date(now);
+  const day = (date.getUTCDay() + 6) % 7;
+  const thursday = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - day + 3);
+  const year = new Date(thursday).getUTCFullYear();
+  return { year, week: 1 + Math.floor((thursday - Date.UTC(year, 0, 1)) / (7 * 86_400_000)) };
+}
+function shopFeaturedAt(catalog, now, count = 4) {
+  const { year, week } = shopIsoWeek(now);
+  let state = (year * 100 + week) >>> 0;
+  const random = () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const ids = catalog.filter((item) => !item.drop).map((item) => item.id).sort();
+  for (let index = ids.length - 1; index > 0; index -= 1) {
+    const other = Math.floor(random() * (index + 1));
+    [ids[index], ids[other]] = [ids[other], ids[index]];
+  }
+  const date = new Date(now);
+  const monday = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - ((date.getUTCDay() + 6) % 7) + 7);
+  return { items: ids.slice(0, count), until: new Date(monday).toISOString() };
+}
+// The showroom's list, shaped as the relay's Studio view: on sale now, nobody's yet (the Shop marks what this PC owns).
+function hubShopCatalog(now = Date.now(), catalog = SHOP_STUDIO_ITEMS, drops = SHOP_DROPS) {
+  const items = catalog.filter((item) => shopSaleOf(item, now, drops).available).map((item) => ({
+    id: item.id, kind: item.kind, name: item.name, blurb: item.blurb ?? "", price: item.price, requires: null, maker: null,
+    data: item.data ? JSON.parse(JSON.stringify(item.data)) : null, sales: null, owned: false, status: "listed",
+    drop: item.drop ?? null, available: true, leaves: shopSaleOf(item, now, drops).leaves,
+  }));
+  const featured = shopFeaturedAt(catalog, now);
+  return { ok: true, local: true, view: "studio", items, next: null, drops: shopDropsAt(now, drops, catalog), featured: featured.items, featuredUntil: featured.until };
+}
 const shopPlain = (value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null);
 const shopObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const shopLevel = (value) => Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shopPlain(item)]));
@@ -2678,6 +2750,7 @@ function hubShop(method, args) {
     return objects === 1 ? hubShopArg(value) : null;
   });
   if (method === "shopOwned" && SHOP_ALL) return hubShopAll();
+  if (method === "shopCatalog") return Promise.resolve(hubShopCatalog());
   return hubCall((client) => client[method](...plain));
 }
 async function hubShopAll() {

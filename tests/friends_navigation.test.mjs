@@ -141,3 +141,24 @@ test("any navigation closes the open bubbles", () => {
   loaded.fire("mefi:nav", { detail: { id: "tasks", action: "open" } });
   assert.equal(loaded.hub.isOpen(), false);
 });
+
+// The Shop is a page of its own (renderer/friends-shop.js, route "shop"): Friends' place "shop" and the bubble's target
+// open that page, not a card in Friends; its row stays in Friends' list and is the current one while the page shows.
+// Without MefiShop.pageOn (an older build) or with "mefiStudio.shop.page" off, it is Friends' place as before (above).
+test("the Shop's place opens the Shop's own page, and its row is current while that page shows", () => {
+  const loaded = load();
+  let route = null;
+  loaded.window.MefiShop.pageOn = () => true;
+  const go = loaded.window.MefiNav.go;
+  loaded.window.MefiNav.go = (id, params) => { if (id === "shop") route = "shop"; return go(id, params); };
+  loaded.window.MefiNav.current = () => route;
+  assert.equal(loaded.hub.open({ section: "friends", target: "shop" }), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.goes)), [["friends-page", { place: "shop" }], ["shop", null]], "Friends' place goes on to the route");
+  assert.equal(loaded.page()?.hidden ?? true, true, "Friends' page does not open for it");
+  assert.deepEqual(loaded.made, [], "no Shop card is built inside Friends");
+  const places = [...loaded.hub.friendsPlaces()];
+  assert.deepEqual(places.map((place) => place.label), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events", "Shop"], "the Shop keeps its row among Friends' places");
+  assert.deepEqual(places.filter((place) => place.current).map((place) => place.id), ["shop"]);
+  places.find((place) => place.id === "shop").run();
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.goes.at(-2))), ["friends-page", { place: "shop" }], "its row goes the same way");
+});

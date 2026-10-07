@@ -247,13 +247,17 @@ html[data-frame] .shell-place-chips { display: flex; flex-wrap: wrap; align-item
 /* Too narrow for the row (Team's dozen-plus places from 760 px, any place from 440 px): the same places as one picker,
    so the page under it keeps its room. */
 html[data-frame] .shell-place-pick { display: none; width: auto; max-width: 100%; min-height: 32px; padding: 4px 12px; border-radius: 999px; font-size: var(--frame-fs); }
+/* The picker shows as studio-ui.js's button for it (enhanceSelect puts it right after the select): it follows the select. */
+html[data-frame] .shell-place-pick + .studio-select { display: none; }
 @container shell-place (max-width: 760px) {
   html[data-frame] .shell-place-bar[data-size="many"] .shell-place-chips { display: none; }
   html[data-frame] .shell-place-bar[data-size="many"] .shell-place-pick { display: block; }
+  html[data-frame] .shell-place-bar[data-size="many"] .shell-place-pick + .studio-select { display: inline-flex; }
 }
 @container shell-place (max-width: 440px) {
   html[data-frame] .shell-place-chips { display: none; }
   html[data-frame] .shell-place-pick { display: block; }
+  html[data-frame] .shell-place-pick + .studio-select { display: inline-flex; }
 }
 /* A window this short needs every row for the page itself (the Rules box, a form): the list toggle and Search reach
    the same places. */

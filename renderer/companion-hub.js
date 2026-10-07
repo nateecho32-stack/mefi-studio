@@ -520,6 +520,7 @@
     // renderer/friends-events.js: the community events the relay runs by itself (the weekly Build Jam, co-work hours).
     { id: "events", label: "Events", glyph: "g-bolt", about: "This week's Build Jam, the co-work hours and building together. Credits come from making and playing things with friends." },
     // renderer/friends-shop.js: scales for Ember (the dragon itself is free), menu effects and style packs for credits, and members' packs.
+    // A page of its own (the route "shop"): its row here opens that page, and is the current row while it shows.
     { id: "shop", label: "Shop", glyph: "g-shop", about: "Scales for Ember, menu effects and style packs for the credits you earn, and style packs members make. Ember itself is free; credits are earned, never bought." },
     // renderer/friends-mod.js: shown only once the relay says this member is a moderator (it checks every action again).
     { id: "mod", label: "Moderation", glyph: "g-flag", about: "Reports, credits that look farmed, and suspensions. Only moderators see this place.", modOnly: true },
@@ -572,6 +573,8 @@
     friendsPage.body.dataset.place = place.id;
   }
   function openPlace(params = {}) {
+    // The Shop is a page of its own (renderer/friends-shop.js); MefiNav.go sends Friends' "shop" there, and so does this.
+    if ((params.place === "shop" || params.target === "shop") && window.MefiShop?.pageOn?.() === true) return window.MefiNav?.go?.("shop") ?? false;
     mountFriendsPage();
     const place = friendsPlaceById(params.place) ?? friendsPlaceById(friendsPlaceOfTarget(params.target)) ?? friendsPlaceById(friendsPage.place) ?? FRIENDS_PLACES[0];
     window.MefiNav?.claim?.("friends-page");
@@ -605,7 +608,7 @@
   }
   // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether it shows and the way there.
   function friendsPlaces() {
-    const here = friendsOpen() ? friendsPage.place : null;
+    const here = friendsOpen() ? friendsPage.place : window.MefiNav?.current?.() === "shop" ? "shop" : null;
     return shownPlaces().map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
   }
   // Where you are in Friends ({ id, label }), for the breadcrumb and the tab; null when the page is not up.

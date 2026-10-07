@@ -45,7 +45,7 @@
   // ---- which pages are Social's --------------------------------------------------------------------------------
   // Pages, not actions or Search: an action (Pause agents, a Friends way in) runs where it is. Any page filed under Settings,
   // Help or Friends is Social's too, so a Settings page added later needs no line here.
-  const PAGES = Object.freeze(["vibe", "friends-page", "inbox", "projects", "activity", "studio", "size", "setup-helper"]);
+  const PAGES = Object.freeze(["vibe", "friends-page", "inbox", "projects", "activity", "studio", "size", "setup-helper", "shop"]);
   const SOCIAL_SECTIONS = Object.freeze(["settings", "help", "friends"]);
   function studioOnly(id, params = {}) {
     if (!socialMode() || typeof id !== "string" || allPages()) return false;
