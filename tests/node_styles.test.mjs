@@ -14,8 +14,8 @@ import { NODE_STYLES_SOURCE as source, loadNodeStyles, recordingContext, gradien
 
 const read = (path) => readFile(new URL(path, import.meta.url), "utf8");
 const [idle, tree, build, bookletTest] = await Promise.all([read("../renderer/idle.js"), read("../renderer/tree3d.js"), read("../scripts/build-booklet.mjs"), read("./booklet_build.test.mjs")]);
-const STYLES = ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil", "dragonscale", "constellation"];
-const BANNERS = ["infra", "shapes: void", "style: orbs", "style: glass", "style: minimal", "style: halo", "style: crystal", "style: singularity", "style: prism", "style: sigil", "style: dragonscale", "style: constellation", "overlays", "wires", "export"];
+const STYLES = ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil", "dragonscale", "constellation", "lantern", "neon"];
+const BANNERS = ["infra", "shapes: void", "style: orbs", "style: glass", "style: minimal", "style: halo", "style: crystal", "style: singularity", "style: prism", "style: sigil", "style: dragonscale", "style: constellation", "style: lantern", "style: neon", "overlays", "wires", "export"];
 const HOOKS = ["speedup", "paint", "glyph", "ring", "hubDress", "orbit", "arrival", "select", "done", "absorb", "wire", "surge", "land", "reach"];
 const lines = source.replace(/\r\n/g, "\n").split("\n");
 
@@ -269,7 +269,7 @@ test("outline() traces each look's silhouette for the rims a caller draws round 
   assert.deepEqual(vertices.sigil, [6, 6, 0, 1], "Sigil: its seal's hexagon");
   assert.deepEqual(vertices.crystal, [8, 8, 0, 1], "Crystal: its octagon");
   assert.deepEqual(vertices.prism, [4, 4, 0, 1], "Prism: its kite");
-  for (const style of ["orbs", "glass", "minimal", "halo", "singularity", "dragonscale", "constellation", "nebula"]) assert.deepEqual(vertices[style], [0, 1, 1, 0], `${style}: a circle`);
+  for (const style of ["orbs", "glass", "minimal", "halo", "singularity", "dragonscale", "constellation", "lantern", "neon", "nebula"]) assert.deepEqual(vertices[style], [0, 1, 1, 0], `${style}: a circle`);
   // Sigil's seal is pointy-top at .98 r; Crystal's octagon turns with the gem.
   const seal = recordingContext();
   seal.beginPath(); styles.outline(seal, "sigil", 0, 0, 10);

@@ -21,9 +21,9 @@ const value = (name, fallback) => {
   if (!args[index + 1] || args[index + 1].startsWith("--")) throw new Error(`${name} needs a value`);
   return args[index + 1];
 };
-// The node styles (renderer/music.js NODE_STYLES, the Shop's two included: a workload that does not own one
+// The node styles (renderer/music.js NODE_STYLES, the Shop's included: a workload that does not own one
 // draws it through the tree event); a --source control may predate node-styles.js.
-const NODE_STYLES = ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil", "dragonscale", "constellation"];
+const NODE_STYLES = ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil", "dragonscale", "constellation", "lantern", "neon"];
 if (args.includes("--help")) {
   console.log(`node tools/profile_studio.mjs --output tools/logs/profile.json [--source DIR] [--capture] [--warmup-ms 2000] [--duration-ms 5000] [--scenarios command-30-3d,command-150-3d,command-30-2d,command-150-2d,command-showcase] [--styles ${NODE_STYLES.join(",")}] [--width 1280] [--height 900]`);
   process.exit(0);
