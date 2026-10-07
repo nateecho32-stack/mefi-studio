@@ -3550,7 +3550,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 /* Models > Community: the community feed and Studio's probes (renderer/model-community.js). */
 .mc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .mc-card { border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--panel-solid); padding: 16px; min-width: 0; }
-.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0; border: 0; } /* a <header>: not the page heading's spacing (section 7) */
 .mc-head h4 { margin: 0; font-size: 14px; color: var(--gold-bright); }
 .mc-actions { display: flex; gap: 6px; }
 .mc-summary { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; overflow-wrap: anywhere; }
@@ -3862,7 +3862,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .walkthrough-assist-list li[aria-current="step"] { color: var(--gold-bright); }
 @keyframes walkthrough-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 .walkthrough-coach { position: fixed; right: calc(18px + var(--shell-x1)); bottom: calc(18px + var(--shell-y1)); z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
-.walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0; border: 0; } /* a <header>: not the page heading's spacing (section 7) */
 .walkthrough-coach-tools { display: flex; flex-wrap: wrap; gap: 4px; }
 #walkthrough-coach-title { color: var(--ivory); font-size: 14px; }
 #walkthrough-coach-copy { margin: 0; color: var(--ivory); font-size: 12px; line-height: 1.65; }
@@ -7889,7 +7889,8 @@ button.fleet-tnode:focus-visible { outline: 2px solid var(--gold-bright); outlin
 .whats-new-sheet { position: fixed; inset: 0; z-index: calc(var(--z-toast) - 2); display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg-deep) 52%, transparent); backdrop-filter: blur(6px); }
 .whats-new-sheet[hidden] { display: none; }
 .whats-new-card { position: relative; width: min(520px, 100%); max-height: calc(100vh - 32px); padding: 20px 22px 18px; overflow: auto; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: var(--r-xl); background: color-mix(in srgb, var(--panel-solid) 97%, transparent); color: var(--ivory); box-shadow: 0 40px 100px -40px color-mix(in srgb, var(--bg-deep) 95%, transparent); }
-.whats-new-head { display: flex; align-items: center; justify-content: space-between; }
+/* padding and border: as a <header> it took styles.css's page heading spacing (24 px over the tag, a rule under it). */
+.whats-new-head { display: flex; align-items: center; justify-content: space-between; padding: 0; border: 0; }
 .whats-new-tag { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 12px; border-radius: var(--r-pill); background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold-bright); font-size: var(--fs-sm); font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
 .whats-new-tag .glyph { width: 13px; height: 13px; }
 .whats-new-card h2 { margin: 14px 0 8px; font: 650 22px/1.25 var(--font-display); letter-spacing: -.01em; }
@@ -8781,7 +8782,8 @@ html[data-motion="off"] :is(#team-models, #team-providers, .agents-more) *, html
 }
 @starting-style { .companion-panel.companion-dynamic:not([hidden]) { opacity: 0; translate: 0 6px; scale: .985; } }
 .companion-menu-pane[hidden] { display: none; }
-.companion-shell-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: none; }
+/* padding and border: as a <header> it took styles.css's page heading spacing (24 px over the title, a rule under it). */
+.companion-shell-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: none; padding: 0; border: 0; }
 .companion-shell-head > div { display: grid; gap: 3px; }
 .companion-shell-head strong { font-size: 19px; }
 .companion-shell-head > button { width: 32px; height: 32px; padding: 0; border-radius: 50%; }
@@ -9424,9 +9426,11 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 /* Its rows are buttons, which keep to one line everywhere else: here they wrap inside the menu's own width. */
 .autonomy-popover { white-space: normal; grid-template-columns: minmax(0, 1fr); }
 .autonomy-popover .autonomy-button { min-width: 0; white-space: normal; }
-.autonomy-mode { text-align: left; display: block; width: 100%; }
-.autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; opacity: .7; font-weight: 400; }
-.autonomy-modes { display: grid; gap: 7px; }
+/* A mode is a two-line button (its name, what it does): it wraps and grows, wherever it is listed. The global button's nowrap
+   and 36 px height pushed the list past a narrow panel (Social's Settings panel scrolled sideways, its lines cut off). */
+.autonomy-mode { text-align: left; display: block; width: 100%; min-width: 0; height: auto; min-height: 0; white-space: normal; }
+.autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: max(12px, 11px * var(--text-scale, 1)); line-height: 1.4; opacity: .7; font-weight: 400; }
+.autonomy-modes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
 .autonomy-note { font-size: 12px; line-height: 1.4; margin: 8px 0; }
 .autonomy-note:empty { display: none; }
 .autonomy-note[data-tone="bad"] { color: var(--bad); }
@@ -10044,7 +10048,8 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 /* The page's fill is the theme's glass (--studio-page-fill, mostly clear in Chrome), so what it stands over must not read
    through: the content under it steps aside while it shows, as under a workspace page (studio-ui.css). The frame stays. */
 body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #vibe-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
-#friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+/* As wide as Social's other pages (social.css .social-sheet): a wide window fills with the place rather than empty sides. */
+#friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1640px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px clamp(16px, 2vw, 28px) 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
 #friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f18, 18px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
 #friends-overlay .friends-place-about { margin: 4px 0 0; max-width: 70ch; font-size: var(--f135, 13.5px); line-height: 1.5; }
@@ -10191,6 +10196,16 @@ button.front-item:hover b { text-decoration: underline; text-decoration-color: v
   .front-ear-end { justify-items: start; text-align: left; }
   .front-cols { grid-template-columns: minmax(0, 1fr); }
 }
+/* A wide Friends page (as wide as Social's other pages, 2026-10-07) sets the lead story beside what friends are building and
+   this week's events, under the masthead and the people online; the three columns and the foot run the full width. */
+.friends-front { container: friends-front / inline-size; }
+@container friends-front (min-width: 1180px) {
+  .friends-front-body { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); column-gap: 36px; }
+  .friends-front-body > * { grid-column: 1 / -1; }
+  .friends-front-body > .front-lead { grid-column: 1; grid-row: 3 / span 2; }
+  .friends-front-body > .front-building { grid-column: 2; grid-row: 3; align-self: start; }
+  .friends-front-body > .front-events { grid-column: 2; grid-row: 4; align-self: start; }
+}
 
 /* The Lobby's masthead is its title: the Friends page's own heading and line step aside (still read aloud, still focused). */
 #friends-overlay[data-place="lobby"] :is(#friends-place-title, .friends-place-about) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -10243,6 +10258,13 @@ button.front-item:hover b { text-decoration: underline; text-decoration-color: v
 .friends-events-primary:focus-visible, .friends-events-pick:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 /* On the Friends page the page title says "Events": the card's own small title steps aside, as the other places' do. */
 #friends-overlay .friends-place-body .friends-events-title { display: none; }
+/* A wide Friends page (2026-10-07) sets the Build Jam, the co-work hour and building together side by side; the lines about
+   the whole week run under them. */
+.friends-events { container: friends-events / inline-size; }
+@container friends-events (min-width: 1100px) {
+  .friends-events-body { grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); align-items: start; }
+  .friends-events-body > :not(.friends-events-section) { grid-column: 1 / -1; }
+}
 
 /* The Shop (renderer/friends-shop.js): Studio's own items and members' style packs for credits, on a page of its own
    (route "shop"), roomy like a storefront: the month's drop as a banner, the Featured shelf, then big cards whose live
@@ -10915,6 +10937,24 @@ html[data-shell="rail"] body:has(.workspace-page:not([hidden])) #vibe-layer { vi
 .vibe-typing i:nth-child(3) { animation-delay: .3s; }
 @keyframes vibe-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
 .vibe-chat-note { margin: 0; padding: 10px 20px 16px; color: var(--v-faint); font-size: 12px; }
+/* The column at the right of a wide Home (renderer/vibe.js syncDock, data-side): Friends at its top (#today-side, from
+   renderer/today.js) and the conversation docked under it (data-dock), the box at the foot of its thread; the top bar runs
+   over the page and the column. Both are cards like the page's own (social.css .social-card): one fill, one edge, one
+   radius. A decision or a panel opens over the column, in its place; the toggle in the top bar steps aside while the
+   conversation's own close button is there. */
+#vibe-layer[data-side="on"] { --v-dock-w: clamp(360px, 23vw, 440px); grid-template-columns: minmax(0, 1fr) var(--v-dock-w); grid-template-rows: auto auto minmax(0, 1fr); }
+/* Nothing to hold (no Friends card in this copy, and the conversation closed): the page takes the column's room back. */
+#vibe-layer[data-side="on"]:not([data-dock="chat"]):not(:has(> #today-side > :not([hidden]))) { grid-template-columns: minmax(0, 1fr); }
+#vibe-layer[data-side="on"] > #today-side { grid-column: 2; grid-row: 2 / -1; align-self: start; min-width: 0; min-height: 0; margin: 12px 16px 0 0; }
+#vibe-layer[data-dock="chat"] > #today-side { grid-row: 2; }
+#vibe-layer > #today-side:not(:has(> :not([hidden]))) { display: none; }
+#vibe-layer[data-dock="chat"] > #vibe-chat { position: relative; inset: auto; z-index: 1; grid-column: 2; grid-row: 3; width: auto; min-height: 0; margin: 12px 16px 16px 0; border-color: color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 44%, transparent); box-shadow: none; }
+#vibe-layer[data-dock="chat"] > #vibe-chat > .vibe-chat-head { align-items: center; padding: 10px 10px 9px 16px; }
+#vibe-layer[data-dock="chat"] > #vibe-chat > .vibe-chat-head h2 { font-size: 15px; }
+#vibe-layer[data-dock="chat"] > #vibe-chat > .vibe-chat-head .vibe-icon { width: 30px; height: 30px; border-radius: 9px; }
+#vibe-layer[data-dock="chat"] > #vibe-chat > .vibe-thread { gap: 12px; padding: 12px 14px 8px; }
+#vibe-layer[data-side="on"] > :is(#vibe-ask, #vibe-panel:not(.is-lanes)) { top: 12px; right: 16px; bottom: 16px; width: calc(var(--v-dock-w) - 16px); }
+#vibe-layer[data-dock="chat"] #vibe-chat-toggle { display: none; }
 
 /* ---- decisions ------------------------------------------------------------ */
 /* The decision drawer shares the conversation's place and glass. */
@@ -10993,6 +11033,12 @@ button.vibe-ask-chip:hover { border-color: var(--v-edge-hi); color: var(--v-ink)
 .vibe-panel-back { flex: none; width: 34px; height: 34px; border-radius: 11px; }
 .vibe-panel-back[hidden] { display: none; }
 .vibe-panel-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 12px 14px 16px; overflow-y: auto; scrollbar-width: thin; }
+/* The body's gap is the spacing: what a panel borrows from elsewhere (the decision history, the permission settings) brings
+   its own margins, which stacked on the gap into 30-40 px holes; its headings read as the panel's own small labels, and the
+   history's first one, which only repeats the panel's title, steps aside. */
+.vibe-panel-body > :is(h3, p, article, .autonomy-control, .autonomy-history, .autonomy-skills) { margin-top: 0; margin-bottom: 0; }
+.vibe-panel-body > h3 { margin-top: 4px; color: var(--v-faint); font: 650 12px/1.2 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+#vibe-panel[data-kind="decisions"] .vibe-panel-body > h3:first-child { display: none; }
 .vibe-panel-empty { margin: 6px 6px 2px; color: var(--v-soft); font-size: 13.5px; line-height: 1.55; }
 .vibe-panel-hint { margin: 0; color: var(--v-soft); font-size: 13px; line-height: 1.5; }
 .vibe-panel-h { margin: 2px 2px 0; font: 650 17px/1.3 var(--font-display); letter-spacing: -.005em; text-wrap: balance; overflow-wrap: anywhere; }
@@ -11238,7 +11284,9 @@ html[data-ui-mode="vibe"] .overlay:not(.workspace-page) .sheet-close { border-ra
    2026-10-06, it sits lower, under the project button's row. */
 html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: calc(10px + var(--shell-y1)); left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
 html[data-ui-mode="vibe"] #workspace-sidebar[data-open="true"] #workspace-sidebar-panel { transform: none; opacity: 1; box-shadow: var(--studio-float-shadow); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-x0) + 24px); bottom: calc(24px + var(--shell-y1)); }
+/* On Home it opens as the project button's own menu: just under its row (the frame's bars, then the 56 px row), as tall as
+   what it lists, never past the status bar (2026-10-07: a full-height drawer that started over the tab strip, mostly empty). */
+body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: calc(var(--shell-y0) + 56px); left: calc(var(--shell-x0) + 24px); bottom: auto; max-height: calc(100vh - var(--shell-y0) - 80px - var(--shell-y1)); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project { border-radius: 14px; font-size: 13px; }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project.selected { color: var(--ivory); background: var(--v-menu-pick); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }
@@ -11273,7 +11321,8 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .vibe-notes-card { position: relative; width: min(580px, 100%); max-height: calc(100vh - 32px); padding: 22px 24px 20px; overflow: auto; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: 26px; background: linear-gradient(180deg, color-mix(in srgb, color-mix(in srgb, var(--gold) 9%, var(--panel-solid)) 94%, transparent), color-mix(in srgb, var(--panel-solid) 96%, transparent)); color: var(--ivory); box-shadow: 0 40px 100px -40px color-mix(in srgb, var(--bg-deep) 95%, transparent), 0 0 0 1px rgba(0, 0, 0, .2), inset 0 1px 0 color-mix(in srgb, var(--ivory) 9%, transparent); animation: vibe-card-in var(--motion-spring) var(--ease-spring) both; }
 .vibe-notes-card::before { content: ""; position: absolute; inset: 0 0 auto; height: 140px; border-radius: 26px 26px 0 0; background: radial-gradient(80% 100% at 50% 0%, color-mix(in srgb, var(--gold) 22%, transparent), transparent 70%); pointer-events: none; }
 @keyframes vibe-card-in { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
-.vibe-notes-head { position: relative; display: flex; align-items: center; justify-content: space-between; }
+/* A <header>: without padding and border of its own it took styles.css's page heading spacing (24 px over the tag, a rule under it). */
+.vibe-notes-head { position: relative; display: flex; align-items: center; justify-content: space-between; padding: 0; border: 0; }
 .vibe-notes-tag { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 12px; border-radius: 999px; background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold-bright); font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
 .vibe-notes-tag .glyph { width: 13px; height: 13px; }
 .vibe-notes .vibe-icon { --v-edge: color-mix(in srgb, var(--ivory) 10%, transparent); --v-glass: transparent; --v-blur: none; --v-soft: var(--muted); --v-ink: var(--ivory); --v-edge-hi: color-mix(in srgb, var(--gold) 38%, transparent); width: 34px; height: 34px; border-radius: 11px; }
@@ -11461,7 +11510,7 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
    tokens where they exist (--d-gap, --d-pad). Nothing reserves scrollbar
    width: the page and the popover scroll under the shared slim indicator. */
 
-.today, .today-inbox, .today-sheet, .inbox-sheet {
+.today, .today-chat-box, .today-inbox, .today-sheet, .inbox-sheet {
   --t-f12: max(12px, calc(12px * var(--text-scale, 1)));
   --t-f13: max(12px, calc(13px * var(--text-scale, 1)));
   --t-f14: max(12px, calc(14px * var(--text-scale, 1)));
@@ -11485,7 +11534,7 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
   --t-warn: var(--warn); --t-live: var(--live); --t-info: var(--info); --t-good: var(--good); --t-bad: var(--bad);
 }
 /* The dark themes' pale status hues wash out on a light page (only --bad is adjusted for that app-wide), so as text they take the page's ink. */
-:root[data-studio-theme-tone="light"] :is(.today, .today-inbox, .today-sheet, .inbox-sheet) {
+:root[data-studio-theme-tone="light"] :is(.today, .today-chat-box, .today-inbox, .today-sheet, .inbox-sheet) {
   --t-warn: color-mix(in srgb, var(--warn) 38%, var(--ivory));
   --t-live: color-mix(in srgb, var(--live) 40%, var(--ivory));
   --t-info: color-mix(in srgb, var(--info) 50%, var(--ivory));
@@ -11495,11 +11544,17 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 /* ---- Vibe's Home in v2: the front door's own stage and dock step aside (its top bar stays: the project, New app, the conversation, Settings) ---- */
 #vibe-layer[data-today="on"] > :is(.vibe-stage, .vibe-dock) { display: none; }
 #vibe-layer[data-today="on"] > .vibe-top { grid-row: 1; grid-column: 1; }
-/* Its row lines up with the page's column (the project picker over the greeting, the conversation and Settings over the chips), so the
-   page reads as one column on a wide window rather than a bar across it with a column under it. */
-#vibe-layer[data-today="on"] > .vibe-top { padding: 12px max(clamp(14px, 3vw, 28px), calc((100% - 1180px) / 2)) 0; }
+/* Its row lines up with the page's column (the project picker at its left edge, the conversation and Settings at its right), so
+   the page reads as one column rather than a bar across it with a column under it. The column takes the window's width up to
+   --today-max: a wide window is for the page, its Friends column and the docked conversation (2026-10-07), not empty sides. */
+#vibe-layer[data-today="on"] { --today-max: 2200px; }
+#vibe-layer[data-today="on"] > .vibe-top { padding: 12px max(clamp(14px, 3vw, 28px), calc((100% - var(--today-max)) / 2)) 0; }
+/* With the column at the right (vibe.css, data-side) the bar runs over both, its end over the column's edge, and the page
+   takes the rows under it. */
+#vibe-layer[data-today="on"][data-side="on"] > .vibe-top { grid-column: 1 / -1; padding-right: 16px; }
+#vibe-layer[data-today="on"][data-side="on"] > .today { grid-row: 2 / -1; }
 @media (min-width: 1400px) {
-  #vibe-layer[data-today="on"]:has(> .vibe-chat:not([hidden])) > .vibe-top { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
+  #vibe-layer[data-today="on"]:not([data-side="on"]):has(> .vibe-chat:not([hidden])) > .vibe-top { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
 }
 #vibe-layer[data-today="on"] .vibe-project-text small { font-size: max(12px, calc(12px * var(--text-scale, 1))); }
 /* The project picker on one line ("Project  Sunrise"), the height of the buttons beside it, so its row is no taller than they are. */
@@ -11507,12 +11562,15 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 #vibe-layer[data-today="on"] .vibe-project-mark { width: 28px; height: 28px; border-radius: 8px; }
 #vibe-layer[data-today="on"] .vibe-project-text { display: flex; align-items: baseline; gap: 6px; }
 .today { grid-row: 2; grid-column: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
-.today-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--t-gap) clamp(14px, 3vw, 28px) 28px; overscroll-behavior: contain; }
+/* The page's width is a container (today-page): Social's Home lays its column out by the room it has (social.css), which the
+   docked conversation and a drawer change without the window changing. */
+.today-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: var(--t-gap) clamp(14px, 3vw, 28px) 28px; overscroll-behavior: contain; container: today-page / inline-size; }
 /* minmax(0, 1fr): an automatic column is as wide as its widest item's smallest size, which at 400px pushed every row past the window. */
-.today-col { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--t-gap); width: min(1180px, 100%); margin: 0 auto; }
-/* A drawer (the conversation, a panel) moves the page over on a wide window instead of covering the board. */
+.today-col { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--t-gap); width: min(var(--today-max, 1180px), 100%); margin: 0 auto; }
+/* A drawer (the conversation, a panel) moves the page over on a wide window instead of covering the board; with the column at
+   the right, a drawer opens over the column and the page keeps its room. */
 @media (min-width: 1400px) {
-  #vibe-layer:has(> .vibe-chat:not([hidden])) .today-scroll { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
+  #vibe-layer:not([data-side="on"]):has(> .vibe-chat:not([hidden])) .today-scroll { padding-right: calc(min(420px, 100vw - 48px) + 44px); }
 }
 .today-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; min-width: 0; }
 .today-page-lead { flex: 1 1 260px; margin: 0; color: var(--t-soft); font-size: var(--t-f14); line-height: 1.5; }
@@ -11541,10 +11599,16 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 /* The box, the starting points and the line that says what holds the agents back: Vibe's own, sized for this column. */
 .today-box { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
 .today-box > * { min-width: 0; }
-.today .vibe-compose { width: 100% !important; margin-top: 0; padding: 14px 16px 12px 18px; border-radius: 18px; animation: none; }
-.today .vibe-compose textarea { font-size: var(--t-f15); line-height: 1.5; }
+/* The box is the page's, or the docked conversation's while it is docked (.today-chat-box, renderer/today.js placeBox): one set of rules for both. */
+:is(.today, .today-chat-box) .vibe-compose { width: 100% !important; margin-top: 0; padding: 14px 16px 12px 18px; border-radius: 18px; animation: none; }
+/* Docked, the conversation is a chat of its own: the thread, then its status line and the box at the foot of the column; the
+   note that points to the box in the middle steps aside. Empty (the box is the page's), the holder takes no room. */
+#vibe-chat > .today-chat-box { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; padding: 6px 14px 14px; }
+#vibe-chat > .today-chat-box:empty { display: none; }
+#vibe-chat:has(> .today-chat-box:not(:empty)) > .vibe-chat-note { display: none; }
+:is(.today, .today-chat-box) .vibe-compose textarea { font-size: var(--t-f15); line-height: 1.5; }
 .today .vibe-hint, .today .vibe-hint .key { font-size: var(--t-f12); }
-.today .vibe-feedback { margin: 0; text-align: left; font-size: var(--t-f13); }
+:is(.today, .today-chat-box) .vibe-feedback { margin: 0; text-align: left; font-size: var(--t-f13); }
 .today .vibe-gate { width: 100% !important; margin: 0; }
 .today .vibe-last { width: 100% !important; margin-top: 0; animation: none; }
 .today .vibe-last-open { font-size: var(--t-f12); }
@@ -11579,25 +11643,25 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 #vibe-layer[data-today="on"] .today .vibe-kicker::after { content: " · Social"; }
 /* The question in plain ink, as the prototype's (the front door's gradient lettering stays the front door's own, in v1). */
 #vibe-layer[data-today="on"] .today .vibe-hero h1 { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--t-ink); }
-#vibe-layer[data-today="on"] .today .vibe-compose { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 6px; padding: 14px 16px 12px; }
-#vibe-layer[data-today="on"] .today .vibe-compose > textarea { grid-column: 1 / -1; grid-row: 1; min-height: 56px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools { display: contents; }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > [role="status"] { grid-column: 1 / -1; grid-row: 2; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button,
-#vibe-layer[data-today="on"] .today .vibe-compose .autonomy-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > button { grid-column: 1; grid-row: 3; justify-self: start; }
-#vibe-layer[data-today="on"] .today .vibe-compose > .vibe-compose-foot { grid-column: 2; grid-row: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
-#vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { margin-left: auto; }
-#vibe-layer[data-today="on"] .today .vibe-compose :is(#vibe-talk, #vibe-build) { min-height: 32px; height: 32px; padding: 0 13px; border-radius: 10px; font-size: var(--t-f13); }
-#vibe-layer[data-today="on"] .today #vibe-build .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 6px; padding: 14px 16px 12px; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > textarea { grid-column: 1 / -1; grid-row: 1; min-height: 56px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools { display: contents; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools > [role="status"] { grid-column: 1 / -1; grid-row: 2; min-width: 0; color: var(--t-soft); font-size: var(--t-f12); }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools > button,
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose .autonomy-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; height: 28px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 9px; background: transparent; color: var(--t-soft); font: 500 var(--t-f125)/1 var(--font-ui); white-space: nowrap; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools > button { grid-column: 1; grid-row: 3; justify-self: start; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .vibe-compose-foot { grid-column: 2; grid-row: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose #vibe-talk { margin-left: auto; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose :is(#vibe-talk, #vibe-build) { min-height: 32px; height: 32px; padding: 0 13px; border-radius: 10px; font-size: var(--t-f13); }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) #vibe-build .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 55%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
 #vibe-layer[data-today="on"] .today-box > .vibe-hint { display: none; }
-#vibe-layer[data-today="on"] .today #vibe-talk .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
-#vibe-layer[data-today="on"] .today .vibe-compose > .file-input-tools > [role="status"][data-idle] { display: none; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) #vibe-talk .today-key { min-width: 17px; height: 20px; padding: 0 5px; border: 1px solid color-mix(in srgb, currentColor 40%, transparent); border-radius: 6px; background: transparent; color: inherit; font: 600 var(--t-f12)/1 var(--font-ui); }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose > .file-input-tools > [role="status"][data-idle] { display: none; }
 #vibe-layer[data-today="on"] .today .vibe-evolution-scope[data-whole] { display: none; }
 /* Nothing floats between the box and the board: the starting points sit right under the box, and a status line with nothing to say
    takes no room (it stays in the page, at no height, so what it says later is still announced). */
 #vibe-layer[data-today="on"] .today .vibe-sparks { margin: 0; }
-#vibe-layer[data-today="on"] .today .vibe-feedback:empty { min-height: 0; height: 0; margin: 0 0 -8px; overflow: hidden; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-feedback:empty { min-height: 0; height: 0; margin: 0 0 -8px; overflow: hidden; }
 #vibe-layer[data-today="on"] .today .vibe-last { margin: 2px 0 0; padding: 8px 10px 8px 14px; border-radius: 12px; }
 #vibe-layer[data-today="on"] .today-box > .vibe-hint .key { min-width: 0; height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: inherit; font: inherit; }
 /* A card that waits on you: the question in its own warm box (the prototype's .bq), the answers under it. */
@@ -11621,7 +11685,9 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .today-count { min-width: 22px; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--ivory) 9%, transparent); font: 650 var(--t-f12)/1.6 var(--font-ui); text-align: center; }
 .today-count:empty { display: none; }
 .today-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; min-width: 0; }
-.today-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; padding: var(--t-pad); border: 1px solid var(--t-edge); border-radius: 12px; background: var(--t-card); transition: border-color var(--motion-fast, 140ms); }
+/* align-content: start: cards side by side share their row's height, and a short one kept its lines together at the top
+   instead of spreading them over the height (a title, a hole, then its time). */
+.today-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 6px; min-width: 0; padding: var(--t-pad); border: 1px solid var(--t-edge); border-radius: 12px; background: var(--t-card); transition: border-color var(--motion-fast, 140ms); }
 .today-card:hover { border-color: color-mix(in srgb, var(--ivory) 22%, transparent); }
 .today-card-head { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
 .today-card-head .today-dot { margin-top: 6px; }
@@ -11674,7 +11740,9 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 .today-btn.primary { border-color: transparent; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: var(--ink); }
 .today-btn:disabled { opacity: .5; cursor: not-allowed; }
 .today-btn.danger-armed { border-color: color-mix(in srgb, var(--bad) 55%, transparent); background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--t-ink); }
-.today-link { padding: 4px 2px; border: 0; background: none; color: var(--t-soft); font: 600 var(--t-f12)/1.3 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ivory) 28%, transparent); text-underline-offset: 3px; cursor: pointer; }
+/* A link that is a button: 24 px tall, its words' own height plus room to aim, not the 36 px every button gets (styles.css), which
+   stacked two lines of links 40 px apart in the Inbox's cards. */
+.today-link { min-height: 24px; padding: 4px 2px; border: 0; background: none; color: var(--t-soft); font: 600 var(--t-f12)/1.3 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ivory) 28%, transparent); text-underline-offset: 3px; cursor: pointer; }
 .today-link:hover:not(:disabled) { color: var(--t-ink); text-decoration-color: var(--gold-bright); }
 .today-link:disabled { opacity: .5; cursor: progress; }
 .today :is(.today-btn, .today-link, .today-option, .today-card-open, .today-chip):focus-visible,
@@ -11943,7 +12011,7 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
    any text size (--text-scale). Nothing here matches in Studio: each rule waits for Social's own layer, its pages or
    html[data-ui-mode="vibe"]. */
 
-.social-sheet, .today-social {
+.social-sheet, .today-social, .today-side {
   --s-f12: max(12px, calc(12px * var(--text-scale, 1)));
   --s-f13: max(12px, calc(13px * var(--text-scale, 1)));
   --s-f14: max(12px, calc(14px * var(--text-scale, 1)));
@@ -11965,17 +12033,41 @@ html[data-ui-mode="vibe"] #shell-status :is(.shell-usage, .shell-usage-sep, .she
    "decided for you" and the Git chip step aside here; Studio's box and header keep them. ---- */
 #vibe-layer[data-today="on"] :is(#vibe-build, #vibe-autonomy-control, #vibe-chat-tools, #vibe-sparks, #vibe-decisions) { display: none !important; }
 #vibe-layer[data-today="on"] > .vibe-top :is(.gs-slot, [data-vibe-panel="settings"]) { display: none !important; }
-#vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { min-width: 96px; justify-content: center; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose #vibe-talk { min-width: 96px; justify-content: center; }
 
-/* ---- Home under the box: your work beside your friends ---- */
-.today-social { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: var(--s-gap); align-items: start; min-width: 0; }
+/* ---- Home: your work and your friends, laid out by the room the page has (today.css's today-page container) ----
+   Friends is always at the right (2026-10-07). On a wide window it sits in the column at the right of Home, over the docked
+   conversation (vibe.css, data-side), and Your work has the page to itself. Narrower: one column, then from 900 px Your work
+   beside Friends under the box, then from 1180 px Friends as a column of its own at the right, from the top of the page. */
+.today-social { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-gap); align-items: start; min-width: 0; }
 .today-social > * { min-width: 0; }
-.today-social:not(:has(> .social-people:not([hidden]))) { grid-template-columns: minmax(0, 1fr); }
-@media (max-width: 1080px) { .today-social { grid-template-columns: minmax(0, 1fr); } }
+@container today-page (min-width: 900px) {
+  .today-social:has(> .social-people:not([hidden])) { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
+}
+@container today-page (min-width: 1180px) {
+  .today-col:has(> .today-social > .social-people:not([hidden])) { grid-template-columns: minmax(0, 1fr) clamp(300px, 28%, 400px); grid-template-rows: auto auto auto 1fr; column-gap: calc(var(--t-gap, 12px) * 2); }
+  .today-col:has(> .today-social > .social-people:not([hidden])) > .today-social { display: contents; }
+  .today-col:has(> .today-social > .social-people:not([hidden])) > .today-top { grid-column: 1; grid-row: 1; }
+  .today-col:has(> .today-social > .social-people:not([hidden])) > .today-box { grid-column: 1; grid-row: 2; }
+  .today-col:has(> .today-social > .social-people:not([hidden])) #today-work { grid-column: 1; grid-row: 3; }
+  /* The fourth row takes what the Friends column needs past the page's own rows, so the rows beside it keep their heights. */
+  .today-col:has(> .today-social > .social-people:not([hidden])) .social-people { grid-column: 2; grid-row: 1 / -1; align-self: start; }
+}
+/* Your work's rows side by side once its card has the room for two: three across the page beside the column, as many as
+   Home shows of each group. */
+.social-work { container: social-work / inline-size; }
+@container social-work (min-width: 720px) {
+  .today-board[data-style="list"] .today-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+}
+@container social-work (min-width: 1180px) {
+  .today-board[data-style="list"] .today-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); }
+}
 
 .social-card { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 10px; min-width: 0; padding: 12px 14px 14px; border: 1px solid var(--s-edge); border-radius: 14px; background: var(--s-card); backdrop-filter: var(--studio-glass-blur, blur(16px) saturate(1.3)); color: var(--s-ink); }
 .social-card[hidden] { display: none; }
-.social-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; min-width: 0; }
+/* A <header>: styles.css gives every header a page heading's 24 px top, a 12 px foot and a rule under it; a card's title row
+   keeps to the card's own spacing. */
+.social-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; min-width: 0; padding: 0; border: 0; }
 .social-card-title { margin: 0; color: var(--s-ink); font: 650 var(--s-f15)/1.3 var(--font-ui); }
 .social-card-links { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }
 .social-card-note { margin: 0; color: var(--s-soft); font-size: var(--s-f13); line-height: 1.5; }
@@ -12006,27 +12098,42 @@ html[data-ui-mode="vibe"] #shell-status :is(.shell-usage, .shell-usage-sep, .she
 html[data-ui-mode="vibe"] :is(.today-need-evidence, .today-card-more) { display: none; }
 .social-work > .today-quiet { margin: 0; }
 
-/* ---- the Friends card ---- */
-.social-online { display: inline-flex; align-items: center; gap: 6px; color: var(--s-soft); font: 600 var(--s-f13)/1 var(--font-ui); }
+/* ---- the Friends card: who is online, the rooms open now and what friends shared, compact (2026-10-07) ----
+   One line a row, small faces, a quiet label over each part and no fill until the pointer is on a row, so the card reads
+   at a glance and leaves the column's height to the conversation. */
+.social-people { gap: 8px; }
+.social-people > .social-card-head { align-items: center; }
+.social-online { display: inline-flex; align-items: center; gap: 6px; color: var(--s-soft); font: 600 var(--s-f12)/1 var(--font-ui); }
 .social-online[hidden] { display: none; }
-.social-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px color-mix(in srgb, var(--good) 70%, transparent); }
-.social-card-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
-.social-people-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
-.social-person-go { display: flex; align-items: center; justify-content: flex-start; gap: 9px; width: 100%; min-height: 44px; padding: 6px 8px; border: 1px solid transparent; border-radius: 10px; background: var(--s-row); color: var(--s-ink); text-align: left; cursor: pointer; }
-.social-person-go:hover, .social-person-go:focus-visible { border-color: var(--s-edge); }
-.social-face { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: hsl(var(--who-hue, 210) 45% 34%); color: #fff; font: 700 var(--s-f12)/1 var(--font-ui); }
-.social-person-text, .social-row-text { display: grid; gap: 2px; min-width: 0; }
+.social-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 6px color-mix(in srgb, var(--good) 70%, transparent); }
+.social-card-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.social-people-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 2px 6px; margin: 0 -4px; padding: 0; list-style: none; }
+.social-person-go { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; min-height: 38px; padding: 3px 6px 3px 4px; border: 0; border-radius: 9px; background: transparent; color: var(--s-ink); text-align: left; cursor: pointer; }
+.social-person-go:hover, .social-person-go:focus-visible { background: var(--s-row); }
+.social-face { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: hsl(var(--who-hue, 210) 45% 34%); color: #fff; font: 700 var(--s-f12)/1 var(--font-ui); }
+.social-person-text { display: grid; gap: 1px; min-width: 0; }
 .social-person-text b, .social-row-text b { overflow: hidden; color: var(--s-ink); font: 600 var(--s-f13)/1.3 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
 .social-person-text small, .social-row-text small { overflow: hidden; color: var(--s-soft); font-size: var(--s-f12); line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
 .social-empty { color: var(--s-soft); font-size: var(--s-f13); line-height: 1.5; list-style: none; }
-.social-subsection { display: grid; gap: 6px; min-width: 0; }
-.social-subhead { margin: 0; color: var(--s-soft); font: 650 max(12px, calc(12.5px * var(--text-scale, 1)))/1.2 var(--font-ui); }
-.social-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.social-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 6px 8px 6px 10px; border-radius: 10px; background: var(--s-row); }
+.social-subsection { display: grid; gap: 2px; min-width: 0; }
+.social-subhead { margin: 0 0 2px; color: var(--s-faint); font: 650 var(--s-f12)/1.2 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+.social-rows { display: grid; gap: 0; margin: 0 -4px; padding: 0; list-style: none; }
+/* A row: the name, then what it is, on one line (either gives way first when the column is narrow), and its one action. */
+.social-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; min-height: 34px; padding: 2px 4px 2px 8px; border-radius: 9px; background: transparent; }
+.social-row:hover, .social-row:focus-within { background: var(--s-row); }
+.social-row-text { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.social-row-text > * { flex: 0 1 auto; min-width: 0; }
+.social-row .social-btn { min-height: 26px; height: 26px; padding: 0 10px; border-radius: 8px; font-size: var(--s-f12); }
+/* In the column at the right of a wide Home (vibe.css, data-side) the card keeps to its share of the height: what does not
+   fit scrolls inside it, under its title, so the conversation under it keeps its room. */
+.today-side > .social-people { grid-template-rows: auto minmax(0, 1fr) auto; max-height: min(46vh, 440px); }
+.today-side > .social-people > .social-card-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 
 /* ---- Projects and Activity: pages of Social's own, in the main area like every other page ---- */
-.social-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 960px; margin: 0 auto; padding: 22px 16px 28px; color: var(--s-ink); }
-html[data-shell="rail"] .social-page > .social-sheet { width: 100%; height: auto; min-height: 100%; max-width: 960px; margin: 0 auto; overflow: visible; background: transparent; }
+/* As wide as Home's column (today.css --today-max), less the Friends column it does not have: a wide window fills with more
+   cards per row rather than empty sides. */
+.social-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1640px; margin: 0 auto; padding: 22px clamp(16px, 2vw, 28px) 28px; color: var(--s-ink); }
+html[data-shell="rail"] .social-page > .social-sheet { width: 100%; height: auto; min-height: 100%; max-width: 1640px; margin: 0 auto; overflow: visible; background: transparent; }
 .social-page { overflow-y: auto; overscroll-behavior: contain; }
 .social-page-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; }
 .social-page-words { display: grid; gap: 4px; min-width: 0; flex: 1 1 320px; }
@@ -12037,10 +12144,12 @@ html[data-shell="rail"] .social-page > .social-sheet { width: 100%; height: auto
 .social-project[data-current="true"] { border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
 .social-projects-friends > .social-btn { justify-self: start; }
 .social-project-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--gold) 22%, var(--panel-solid)); color: var(--s-ink); font: 700 var(--s-f12)/1 var(--font-ui); }
-/* Activity is a page in the main area (.workspace-page): its bar and its list in a centred column, like Projects and Friends. */
+/* Activity is a page in the main area (.workspace-page): its bar and its list in a centred column, like Projects and Friends,
+   as wide as theirs; its rows sit side by side as Home's do once there is room (the social-work container). */
 #activity-overlay > .activity-sheet { background: transparent; }
-#activity-overlay .activity-sheet > :is(.sheet-head, .today-page-body) { width: min(960px, 100%); margin: 0 auto; box-sizing: border-box; }
-#activity-overlay .activity-sheet > .sheet-head { padding: 18px 20px 6px; border: 0; background: none; }
+#activity-overlay .activity-sheet > :is(.sheet-head, .today-page-body) { width: min(1640px, 100%); margin: 0 auto; box-sizing: border-box; }
+#activity-overlay .activity-sheet > .sheet-head { padding: 18px clamp(20px, 2vw, 28px) 6px; border: 0; background: none; }
+#activity-overlay .activity-sheet > .today-page-body { container: social-work / inline-size; }
 @media (max-width: 680px) {
   .social-card { padding: 10px 12px 12px; }
   .social-project { grid-template-columns: auto minmax(0, 1fr); }
@@ -13803,7 +13912,8 @@ html[data-frame] .shell-place-chips { display: flex; flex-wrap: wrap; align-item
 /* Too narrow for the row (Team's dozen-plus places from 760 px, any place from 440 px): the same places as one picker,
    so the page under it keeps its room. */
 html[data-frame] .shell-place-pick { display: none; width: auto; max-width: 100%; min-height: 32px; padding: 4px 12px; border-radius: 999px; font-size: var(--frame-fs); }
-/* The picker shows as studio-ui.js's button for it (enhanceSelect puts it right after the select): it follows the select. */
+/* renderer/studio-ui.js draws an enhanced picker (button.studio-select) right after the native one and hides the native one: the
+   button shows and hides with it, or a wide page showed its places twice, as chips and as "The Lobby" picker under them. */
 html[data-frame] .shell-place-pick + .studio-select { display: none; }
 @container shell-place (max-width: 760px) {
   html[data-frame] .shell-place-bar[data-size="many"] .shell-place-chips { display: none; }
@@ -13918,7 +14028,8 @@ html[data-frame] .shell-menu-row + .shell-menu-row { border-top: 1px solid color
 html[data-frame] .shell-menu-words { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 html[data-frame] .shell-menu-words b { font-weight: 600; }
 html[data-frame] .shell-menu-words small { color: var(--dim); font-size: var(--frame-fs-s); }
-html[data-frame] .shell-switch { flex: none; width: 36px; height: 20px; padding: 0; border: 1px solid var(--hairline-strong); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 6%, transparent); position: relative; }
+/* min-height: 0: styles.css gives every button a 36 px minimum, which drew this 36 x 20 switch as a square with its knob in a corner. */
+html[data-frame] .shell-switch { flex: none; width: 36px; height: 20px; min-height: 0; padding: 0; border: 1px solid var(--hairline-strong); border-radius: 10px; background: color-mix(in srgb, var(--ivory) 6%, transparent); position: relative; }
 html[data-frame] .shell-switch i { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform var(--motion-fast, 140ms) var(--ease-out, ease-out), background var(--motion-fast, 140ms); }
 html[data-frame] .shell-switch[aria-checked="true"] { background: color-mix(in srgb, var(--gold) 30%, transparent); border-color: color-mix(in srgb, var(--gold) 55%, transparent); }
 html[data-frame] .shell-switch[aria-checked="true"] i { transform: translateX(16px); background: var(--gold-bright); }
@@ -14101,6 +14212,8 @@ html[data-frame] body:has(#friends-overlay:not([hidden])):not(.appearance-settin
 /* ---- Tab behaviour ---- */
 .ts-card { display: grid; gap: 12px; padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 16px; background: color-mix(in srgb, var(--ivory) 3%, transparent); color: var(--ivory); font: 450 var(--ts-fs)/1.4 var(--font-ui); }
 .ts-pop-behaviour .ts-card { padding: 4px 6px; border: 0; background: none; }
+/* A <header>: without this it took styles.css's page heading spacing (24 px over the title, a rule under it). */
+.ts-card-head { display: block; padding: 0; border: 0; }
 .ts-card-head h4 { margin: 0 0 2px; font-size: var(--ts-fs-small); }
 .ts-card-head p, .ts-note { margin: 0; color: var(--muted); font-size: var(--ts-fs-small); }
 .ts-card-body { display: grid; gap: 12px; }
@@ -15453,7 +15566,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   <aside id="vibe-chat" class="vibe-chat" aria-labelledby="vibe-chat-title" hidden>
     <header class="vibe-chat-head"><div><small>Conversation</small><h2 id="vibe-chat-title">Mefi</h2></div><button id="vibe-chat-close" class="vibe-icon" type="button" aria-label="Close the conversation" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
     <ol id="vibe-thread" class="vibe-thread"></ol>
-    <p class="vibe-chat-note">Reply in the box in the middle. Enter talks, Ctrl + Enter builds.</p>
+    <p class="vibe-chat-note">Reply in the box on the page. Enter sends, Ctrl + Enter builds right away.</p>
   </aside>
   <!-- A decision from Needs you, answered without leaving Vibe (vibe.js). -->
   <aside id="vibe-ask" data-type-scope class="vibe-chat vibe-ask" aria-labelledby="vibe-ask-title" hidden>
@@ -15570,13 +15683,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     <h2 id="vibe-notes-title">Two ways to work: Social and Studio</h2>
     <p id="vibe-notes-lede" class="vibe-notes-lede">Mefi Studio opens in <b>Social</b>: friends, and a light eye on your agents. In-depth building lives in <b>Studio</b>, one click away.</p>
     <div class="vibe-notes-modes">
-      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Social</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Social</b><span>Talk with Mefi, see who is online, answer what needs you.</span></figcaption></figure>
       <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Studio</b><span>In-depth building: the Map, boards, models and every setting.</span></figcaption></figure>
     </div>
     <ul class="vibe-notes-list">
       <li>Switch any time with the <b>Social / Studio</b> switch at the top, or from the menu and Search.</li>
-      <li>One box: <b>Talk it over</b> with Mefi, or <b>Build it</b> as a task.</li>
-      <li>Building now, Needs you and Freshly done share one screen.</li>
+      <li>One box: <b>Send</b> talks with Mefi, who offers to build what you describe; <b>Ctrl Enter</b> builds it right away.</li>
+      <li>Home shows your work, your friends and the conversation with Mefi side by side.</li>
     </ul>
     <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Studio</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Social</button></footer>
   </div>
@@ -101341,14 +101454,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!window.MefiVibePanels) return false;
     if (!active()) go("vibe");
     closeAsk({ quiet: true });
-    if (state.chatOpen) closeChat();
+    if (state.chatOpen && !docked()) hideChat();
     window.MefiVibePanels.open(kind, { ...options, data: shared() });
     signatures.delete("lanes"); renderDock(lanes());
     return true;
   }
   function closeDrawers() {
     closeAsk({ quiet: true });
-    if (state.chatOpen) closeChat();
+    if (state.chatOpen && !docked()) hideChat();
   }
   // Build it on an idea: the same promotion as the Ideas page's Make task.
   async function promoteIdea(idea) {
@@ -101859,9 +101972,37 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // ---- conversation drawer --------------------------------------------------
-  function openChat() {
-    closeAsk({ quiet: true });
-    window.MefiVibePanels?.close?.({ quiet: true });
+  // On a wide window Social's Home has a column of its own at the right, where the drawer opens (2026-10-07: the owner
+  // asked for the empty sides to be used): Friends at its top and the conversation docked under it, the box at the foot of
+  // its thread. The column stands while Home is up (today.js sets #vibe-layer[data-today="on"]) and the layer has room for
+  // the page beside it (data-side); the conversation docks in it (data-dock) unless it was closed, which keeps it away
+  // (mefiStudio.social.chatDock = "off") until it is opened again. A decision or a panel opens over the column, and Esc
+  // leaves the conversation be.
+  const DOCK_KEY = "mefiStudio.social.chatDock";
+  const DOCK_MIN = 1440; // the layer's width with room for the page and the column beside it
+  const docked = () => layer.dataset.dock === "chat";
+  const sided = () => layer.dataset.side === "on";
+  const dockRoom = () => !layer.hidden && layer.dataset.today === "on" && (layer.clientWidth || 0) >= DOCK_MIN;
+  // Today moves Friends into the column and the box under the docked thread, and back (renderer/today.js placeBox).
+  function setLayout(side, dock) {
+    if (side === sided() && dock === docked()) return;
+    if (side) layer.dataset.side = "on"; else delete layer.dataset.side;
+    if (dock) layer.dataset.dock = "chat"; else delete layer.dataset.dock;
+    window.MefiToday?.placeBox?.();
+  }
+  const setDock = (on) => setLayout(on || dockRoom(), on);
+  // Fits the window: a docked conversation the window grows too narrow for goes away rather than turning into a drawer
+  // over the page; it comes back with the room.
+  function syncDock() {
+    // A drawer open when the window grows wide docks too: it was open because it was wanted.
+    const side = dockRoom(), want = side && (state.chatOpen || read(DOCK_KEY) !== "off");
+    if (side === sided() && want === docked()) return;
+    const was = docked();
+    setLayout(side, want);
+    if (want && !was && !state.chatOpen) showChat();
+    else if (!want && was && state.chatOpen) hideChat();
+  }
+  function showChat() {
     state.chatOpen = true; $("chat").hidden = false; layer.dataset.chat = "open";
     $("chat-toggle").setAttribute("aria-expanded", "true");
     state.seenMessageId = messages().at(-1)?.id ?? null;
@@ -101869,12 +102010,23 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     signatures.delete("chat"); renderChat();
     const thread = $("thread"); thread.scrollTop = thread.scrollHeight;
   }
-  function closeChat() {
+  function hideChat() {
     state.chatOpen = false; $("chat").hidden = true; layer.dataset.chat = "closed";
     $("chat-toggle").setAttribute("aria-expanded", "false");
     state.seenMessageId = messages().at(-1)?.id ?? null;
     if (projectId() && state.seenMessageId) write(`mefiStudio.vibe.seen.${projectId()}`, state.seenMessageId);
     signatures.delete("chat"); renderChat();
+  }
+  // Opening it on a wide Home docks it again; elsewhere it is the drawer.
+  function openChat() {
+    closeAsk({ quiet: true });
+    window.MefiVibePanels?.close?.({ quiet: true });
+    if (dockRoom()) { write(DOCK_KEY, "on"); setDock(true); }
+    showChat();
+  }
+  function closeChat() {
+    if (docked()) { write(DOCK_KEY, "off"); setDock(false); }
+    hideChat();
   }
 
   // ---- needs you ------------------------------------------------------------
@@ -101950,7 +102102,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const lasted = (at) => { const text = ago(at); return text === "just now" ? "under a minute" : text.replace(/ ago$/, ""); };
   const needKey = (need) => need ? `${need.kind}:${need.id}` : "";
   function openNeed(need) {
-    if (state.chatOpen) closeChat();
+    if (state.chatOpen && !docked()) hideChat();
     window.MefiVibePanels?.close?.({ quiet: true });
     state.need = { kind: need.kind, id: need.id };
     $("ask").hidden = false; layer.dataset.ask = "open";
@@ -102334,6 +102486,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     render();
     // Layout v2: Today draws the front door's own pieces where it wants them (renderer/today.js); nothing in v1.
     window.MefiToday?.show?.();
+    syncDock();
     paintRail();
     if (!window.MefiBoot?.isActive?.()) layer.focus({ preventScroll: true });
     return refresh();
@@ -102345,6 +102498,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     window.MefiToday?.hide?.();
     closeAsk({ quiet: true });
     window.MefiVibePanels?.close?.({ quiet: true });
+    syncDock();
     paintRail();
     if (!window.MefiWorkspace?.isActive?.()) window.MefiIdle?.setHomeBackdrop?.(false);
   }
@@ -102401,8 +102555,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (event.key !== "Escape") return;
       if (window.MefiVibePanels?.isOpen?.()) { event.preventDefault(); event.stopPropagation(); window.MefiVibePanels.escape(); return; }
       if (!$("ask").hidden) { event.preventDefault(); event.stopPropagation(); closeAsk(); return; }
-      if (state.chatOpen) { event.preventDefault(); event.stopPropagation(); closeChat(); $("chat-toggle").focus(); }
+      if (state.chatOpen && !docked()) { event.preventDefault(); event.stopPropagation(); closeChat(); $("chat-toggle").focus(); }
     });
+    // The docked conversation follows the window (syncDock): the layer is fixed to the frame, so its size is the window's.
+    if (typeof ResizeObserver === "function") new ResizeObserver(() => syncDock()).observe(layer);
   }
 
   // The pushes that keep `state` current: the front door's own (init wires them
@@ -102602,7 +102758,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   });
   // Vibe's keys on the shortcut sheet, under Home: display-only rows
   // (nav.js's handleKey skips the "command" group; the listener above acts).
-  for (const [key, id, label] of [...VIBE_KEYS, ["Enter", "vibe-key-talk", "Social: talk it over (in the box)"], ["Ctrl Enter", "vibe-key-build", "Social: build it (in the box)"]]) {
+  for (const [key, id, label] of [...VIBE_KEYS, ["Enter", "vibe-key-talk", "Social: send to Mefi (in the box)"], ["Ctrl Enter", "vibe-key-build", "Social: build it right away (in the box)"]]) {
     window.MefiNav?.register?.({
       id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null,
       showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false },
@@ -102667,7 +102823,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, requestChange, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve(), data: readModel, watch,
     // The four ways to start (Modify, Experiment, Fix, Improve), as copies: Build's Today (renderer/today.js) offers the same starters in its own box.
-    intents: () => Object.fromEntries(Object.entries(INTENTS).map(([id, entry]) => [id, { ...entry }])) };
+    intents: () => Object.fromEntries(Object.entries(INTENTS).map(([id, entry]) => [id, { ...entry }])),
+    // The docked conversation: Today asks it to fit again when Home comes and goes (data-today), and says whether it is docked.
+    syncDock, docked };
 })();
 
 // Today and the Inbox: the calm mode's page and the one place what waits on you
@@ -103885,7 +104043,48 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       input.placeholder = "Ask Mefi anything, or describe something to make…";
       (state.added ||= []).push(() => { input.placeholder = was; });
     }
+    // A wide Home has a column of its own at the right (renderer/vibe.js syncDock): Friends at its top, in #today-side, and
+    // the conversation docked under it with the box at the foot of its thread, in #today-chat-box (placeBox). Both holders
+    // wait empty, and out of sight, while what they hold is the page's.
+    const chat = byId("vibe-chat");
+    if (chat) {
+      const holder = el("div", "today-chat-box"); holder.id = "today-chat-box";
+      const note = chat.querySelector?.(".vibe-chat-note") ?? null;
+      if (note && chat.insertBefore) chat.insertBefore(holder, note); else chat.append(holder);
+      (state.added ||= []).push(() => holder.remove?.());
+    }
+    const side = el("div", "today-side"); side.id = "today-side";
+    if (chat?.parentNode === layer && layer.insertBefore) layer.insertBefore(side, chat); else layer.append(side);
+    (state.added ||= []).push(() => side.remove?.());
     return today;
+  }
+  // Friends belongs to the column while it stands and to the page otherwise, after Your work; the box and its status line
+  // belong to the docked conversation while it is docked and to the page otherwise, back in the page's own order (MOVED).
+  // A move keeps the keyboard where it was: the window can change size while you type.
+  const CHAT_PARTS = ["vibe-feedback", "vibe-compose"];
+  function placeBox() {
+    const layer = byId("vibe-layer"), holder = byId("today-chat-box"), side = byId("today-side"), page = byId("today-page");
+    const slot = page?.querySelector?.(".today-box"), grid = page?.querySelector?.(".today-social");
+    if (!layer || !holder || !slot) return;
+    const held = document.activeElement;
+    const move = (node, into) => { node.remove?.(); into.append(node); };
+    let moved = false;
+    const people = byId("social-people");
+    if (people && side && grid) {
+      const into = layer.dataset?.side === "on" ? side : grid;
+      if (people.parentNode !== into && (people.parentNode === side || people.parentNode === grid)) { move(people, into); moved = true; }
+    }
+    if (layer.dataset?.dock === "chat") {
+      for (const id of CHAT_PARTS) { const node = byId(id); if (node?.parentNode === slot) { move(node, holder); moved = true; } }
+    } else if (CHAT_PARTS.some((id) => byId(id)?.parentNode === holder)) {
+      for (const id of MOVED) { const node = byId(id); if (node && (node.parentNode === slot || node.parentNode === holder)) move(node, slot); }
+      moved = true;
+    }
+    if (!moved) return;
+    // Docking moves the box into the conversation just before it shows, when nothing in it can take the keyboard yet: the
+    // focus goes back once it has, unless something else took it meanwhile.
+    const back = () => { const now = document.activeElement; if (held?.isConnected && now !== held && (!now || now === document.body)) held.focus?.({ preventScroll: true }); };
+    if (held && held !== document.body) { back(); Promise.resolve().then(back); }
   }
   function show() {
     if (!state.on) return false;
@@ -103897,6 +104096,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     paint(); startClock();
     // The Friends card (renderer/social.js) reads nothing while Home is away; back on Home it catches up.
     byId("social-people")?.wake?.();
+    // A wide Home keeps the conversation docked beside the page (renderer/vibe.js syncDock).
+    window.MefiVibe?.syncDock?.();
     return true;
   }
   function hide() {
@@ -103908,14 +104109,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // Puts the borrowed pieces back and takes the page away: v1's front door as it was.
   function restore() {
     const layer = byId("vibe-layer");
+    // The Friends card stops reading first: it may sit in the column at the right, which goes with the undos below.
+    byId("social-people")?.dispose?.();
     for (const { node, parent, next } of [...(state.parts || [])].reverse()) { if (parent) parent.insertBefore(node, next && next.parentNode === parent ? next : null); }
     state.parts = null;
     for (const undo of (state.added || []).splice(0)) { try { undo(); } catch { /* already gone */ } }
-    const people = byId("social-people");
-    people?.dispose?.();
     byId("today-page")?.remove();
     if (layer?.dataset) delete layer.dataset.today;
     state.host = null;
+    window.MefiVibe?.syncDock?.();
   }
 
   // The Build host: the same board as a page, opened from its pinned tab or Search.
@@ -104528,7 +104730,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   window.MefiToday = {
-    start, stop, show, hide, isOn: () => state.on, takesNeeds: () => state.on,
+    start, stop, show, hide, placeBox, isOn: () => state.on, takesNeeds: () => state.on,
     count, items, needTasks, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
     openNeed, openFromAlert, openActivity: openActivityPage, closeActivity: closeActivityPage, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
     // Build's Home (layout v2): workspace.js asks when Home comes and goes and when its box sends; the router's view "chat" is the classic Home.

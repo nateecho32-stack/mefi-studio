@@ -75,6 +75,27 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Appearance under **From the Shop** and can be tried for two minutes first;
   every node style Studio already had stays free.
 
+- **Social uses a wide window.** Home no longer sits in a narrow column with
+  empty sides. On a wide window it has a column at the right: **Friends** at
+  the top, now compact (one line a row, smaller faces), and the conversation
+  with Mefi under it with the box at its foot, like a chat; your work takes
+  the rest of the page, its cards side by side. The conversation's close
+  button hands the box back to the page, and that is remembered until you
+  open it again; Friends keeps the column. A narrower window keeps the box on
+  the page, Friends beside your work and the conversation as a drawer.
+  **Activity**, **Projects** and every **Friends** place use the width too
+  (The Lobby sets its top story beside what friends are building).
+- **Menus without odd gaps.** Card titles, both What's new cards, the tab
+  settings, the walkthrough's coach, the Model Lab's cards and the Decided
+  for you panel lost the extra space above and between their parts;
+  the Layout menu's switches are switches again, not squares; the
+  permission choices in Social's Settings panel wrap instead of running off
+  its edge; the project button opens a short menu under it instead of a
+  tall drawer over the tabs; cards side by side keep their lines together;
+  and Friends no longer shows its places twice, as chips and as a picker.
+  What's new and the shortcut list say what Social's box does now (Send,
+  and Ctrl Enter to build right away).
+
 - **Sign in to GitHub can finish.** Its setup window opened blank: the
   GitHub CLI never showed its one-time code or opened the browser, so the
   sign-in behind the Git chip, Publish to GitHub, Link to a repository, the

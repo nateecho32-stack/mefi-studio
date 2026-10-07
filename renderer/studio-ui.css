@@ -603,9 +603,11 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 /* Its rows are buttons, which keep to one line everywhere else: here they wrap inside the menu's own width. */
 .autonomy-popover { white-space: normal; grid-template-columns: minmax(0, 1fr); }
 .autonomy-popover .autonomy-button { min-width: 0; white-space: normal; }
-.autonomy-mode { text-align: left; display: block; width: 100%; }
-.autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; opacity: .7; font-weight: 400; }
-.autonomy-modes { display: grid; gap: 7px; }
+/* A mode is a two-line button (its name, what it does): it wraps and grows, wherever it is listed. The global button's nowrap
+   and 36 px height pushed the list past a narrow panel (Social's Settings panel scrolled sideways, its lines cut off). */
+.autonomy-mode { text-align: left; display: block; width: 100%; min-width: 0; height: auto; min-height: 0; white-space: normal; }
+.autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: max(12px, 11px * var(--text-scale, 1)); line-height: 1.4; opacity: .7; font-weight: 400; }
+.autonomy-modes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
 .autonomy-note { font-size: 12px; line-height: 1.4; margin: 8px 0; }
 .autonomy-note:empty { display: none; }
 .autonomy-note[data-tone="bad"] { color: var(--bad); }

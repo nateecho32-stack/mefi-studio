@@ -1213,7 +1213,48 @@
       input.placeholder = "Ask Mefi anything, or describe something to make…";
       (state.added ||= []).push(() => { input.placeholder = was; });
     }
+    // A wide Home has a column of its own at the right (renderer/vibe.js syncDock): Friends at its top, in #today-side, and
+    // the conversation docked under it with the box at the foot of its thread, in #today-chat-box (placeBox). Both holders
+    // wait empty, and out of sight, while what they hold is the page's.
+    const chat = byId("vibe-chat");
+    if (chat) {
+      const holder = el("div", "today-chat-box"); holder.id = "today-chat-box";
+      const note = chat.querySelector?.(".vibe-chat-note") ?? null;
+      if (note && chat.insertBefore) chat.insertBefore(holder, note); else chat.append(holder);
+      (state.added ||= []).push(() => holder.remove?.());
+    }
+    const side = el("div", "today-side"); side.id = "today-side";
+    if (chat?.parentNode === layer && layer.insertBefore) layer.insertBefore(side, chat); else layer.append(side);
+    (state.added ||= []).push(() => side.remove?.());
     return today;
+  }
+  // Friends belongs to the column while it stands and to the page otherwise, after Your work; the box and its status line
+  // belong to the docked conversation while it is docked and to the page otherwise, back in the page's own order (MOVED).
+  // A move keeps the keyboard where it was: the window can change size while you type.
+  const CHAT_PARTS = ["vibe-feedback", "vibe-compose"];
+  function placeBox() {
+    const layer = byId("vibe-layer"), holder = byId("today-chat-box"), side = byId("today-side"), page = byId("today-page");
+    const slot = page?.querySelector?.(".today-box"), grid = page?.querySelector?.(".today-social");
+    if (!layer || !holder || !slot) return;
+    const held = document.activeElement;
+    const move = (node, into) => { node.remove?.(); into.append(node); };
+    let moved = false;
+    const people = byId("social-people");
+    if (people && side && grid) {
+      const into = layer.dataset?.side === "on" ? side : grid;
+      if (people.parentNode !== into && (people.parentNode === side || people.parentNode === grid)) { move(people, into); moved = true; }
+    }
+    if (layer.dataset?.dock === "chat") {
+      for (const id of CHAT_PARTS) { const node = byId(id); if (node?.parentNode === slot) { move(node, holder); moved = true; } }
+    } else if (CHAT_PARTS.some((id) => byId(id)?.parentNode === holder)) {
+      for (const id of MOVED) { const node = byId(id); if (node && (node.parentNode === slot || node.parentNode === holder)) move(node, slot); }
+      moved = true;
+    }
+    if (!moved) return;
+    // Docking moves the box into the conversation just before it shows, when nothing in it can take the keyboard yet: the
+    // focus goes back once it has, unless something else took it meanwhile.
+    const back = () => { const now = document.activeElement; if (held?.isConnected && now !== held && (!now || now === document.body)) held.focus?.({ preventScroll: true }); };
+    if (held && held !== document.body) { back(); Promise.resolve().then(back); }
   }
   function show() {
     if (!state.on) return false;
@@ -1225,6 +1266,8 @@
     paint(); startClock();
     // The Friends card (renderer/social.js) reads nothing while Home is away; back on Home it catches up.
     byId("social-people")?.wake?.();
+    // A wide Home keeps the conversation docked beside the page (renderer/vibe.js syncDock).
+    window.MefiVibe?.syncDock?.();
     return true;
   }
   function hide() {
@@ -1236,14 +1279,15 @@
   // Puts the borrowed pieces back and takes the page away: v1's front door as it was.
   function restore() {
     const layer = byId("vibe-layer");
+    // The Friends card stops reading first: it may sit in the column at the right, which goes with the undos below.
+    byId("social-people")?.dispose?.();
     for (const { node, parent, next } of [...(state.parts || [])].reverse()) { if (parent) parent.insertBefore(node, next && next.parentNode === parent ? next : null); }
     state.parts = null;
     for (const undo of (state.added || []).splice(0)) { try { undo(); } catch { /* already gone */ } }
-    const people = byId("social-people");
-    people?.dispose?.();
     byId("today-page")?.remove();
     if (layer?.dataset) delete layer.dataset.today;
     state.host = null;
+    window.MefiVibe?.syncDock?.();
   }
 
   // The Build host: the same board as a page, opened from its pinned tab or Search.
@@ -1856,7 +1900,7 @@
   }
 
   window.MefiToday = {
-    start, stop, show, hide, isOn: () => state.on, takesNeeds: () => state.on,
+    start, stop, show, hide, placeBox, isOn: () => state.on, takesNeeds: () => state.on,
     count, items, needTasks, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
     openNeed, openFromAlert, openActivity: openActivityPage, closeActivity: closeActivityPage, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
     // Build's Home (layout v2): workspace.js asks when Home comes and goes and when its box sends; the router's view "chat" is the classic Home.

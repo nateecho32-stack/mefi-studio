@@ -6,6 +6,33 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 The rail's words are whole, and its places are checked at every window size
+
+Branch `ui/rail-words` in `C:\wt\modes` on main 4b150b3: 0f5076a (the Social/Studio launch hint, "Each launch opens
+the mode you last used", which main's merge of the rename did not take) and f9fb916 (at rest the rail keeps 4 px at
+its sides instead of 10 and a tile 2 px, so a word has about 51 px instead of 39; the rail's 64 px is unchanged).
+
+Measured in a real window (`shell_render`, new section 2b, Studio's rail at 1920x1080, 1440x900, 1100x720, 600x560 and
+600x560 at 150%): before, "Settings" needed 43 px and had 39 at the three larger sizes (Segoe UI), and every place was
+reachable; after, no word is cut and every place's middle is the place itself at all five sizes, with Segoe UI and with
+Verdana standing in for Linux's DejaVu Sans. Social's Home has no rail (a question for the owner, not changed here).
+The whole `shell_render` passes on this branch (214 s), the new section included; `skills_render` 1/1.
+
+`npm run check` ok, `npm run audit` 0 errors and 0 warnings, `npm run lint` 0 errors and 47 warnings (as main).
+shell_frame_css, shell_frame_bars, layout_contract_css, app_rail, vibe_home, vibe_panels, vibe_frame, booklet_build
+and size_page: 182/182.
+
+The skills landing (d55269f) said six of its window suites were still queued: all passed afterwards on its tree, one at
+a time: today_render (67 s), skills_render (27 s), composer_render (47 s), autonomy_render (17 s), agent_setup_render
+(45 s) and unified_studio_render (190 s), with team_render and sessions_render as reported.
+
+Incident on this PC, 08:26: removing a throwaway worktree with `git worktree remove --force` followed its node_modules
+junction into the shared node_modules and deleted @electron/get, @electron-internal/extract-zip, @types/node, debug and
+Electron's chrome_100_percent.pak and chrome_200_percent.pak before a locked DLL stopped it. Restored by 08:31 from
+Electron's download cache and an `npm ci --ignore-scripts` scratch copy; all 15 lock entries match, `electron.exe
+--version` is 44.4.1 and window suites pass again. A window suite that failed oddly on this PC between 08:26 and 08:31
+should be run again.
+
 ## 2026-10-06 A test stage that runs past its limit is stopped with everything it started
 
 Branch `wip/test-speed` (C:\wt\speed), main 017d51a merged in. Overnight an economy-events gate held the machine-wide

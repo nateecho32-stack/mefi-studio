@@ -125,6 +125,8 @@
 /* ---- Tab behaviour ---- */
 .ts-card { display: grid; gap: 12px; padding: 14px 16px; border: 1px solid var(--hairline); border-radius: 16px; background: color-mix(in srgb, var(--ivory) 3%, transparent); color: var(--ivory); font: 450 var(--ts-fs)/1.4 var(--font-ui); }
 .ts-pop-behaviour .ts-card { padding: 4px 6px; border: 0; background: none; }
+/* A <header>: without this it took styles.css's page heading spacing (24 px over the title, a rule under it). */
+.ts-card-head { display: block; padding: 0; border: 0; }
 .ts-card-head h4 { margin: 0 0 2px; font-size: var(--ts-fs-small); }
 .ts-card-head p, .ts-note { margin: 0; color: var(--muted); font-size: var(--ts-fs-small); }
 .ts-card-body { display: grid; gap: 12px; }
