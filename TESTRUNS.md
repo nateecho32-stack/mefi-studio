@@ -39,6 +39,29 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-07 Pets: petting and the chase, little things, three Shop pets, a live pet card; relay pets generations
+
+Branch `feat/pets-more` (C:\wt\s-pets, from origin/main c513838; 414c7f6, cdda867, 3d93d0f, d78b331, 17c954d).
+Asked: pet Ember (rest the pointer on it: it stops, looks, purrs, hearts, its name; quick circles: a chase), rare
+little things (stretch and yawn on waking, tail flick, spark sneeze, a firefly), a cloud dragon for the Shop, then
+"add more pets" (a phoenix and a will-o'-wisp), Shop catalog entries left to the Shop's rotation work, relay kinds with
+compatibility, and Settings' pet card with a live preview and a name. Not deployed: the relay changes are code only.
+
+Measured (perf lab, the page's own paint path, 4 interleaved rounds of 20 s at 60 fps with a loop, fireflies and
+petting, main's Ember beside the new code; Chromium's timer is 0.1 ms): dpr 1.25 main's Ember mean 0.13/0.11 ms
+(theme/gold), now 0.12/0.12; cloud 0.15/0.12, phoenix 0.16/0.16, wisp 0.11/0.10; dpr 2 every kind 0.10 to 0.14;
+every p95 0.3 ms or less. A rest with a purr, stretch, flick or firefly paints at 60 fps (15 before), one with a
+drifting trail at 30; sleep keeps 6; motion Off one still pose; a live preview draws nothing until it is on screen.
+
+Tests, each through `npm run test:one` (Node suites) or the Electron lane with a 600 s limit: pets 25/25 (11 before),
+relay_pets 14/14 and hub_client_pets 5/5, hub_client 18/18, friends_shop_ui 29/29 (Ember's switch now sets kind
+dragon; a Shop pet's card; previews on seconds, they were given milliseconds), setup_helper 33/33, rooms_ui, shop_host,
+hub_client_shop, relay_shop and pets_host green (80/80 together); Electron: setup_helper_render 1/1 (34 s),
+settings_render 1/1 (57 s), one run each. check ok; lint 47 warnings (as main); audit 0 findings; Python contracts
+248 OK (1 skipped). Contact sheets (dark Chrome and light Daylight; poses, skins, 96x64 to 360x240) and frame strips
+of petting, waking, sneezing, the flick, fireflies and the chase were rendered offscreen and kept locally in
+C:\wt\s-pets-lab\out. Not run: the full `npm test`.
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -485,39 +508,6 @@ Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tes
 fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
 `layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
 forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
-
-## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
-
-Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
-hand with both sides kept; d1344bc puts the Playlists entry back to once after an earlier merge took 0e9f37f, not
-d55269f as its message says). Relay: `relay/src/economy.mjs` (a daily community budget, 200 + 25 per member seen this
-week who is old enough to earn) and `relay/src/events.mjs` (the weekly Build Jam, co-work hours at 02:00, 10:00 and
-18:00 UTC, building together), run on the relay's alarm; schema v5; credits.mjs gains together, cowork and jam kinds
-paid through award(). Studio: hub-client events calls, main.cjs HUB_EVENT_METHODS, preload hubEvents,
-renderer/friends-events.js + .css as Friends › Events.
-
-A read-only review of the social side found, in this branch, an alarm that would have woken the relay every second
-before each co-work hour and through a pause, a listed co-work room nobody could approve requests for, prizes two
-votes could win, and Forget me leaving names in results; all fixed in 113ca61 with tests. Its findings in other
-files went to the social session, which landed them on main (711ceb5).
-
-Gate on 132132d (main f1934aa merged): the parallel stage at 4 suites at a time, 7227 tests, 7210 pass, 3 fail, all a
-git time limit hit under load (29 to 780 MB free while other sessions ran): git_actions "a listener that throws does
-not stop a publish half-way", rust_parity_git "the actions answer like the JavaScript" and rust_parity_snapshots
-"the same attempt on two identical repositories". Python contracts 248 OK (1 skipped), normalized-path lock OK,
-`npm run audit` 0 findings. The Electron lane did not finish: media_window_render and layout_contract_render each
-kept an Electron window alive all night (their kill timers never landed at that memory) and held the machine-wide
-lane about nine hours until killed at 06:11 (a stage limit for exactly this is on wip/test-speed). The Electron
-suites were then run one at a time on the merged tree 0d82a1a through the lease with a 12-minute guard each:
-42 of 47 pass on the first pass (layout_contract_render left out: it fails on clean main here and retires with
-ui/v2-only). Of the five: shell_render is the known display-scaling failure on clean main; agent_setup_render and
-unified_studio_render fail on main's own renderer too (a control run in C:\wt\speed, at other assertions:
-load-sensitive); today_render and tree_dynamics_render, which had run 10 and 15 minutes under load, pass alone
-(101 s and 14 s). friends_render, companion_hub_render and friends_two_render pass. The three git time-limit
-suites pass alone: git_actions, rust_parity_git and rust_parity_snapshots, 72/72 in 2 min 41 s through `npm run
-test:one`.
-
-After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
 
 ## Read Before Any Tests
 
