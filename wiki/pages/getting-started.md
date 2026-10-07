@@ -2,6 +2,8 @@
 
 Start with a small change in a project you can easily check. Studio helps you talk the idea over, turn it into work and follow the result.
 
+> **Which version do you have?** These steps are for **0.4.4**, today's download, where the two modes are called Vibe and Build. The boxes marked <span class="status next">Coming in 0.5</span> describe the next release, where they're called Social and Studio. On 0.4.4, skip those boxes.
+
 ## 1. Choose the folder you want to work on
 
 At launch, pick an existing project or choose **Open another folder…**. Then:

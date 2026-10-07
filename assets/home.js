@@ -139,6 +139,9 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(replace);
     // The app opens out of the orb.
     $("#gate-play").addEventListener("click", function () { playDemo(slot, true); });
+    // Watching is its own choice: the demo plays itself, with Pause and Restart (assets/play.js).
+    var watchBtn = $("#gate-watch");
+    if (watchBtn) watchBtn.addEventListener("click", function () { playDemo(slot, true, "watch"); });
     $("#gate-skip").addEventListener("click", function (e) { skipGate(e.currentTarget); });
     gate.addEventListener("keydown", function (e) { if (e.key === "Escape") skipGate($("#gate-skip")); });
     setTimeout(function () { try { $("#gate-play").focus({ preventScroll: true }); } catch (e) { /* old engines */ } }, 80);
@@ -158,13 +161,13 @@
   }
 
   var demoOpen = false;
-  function playDemo(from, fromGate) {
+  function playDemo(from, fromGate, mode) {
     if (demoOpen || !window.MefiPlay) return;
     demoOpen = true;
     store.set(SEEN, "1");
     lock(true);
     setInert(true);
-    var app = window.MefiPlay.open({ from: from, onLeave: function (info) { leaveDemo(app, info, fromGate); } });
+    var app = window.MefiPlay.open({ from: from, mode: mode === "watch" ? "watch" : "try", onLeave: function (info) { leaveDemo(app, info, fromGate); } });
     if (!app) { demoOpen = false; lock(false); setInert(false); return; }
     // Once the app covers everything, the gate and the orb can rest behind it.
     setTimeout(function () {

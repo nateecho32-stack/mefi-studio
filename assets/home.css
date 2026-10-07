@@ -67,10 +67,19 @@ html.page-lock { overflow: hidden; }
 .gate-skip svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .4s var(--ease-out); }
 .gate-skip:hover svg { transform: translateX(3px); }
 .gate-play:focus-visible, .gate-skip:focus-visible { outline: none; box-shadow: var(--ring); }
-.gate-note { margin: 18px 0 0; font-size: 0.9rem; color: var(--dim); }
+.gate-note { margin: 18px 0 0; max-width: 46ch; font-size: 0.9rem; line-height: 1.5; color: var(--dim); }
+/* Until 0.5 is out, the first screen says what the demo shows: a preview, not today's download (site.js applyRelease). */
+.gate-pre { display: inline-flex; align-items: center; gap: 9px; margin: -2px 0 16px; padding: 4px 12px 4px 4px; border-radius: 999px; font-size: 0.86rem; font-weight: 600; color: var(--muted); background: rgb(255 255 255 / 0.04); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
+.gate-pre[hidden] { display: none; }
+.gate-pre b { padding: 2px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); background: linear-gradient(180deg, #fff, var(--accent-bright)); }
+/* Watching is its own choice, next to the note: the demo plays itself (with Pause and Restart). */
+.gate-watch { padding: 0; border: 0; background: none; font: inherit; font-weight: 650; color: var(--muted); text-decoration: underline; text-decoration-color: rgb(255 255 255 / 0.3); text-underline-offset: 3px; cursor: pointer; }
+.gate-watch:hover { color: var(--ivory); }
+.gate-watch:focus-visible { outline: none; border-radius: 4px; box-shadow: var(--ring); }
 /* the gate arrives: brand, title lines, then the two buttons */
 @keyframes gate-up { from { opacity: 0; transform: translateY(22px); } }
 .motion .gate-brand { animation: gate-up .9s var(--ease-out) .25s both; }
+.motion .gate-pre { animation: gate-up .9s var(--ease-out) .3s both; }
 .motion .gate-title .gl { animation: gate-up 1s var(--ease-out) both; }
 .motion .gate-title .gl:nth-child(1) { animation-delay: .38s; }
 .motion .gate-title .gl:nth-child(2) { animation-delay: .52s; }
@@ -766,7 +775,9 @@ html.page-lock { overflow: hidden; }
 @media (max-width: 920px) {
   .hero { min-height: 0; padding-top: 28px; }
   .hero-grid { display: flex; flex-direction: column; }
-  .hero-stage { --size: min(84vw, 420px); position: relative; order: -1; right: auto; top: auto; margin: -10px auto -36px; }
+  /* The headline, the words and the buttons first; the orb and its friends after them, smaller. (Before 2026-10-07 the
+     orb came first and pushed the headline about 490 px down a 396 px wide window, out of view at 200% zoom.) */
+  .hero-stage { --size: min(62vw, 300px); position: relative; right: auto; top: auto; margin: 26px auto -12px; }
   .hero-copy { max-width: none; text-align: center; }
   .hero-lede { margin-inline: auto; }
   .hero .cta-row, .hero-meta, .hero-live, .hero-soon { justify-content: center; }
@@ -789,6 +800,13 @@ html.page-lock { overflow: hidden; }
   .jn-steps li::after { display: none; }
   .jn-note { margin-top: 6px; }
   .jn-progress { bottom: 18px; }
+}
+/* A short window (a laptop at 200% zoom is 640 x 400 CSS px) shows the buttons on its first screen: the Coming in 0.5 pill
+   steps aside, since the line under the buttons says the same, and the gaps tighten. */
+@media (max-width: 920px) and (max-height: 560px) {
+  .hero { padding-top: 12px; }
+  .hero-pill { display: none; }
+  .hero .cta-row { margin-top: 20px; }
 }
 @media (max-width: 720px) {
   .hero-title { font-size: clamp(2.6rem, 12vw, 3.6rem); }

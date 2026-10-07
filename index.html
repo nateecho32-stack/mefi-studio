@@ -85,12 +85,13 @@
   <div class="gate-inner">
     <span class="gate-orb-slot" id="gate-orb-slot" aria-hidden="true"><span class="gate-pearl"></span></span>
     <p class="gate-brand"><img src="assets/icon-256.png" width="26" height="26" alt="">Mefi Studio</p>
+    <p class="gate-pre" data-until="0.5"><b>Preview</b>Studio 0.5, out soon</p>
     <h1 class="gate-title" id="gate-title"><span class="gl">The social app</span> <span class="gl"><span class="grad">for vibe coders.</span></span></h1>
     <div class="gate-actions">
       <button type="button" class="gate-play" id="gate-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg>Try the demo</button>
       <button type="button" class="gate-skip" id="gate-skip">Skip to the site<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
     </div>
-    <p class="gate-note" id="gate-note">A guided one-minute demo in your browser, with made-up friends. Nothing to install.</p>
+    <p class="gate-note" id="gate-note"><span data-until="0.5">A guided one-minute preview of Studio 0.5 in your browser, with made-up friends. It waits for you at each step. Today's download is 0.4.4.</span><span data-from="0.5" hidden>A guided one-minute demo in your browser, with made-up friends. It waits for you at each step.</span> <button type="button" class="gate-watch" id="gate-watch">Or watch it play</button></p>
   </div>
 </div>
 
@@ -102,9 +103,10 @@
       <h1 id="hero-title" class="hero-title" data-split data-split-manual tabindex="-1"><span class="ln">The social app</span> <span class="ln"><span class="grad shimmer">for vibe coders.</span></span></h1>
       <p class="hero-lede h-enter" style="--d:3">Hang out in rooms, see what your friends are making, and build right next to them. Studio runs the AI you already use, like Claude Code, Codex and OpenCode, so nobody has to vibe code alone.</p>
       <div class="cta-row h-enter" style="--d:4">
-        <a class="btn btn-primary btn-lg" href="download.html" data-magnetic><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download for Windows</a>
+        <a class="btn btn-primary btn-lg" href="download.html" data-magnetic><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span data-until="0.5">Download 0.4.4 for Windows</span><span data-from="0.5" hidden>Download for Windows</span></a>
         <button type="button" class="btn btn-lg btn-try" data-play-demo hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg>Try the demo</button>
       </div>
+      <p class="soon-line hero-soon h-enter" style="--d:4" data-until="0.5">Everything on this page is Studio 0.5, out soon. Until then the download is 0.4.4.</p>
       <ul class="hero-meta h-enter" style="--d:5">
         <li>Free and open source</li>
         <li>Windows 10 and 11</li>
@@ -115,7 +117,6 @@
         <a class="hero-discord" href="https://discord.gg/xgfKc5pVxG" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg>Join the Discord <span aria-hidden="true">↗</span></a>
         <p class="hero-release" data-latest-hint>Latest release on <a href="https://github.com/nateecho32-stack/mefi-studio/releases/latest" rel="noopener">GitHub</a></p>
       </div>
-      <p class="soon-line hero-soon h-enter" style="--d:7" data-until="0.5">Everything on this page is Studio 0.5, out soon. Until then the download is 0.4.4.</p>
     </div>
     <div class="hero-stage" aria-hidden="true">
       <div class="orb" id="hero-orb"><span class="orb-pearl"></span></div>
@@ -185,6 +186,7 @@
       <li data-reveal><b>The Lobby</b><span>Who's online, what friends are building right now, the week's top project, and a pop-up when they show up.</span></li>
       <li data-reveal><b>Play what friends made</b><span>Put it on the Project hub and friends play it in a click. A two-minute play earns you both credits.</span></li>
     </ul>
+    <p class="fine center rm-req" data-reveal>Building in Studio never needs Discord. Rooms, the Lobby, the Project hub and the Build Jam sign you in with Discord, and your account needs to be in the Void Engine server.</p>
     <div class="rm-try" data-reveal>
       <button type="button" class="btn btn-lg btn-try" data-play-demo hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg>Try the demo</button>
       <p class="fine">Build something with made-up friends in about a minute, right here in your browser.</p>
@@ -361,9 +363,10 @@
     </div>
     <div class="jam-grid" data-stagger="100">
       <article class="jam-card jam-main" data-reveal data-spot>
-        <p class="jam-k">This week's Build Jam</p>
+        <p class="jam-k"><span data-until="0.5">A sample Build Jam week</span><span data-from="0.5" hidden>This week's Build Jam</span></p>
         <p class="jam-theme" id="jam-theme">Tiny worlds</p>
         <p class="jam-phase" id="jam-phase">Make something, share it on the Project hub and enter it.</p>
+        <p class="jam-fine jam-sample" data-until="0.5">The jam runs inside Studio's Friends, so you can enter from Studio 0.5, out soon. Today's download, 0.4.4, can't.</p>
         <div class="jam-week" aria-hidden="true">
           <div class="jw-bar"><i class="jw-enter"></i><i class="jw-vote"></i><i class="jw-now" id="jam-now"></i></div>
           <div class="jw-days"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span></div>
@@ -373,9 +376,10 @@
       </article>
       <article class="jam-card jam-cowork" data-reveal data-spot>
         <p class="jam-k">Co-work hours</p>
-        <p class="jam-big" id="cowork-next">Three times a day</p>
+        <p class="jam-big"><span data-until="0.5">Three times a day</span><span id="cowork-next" data-from="0.5" hidden>Three times a day</span></p>
         <ul class="cowork-times" id="cowork-times"><li>02:00 UTC</li><li>10:00 UTC</li><li>18:00 UTC</li></ul>
         <p class="jam-fine">An hour of working side by side. Stay for most of it with someone else there and you both earn credits.</p>
+        <p class="jam-fine jam-sample" data-until="0.5">Times are in your time zone. You can join from Studio 0.5, out soon.</p>
       </article>
       <article class="jam-card jam-ranks" data-reveal data-play data-spot>
         <p class="jam-k">Ranks you earn</p>

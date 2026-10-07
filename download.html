@@ -74,7 +74,7 @@
         <h1 id="page-title">Get Mefi Studio for Windows</h1>
         <p class="lede">Free and open source. One zip, no installer and no Studio account: unzip it, open it and pick a project folder.</p>
         <ul class="ticks dl-ticks">
-          <li><strong>Portable.</strong> The app and its work stay in the folder you unzip. Nothing else gets installed.</li>
+          <li><strong>Portable.</strong> Nothing gets installed. The app, your tasks, plans and chats stay in the folder you unzip; settings, saved keys and your project list are kept in Windows' app data. <a href="#updates">What to back up</a></li>
           <li><strong>Private by default.</strong> No telemetry. Your projects stay on your PC, and an AI service you connect only gets what you send through it.</li>
           <li><strong>Checkable.</strong> Every release comes with a SHA-256 file, so you can confirm the zip is the one that was published.</li>
         </ul>
@@ -224,6 +224,7 @@ $want = (Get-Content "$zip.sha256").Split(" ")[0]
         <h2 id="updates-title">Studio tells you when there's a new release</h2>
         <p class="muted">The app looks for new releases on GitHub every 20 minutes. When one is out, the menu shows an update badge and a notice says so. To look right away, open <strong>Settings › System › Updates</strong> and press <strong>Check GitHub</strong>.</p>
         <p class="muted"><strong>Update</strong> downloads the new build, checks its SHA-256, and swaps the app files after Studio closes. Your data folder is never overwritten.</p>
+        <p class="muted"><strong>What to back up:</strong> the <code>resources\app\data</code> folder inside the app, which holds your tasks, ideas, plans and conversations, and <code>%APPDATA%\Mefi's Studio AI+</code>, which holds your settings and project list. Saved keys are encrypted for this PC, so on another PC you add them again.</p>
         <p class="muted">Running from source? Pull <code>main</code>. Live update applies the changes while Studio runs.</p>
         <p><a href="wiki/#/updates">Update Studio in the wiki →</a></p>
       </div>

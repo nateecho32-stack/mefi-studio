@@ -7,8 +7,11 @@
    (or reverts) the changes, tries the finished site in a preview window and
    shares it in a room. Only what the current step asks for can be pressed:
    anything else nudges the hint. The explaining waits for the end card,
-   which can start another project. Every step plays itself after a quiet
-   while, Skip and Escape always leave, and nothing is sent anywhere. */
+   which can start another project. Try it (the default) waits at every
+   step until the visitor presses; Watch presses for them after a short
+   look; Pause and Restart are always in the banner (2026-10-07: a review
+   found it answering, accepting and sharing while the visitor was still
+   reading). Skip and Escape always leave, and nothing is sent anywhere. */
 (function () {
   "use strict";
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -113,6 +116,7 @@
     close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
     play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg>',
     pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>',
+    restart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/></svg>',
     lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
     folder: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>',
     pulse: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></svg>',
@@ -152,7 +156,16 @@
           '<span class="pl-pill work" aria-hidden="true"><i></i><em class="n-work">0</em> working</span>' +
           '<button type="button" class="pl-skip">Skip to the site' + SVG.close + '</button>' +
         '</header>' +
-        '<p class="pl-banner"><b>Guided demo</b><span class="pl-banner-long">Made-up friends and projects, sped up. Press the glowing button at each step, or wait and it plays itself.</span><span class="pl-banner-short">Press the glowing button, or wait.</span></p>' +
+        '<div class="pl-banner"><b>Guided demo</b><b class="pl-pre" data-until="0.5">0.5 preview</b>' +
+          '<span class="pl-banner-long" aria-live="polite"></span><span class="pl-banner-short"></span>' +
+          '<span class="pl-ctrls" role="group" aria-label="Demo controls">' +
+            '<span class="pl-modes" role="group" aria-label="How the demo plays">' +
+              '<button type="button" data-mode="try" aria-pressed="true" title="It waits at each step until you press">Try it</button>' +
+              '<button type="button" data-mode="watch" aria-pressed="false" title="It plays itself">Watch</button>' +
+            '</span>' +
+            '<button type="button" class="pl-pause" aria-pressed="false" aria-label="Pause the demo" title="Pause">' + SVG.pause + '<span>Pause</span></button>' +
+            '<button type="button" class="pl-restart" aria-label="Restart the demo" title="Start over">' + SVG.restart + '<span>Restart</span></button>' +
+          '</span></div>' +
         '<div class="pl-body">' +
           '<nav class="pl-rail" aria-hidden="true"><i class="on" title="Home">' + SVG.today + '</i><i class="r-friends" title="Friends">' + SVG.friends + '<em class="badge">2</em></i><i title="Projects">' + SVG.folder + '</i><i title="Activity">' + SVG.pulse + '</i></nav>' +
           '<main class="pl-main">' +
@@ -205,8 +218,15 @@
     var live = $(".pl-live"), box = $("#pl-idea");
     function say(text) { live.textContent = text; }
     function later(fn, ms) { var t = setTimeout(fn, ms); timers.push(t); return t; }
-    function sleep(ms) { return new Promise(function (r) { later(r, still() ? Math.min(ms, 40) : ms); }); }
+    // Pause holds every wait until Play. `opts.mode` is the visitor's choice ("try" waits for a press, "watch" presses after
+    // a short look); it lives on `opts`, so Restart and Try another project keep it.
+    var paused = false, holds = [];
+    if (opts.mode !== "watch") opts.mode = "try";
+    function playing() { return paused ? new Promise(function (r) { holds.push(r); }) : Promise.resolve(); }
+    function sleep(ms) { return new Promise(function (r) { later(r, still() ? Math.min(ms, 40) : ms); }).then(playing); }
     function alive() { if (!token.alive) throw new Error("left"); }
+    // Who made each call, for the end card: the visitor, or Watch pressing for them.
+    var byYou = { ask: false, accept: false, share: false }, pressing = false, pressedByDemo = false;
     if (again) app.classList.add("fresh");
 
     var h = new Date().getHours();
@@ -225,7 +245,7 @@
     }
     root.addEventListener("click", function (e) {
       var t = e.target;
-      if (!token.alive || !(t instanceof Element) || t.closest(".pl-skip, .pl-end")) return;
+      if (!token.alive || !(t instanceof Element) || t.closest(".pl-skip, .pl-end, .pl-ctrls")) return;
       for (var i = 0; i < allowed.length; i++) if (allowed[i].contains(t)) return;
       e.preventDefault(); e.stopPropagation();
       nudge();
@@ -273,17 +293,28 @@
     }
     window.addEventListener("resize", placeHint, on);
 
-    // Waits for a click on one of the targets (and lets `also` be pressed meanwhile);
-    // after a quiet while it clicks the first target itself.
+    // Waits for a click on one of the targets (and lets `also` be pressed meanwhile). In Watch it presses the first target
+    // itself after a short look, which a hand on the mouse or the keys puts off; Try it never presses, and nor does a pause.
+    var WATCH_MS = 3200, waiting = null;
     function waitClick(targets, label, idleMs, side, anchor, also) {
       targets = [].concat(targets);
       allow(targets.concat(also || []));
       return new Promise(function (resolve) {
         var idle = null, done = false;
-        function arm() { clearTimeout(idle); idle = later(function () { if (token.alive && !done) targets[0].click(); }, idleMs || 12000); }
+        function arm() {
+          clearTimeout(idle); idle = null;
+          if (done || paused || opts.mode !== "watch") return;
+          idle = later(function () {
+            if (!token.alive || done || paused || opts.mode !== "watch") return;
+            pressing = true;
+            try { targets[0].click(); } finally { pressing = false; }
+          }, Math.min(idleMs || WATCH_MS, WATCH_MS));
+        }
         function finish(e) {
           if (done) return; done = true;
           clearTimeout(idle);
+          waiting = null;
+          pressedByDemo = pressing;
           targets.forEach(function (t) { t.removeEventListener("click", finish); });
           root.removeEventListener("pointermove", arm); root.removeEventListener("keydown", arm);
           hint(null); allow([]);
@@ -292,9 +323,47 @@
         targets.forEach(function (t) { t.addEventListener("click", finish); });
         root.addEventListener("pointermove", arm, { passive: true, signal: ctl.signal }); root.addEventListener("keydown", arm, on);
         hint(anchor || targets[0], label, side);
+        waiting = { arm: arm };
         arm();
       });
     }
+
+    // ---- the banner's controls: Try it or Watch, Pause, Restart ---------------------
+    var pauseBtn = $(".pl-pause"), modeBtns = $$(".pl-modes button");
+    function paintBanner() {
+      var watch = opts.mode === "watch";
+      $(".pl-banner-long").textContent = paused ? "Paused. Press Play to go on."
+        : watch ? "Made-up friends and projects, sped up. It plays itself; pause it any time."
+        : "Made-up friends and projects, sped up. It waits at each step until you press the glowing button.";
+      $(".pl-banner-short").textContent = paused ? "Paused." : watch ? "It plays itself." : "It waits for you.";
+      modeBtns.forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.mode === opts.mode)); });
+      pauseBtn.setAttribute("aria-pressed", String(paused));
+      pauseBtn.setAttribute("aria-label", paused ? "Play the demo" : "Pause the demo");
+      pauseBtn.title = paused ? "Play" : "Pause";
+      pauseBtn.innerHTML = (paused ? SVG.play : SVG.pause) + "<span>" + (paused ? "Play" : "Pause") + "</span>";
+      app.classList.toggle("paused", paused);
+      app.dataset.mode = opts.mode;
+    }
+    function setPaused(on) {
+      if (paused === on) return;
+      paused = on;
+      if (!on) holds.splice(0).forEach(function (r) { r(); });
+      if (waiting) waiting.arm();
+      paintBanner();
+      say(on ? "Demo paused." : "Demo playing.");
+    }
+    function setMode(mode) {
+      if (opts.mode === mode) return;
+      opts.mode = mode;
+      if (waiting) waiting.arm();
+      paintBanner();
+      say(mode === "watch" ? "The demo plays itself now." : "The demo waits for you at each step.");
+    }
+    pauseBtn.addEventListener("click", function () { setPaused(!paused); }, on);
+    modeBtns.forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }, on); });
+    $(".pl-restart").addEventListener("click", function () { if (!leaving) restart(); }, on);
+    paintBanner();
+    if (window.SITE && window.SITE.applyRelease) window.SITE.applyRelease();
 
     function step(i) {
       app.dataset.step = String(i);
@@ -479,6 +548,7 @@
         move([[asker, lists.need]]);
         say(spec.tasks[1][1] + " asks: " + spec.ask.q);
         var picked = await waitClick([yes, no], "Your call", 13000, "below", q); alive();
+        byYou.ask = !pressedByDemo;
         answer = picked === no ? "no" : "yes";
         q.classList.add("answered");
         q.appendChild(el("p", "pl-answer", "✓ " + (answer === "yes" ? spec.ask.yes : spec.ask.no)));
@@ -530,6 +600,7 @@
           hint(accept, "Bring them back", "below");
         });
         await waitClick(accept, "Accept", 12000, "below", null, [revert]); alive();
+        byYou.accept = !pressedByDemo;
         fl.classList.remove("reverted");
         accept.disabled = true; revert.disabled = true; accept.textContent = "Accepted ✓";
         note.textContent = "Accepted. It's in your project now.";
@@ -561,6 +632,7 @@
         await sleep(60); alive();
         share.classList.add("in");
         await waitClick(share, "Share it", 9000, "below", null, [w.body]); alive();
+        byYou.share = !pressedByDemo;
         allow([w.body]);
         share.disabled = true; share.classList.add("sent"); share.innerHTML = SVG.friends + "<span>On the Project hub</span>";
         app.classList.add("shared", "sheet-friends");
@@ -584,21 +656,26 @@
     function end() {
       hint(null);
       var more = ORDER.some(function (k) { return built.indexOf(k) < 0; });
+      // Say who made the calls: "You made the call" only when the visitor did, not when Watch pressed for them.
+      var watched = !byYou.ask && !byYou.accept && !byYou.share;
+      var call = byYou.ask && byYou.accept
+        ? '<li><b>You made the call</b> when it mattered, and nothing landed until you accepted it.</li>'
+        : '<li><b>The demo made the call this time.</b> In Studio a builder’s question waits for your answer, and nothing lands until you accept it.</li>';
       var c = el("div", "pl-end");
       c.innerHTML =
         '<div class="pl-end-card" role="document">' +
-          '<p class="pl-k">You just used Mefi Studio</p>' +
+          '<p class="pl-k">' + (watched ? "You just watched Mefi Studio" : "You just used Mefi Studio") + '</p>' +
           '<h2>That’s the whole loop.</h2>' +
           '<ol class="pl-recap">' +
             '<li><b>You said what you wanted.</b> Builders like Claude Code, Codex and OpenCode did the work in your project.</li>' +
-            '<li><b>You made the call</b> when it mattered, and nothing landed until you accepted it.</li>' +
-            '<li><b>Your friends were there the whole time,</b> and saw it the moment you shared it.</li>' +
+            call +
+            '<li><b>Your friends were there the whole time,</b> and saw it the moment it was shared.</li>' +
           '</ol>' +
           '<p class="pl-end-fine">In Studio a real build takes a few minutes and runs on the AI you choose. This one was sped up and made up.</p>' +
           '<p class="pl-end-fine" data-until="0.5">It shows Studio 0.5, out soon. Until then the download is 0.4.4.</p>' +
           '<div class="pl-end-acts"><button type="button" class="pl-enter">See the site</button>' +
             (more ? '<button type="button" class="pl-again">Try another project</button>' : "") +
-            '<a class="pl-get" href="download.html">Download for Windows</a></div>' +
+            '<a class="pl-get" href="download.html"><span data-until="0.5">Download 0.4.4 for Windows</span><span data-from="0.5" hidden>Download for Windows</span></a></div>' +
         '</div>';
       root.appendChild(c);
       if (window.SITE && window.SITE.applyRelease) window.SITE.applyRelease();

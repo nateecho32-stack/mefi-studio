@@ -56,7 +56,8 @@
 .pl-rail svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .pl-rail .badge { position: absolute; right: 2px; top: 2px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; font: 800 10px/16px var(--font-ui); text-align: center; color: #1a1300; background: var(--warn); transform: scale(0); transition: transform .5s var(--ease-spring); }
 .pl-app.shared .pl-rail .badge { transform: scale(1); }
-.pl-main { position: relative; display: flex; flex-direction: column; overflow: auto; padding: clamp(18px, 3vh, 34px) clamp(18px, 3vw, 48px) 28px; scrollbar-width: thin; }
+/* A container: the board lays itself out by the room it has (the compact board, below), not by the window's width. */
+.pl-main { position: relative; display: flex; flex-direction: column; overflow: auto; padding: clamp(18px, 3vh, 34px) clamp(18px, 3vw, 48px) 28px; scrollbar-width: thin; container: pl-main / inline-size; }
 .pl-main > * { flex: none; width: 100%; }
 .pl-hello { display: flex; align-items: center; gap: 14px; max-width: 1060px; margin: 0 auto 16px; }
 .pl-orb { width: 46px; height: 46px; flex: none; border-radius: 50%; background: radial-gradient(circle at 34% 28%, #fff 0 9%, rgb(255 255 255 / 0.55) 20%, transparent 42%), conic-gradient(from 200deg, rgb(var(--accent-3-rgb)), rgb(var(--accent-2-rgb)), var(--accent-bright), rgb(var(--accent-3-rgb))); box-shadow: inset -5px -8px 14px rgb(0 0 0 / 0.55), 0 0 26px rgb(var(--accent-2-rgb) / 0.45); animation: pl-breathe 5s ease-in-out infinite; }
@@ -82,8 +83,24 @@
 /* It says what it is: a guided demo with made-up people. */
 .pl-banner { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; padding: 0 12px; font-size: 12.5px; color: var(--muted); background: linear-gradient(90deg, rgb(var(--accent-2-rgb) / 0.04), rgb(var(--accent-2-rgb) / 0.12), rgb(var(--accent-2-rgb) / 0.04)); border-bottom: 1px solid rgb(var(--accent-2-rgb) / 0.2); white-space: nowrap; overflow: hidden; }
 .pl-banner b { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); background: linear-gradient(180deg, #fff, var(--accent-bright)); }
-.pl-banner-long, .pl-banner-short { overflow: hidden; text-overflow: ellipsis; }
+.pl-banner-long, .pl-banner-short { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .pl-banner-short { display: none; }
+/* Until 0.5 is out the demo says it is a preview, all the way through (site.js applyRelease hides it after). */
+.pl-banner b.pl-pre { color: var(--accent-bright); background: rgb(var(--accent-2-rgb) / 0.14); box-shadow: inset 0 0 0 1px rgb(var(--accent-2-rgb) / 0.45); }
+.pl-banner b[hidden] { display: none; }
+/* The demo's own controls: Try it (it waits for you) or Watch (it plays itself), Pause and Restart. */
+.pl-ctrls { display: inline-flex; align-items: center; gap: 6px; flex: none; margin-left: 4px; }
+.pl-modes { display: inline-flex; padding: 2px; border-radius: 999px; background: rgb(255 255 255 / 0.05); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1); }
+.pl-ctrls button { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 10px; border: 0; border-radius: 999px; font: 650 12px var(--font-ui); color: var(--muted); background: transparent; cursor: pointer; white-space: nowrap; transition: color .2s, background .2s; }
+.pl-ctrls button:hover { color: var(--ivory); background: rgb(255 255 255 / 0.06); }
+.pl-ctrls button:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
+.pl-modes button[aria-pressed="true"] { color: var(--ink); background: linear-gradient(180deg, #fff, var(--accent-bright)); }
+.pl-pause, .pl-restart { box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
+.pl-pause[aria-pressed="true"] { color: var(--ink); background: var(--warn); box-shadow: none; }
+.pl-ctrls svg { flex: none; width: 12px; height: 12px; fill: currentColor; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pl-restart svg { fill: none; }
+/* Paused: what moves on its own stops with it (the waits are held in play.js). */
+.pl-app.paused *, .pl-app.paused *::before, .pl-app.paused *::after { animation-play-state: paused !important; }
 .pl-toast { position: absolute; left: 50%; bottom: 58px; z-index: 145; max-width: min(520px, calc(100% - 32px)); margin: 0; padding: 10px 16px; border-radius: 12px; font-size: 13.5px; font-weight: 600; text-align: center; color: var(--ivory); background: rgb(var(--bg-2-rgb) / 0.96); box-shadow: 0 0 0 1px rgb(var(--accent-2-rgb) / 0.4), 0 20px 40px -16px rgb(0 0 0 / 0.9); opacity: 0; transform: translate(-50%, 10px); transition: opacity .3s ease, transform .45s var(--ease-spring); pointer-events: none; }
 .pl-toast.on { opacity: 1; transform: translate(-50%, 0); }
 .pl-orb.sm { width: 28px; height: 28px; animation: none; }
@@ -155,8 +172,10 @@
 .pl-col[data-col="need"] h3 { color: var(--warn); }
 .pl-col[data-col="run"] h3 { color: var(--live); }
 .pl-col[data-col="review"] h3 { color: var(--info); }
-.pl-list { display: grid; gap: 9px; }
-.pl-card { position: relative; padding: 11px 12px 12px; border-radius: 13px; background: var(--pl-card); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07), 0 10px 24px -16px rgb(0 0 0 / 0.9); }
+/* minmax(0, 1fr) and min-width: 0: a card is as wide as its column, never as wide as its one-line meta (an automatic
+   track let "Claude Code · writing index.html" push cards past their column on a laptop). */
+.pl-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }
+.pl-card { position: relative; min-width: 0; padding: 11px 12px 12px; border-radius: 13px; background: var(--pl-card); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.07), 0 10px 24px -16px rgb(0 0 0 / 0.9); }
 .pl-card.in { animation: pl-card-in .7s var(--ease-spring) both; animation-delay: calc(var(--i, 0) * 110ms); }
 @keyframes pl-card-in { from { opacity: 0; transform: translateY(14px) scale(.94); } }
 .pl-title { display: block; padding-right: 22px; font-size: 13.5px; font-weight: 650; color: var(--ivory); line-height: 1.3; }
@@ -173,7 +192,8 @@
 .pl-card.asking { box-shadow: inset 0 0 0 1px rgb(255 212 121 / 0.5), 0 0 30px -10px rgb(255 212 121 / 0.4); }
 .pl-ask { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--pl-line); }
 .pl-q { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--ivory); }
-.pl-opt { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 10px; font: 600 12.5px var(--font-ui); text-align: left; color: var(--text); background: rgb(255 255 255 / 0.03); border: 1px solid rgb(255 255 255 / 0.12); cursor: pointer; transition: background .2s, border-color .2s, color .2s; }
+/* flex-wrap: in a narrow card "Recommended" goes under its answer instead of squeezing it to one word a line. */
+.pl-opt { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; width: 100%; margin-top: 6px; padding: 8px 10px; border-radius: 10px; font: 600 12.5px var(--font-ui); text-align: left; color: var(--text); background: rgb(255 255 255 / 0.03); border: 1px solid rgb(255 255 255 / 0.12); cursor: pointer; transition: background .2s, border-color .2s, color .2s; }
 .pl-opt:hover { border-color: rgb(255 255 255 / 0.28); background: rgb(255 255 255 / 0.06); }
 .pl-opt em { margin-left: auto; font-style: normal; font-size: 10.5px; padding: 1px 7px; border-radius: 6px; color: var(--muted); background: rgb(255 255 255 / 0.08); }
 .pl-ask.answered .pl-opt { display: none; }
@@ -185,6 +205,21 @@
 .pl-checks i { position: relative; width: 15px; height: 15px; border-radius: 50%; background: rgb(87 255 154 / 0.18); box-shadow: inset 0 0 0 1px rgb(87 255 154 / 0.6); flex: none; }
 .pl-checks i::after { content: ""; position: absolute; left: 5px; top: 3px; width: 3px; height: 6px; border: solid var(--live); border-width: 0 1.7px 1.7px 0; transform: rotate(45deg); }
 .pl-checks.gone { opacity: 0; transition: opacity .4s; }
+
+/* A narrow board (a laptop or a small window; a review measured 153 px columns at 1188 x 761, with cards spilling out of
+   them) lists only the groups that hold something, one under the other, as Social's Home does: their cards side by side,
+   and a question in a panel as wide as the board, its answers in a row. */
+@container pl-main (max-width: 980px) {
+  .pl-board { grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; }
+  .pl-col { min-height: 0; }
+  .pl-col:not(.has) { display: none; }
+  .pl-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); }
+  .pl-col[data-col="need"] .pl-list { grid-template-columns: minmax(0, 1fr); }
+  .pl-col[data-col="need"] .pl-ask { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+  .pl-col[data-col="need"] :is(.pl-q, .pl-answer) { flex: 1 0 100%; }
+  .pl-col[data-col="need"] .pl-opt { width: auto; margin-top: 0; }
+  .pl-board:not(:has(.has))::before { content: "Your tasks show up here."; display: block; padding: 18px; border-radius: 14px; text-align: center; color: var(--dim); box-shadow: inset 0 0 0 1px var(--pl-line); }
+}
 
 /* ---- the side panel ------------------------------------------------------------ */
 .pl-side { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; background: rgb(var(--bg-2-rgb) / 0.7); border-left: 1px solid var(--pl-line); }
@@ -238,7 +273,7 @@
 .pl-share svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
 
 /* ---- the rails: only what the step asks for can be pressed -------------------------- */
-.pl-app button:not(.pl-ok):not(.pl-ok *):not(.pl-skip) { cursor: default; }
+.pl-app button:not(.pl-ok):not(.pl-ok *):not(.pl-skip):not(.pl-ctrls button) { cursor: default; }
 .pl-app.fresh { animation: pl-fresh .6s var(--ease-out) both; }
 @keyframes pl-fresh { from { opacity: 0; transform: scale(.985); } }
 
@@ -488,6 +523,14 @@ canvas.pl-target { animation: pl-pulse 1.8s var(--ease-out) infinite; }
   .pv-band-hero::after { width: 150px; height: 150px; right: -56px; bottom: -64px; opacity: .55; }
 }
 @media (max-width: 480px) {
+  /* a phone keeps the labels and the controls; the line of words goes, the labels are smaller and Pause and Restart are icons */
+  .pl-banner { gap: 5px; padding: 0 6px; justify-content: flex-start; }
+  .pl-banner b { padding: 2px 7px; font-size: 10px; letter-spacing: .04em; }
+  .pl-banner-short { display: none; }
+  .pl-ctrls { gap: 4px; margin-left: auto; }
+  .pl-modes button { padding: 0 8px; }
+  .pl-pause span, .pl-restart span { display: none; }
+  .pl-ctrls :is(.pl-pause, .pl-restart) { width: 24px; padding: 0; justify-content: center; }
   .pl-top { gap: 8px; padding: 0 8px 0 12px; }
   .pl-crumb i, .pl-crumb .pl-tail { display: none; }
   .pl-box-row { flex-direction: column; align-items: stretch; }
