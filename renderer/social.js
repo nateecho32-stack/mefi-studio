@@ -112,12 +112,14 @@
     if (typeof api?.hubStatus !== "function" || typeof api?.hubRoom !== "function" || friendsCardOff()) { root.hidden = true; root.dataset.state = "unavailable"; return root; }
     let timer = 0, seq = 0, tried = false, readAt = 0;
     const gone = () => root.isConnected === false;
+    // Social's Home stays in the page while Studio is up (its layer is hidden): the card reads nothing until it is seen again.
+    const seen = () => document.visibilityState !== "hidden" && (typeof root.getClientRects !== "function" || root.getClientRects().length > 0);
     const schedule = (ms = REFRESH_MS) => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         timer = 0;
         if (gone()) return;
-        if (document.visibilityState === "hidden") { schedule(); return; }
+        if (!seen()) { schedule(); return; }
         void load();
       }, ms);
     };
@@ -227,9 +229,11 @@
       }
       body.replaceChildren(...parts);
     }
-    // Back on screen (the window came forward) after a minute or more: read again soon rather than wait out the five minutes.
-    const wake = () => { if (!gone() && document.visibilityState !== "hidden" && Date.now() - readAt >= WAKE_AFTER_MS) schedule(800); };
+    // Back on screen (the window came forward, or Home shows again: renderer/today.js show()) after a minute or more: read
+    // again soon rather than wait out the five minutes.
+    const wake = () => { if (!gone() && seen() && Date.now() - readAt >= WAKE_AFTER_MS) schedule(800); };
     document.addEventListener?.("visibilitychange", wake);
+    root.wake = wake;
     root.refresh = () => { tried = false; void load(); };
     root.dispose = () => { clearTimeout(timer); timer = 0; seq += 1; document.removeEventListener?.("visibilitychange", wake); };
     say("loading", "Looking for your friends…");

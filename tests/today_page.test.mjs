@@ -481,3 +481,15 @@ test("Social's Home puts your work beside the Friends card, and the rail's Activ
   t.today.stop();
   assert.equal(disposed, 1, "the Friends card stops reading when Home goes");
 });
+
+test("Activity has every row; finished work past the day's six is one press from the task board, as on Studio's Today", async () => {
+  const many = Array.from({ length: 9 }, (_, index) => finished({ id: `d${index}`, title: `Done thing ${index}`, doneAt: NOW - (index + 1) * 600000 }));
+  const t = await up({ data: board({ tasks: many }) });
+  // Home shows three of the six and leaves the rest to Activity.
+  assert.equal(cardsOf(t, "done").length, 3);
+  const home = group(t, "done").querySelector(".today-more");
+  assert.equal(home.textContent, "6 more", "three Home leaves out, and three past the day's six");
+  assert.equal(home.dataset.to, "activity");
+  await home.click();
+  assert.deepEqual(t.nav.gone.at(-1), ["activity", null]);
+});

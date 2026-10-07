@@ -46,15 +46,18 @@ function load({ mode = "vibe", bridge = {}, registry = {}, sessions = null, work
     ...(workspace ? { MefiWorkspace: workspace } : {}),
     mefiStudio: bridge,
   };
+  // The page's clock, which a test moves on (the vm has its own Date, so the host's cannot be patched for it).
+  const clock = { now: Date.now() };
   const context = vm.createContext({
     window, document, console,
+    Date: class extends Date { static now() { return clock.now; } },
     localStorage: { getItem: (key) => storage.get(key) ?? null },
     setTimeout: (fn, ms) => { timers.push({ fn, ms, cancelled: false }); return timers.length; },
     clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].cancelled = true; },
     requestAnimationFrame: (fn) => { fn(); return 1; },
   });
   vm.runInContext(source, context);
-  return { window, document, social: window.MefiSocial, goes, modes, toasts, registered, claimed, released, timers, state, docListeners };
+  return { window, document, social: window.MefiSocial, goes, modes, toasts, registered, claimed, released, timers, state, docListeners, clock };
 }
 const live = (timers) => timers.filter((timer) => !timer.cancelled);
 
@@ -199,4 +202,32 @@ test("two switches per device put Social back as it was: every page in Social's 
   const off = card.social.peopleCard();
   assert.equal(off.hidden, true);
   assert.equal(card.timers.length, 0, "and it asks the relay nothing");
+});
+
+test("the Friends card reads nothing while Social's Home is out of sight, and catches up when Home shows again", async () => {
+  let reads = 0;
+  const t = load({ bridge: { hubStatus: async () => { reads += 1; return { ok: true, status: { configured: true, linked: true, state: "ready", front: true, user: { id: "me" } } }; }, hubRoom: async () => ({ ok: true, online: { count: 1, people: [] }, rooms: [] }) } });
+  const card = t.social.peopleCard();
+  let shown = true;
+  card.getClientRects = () => (shown ? [{}] : []);
+  t.document.body.append(card);
+  await settle(); await settle();
+  assert.equal(reads, 1, "one read when it shows");
+  // Studio is up: Home's layer is hidden, and the card with it.
+  shown = false;
+  const due = live(t.timers).find((timer) => timer.ms === 300000);
+  due.cancelled = true; due.fn();
+  await settle();
+  assert.equal(reads, 1, "nothing is read for a card nobody can see");
+  assert.ok(live(t.timers).some((timer) => timer.ms === 300000), "it looks again later");
+  // Home again, a minute or more after the last read: renderer/today.js show() wakes it.
+  shown = true;
+  t.clock.now += 120000;
+  card.wake();
+  const soon = live(t.timers).find((timer) => timer.ms === 800);
+  assert.ok(soon, "a read soon, not in five minutes");
+  soon.cancelled = true; soon.fn();
+  await settle(); await settle();
+  assert.equal(reads, 2);
+  card.dispose();
 });

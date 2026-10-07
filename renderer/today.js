@@ -1028,15 +1028,19 @@
       // A list hides a group with nothing in it; the board's columns stay and say they are empty.
       if (style === "list") { if (group.hidden !== (cards.length === 0)) group.hidden = cards.length === 0; if (empty) empty.hidden = true; }
       else if (empty && empty.hidden !== (cards.length > 0)) empty.hidden = cards.length > 0;
-      const extra = style === "list" ? cards.length - kept.length : key === "done" ? current.board.doneMore : 0;
+      // "N more": rows Home leaves for Activity, and finished work past the day's six, which is the task board's.
+      const capped = cards.length - kept.length;
+      const extra = (style === "list" ? capped : 0) + (key === "done" ? current.board.doneMore : 0);
       let more = group.querySelector(".today-more");
       if (extra > 0 && !more) {
-        more = style === "list"
-          ? button("", "today-link today-more", () => window.MefiNav?.go?.("activity"), { title: "Everything in Activity" })
-          : button("", "today-link today-more", () => window.MefiNav?.go?.("tasks", { filter: "done" }), { title: "All finished work" });
+        more = button("", "today-link today-more", () => (more.dataset.to === "activity" ? window.MefiNav?.go?.("activity") : window.MefiNav?.go?.("tasks", { filter: "done" })));
         group.append(more);
       }
-      if (more) { more.hidden = !(extra > 0); more.textContent = `${extra} more`; }
+      if (more) {
+        more.dataset.to = style === "list" && capped > 0 ? "activity" : "tasks";
+        more.title = more.dataset.to === "activity" ? "Everything in Activity" : "All finished work";
+        more.hidden = !(extra > 0); more.textContent = `${extra} more`;
+      }
     }
     const feed = holder.querySelector?.(".today-latest");
     if (feed) {
@@ -1208,6 +1212,8 @@
     state.host = "vibe";
     if (layer.dataset) layer.dataset.today = "on";
     paint(); startClock();
+    // The Friends card (renderer/social.js) reads nothing while Home is away; back on Home it catches up.
+    byId("social-people")?.wake?.();
     return true;
   }
   function hide() {

@@ -10723,11 +10723,11 @@ html[data-ui-mode="vibe"] #help-overlay .sheet-head { border-radius: 18px; }
 html[data-ui-mode="vibe"] #help-overlay .eyebrow { color: var(--gold-bright); }
 html[data-ui-mode="vibe"] .overlay:not(.workspace-page) .sheet-close { border-radius: 12px; }
 
-/* The project panel: a floating card beside the rail, or under Vibe's
-   project button on the Vibe page. */
+/* The project panel: a floating card beside the rail on every Social page; on Home, where the rail stands too since
+   2026-10-06, it sits lower, under the project button's row. */
 html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: calc(10px + var(--shell-y1)); left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
 html[data-ui-mode="vibe"] #workspace-sidebar[data-open="true"] #workspace-sidebar-panel { transform: none; opacity: 1; box-shadow: var(--studio-float-shadow); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-x0) + 24px); bottom: calc(24px + var(--shell-y1)); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project { border-radius: 14px; font-size: 13px; }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project.selected { color: var(--ivory); background: var(--v-menu-pick); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }
@@ -97226,15 +97226,19 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       // A list hides a group with nothing in it; the board's columns stay and say they are empty.
       if (style === "list") { if (group.hidden !== (cards.length === 0)) group.hidden = cards.length === 0; if (empty) empty.hidden = true; }
       else if (empty && empty.hidden !== (cards.length > 0)) empty.hidden = cards.length > 0;
-      const extra = style === "list" ? cards.length - kept.length : key === "done" ? current.board.doneMore : 0;
+      // "N more": rows Home leaves for Activity, and finished work past the day's six, which is the task board's.
+      const capped = cards.length - kept.length;
+      const extra = (style === "list" ? capped : 0) + (key === "done" ? current.board.doneMore : 0);
       let more = group.querySelector(".today-more");
       if (extra > 0 && !more) {
-        more = style === "list"
-          ? button("", "today-link today-more", () => window.MefiNav?.go?.("activity"), { title: "Everything in Activity" })
-          : button("", "today-link today-more", () => window.MefiNav?.go?.("tasks", { filter: "done" }), { title: "All finished work" });
+        more = button("", "today-link today-more", () => (more.dataset.to === "activity" ? window.MefiNav?.go?.("activity") : window.MefiNav?.go?.("tasks", { filter: "done" })));
         group.append(more);
       }
-      if (more) { more.hidden = !(extra > 0); more.textContent = `${extra} more`; }
+      if (more) {
+        more.dataset.to = style === "list" && capped > 0 ? "activity" : "tasks";
+        more.title = more.dataset.to === "activity" ? "Everything in Activity" : "All finished work";
+        more.hidden = !(extra > 0); more.textContent = `${extra} more`;
+      }
     }
     const feed = holder.querySelector?.(".today-latest");
     if (feed) {
@@ -97406,6 +97410,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     state.host = "vibe";
     if (layer.dataset) layer.dataset.today = "on";
     paint(); startClock();
+    // The Friends card (renderer/social.js) reads nothing while Home is away; back on Home it catches up.
+    byId("social-people")?.wake?.();
     return true;
   }
   function hide() {
@@ -98163,12 +98169,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (typeof api?.hubStatus !== "function" || typeof api?.hubRoom !== "function" || friendsCardOff()) { root.hidden = true; root.dataset.state = "unavailable"; return root; }
     let timer = 0, seq = 0, tried = false, readAt = 0;
     const gone = () => root.isConnected === false;
+    // Social's Home stays in the page while Studio is up (its layer is hidden): the card reads nothing until it is seen again.
+    const seen = () => document.visibilityState !== "hidden" && (typeof root.getClientRects !== "function" || root.getClientRects().length > 0);
     const schedule = (ms = REFRESH_MS) => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         timer = 0;
         if (gone()) return;
-        if (document.visibilityState === "hidden") { schedule(); return; }
+        if (!seen()) { schedule(); return; }
         void load();
       }, ms);
     };
@@ -98278,9 +98286,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       }
       body.replaceChildren(...parts);
     }
-    // Back on screen (the window came forward) after a minute or more: read again soon rather than wait out the five minutes.
-    const wake = () => { if (!gone() && document.visibilityState !== "hidden" && Date.now() - readAt >= WAKE_AFTER_MS) schedule(800); };
+    // Back on screen (the window came forward, or Home shows again: renderer/today.js show()) after a minute or more: read
+    // again soon rather than wait out the five minutes.
+    const wake = () => { if (!gone() && seen() && Date.now() - readAt >= WAKE_AFTER_MS) schedule(800); };
     document.addEventListener?.("visibilitychange", wake);
+    root.wake = wake;
     root.refresh = () => { tried = false; void load(); };
     root.dispose = () => { clearTimeout(timer); timer = 0; seq += 1; document.removeEventListener?.("visibilitychange", wake); };
     say("loading", "Looking for your friends…");
