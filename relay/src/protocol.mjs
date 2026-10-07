@@ -13,7 +13,8 @@
 // (feature "history.peer") that let a member's own Studio fill a gap in
 // another member's room history, since the relay keeps none. My PCs (feature
 // "pcs", docs/my-pcs.md) adds the pc* frames, also relayed and never stored,
-// and Pets (feature "pets") the pet frame and roomPets, kept on the socket only.
+// and Pets (feature "pets", with "pets.2" for the Shop's pets) the pet frame
+// and roomPets, kept on the socket only.
 //
 // Validators return normalised copies holding only known fields, so nothing
 // extra a client sends rides along into the hub. Strings are checked, never
@@ -105,6 +106,7 @@ export const FEATURES = Object.freeze({
   shop: 'shop', // GET /v1/shop: Studio's own items and members' style packs, bought with credits (relay/src/shop.mjs)
   shopDrops: 'shop.drops', // GET /v1/shop also says each item's drop, whether it is on sale and when it leaves, the drops and the week's Featured shelf (relay/src/shop-drops.mjs)
   pets: 'pets', // pet / roomPets: a member's pet visits the rooms they have open (relay/src/pets.mjs); also a hello feature
+  petsGeneration: 'pets.2', // the newest pets generation (PET_GENERATION) this relay knows; a hello names the Studio's own
 });
 
 /** listen{action}: a room's shared player. */
@@ -124,9 +126,32 @@ export const REMOTE_NOTICE_KINDS = Object.freeze(['needs-you', 'done', 'failed',
 export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'success', 'danger']);
 /** pcHello{pc.kind}: My PCs tells a laptop (it has a battery to watch) from a desktop. */
 export const PC_KINDS = Object.freeze(['desktop', 'laptop']);
-/** pet{pet}: a member's pet (feature "pets"), as Studio's renderer/pets.js draws it; "theme" wears the theme's colours. */
-export const PET_KINDS = Object.freeze(['dragon']);
+/**
+ * pet{pet}: a member's pet (feature "pets"), as Studio's renderer/pets.js draws it; "theme" wears the theme's colours.
+ * Ember the dragon is every Studio's; the other kinds are Shop items ("studio:pet-<kind>"). Each kind came with a
+ * pets generation: a relay lists the newest it knows in ready.features ("pets.2", FEATURES.petsGeneration) and a
+ * Studio the newest it draws in hello.features, so neither side meets a kind newer than it knows. Studio says the
+ * dragon to an older relay (scripts/hub-client.cjs), and the relay shows an older Studio the dragon (pets.mjs).
+ */
+export const PET_KINDS = Object.freeze(['dragon', 'cloud', 'phoenix', 'wisp']);
+export const PET_GENERATION = Object.freeze({ dragon: 1, cloud: 2, phoenix: 2, wisp: 2 });
+export const PETS_GENERATION = 2;
 export const PET_SKINS = Object.freeze(['theme', 'frost', 'jade', 'void', 'gold']);
+/** The newest pets generation a features list names ("pets" alone is the first), or 0 for none. */
+export function petsGenerationOf(features) {
+  let newest = 0;
+  for (const name of Array.isArray(features) ? features : []) {
+    if (name === 'pets') newest = Math.max(newest, 1);
+    const match = /^pets\.(\d{1,3})$/.exec(String(name));
+    if (match) newest = Math.max(newest, Number(match[1]));
+  }
+  return newest;
+}
+/** A pet as a side of that generation may meet it: a kind newer than it knows comes as the dragon. */
+export function petForGeneration(pet, generation) {
+  if (!pet || (PET_GENERATION[pet.kind] ?? Infinity) <= Math.max(1, generation)) return pet;
+  return { ...pet, kind: 'dragon' };
+}
 
 /** Project cards (feature "projects") and why a credits frame was sent (feature "credits"; "shop" a purchase, "sale" a pack's maker paid). */
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);

@@ -1371,7 +1371,7 @@
   const stepIs = (name) => WELCOME[welcome.step] === name;
   const MARKS = { claude: "CC", codex: "CX", opencode: "OC", grok: "GK", antigravity: "AG" };
   const COUNT = ["no", "one", "two", "three", "four", "five", "six"];
-  const welcome = { open: false, step: 0, els: null, clis: null, projects: null, text: "", busy: false, then: null, previous: null, serial: 0, connected: null };
+  const welcome = { open: false, step: 0, els: null, clis: null, projects: null, text: "", busy: false, then: null, previous: null, serial: 0, connected: null, pet: null };
   // What each tool uses, in a beginner's words: the account they may already pay for, or OpenCode's free models.
   const ACCOUNT = { claude: "Uses your Claude subscription", codex: "Uses your ChatGPT plan", grok: "Uses your Grok account", antigravity: "Uses your Google account", opencode: "Free models to start with" };
   // The first task's examples: small, plain, and each one a whole thought.
@@ -1542,6 +1542,15 @@
     if (typeof pets?.set === "function") {
       const row = segmented("Your dragon", [[true, "On"], [false, "Off"]], pets.state?.()?.on === true, (on) => pets.set({ on }));
       row.append(node("small", "setup-welcome-look-note", "Ember flies around and naps on the bars. Free with every Studio."));
+      // A tiny Ember under the words, flying in the look picked (moving only while the card shows; hidden on a narrow window).
+      welcome.pet?.stop?.();
+      welcome.pet = null;
+      if (typeof pets.livePreview === "function") {
+        const picture = node("canvas", "setup-welcome-pet");
+        picture.setAttribute("aria-hidden", "true");
+        row.append(picture);
+        try { welcome.pet = pets.livePreview(picture, { kind: "dragon", skin: pets.state?.()?.skin || "theme" }); } catch { welcome.pet = null; }
+      }
       parts.push(row);
     }
     body.replaceChildren(...parts);
@@ -1777,6 +1786,7 @@
   function hideWelcome() {
     if (!welcome.open) return false;
     welcome.open = false; welcome.serial += 1;
+    welcome.pet?.stop?.(); welcome.pet = null;
     window.removeEventListener?.("focus", welcomeRefocus);
     if (welcome.els) welcome.els.overlay.hidden = true;
     const back = welcome.previous; welcome.previous = null;

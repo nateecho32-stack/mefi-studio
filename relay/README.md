@@ -67,8 +67,15 @@ Pets (feature `pets`, `src/pets.mjs`): a member's pet (what it is, its skin
 and its name) lives only on their live connection, like My PCs, and is gone
 when it closes; nothing about it is written anywhere. The members of a room
 with Studio open on it see each other's pets (`roomPets`, at most 12), and a
-member who hides from Who's online shares no pet at all. A skin from the Shop
-shows only when its member owns it.
+member who hides from Who's online shares no pet at all. A skin or a pet
+from the Shop (`studio:skin-<skin>`, `studio:pet-<kind>`) shows only when its
+member owns it; otherwise the member's pet is Ember in the theme's colours.
+Each kind came with a pets generation (`PET_GENERATION` in
+`src/protocol.mjs`): the relay lists the newest it knows in
+`ready.features` (`pets.2`), a Studio names its own in `hello.features`, and
+a Studio of an older generation sees a newer kind as Ember, so it never
+meets one it cannot draw (Studio, for its part, says Ember to a relay
+without `pets.2`).
 
 ## Credits that cannot be farmed
 
@@ -215,7 +222,7 @@ with `POST /v1/admin/shop/:id/remove`, or by resolving its report with
 | `src/leases.mjs` · `src/paths.mjs` | Cowork claims, carried over from the hub. |
 | `src/events.mjs` · `src/economy.mjs` | Community events the relay runs by itself, and the daily community budget they draw on. |
 | `src/pcs.mjs` | My PCs: which PCs see each other, status lines and envelopes passed between them, kept on the sockets only. |
-| `src/pets.mjs` | Pets: each member's pet, kept on their socket only, and the roomPets frame for the rooms they have open. |
+| `src/pets.mjs` | Pets: each member's pet, kept on their socket only, and the roomPets frame for the rooms they have open, in each Studio's own pets generation; a Shop pet or skin only for its owner. |
 | `src/shop.mjs` · `src/shop-pack.mjs` | The Shop: Studio's own items, members' style packs, purchases and a maker's share; what a pack may hold. |
 | `src/store.mjs` | The schema and its migrations. |
 | `node/adapter.mjs` | The real Worker and Hub under Node with in-memory sockets and a scripted Discord, for Studio's tests. |

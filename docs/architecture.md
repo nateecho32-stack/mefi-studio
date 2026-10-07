@@ -611,7 +611,11 @@ settings and per-model work-kind summaries for the shared controls.
   **Report** (and a moderator's **Remove**) on a member's pack; Esc, ×, or a
   press on the page around it closes it. Ember the dragon itself comes free
   with every Studio: its card says Free, and its detail has only a **Show
-  Ember** switch (`MefiPets.set({ on })`). Every preview is live: scales on a
+  Ember** switch (`MefiPets.set({ on })`; On while Ember itself is out, so it
+  reads Off while a pet from the Shop flies instead). A pet the Shop lists
+  (kind `pet`, `studio:pet-<kind>`) flies in its card, is tried with
+  `MefiPets.preview({ kind })` and let out with `MefiPets.set({ on, kind })`.
+  Every preview is live: scales on a
   flying Ember (`MefiPets.paintPreview`), an effect played on a little menu on
   hover, focus or Try (`MefiEffects.demo`; by itself in the banner and a
   detail), a node style as a little board of four of its nodes on their wires
@@ -667,14 +671,34 @@ settings and per-model work-kind summaries for the shared controls.
   `hub:pet`; the relay's `relay/src/pets.mjs`). Ember, the dragon every Studio
   comes with, flies on its own small canvas above the page and never takes
   the pointer (Settings › Appearance › Interface, **Pet and menu effects**;
-  a new profile's first run switches it on). Studio tells the relay which pet
-  you have (`hubPet`: kind, skin and name, or none) and the relay keeps it on
-  your live connection only. While a room is open in Friends › Rooms, the
-  relay's `roomPets` for that room brings the other members' pets in
-  (`MefiPets.guests`): each flies in from an edge with its owner's name above
-  it, plays with your Ember, and flies out when its owner leaves or you leave
-  the room. Visitors come only while your own pet is on, never with motion
-  Off, five at most.
+  a new profile's first run switches it on). The Shop's pets fly the same
+  flight with bodies and painters of their own: a **Cloud dragon**
+  (`studio:pet-cloud`), a **Phoenix** (`studio:pet-phoenix`) and a
+  **Will-o'-wisp** (`studio:pet-wisp`); every skin fits every pet, and a pet
+  or skin this PC does not own (`MefiShop.owns`) is Ember in the theme's
+  colours. Each pet keeps its own name. **Petting**: the pointer resting on
+  the pet's body for half a second (hit-tested against its spine and head;
+  clicks still go through) stops it, turns its head to the pointer and makes
+  it purr, with a few hearts and its name above it; quick circles near your
+  own pet start a short chase. Neither happens while you type or with the
+  card's **Plays with your pointer** off. **Little things**, minutes apart: a
+  stretch and a yawn on waking, a flick of the tail at rest, a tiny sneeze of
+  sparks, a firefly to chase (with Calm it drifts past and the pet only
+  watches). Nothing with motion Off; `localStorage["mefiStudio.pet.antics"] =
+  "off"` stops them on one PC. The card shows the pet moving
+  (`MefiPets.livePreview`, only while on screen with motion on;
+  `mefiStudio.pet.livePreview = "off"` keeps it still) with **Pet**,
+  **Name** and **Colours** and a two-minute Try for a pet or skin not owned.
+  Studio tells the relay which pet you have (`hubPet`: kind, skin and name,
+  or none) and the relay keeps it on your live connection only, showing a
+  Shop pet or skin only to its owner. While a room is open in Friends ›
+  Rooms, the relay's `roomPets` for that room brings the other members' pets
+  in (`MefiPets.guests`): each flies in from an edge with its owner's name
+  above it, plays with your pet, and flies out when its owner leaves or you
+  leave the room. Visitors come only while your own pet is on, never with
+  motion Off, five at most. Pets come in generations (the relay's
+  `PET_GENERATION`, `ready.features` "pets.2"): a relay or a friend's Studio
+  that does not know a kind yet is told, or shows, Ember instead.
 - **Share between my PCs** (renderer/pc-vault.js; main.cjs "Your PCs vault";
   scripts/pc-vault.cjs, vault-crypto.cjs, vault-shelves.cjs, share-review.cjs).
   A private `<account>/mefi-studio-vault` repository, every file sealed
@@ -824,7 +848,8 @@ settings and per-model work-kind summaries for the shared controls.
   pick would), a colour within the family, the text size (`MefiSize.apply`,
   source `first-run`), motion (the Interface card's `#motion-toggle`) and
   **Your dragon** (Ember, `renderer/pets.js`; switched on for a new profile
-  that has never chosen). Every pick shows behind the card at once. Then
+  that has never chosen; a tiny Ember flies beside it, `MefiPets.livePreview`,
+  left out under 520 px). Every pick shows behind the card at once. Then
   **Connect the AI you
   already use** (the coding tools `setup:cli-status` finds, each with its own
   Sign in or install, and **Other ways to connect**, which opens the sheet at

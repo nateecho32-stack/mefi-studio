@@ -805,6 +805,34 @@ test("the first step makes it yours: Light, Dark or Stylized change at once, col
   assert.deepEqual(chose.petted, []);
 });
 
+test("the dragon row has a tiny Ember under its name (MefiPets.livePreview), started with the look step and stopped when the welcome closes", async () => {
+  const { env } = lookEnv();
+  const shows = [];
+  env.window.MefiPets.livePreview = (canvas, options) => {
+    const show = { canvas, options: JSON.parse(JSON.stringify(options)), stopped: false, stop() { this.stopped = true; } };
+    shows.push(show);
+    return show;
+  };
+  env.helper.welcome();
+  await settle();
+  const picture = env.welcome().querySelector("canvas.setup-welcome-pet");
+  assert.ok(picture, "a picture of Ember");
+  assert.equal(picture.getAttribute("aria-hidden"), "true", "a picture only: the row's words say what it is");
+  assert.deepEqual(shows.map((show) => show.options), [{ kind: "dragon", skin: "theme" }]);
+  assert.equal(shows[0].canvas, picture);
+  // Another look repaints the step: the old picture stops and a new one starts.
+  await env.welcome().querySelectorAll(".setup-welcome-look")[0].click();
+  assert.equal(shows.length, 2);
+  assert.equal(shows[0].stopped, true, "one picture at a time");
+  env.helper.closeWelcome();
+  assert.equal(shows.at(-1).stopped, true, "closing the welcome stops it");
+  // A pets.js without livePreview: the row as it was.
+  const plain = lookEnv();
+  plain.env.helper.welcome();
+  await settle();
+  assert.equal(plain.env.welcome().querySelector("canvas.setup-welcome-pet"), null);
+});
+
 test("after the welcome, a note beside the Settings button says where the look lives, once", async () => {
   const env = load({ layout: "v2" });
   welcomeBridge(env);
