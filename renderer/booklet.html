@@ -114300,10 +114300,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return true;
   }
   // The Shop card's demo: the effect plays on the element in place, and the
-  // element is back as it was once the effect is over.
+  // element is back as it was once the effect is over. While it plays, a
+  // promise that settles once the element is back (the Shop waits on it
+  // before its next look); false when nothing plays.
   function demo(element, id) {
     if (!element?.isConnected || still()) return false;
-    return play(element, id, { mode: "demo" });
+    let settle = null;
+    const over = new Promise((resolve) => { settle = resolve; });
+    return play(element, id, { mode: "demo", done: () => settle(true) }) ? over : false;
   }
   // The Shop's big previews: the effect plays on a sample menu, the menu comes
   // back gently, and after a calm pause it plays again, only while the sample

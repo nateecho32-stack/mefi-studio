@@ -405,14 +405,17 @@ test("every frame's particle work is capped, however large the menu", () => {
   }
 });
 
-test("the Shop's demo plays on a big sample in place: its canvas follows the page when it scrolls (not the effect's own drift), and the sample is back after", () => {
+test("the Shop's demo plays on a big sample in place: its canvas follows the page when it scrolls (not the effect's own drift), and the sample is back after", async () => {
   const env = page({ effect: null });
   let top = 300;
   const sample = env.node("", "friends-shop-menu", { width: 520, height: 340 });
   // As in a browser, the box includes the translate the effect gives it.
   const drift = () => (sample.style.getPropertyValue("translate") || "0px 0px").split(" ").map((part) => Number.parseFloat(part) || 0);
   sample.getBoundingClientRect = () => { const [x, y] = drift(); return { left: 10 + x, top: top + y, right: 530 + x, bottom: top + 340 + y, width: 520, height: 340 }; };
-  assert.equal(env.effects.demo(sample, "wind"), true, "any effect, owned or not: the Shop shows it");
+  const played = env.effects.demo(sample, "wind");
+  assert.equal(typeof played?.then, "function", "any effect, owned or not, plays: a promise that settles once the sample is back");
+  let over = false;
+  played.then((value) => { over = value; });
   const canvas = env.document.body.children.find((child) => child.className === "exit-effect-dust");
   const at = () => canvas.style.transform.match(/translate3d\((-?[\d.]+)px, (-?[\d.]+)px, 0\)/).slice(1).map(Number);
   const [, first] = at();
@@ -423,8 +426,12 @@ test("the Shop's demo plays on a big sample in place: its canvas follows the pag
   env.play(1);
   assert.equal(at()[1], first - 120, "the page scrolled: the canvas went with the sample");
   assert.equal(sample.getAttribute("inert"), null, "a sample is never made inert");
+  await Promise.resolve();
+  assert.equal(over, false, "not yet: it is still playing");
   env.play();
   assert.deepEqual(sample.style.names(), [], "back as it was");
+  await Promise.resolve();
+  assert.equal(over, true, "and the Shop hears it is over");
   assert.equal(env.effects.demo(sample, "confetti"), false);
   env.document.documentElement.dataset.motion = "off";
   assert.equal(env.effects.demo(sample, "wind"), false, "nothing with motion Off");
