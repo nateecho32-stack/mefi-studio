@@ -1390,6 +1390,6 @@
     }, 15000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) refresh(); });
   }
-  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview, snapshot, setComposerMode: setMode, send: (purpose) => submit(null, purpose) };
+  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, selectProject: (id) => selectProject(id), buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview, snapshot, setComposerMode: setMode, send: (purpose) => submit(null, purpose) };
   init();
 })();

@@ -627,8 +627,8 @@ html[data-ui-mode="vibe"] :is(#app-rail, #workspace-sidebar-toggle) { display: n
   font-family: var(--font-ui);
   animation: vibe-rail-in var(--motion-slow) var(--ease-out) both;
 }
-/* Off on Today itself (its own home), on every page over it, Friends included. */
-.vibe-rail[hidden], body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) .vibe-rail { display: none; }
+/* On every Social page, Home included (a QA pass on 2026-10-06 found Friends out of reach from Home); hidden in Studio. */
+.vibe-rail[hidden] { display: none; }
 html[data-no-blur] .vibe-rail { backdrop-filter: none; background: color-mix(in srgb, var(--panel-solid) 96%, transparent); }
 @keyframes vibe-rail-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 .vibe-rail-items, .vibe-rail-foot { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
@@ -681,10 +681,8 @@ html[data-ui-mode="vibe"] {
   html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not([data-studio-theme-tone="light"]):not(:has([data-media-background="true"])) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
 }
 
-/* On Vibe's own page there is no rail, so sheets and the project panel use
-   the whole window instead of leaving a strip where the rail would be. */
-body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: var(--shell-list-w); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #toast-host { left: calc(var(--shell-list-w) + 24px); bottom: calc(104px + var(--shell-y1)); }
+/* Social's Home keeps its rail, so a sheet over it starts beside the rail like everywhere else; toasts stay clear of the box. */
+body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #toast-host { bottom: calc(104px + var(--shell-y1)); }
 
 /* Search */
 html[data-ui-mode="vibe"] #palette-overlay { padding-top: 11vh; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); }
@@ -707,11 +705,11 @@ html[data-ui-mode="vibe"] #help-overlay .sheet-head { border-radius: 18px; }
 html[data-ui-mode="vibe"] #help-overlay .eyebrow { color: var(--gold-bright); }
 html[data-ui-mode="vibe"] .overlay:not(.workspace-page) .sheet-close { border-radius: 12px; }
 
-/* The project panel: a floating card beside the rail, or under Vibe's
-   project button on the Vibe page. */
+/* The project panel: a floating card beside the rail on every Social page; on Home, where the rail stands too since
+   2026-10-06, it sits lower, under the project button's row. */
 html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: calc(10px + var(--shell-y1)); left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
 html[data-ui-mode="vibe"] #workspace-sidebar[data-open="true"] #workspace-sidebar-panel { transform: none; opacity: 1; box-shadow: var(--studio-float-shadow); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-x0) + 24px); bottom: calc(24px + var(--shell-y1)); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project { border-radius: 14px; font-size: 13px; }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project.selected { color: var(--ivory); background: var(--v-menu-pick); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }

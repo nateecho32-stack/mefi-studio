@@ -11,11 +11,11 @@ import { createDom, Element } from "./fixtures/renderer-dom.mjs";
 const source = await readFile(new URL("../renderer/key-tips.js", import.meta.url), "utf8");
 
 function load({ storage = new Map(), vibe = true } = {}) {
-  const { document, get } = createDom({ ids: ["vibe-compose", "vibe-build", "vibe-dock", "vibe-pulse", "settings-key-tips"] });
+  const { document, get } = createDom({ ids: ["vibe-compose", "vibe-talk", "vibe-build", "vibe-dock", "vibe-pulse", "settings-key-tips"] });
   const lookup = document.getElementById;
   document.getElementById = (id) => lookup(id) ?? document.querySelector(`#${id}`);
   document.readyState = "complete";
-  for (const id of ["vibe-compose", "vibe-build", "vibe-dock", "vibe-pulse"]) document.body.append(get(id));
+  for (const id of ["vibe-compose", "vibe-talk", "vibe-build", "vibe-dock", "vibe-pulse"]) document.body.append(get(id));
   // Laid out on screen: every node answers with a visible box.
   Element.prototype.getBoundingClientRect ??= function () { return { left: 400, top: 300, right: 700, bottom: 360, width: 300, height: 60 }; };
   Element.prototype.getClientRects ??= function () { return this.hidden ? [] : [{}]; };
@@ -46,10 +46,43 @@ test("a first launch shows two Vibe tips beside their controls, with keycaps", (
   env.tips.tick();
   assert.deepEqual([...env.tips.shown()], ["vibe-box", "vibe-dock"]);
   const box = env.shown()[0];
-  assert.equal(box.dataset.side, "bottom", "under Build it: never over the button it names, nor the headline");
+  assert.equal(box.dataset.side, "right", "beside Send, Social's one action: never over the button it names, nor the line under the box");
   const caps = box.querySelectorAll("kbd").map((cap) => cap.textContent);
   assert.deepEqual(caps, ["/", "Enter", "Ctrl", "Enter"]);
   assert.ok(env.registered.some((dest) => dest.id === "keyTipsToggle") && env.registered.some((dest) => dest.id === "keyTipsAgain"), "Search can switch them off and bring them back");
+});
+
+// A QA pass on 2026-10-06 found the box's tip lying over the Resume button under the box: a tip takes the side it asks for only
+// while that leaves every control clear, else the next side that does, else it waits for a later pass.
+test("a tip never covers a control: it takes the next side that leaves them clear, or waits", () => {
+  const sized = Object.getOwnPropertyDescriptors(Element.prototype);
+  Object.defineProperty(Element.prototype, "offsetWidth", { configurable: true, get() { return 200; } });
+  Object.defineProperty(Element.prototype, "offsetHeight", { configurable: true, get() { return 80; } });
+  try {
+    const resume = { contains: () => false };
+    const control = { closest: (selector) => (selector === ".key-tip" ? null : resume) };
+    // Everything right of the target is a control (in this DOM every box runs from 0 to 400).
+    const env = load();
+    env.document.elementsFromPoint = (x) => (x > 400 ? [control] : []);
+    env.tips.tick();
+    const box = env.shown().find((node) => node.dataset.tip === "vibe-box");
+    assert.ok(box, "the tip still shows");
+    assert.notEqual(box.dataset.side, "right", "not on the side that covers a control");
+    assert.equal(box.dataset.side, "bottom", "the next side that leaves every control clear");
+    // Controls everywhere: no tip at all, until a pass finds room.
+    const crowded = load();
+    crowded.document.elementsFromPoint = () => [control];
+    crowded.tips.tick();
+    assert.deepEqual([...crowded.tips.shown()], [], "a tip with nowhere clear to stand waits");
+    crowded.document.elementsFromPoint = () => [];
+    crowded.tips.tick();
+    assert.equal(crowded.tips.shown().length, 2, "and shows once there is room");
+  } finally {
+    for (const name of ["offsetWidth", "offsetHeight"]) {
+      if (sized[name]) Object.defineProperty(Element.prototype, name, sized[name]);
+      else delete Element.prototype[name];
+    }
+  }
 });
 
 test("a tip never pops over the What's new sheet that opens after an update", () => {

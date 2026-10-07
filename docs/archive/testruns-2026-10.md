@@ -6,6 +6,34 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
+
+Branch `wip/social-polish` in `C:\wt\polish` (bea5ec9 an open room like a chat app, rooms as cards, Friends icons,
+plain words; 671b1b8 the two-Studio proof and The Lobby following who arrives), main merged (1de784f, clean;
+booklet.html regenerated and equal).
+
+The two-person flow, recorded (tests/friends_two_render.test.mjs, new): one Electron process plays two PCs, two real
+windows in the 0.5 layout with their own user data (separate session partitions), each bridge reaching its own copy
+of main.cjs's real Rooms hub block, and the real relay between them (relay/node/adapter.mjs: the Worker, the Hub
+object, SQLite, scripted Discord). Both meet in The Lobby and see each other online; PC one makes "Two PC test" from
+New room and reads its invite code from the room's menu; PC two joins with the code typed in lower case with a space;
+they chat both ways with Enter and see each other's face in the room; PC two closes Studio, PC one sends two more, PC
+two comes back and the two missed messages are filled in from PC one's copy (the relay keeps none); PC one starts
+Listen together and PC two hears the shared player; PC one shares a project from the Project hub and PC two plays it:
+the link opens in the browser, two minutes on PC one gets "Someone played your project: +5 credits" and its Lobby
+shows 5 credits, PC two's shows 2. 1/1, about 40 s.
+
+Polish checked in real windows (friends_render): an open room with five messages (a mention of this member, one of
+someone unnamed, and this member's own) at 1920x1080, 1100x720 and 600x560 at 150%: the room's name once, the chat
+taking most of the height, the composer on screen with Send inside it, Load earlier at the top of the log, mentions as
+names and "@someone"; every Friends place at 1920x1080, 1440x900, 1100x720 and 600x560 at 150% in Chrome, and every
+place plus an open room in a light palette, with no text under 12 px and nothing wider than the page.
+
+Run alone here on the merge: friends_render, companion_hub_render, friends_two_render and unified_studio_render 1/1
+each; rooms_ui 14/14, friends_front_ui 12/12, friends_mod_ui 4/4, friends_navigation 8/8, project_hub_ui 7/7, app_rail
+40/40, onboarding 43/43, tabs_strip 66/66, module_purity 63/63, booklet_build 5/5, hub_host 14/14, relay_connect 6/6.
+`npm run check` ok. Windows CI runs the full gate on the landing commit before the fast-forward.
+
 ## 2026-10-06 The studio log kept on disk and Trace's Load older (S2) land on main
 
 Branch `land/s2-log` in a cloud session (Linux, Node 24.21.0), stacked on S12 over main f1934aa (first gated over 00d32ca): the parked "not

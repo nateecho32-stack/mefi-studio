@@ -8,7 +8,10 @@ import vm from "node:vm";
 // top are the only things that sync, and never twice at once; the last answer
 // from any source paints at once; the background look repaints an open card
 // and drives the Friends badge; a project switch starts over; and the browser
-// preview says where syncing works.
+// preview says where syncing works. The card reads top to bottom: Connect
+// another PC and My PCs, then the folded groups in order, then Share projects;
+// Keep this PC in step with GitHub is folded, and its line and Sync this PC
+// come out only when something needs the owner, or after a press there.
 
 const source = await readFile(new URL("../renderer/pc-sync.js", import.meta.url), "utf8");
 const hub = await readFile(new URL("../renderer/companion-hub.js", import.meta.url), "utf8");
@@ -331,4 +334,70 @@ test("a long report reads as a few grouped lines, with the whole list one press 
   assert.equal(brief.hidden, true);
   assert.equal(full.children.length, 7);
   assert.equal(toggle.textContent, "Show less");
+});
+
+test("the card reads top to bottom: Connect another PC and My PCs, the folded groups in order, then Share projects", () => {
+  const fake = bridge({ syncStatus: answer() });
+  const part = (id) => { const el = new Element("div"); el.id = id; return el; };
+  const fleet = part("pc-fleet");
+  fleet.parts = { walk: part("pc-walk"), list: part("pc-fleet-list"), power: part("pc-fleet-power"), lend: part("pc-fleet-lending") };
+  fleet.append(fleet.parts.walk, fleet.parts.list);
+  const asked = [];
+  Object.assign(fake.api, { pcsStatus: async () => ({ ok: true }), pcSetupStatus: async () => ({ ok: true }), pairedStatus: async () => ({ ok: true }), remoteStatus: async () => ({ ok: true }) });
+  const card = environment(fake.api, {
+    MefiPcFleet: { section: (api) => { asked.push(api === fake.api); return fleet; } },
+    MefiPcVault: { group: () => part("pc-share-group"), section: () => part("old-vault"), shareSection: () => part("old-share") },
+  }).sync.card();
+  assert.deepEqual(asked, [true], "My PCs gets the bridge");
+  assert.deepEqual(card.children.map((child) => child.id), ["pc-sync-title", "pc-fleet", "pc-sync-group", "pc-fleet-power", "pc-fleet-lending", "pc-setup", "pc-paired-workers", "pc-remote", "pc-share-group"]);
+  const names = (id) => { const box = card.find(id); return (box.tagName === "DETAILS" ? box.children[0] : box.find("pc-sync-group-toggle")).textContent; };
+  assert.deepEqual(["pc-sync-group", "pc-setup", "pc-paired-workers", "pc-remote"].map(names), ["Keep this PC in step with GitHub", "Set up this PC", "Paired workers", "Reach this PC from Discord"]);
+  assert.ok(["pc-setup", "pc-paired-workers", "pc-remote"].every((id) => card.find(id).open !== true), "every group starts folded");
+});
+
+test("Keep this PC in step with GitHub is folded; its status line and Sync this PC come out only when something needs the owner", async () => {
+  const fake = bridge({ syncStatus: answer() });
+  const card = environment(fake.api).sync.card();
+  const fold = card.find("pc-sync-group-toggle"), head = card.find("pc-sync-head"), body = card.find("pc-sync-body");
+  assert.equal(fold.tagName, "BUTTON");
+  assert.deepEqual([fold.getAttribute("aria-expanded"), fold.getAttribute("aria-controls")], ["false", "pc-sync-body"]);
+  assert.ok(head.find("pc-sync-status") && head.find("pc-sync-run") && body.find("pc-sync-toggle"), "the line and its buttons stand apart from the folded rest");
+  assert.deepEqual([head.hidden, body.hidden], [true, true], "folded and quiet while it looks");
+  fake.answer(0);
+  await flush();
+  assert.equal(card.dataset.state, "clean");
+  assert.deepEqual([head.hidden, body.hidden], [true, true], "in step: nothing to say while folded");
+  fake.push(answer({ headline: "GitHub has 2 commits this PC has not pulled yet.", state: { repo: true, remote: true, device: "PC", behind: 2 } }));
+  assert.deepEqual([head.hidden, body.hidden], [false, true], "behind: the line and Sync this PC come out, the rest stays folded");
+  assert.equal(card.find("pc-sync-status").textContent, "GitHub has 2 commits this PC has not pulled yet.");
+  fake.push(answer({ risk: 1, pending: [{ kind: "unpushed" }], headline: "Some work on this PC is not on GitHub yet." }));
+  assert.equal(head.hidden, false, "work only this PC has");
+  fake.push(answer({ ok: false, risk: 0, problems: [{ kind: "fetch-failed" }], headline: "Couldn't check GitHub (offline)." }));
+  assert.equal(head.hidden, false, "a GitHub that could not be checked");
+  fake.push(answer({ risk: 0, pending: [{ kind: "github-branch" }], lines: ["This PC matches GitHub main.", "Branch wip/a on GitHub: 1 commit not on main."] }));
+  assert.equal(head.hidden, true, "a branch on GitHub alone is nothing to do");
+  fake.push(answer({ ok: false, headline: "This project has no origin remote yet.", state: { repo: true, remote: false } }));
+  assert.equal(head.hidden, true, "nor is a project that is not on GitHub");
+  fold.click();
+  assert.deepEqual([fold.getAttribute("aria-expanded"), head.hidden, body.hidden], ["true", false, false]);
+  fold.click();
+  assert.deepEqual([fold.getAttribute("aria-expanded"), head.hidden, body.hidden], ["false", true, true]);
+});
+
+test("a press on Sync this PC keeps the line in sight for the answer, even once it says this PC is in step", async () => {
+  const fake = bridge({ syncStatus: answer({ headline: "GitHub has 1 commit this PC has not pulled yet.", state: { repo: true, remote: true, device: "PC", behind: 1 } }), syncRun: answer({ lines: ["This PC matches GitHub main.", "Pulled 1 commit from GitHub."] }) });
+  const card = environment(fake.api).sync.card();
+  fake.answer(0);
+  await flush();
+  const head = card.find("pc-sync-head"), fold = card.find("pc-sync-group-toggle");
+  assert.equal(head.hidden, false);
+  card.find("pc-sync-run").click();
+  fake.answer(1);
+  await flush();
+  assert.equal(card.dataset.state, "clean");
+  assert.equal(head.hidden, false, "the answer stays where the press was");
+  assert.equal(card.find("pc-sync-status").textContent, "This PC matches GitHub main.");
+  fold.click();
+  fold.click();
+  assert.equal(head.hidden, true, "folding the group puts it away");
 });

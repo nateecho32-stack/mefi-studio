@@ -107,6 +107,9 @@
   <symbol id="g-bell" viewBox="0 0 16 16"><path d="M3.5 11.6c1-.95 1.45-2 1.45-3.4V6.9a3.05 3.05 0 0 1 6.1 0v1.3c0 1.4.45 2.45 1.45 3.4Z"/><path d="M8 2.1v1.7M6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></symbol>
   <symbol id="g-clip" viewBox="0 0 16 16"><path d="M13.2 7.4 7.6 13a3.3 3.3 0 0 1-4.7-4.7L8.7 2.6a2.3 2.3 0 0 1 3.3 3.3l-5.7 5.7a1.3 1.3 0 0 1-1.9-1.9L9.3 4.8"/></symbol>
   <symbol id="g-chat" viewBox="0 0 16 16"><path d="M2.7 3.3h10.6v7.4H6l-3.3 2.6z"/></symbol>
+  <!-- Social's rail (renderer/social.js): Projects, and Activity, the open project's work in one list. -->
+  <symbol id="g-folder" viewBox="0 0 16 16"><path d="M2.25 4.25a1 1 0 0 1 1-1h3.1l1.3 1.5h5.1a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H3.25a1 1 0 0 1-1-1z"/><path d="M2.25 6.75h11.5"/></symbol>
+  <symbol id="g-activity" viewBox="0 0 16 16"><path d="M1.75 8.25h2.7l1.6-4.5 3.4 8.5 1.7-4h3.1"/></symbol>
 </svg>
 <!-- The one navigation rail (docs/ux-audit.md, Phase 3). Every destination in
      nav.js's registry, grouped Home / Work / Live / Models / Settings, built by
@@ -363,20 +366,15 @@
     <footer class="vibe-ask-foot vibe-panel-foot"><span id="vibe-panel-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-panel-full" class="vibe-ask-link" type="button">Full view <span aria-hidden="true">↗</span></button></footer>
   </aside>
 </section>
-<!-- Vibe's frame for every other page (renderer/vibe.js). In Vibe mode this
-     rail stands in for Build's #app-rail on Tasks, Plans, Command, Settings
-     and the rest, so leaving the front door never lands in the Build view; the
-     spark at the top goes back to Vibe and only the switch at the foot leaves
-     the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
+<!-- Social's rail (renderer/vibe.js, renderer/social.js): Home, Friends, Projects and Activity, on every Social page, Home
+     included. Studio's pages (the Map, the boards, Team and the rest) open in Studio, so the rail never leads out of the
+     mode without saying so; only the Studio switch at the foot leaves it. Hidden in Studio. -->
 <nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Today (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Today</span></button>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Home: talk with Mefi, your friends and your work (H)"><svg class="glyph" aria-hidden="true"><use href="#g-home"/></svg><span>Home</span></button>
   <div class="vibe-rail-items">
-    <button type="button" data-nav="friends" data-vibe-place="friends" title="Friends: the Lobby, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
-    <button type="button" data-nav="command" data-vibe-place="map" title="The Map: your agents at work, live (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span>Map</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button type="button" data-nav="tasks" data-vibe-place="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
-    <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
-    <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button type="button" data-nav="agents" data-vibe-place="team" title="Team: who builds, which AI it uses and how much it may decide"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span>Team</span></button>
+    <button id="vibe-rail-friends" type="button" data-nav="friends" data-vibe-place="friends" title="Friends: who's online, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
+    <button id="vibe-rail-projects" type="button" data-nav="projects" title="Projects: your apps, and New app"><svg class="glyph" aria-hidden="true"><use href="#g-folder"/></svg><span>Projects</span></button>
+    <button id="vibe-rail-activity" type="button" data-nav="activity" title="Activity: what needs you, what's running and what's done"><svg class="glyph" aria-hidden="true"><use href="#g-activity"/></svg><span>Activity</span><span id="vibe-rail-needs" class="count warn" hidden></span></button>
     <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
   </div>
   <div class="vibe-rail-foot" id="vibe-rail-foot">
@@ -430,6 +428,33 @@
       <div id="inbox-list" class="inbox-list" role="list" aria-label="Waiting on you"></div>
       <div id="inbox-empty" class="today-empty" hidden><b>All clear</b><span>Questions, permissions, approvals and failures land here, in one place.</span></div>
       <section class="inbox-decided-wrap" aria-label="Decided for you"><div id="inbox-decided" class="inbox-decided"></div></section>
+    </div>
+  </div>
+</div>
+<!-- Social's Activity (renderer/today.js registers "activity"): the open project's work in one list, the board Social's Home
+     shows in short. What needs you answers in its row; anything deeper (a session, its changes and checks) opens in Studio. -->
+<div class="overlay explorer workspace-page" id="activity-overlay" hidden>
+  <div class="explorer-sheet today-sheet activity-sheet" role="dialog" aria-modal="true" aria-labelledby="activity-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="activity" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Social</div>
+        <h2 id="activity-heading">Activity</h2>
+      </div>
+      <div class="sheet-actions">
+        <button id="activity-studio" class="ghost" type="button" title="Every session with its changes, checks and logs">Open in Studio</button>
+        <button id="activity-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="today-page-body">
+      <div class="today-top">
+        <p class="today-page-lead">What needs you, what's running, what's next and what finished today, for the open project.</p>
+        <div id="activity-summary" class="today-summary" role="group" aria-label="What is happening"></div>
+      </div>
+      <p id="activity-quiet" class="today-quiet" role="status" hidden></p>
+      <div id="activity-board" class="today-board" data-style="list">
+        <div class="today-groups"></div>
+      </div>
     </div>
   </div>
 </div>

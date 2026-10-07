@@ -710,6 +710,10 @@ app.whenReady().then(async () => {
   await run("delete window.MefiSessions; window.__went = []; window.__go = window.MefiNav.go; window.MefiNav.go = (...args) => { window.__went.push(args); return true; };");
   await click(`${cardOf("run:t_run")} .today-card-open`);
   assert.deepEqual(await run("return window.__went.map((args) => [args[0], args[1].taskId, args[1].projectId, args[1].filter]);"), [["tasks", "t_run", "today-project", "all"]], "a card opens its session through the route when the session panels are not there");
+  // In Social a task's details are Studio's (renderer/social.js): the mode switches first, under the page.
+  assert.equal(await run("return window.MefiVibe.mode();"), "build", "a task opened from Social opens in Studio");
+  await run("window.MefiNav.go = window.__go; await window.MefiVibe.setMode('vibe'); window.MefiNav.go = (...args) => { window.__went.push(args); return true; };");
+  await until("document.getElementById('vibe-layer').dataset.today === 'on' && !document.getElementById('vibe-layer').hidden", "back in Social");
   await run("window.__went.length = 0; window.__sessions.length = 0; window.MefiSessions = { active: () => true, open: (...args) => { window.__sessions.push(args); return true; } };");
   await click(`${cardOf("done:t_done1")} .today-card-open`);
   assert.deepEqual(await run("return window.__sessions;"), [["t_done1", { preview: true }]], "in its thread when the session panels are there");
@@ -723,7 +727,9 @@ app.whenReady().then(async () => {
   assert.deepEqual(await run("return window.__sessions;"), [["t_next", { preview: true }]], "one notification lands on its task");
   assert.equal(await run("return window.MefiToday.openFromAlert({ kind: 'test' });"), false, "the test notification is alerts.js's own");
   await run("window.MefiNav.go = window.__go; window.MefiSessions = window.__realSessions;");
-  check("cards open their sessions; a notification lands on the task, or the Inbox when it told several");
+  await run("await window.MefiVibe.setMode('vibe');");
+  await until("document.getElementById('vibe-layer').dataset.today === 'on' && !document.getElementById('vibe-layer').hidden", "Social again");
+  check("cards open their sessions in Studio; a notification lands on the task, or the Inbox when it told several");
 
   // ---- a reload resumes in Vibe with Today up, and a push repaints without rebuilding ---------------------------
   await run("window.__kept = document.querySelector('#today-board [data-key=\"run:t_run\"]'); window.__keptNext = document.querySelector('#today-board [data-key=\"next:t_next\"]');");
@@ -746,7 +752,7 @@ app.whenReady().then(async () => {
   for (let index = 0; index < 60; index += 1) {
     contents.sendInputEvent({ type: "keyDown", keyCode: "Tab" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
     await sleep(40);
-    stops.push(await run(`const node = document.activeElement; if (!node || node === document.body) return null; const r = node.getBoundingClientRect(), style = getComputedStyle(node); return { under: Boolean(node.closest('body > main, body > header.page-head')), id: node.id || '', cls: typeof node.className === 'string' ? node.className.split(' ')[0] : '', text: (node.textContent || '').trim().slice(0, 28), x: Math.round(r.left), y: Math.round(r.top), ring: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0, today: Boolean(node.closest('#today-page')), ours: /^today-/.test(typeof node.className === 'string' ? node.className.split(' ')[0] : '') };`));
+    stops.push(await run(`const node = document.activeElement; if (!node || node === document.body) return null; const r = node.getBoundingClientRect(), style = getComputedStyle(node); return { under: Boolean(node.closest('body > main, body > header.page-head')), id: node.id || '', cls: typeof node.className === 'string' ? node.className.split(' ')[0] : '', text: (node.textContent || '').trim().slice(0, 28), x: Math.round(r.left), y: Math.round(r.top), ring: style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0, today: Boolean(node.closest('#today-page')), group: node.closest('.today-group')?.dataset.group || '', ours: /^today-/.test(typeof node.className === 'string' ? node.className.split(' ')[0] : '') };`));
   }
   report.tabStops = stops.map((stop) => (stop ? `${stop.id || stop.cls}:${stop.text}@${stop.x},${stop.y}` : null));
   // Past the page's last control the order leaves the document for one press (Chromium's wrap) and comes back at the
@@ -756,15 +762,18 @@ app.whenReady().then(async () => {
   assert.ok(outs.every((index) => index === stops.length - 1 || stops[index + 1]?.id === "shell-list-toggle"), `focus leaves the page only where the order wraps, back to the frame's first control: ${JSON.stringify(report.tabStops)}`);
   assert.ok(stops.every((stop) => !stop?.under), `no stop lands on a page under the frame's layers: ${JSON.stringify(stops.filter((stop) => stop?.under))}`);
   const at = (match) => stops.findIndex((stop) => stop && match(stop));
-  const order = [at((stop) => stop.id === "vibe-project"), at((stop) => stop.id === "vibe-new-app"), at((stop) => stop.id === "vibe-chat-toggle"), at((stop) => stop.cls === "today-chip"), at((stop) => stop.id === "vibe-input"), at((stop) => stop.id === "vibe-talk"), at((stop) => stop.id === "vibe-build"), at((stop) => stop.cls === "vibe-evolution-intent"), at((stop) => stop.cls === "today-card-open")];
+  const order = [at((stop) => stop.id === "vibe-project"), at((stop) => stop.id === "vibe-new-app"), at((stop) => stop.id === "vibe-chat-toggle"), at((stop) => stop.cls === "today-chip"), at((stop) => stop.id === "vibe-input"), at((stop) => stop.id === "vibe-talk"), at((stop) => stop.cls === "social-link"), at((stop) => stop.cls === "today-card-open")];
   assert.ok(order.every((found) => found >= 0), `every stop is reached by Tab: ${JSON.stringify(order)} in ${JSON.stringify(report.tabStops)}`);
-  assert.deepEqual([...order].sort((a, b) => a - b), order, "in the order the page reads: project, the summary, the box, its buttons, the starting points, the board");
-  const firstCards = stops.filter((stop) => stop && (stop.cls === "today-card-open" || stop.cls === "today-btn" || stop.cls === "today-link" || stop.cls === "today-chip"));
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "in the order the page reads: project, the summary, the box and Send, Your work's links, the list");
+  // Social's box has one action (a QA pass on 2026-10-06): Build it is a key there (Ctrl Enter) and the starting points are Studio's.
+  assert.equal(at((stop) => stop.id === "vibe-build"), -1, "Build it is not a stop in Social");
+  assert.equal(at((stop) => stop.cls === "vibe-evolution-intent"), -1, "nor are the starting points");
+  const firstCards = stops.filter((stop) => stop && (stop.cls === "today-card-open" || stop.cls === "today-btn" || stop.cls === "today-link" || stop.cls === "today-chip" || stop.cls === "social-link"));
   assert.ok(firstCards.length >= 4, "the board's own controls are in the tab order");
   assert.ok(firstCards.every((stop) => stop.ring), `a focus ring on every stop of Today's own: ${JSON.stringify(firstCards.filter((stop) => !stop.ring))}`);
-  // Down the board the order follows the columns: the first card of Needs you comes before the first of Running.
-  const needsAt = at((stop) => stop.cls === "today-card-open" && stop.x < 500), runningAt = at((stop) => stop.cls === "today-card-open" && stop.x >= 500);
-  assert.ok(needsAt >= 0 && (runningAt < 0 || needsAt < runningAt), "the Needs you column is walked before Running");
+  // Down the list the order follows the groups: the first card of Needs you comes before the first of Running.
+  const needsAt = at((stop) => stop.group === "needs"), runningAt = at((stop) => stop.group === "running");
+  assert.ok(needsAt >= 0 && (runningAt < 0 || needsAt < runningAt), "Needs you is walked before Running");
   await run("document.activeElement?.blur?.();");
   check("Tab walks Today in reading order with a ring on its own stops");
 

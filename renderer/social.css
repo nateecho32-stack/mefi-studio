@@ -1,0 +1,108 @@
+/* Social (renderer/social.js, renderer/today.js): people, rooms, your projects and a simple talk with Mefi, with the details
+   left to Studio. Inlined after today.css, so it wins its ties. Every colour is a theme token and no text is under 12 px, at
+   any text size (--text-scale). Nothing here matches in Studio: each rule waits for Social's own layer, its pages or
+   html[data-ui-mode="vibe"]. */
+
+.social-sheet, .today-social {
+  --s-f12: max(12px, calc(12px * var(--text-scale, 1)));
+  --s-f13: max(12px, calc(13px * var(--text-scale, 1)));
+  --s-f14: max(12px, calc(14px * var(--text-scale, 1)));
+  --s-f15: max(12px, calc(15px * var(--text-scale, 1)));
+  --s-f18: max(12px, calc(18px * var(--text-scale, 1)));
+  --s-ink: var(--ivory);
+  --s-soft: var(--muted);
+  --s-faint: var(--dim);
+  --s-edge: color-mix(in srgb, var(--ivory) 12%, transparent);
+  --s-card: color-mix(in srgb, var(--panel-solid) 44%, transparent);
+  --s-row: color-mix(in srgb, var(--panel-solid) 62%, transparent);
+  --s-gap: var(--d-gap, 12px);
+}
+
+/* ---- the status bar: what runs and what waits on you; usage, cost, the machine's load and the permission mode are Studio's ---- */
+html[data-ui-mode="vibe"] #shell-status :is(.shell-usage, .shell-usage-sep, .shell-machine, .shell-cost, .shell-permission) { display: none !important; }
+
+/* ---- Home's box: one conversation, one action (Send). Build it, the permission mode, the answer styles, the starting points,
+   "decided for you" and the Git chip step aside here; Studio's box and header keep them. ---- */
+#vibe-layer[data-today="on"] :is(#vibe-build, #vibe-autonomy-control, #vibe-chat-tools, #vibe-sparks, #vibe-decisions) { display: none !important; }
+#vibe-layer[data-today="on"] > .vibe-top :is(.gs-slot, [data-vibe-panel="settings"]) { display: none !important; }
+#vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { min-width: 96px; justify-content: center; }
+
+/* ---- Home under the box: your work beside your friends ---- */
+.today-social { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: var(--s-gap); align-items: start; min-width: 0; }
+.today-social > * { min-width: 0; }
+.today-social:not(:has(> .social-people:not([hidden]))) { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1080px) { .today-social { grid-template-columns: minmax(0, 1fr); } }
+
+.social-card { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 10px; min-width: 0; padding: 12px 14px 14px; border: 1px solid var(--s-edge); border-radius: 14px; background: var(--s-card); backdrop-filter: var(--studio-glass-blur, blur(16px) saturate(1.3)); color: var(--s-ink); }
+.social-card[hidden] { display: none; }
+.social-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; min-width: 0; }
+.social-card-title { margin: 0; color: var(--s-ink); font: 650 var(--s-f15)/1.3 var(--font-ui); }
+.social-card-links { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }
+.social-card-note { margin: 0; color: var(--s-soft); font-size: var(--s-f13); line-height: 1.5; }
+.social-card-note:empty { display: none; }
+.social-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.social-card-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-top: 2px; }
+.social-card-foot[hidden] { display: none; }
+.social-link { min-height: 0; padding: 2px 0; border: 0; background: none; box-shadow: none; color: var(--s-soft); font: 600 var(--s-f13)/1.3 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; cursor: pointer; }
+.social-link:hover, .social-link:focus-visible { color: var(--s-ink); }
+.social-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid var(--hairline-strong); border-radius: 10px; background: transparent; color: var(--s-ink); font: 600 var(--s-f13)/1 var(--font-ui); white-space: nowrap; cursor: pointer; }
+.social-btn:hover { border-color: color-mix(in srgb, var(--ivory) 30%, transparent); }
+/* A ring on every stop of Social's own, as Today's (today.css). */
+:is(.social-link, .social-btn, .social-person-go):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+.social-btn.primary { border-color: transparent; background: var(--ivory); color: var(--on-ivory, var(--bg)); }
+
+/* Your work: the list (data-style="list"), a few compact rows of each group with a heading; a group with nothing in it takes no room. */
+.today-board[data-style="list"] { gap: 8px; }
+.today-board[data-style="list"] .today-groups { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.today-board[data-style="list"] .today-group { gap: 6px; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; }
+.today-board[data-style="list"] .today-group[hidden] { display: none; }
+.today-board[data-style="list"] .today-group > h3 { padding: 0 2px; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.today-board[data-style="list"] .today-group[data-group="queued"] > h3 { color: var(--muted); }
+.today-board[data-style="list"] .today-cards { gap: 6px; }
+.today-board[data-style="list"] .today-card { gap: 4px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--panel-solid) 58%, transparent); }
+.today-board[data-style="list"] :is(.today-wt, .today-card-more) { display: none; }
+.today-board[data-style="list"] .today-more { justify-self: start; }
+/* In Social the run's own lines (the last output, a check's command) are Studio's. */
+html[data-ui-mode="vibe"] :is(.today-need-evidence, .today-card-more) { display: none; }
+.social-work > .today-quiet { margin: 0; }
+
+/* ---- the Friends card ---- */
+.social-online { display: inline-flex; align-items: center; gap: 6px; color: var(--s-soft); font: 600 var(--s-f13)/1 var(--font-ui); }
+.social-online[hidden] { display: none; }
+.social-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px color-mix(in srgb, var(--good) 70%, transparent); }
+.social-card-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+.social-people-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.social-person-go { display: flex; align-items: center; justify-content: flex-start; gap: 9px; width: 100%; min-height: 44px; padding: 6px 8px; border: 1px solid transparent; border-radius: 10px; background: var(--s-row); color: var(--s-ink); text-align: left; cursor: pointer; }
+.social-person-go:hover, .social-person-go:focus-visible { border-color: var(--s-edge); }
+.social-face { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: hsl(var(--who-hue, 210) 45% 34%); color: #fff; font: 700 var(--s-f12)/1 var(--font-ui); }
+.social-person-text, .social-row-text { display: grid; gap: 2px; min-width: 0; }
+.social-person-text b, .social-row-text b { overflow: hidden; color: var(--s-ink); font: 600 var(--s-f13)/1.3 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+.social-person-text small, .social-row-text small { overflow: hidden; color: var(--s-soft); font-size: var(--s-f12); line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.social-empty { color: var(--s-soft); font-size: var(--s-f13); line-height: 1.5; list-style: none; }
+.social-subsection { display: grid; gap: 6px; min-width: 0; }
+.social-subhead { margin: 0; color: var(--s-soft); font: 650 max(12px, calc(12.5px * var(--text-scale, 1)))/1.2 var(--font-ui); }
+.social-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.social-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 6px 8px 6px 10px; border-radius: 10px; background: var(--s-row); }
+
+/* ---- Projects and Activity: pages of Social's own, in the main area like every other page ---- */
+.social-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 960px; margin: 0 auto; padding: 22px 16px 28px; color: var(--s-ink); }
+html[data-shell="rail"] .social-page > .social-sheet { width: 100%; height: auto; min-height: 100%; max-width: 960px; margin: 0 auto; overflow: visible; background: transparent; }
+.social-page { overflow-y: auto; overscroll-behavior: contain; }
+.social-page-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; }
+.social-page-words { display: grid; gap: 4px; min-width: 0; flex: 1 1 320px; }
+.social-page-words h1 { margin: 0; color: var(--s-ink); font: 650 var(--s-f18)/1.3 var(--font-display, var(--font-ui)); letter-spacing: -.01em; outline: none; }
+.social-page-about { margin: 0; max-width: 70ch; color: var(--s-soft); font-size: var(--s-f14); line-height: 1.5; }
+.social-projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.social-project { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px; border: 1px solid var(--s-edge); border-radius: 12px; background: var(--s-card); }
+.social-project[data-current="true"] { border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.social-projects-friends > .social-btn { justify-self: start; }
+.social-project-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--gold) 22%, var(--panel-solid)); color: var(--s-ink); font: 700 var(--s-f12)/1 var(--font-ui); }
+/* Activity is a page in the main area (.workspace-page): its bar and its list in a centred column, like Projects and Friends. */
+#activity-overlay > .activity-sheet { background: transparent; }
+#activity-overlay .activity-sheet > :is(.sheet-head, .today-page-body) { width: min(960px, 100%); margin: 0 auto; box-sizing: border-box; }
+#activity-overlay .activity-sheet > .sheet-head { padding: 18px 20px 6px; border: 0; background: none; }
+@media (max-width: 680px) {
+  .social-card { padding: 10px 12px 12px; }
+  .social-project { grid-template-columns: auto minmax(0, 1fr); }
+  .social-project > .social-btn { grid-column: 1 / -1; justify-self: start; }
+}
