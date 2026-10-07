@@ -563,7 +563,11 @@ test("checkPack is the relay's check: data only, known keys, #rrggbb, 2 KB, and 
   }
   assert.equal(shop.checkPack({ ...SYNTHWAVE, palette: { ...SYNTHWAVE.palette, text: "#fff" } }).why, "Text: enter a colour as #RRGGBB.");
   assert.match(shop.checkPack({ ...SYNTHWAVE, palette: { ...SYNTHWAVE.palette, text: "#3a3550" } }).why, /^Text on background is \d+(\.\d)?:1\. It needs 4\.5:1 to be easy to read\.$/);
-  assert.match(shop.checkPack({ ...SYNTHWAVE, palette: { ...SYNTHWAVE.palette, accent: "#2a1a40" } }).why, /^Accent on background is \d+(\.\d)?:1\. It needs 3:1 to be seen clearly\.$/);
+  assert.match(shop.checkPack({ ...SYNTHWAVE, palette: { ...SYNTHWAVE.palette, accent: "#2a1a40" } }).why, /^Accent on background is \d+(\.\d)?:1\. It needs 4\.5:1 to read as text\.$/);
+  // The accent is read as text too, so 3:1 is no longer enough: Sakura's first accent (3.9:1 on its page) is refused.
+  const sakura = { v: 1, palette: { accent: "#d6457a", accent2: "#8a6bd1", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24" } };
+  assert.deepEqual([shop.checkPack(sakura).error, shop.checkPack(sakura).field], ["low-contrast", "palette.accent"]);
+  assert.equal(shop.checkPack({ ...sakura, palette: { ...sakura.palette, accent: "#b8325f" } }).ok, true, "its deepened accent reads 5.4:1");
   assert.equal(shop.checkPack({ ...SYNTHWAVE, css: "x" }).why, "A style has no part called “css”.");
   // WCAG contrast: black on white is 21:1, a colour on itself 1:1; anything else is not a colour.
   assert.equal(shop.contrast("#000000", "#ffffff"), 21);
@@ -587,7 +591,7 @@ test("Make a style: a live preview and contrast readout; the check stops Publish
   const readout = () => card.querySelector("#friends-shop-contrast").textContent;
   assert.match(readout(), /Text on background 21:1✓ Easy to read/);
   assert.match(readout(), /Text on panels \d+(\.\d)?:1✓ Easy to read/);
-  assert.match(readout(), /Accent on background \d+(\.\d)?:1✓ Stands out/);
+  assert.match(readout(), /Accent on background \d+(\.\d)?:1✓ Reads as text/);
   const preview = card.querySelector("#friends-shop-make-preview");
   assert.equal(preview.style["--pack-bg"], "#000000");
   assert.equal(preview.querySelector(".friends-shop-mock-title").textContent, "Night market");
@@ -641,7 +645,7 @@ test("Publish's refusals in plain words: the relay's limits, a name clash and a 
     [{ ok: false, error: "limit", reason: "daily-publishes" }, "You have published 4 packs today. Try again tomorrow."],
     [{ ok: false, error: "limit", reason: "shop-full" }, "The Shop is full right now. Try again another day."],
     [{ ok: false, error: "conflict", reason: "name-taken" }, "You already have a listed pack with that name."],
-    [{ ok: false, error: "low-contrast" }, "Its text is too hard to read: text needs 4.5:1 on the background and on panels, and the accent 3:1 on the background."],
+    [{ ok: false, error: "low-contrast" }, "Its text is too hard to read: text needs 4.5:1 on the background and on panels, and so does the accent on the background (it is read as text too)."],
     [{ ok: false, error: "hold", hold: "new-account", until }, /^Credits start when your Discord account is 30 days old on .+ You can publish it free now\.$/],
   ];
   for (const [answer, words] of cases) {

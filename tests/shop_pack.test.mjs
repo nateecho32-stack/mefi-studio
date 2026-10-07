@@ -44,7 +44,7 @@ test("WCAG contrast: black on white is 21, a colour on itself 1, and the limits 
   assert.equal(contrastRatio("#ffffff", "#000000"), 21, "order does not matter");
   assert.equal(contrastRatio("#3a7bff", "#3a7bff"), 1);
   assert.equal(Math.round(contrastRatio("#767676", "#ffffff") * 100) / 100, 4.54);
-  assert.deepEqual({ ...PACK_LIMITS }, { bytes: 2048, textContrast: 4.5, accentContrast: 3, nameMin: 2, nameMax: 40, blurbMax: 160 });
+  assert.deepEqual({ ...PACK_LIMITS }, { bytes: 2048, textContrast: 4.5, accentContrast: 4.5, nameMin: 2, nameMax: 40, blurbMax: 160 }, "the accent is read as text too, so it needs what text needs");
   assert.deepEqual([...PALETTE_KEYS, ...PALETTE_OPTIONAL], ["accent", "background", "surface", "text", "accent2"]);
   assert.deepEqual([...NODE_STYLES], ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]);
   assert.deepEqual([...MATERIALS], ["focus", "studio", "atmosphere"]);

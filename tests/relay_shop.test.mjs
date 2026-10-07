@@ -102,7 +102,7 @@ test("the Studio catalog: ten items as the spec lists them (Ember is free, so no
   }
   assert.deepEqual(shop.items.map((item) => item.blurb).slice(0, 4), ["Ember in icy blue.", "Ember in green and gold.", "Ember in black with a violet glow.", "Ember in shining gold."]);
   assert.ok(!shop.items.some((item) => item.id === "studio:pet-dragon"), "Ember the dragon is free in every Studio");
-  assert.deepEqual(shop.items.find((item) => item.id === "studio:pack-sakura").data, { v: 1, palette: { accent: "#d6457a", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" });
+  assert.deepEqual(shop.items.find((item) => item.id === "studio:pack-sakura").data, { v: 1, palette: { accent: "#b8325f", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" });
   assert.deepEqual([shop.view, shop.next, shop.balance, shop.canEarn, shop.hold], ["studio", null, 0, true, null]);
   assert.equal((await as("tok-alice", "GET", "/v1/shop")).items.length, 10, "the catalog is the default list");
   assert.equal((await as("tok-alice", "GET", "/v1/shop?view=everything")).status, 400);

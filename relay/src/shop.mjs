@@ -87,7 +87,7 @@ export const CATALOG = Object.freeze([
     data: studioPack({ accent: '#2fd6c3', accent2: '#3a7bff', background: '#04131c', surface: '#0a2230', text: '#e2f6f7', nodeStyle: 'glass', material: 'studio', font: 'studio' }),
   }),
   studioItem('studio:pack-sakura', 'pack', 'Sakura (light)', 50, 'Soft pink on warm white, a light look.', {
-    data: studioPack({ accent: '#d6457a', accent2: '#8a6bd1', background: '#fbf6f4', surface: '#ffffff', text: '#2b1f24', nodeStyle: 'minimal', material: 'focus', font: 'studio' }),
+    data: studioPack({ accent: '#b8325f', accent2: '#8a6bd1', background: '#fbf6f4', surface: '#ffffff', text: '#2b1f24', nodeStyle: 'minimal', material: 'focus', font: 'studio' }),
   }),
 ]);
 

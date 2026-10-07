@@ -8,7 +8,8 @@
 // a pack holds exactly what the Shop shows. Colours are kept lower-case. A
 // pack must also read well: its text against the background and against
 // the surface at WCAG's 4.5 to 1, and its accent against the background at
-// 3 to 1.
+// 4.5 to 1 as well, since Studio sets text in the accent too (links, chosen
+// tabs, a light page's headings).
 //
 // Studio's pack editor keeps a mirror of this check, so it can say what is
 // wrong before anything is published; tests/fixtures/shop-pack-cases.json
@@ -23,7 +24,7 @@ export const PACK_VERSION = 1;
 export const PACK_LIMITS = Object.freeze({
   bytes: 2048, // the pack as JSON
   textContrast: 4.5, // text against the background, and against the surface
-  accentContrast: 3, // the accent against the background
+  accentContrast: 4.5, // the accent against the background (it is read as text too)
   nameMin: 2,
   nameMax: 40,
   blurbMax: 160,

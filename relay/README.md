@@ -176,7 +176,8 @@ everything free in Studio stays free, since the Shop sells new things only:
   four or five colours, and a node style, a material and a font from Studio's
   own lists, at most 2 KB. A key the schema does not name is refused, so a
   pack cannot carry CSS, links or images, and its text and accent have to
-  read well (WCAG contrast 4.5 and 3). Free, or 10 to 250 credits.
+  read well (WCAG contrast 4.5 for both: Studio sets text in the accent
+  too). Free, or 10 to 250 credits.
 
 A purchase is one transaction: the item, the price the member was shown and
 their balance are checked, the credits come off the balance, and the item is

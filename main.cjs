@@ -2644,7 +2644,7 @@ const SHOP_STUDIO_ITEMS = Object.freeze([
   { id: "studio:fx-stardust", kind: "effect", name: "Stardust" },
   { id: "studio:pack-synthwave", kind: "pack", name: "Synthwave", data: { v: 1, palette: { accent: "#ff4fa3", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff", accent2: "#8b5cff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } },
   { id: "studio:pack-deep-sea", kind: "pack", name: "Deep sea", data: { v: 1, palette: { accent: "#2fd6c3", background: "#04131c", surface: "#0a2230", text: "#e2f6f7", accent2: "#3a7bff" }, nodeStyle: "glass", material: "studio", font: "studio" } },
-  { id: "studio:pack-sakura", kind: "pack", name: "Sakura (light)", data: { v: 1, palette: { accent: "#d6457a", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" } },
+  { id: "studio:pack-sakura", kind: "pack", name: "Sakura (light)", data: { v: 1, palette: { accent: "#b8325f", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" } },
 ]);
 const shopPlain = (value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null);
 const shopObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);

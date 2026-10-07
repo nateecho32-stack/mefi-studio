@@ -81726,8 +81726,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const NODE_STYLES = ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"];
   const MATERIALS = [["focus", "Focus"], ["studio", "Studio"], ["atmosphere", "Atmosphere"]];
   const FONTS = [["studio", "Studio"], ["display", "Display"], ["serif", "Serif"], ["mono", "Mono"]];
-  // What a pack's colours must reach: WCAG contrast, and the words for a pair that does.
-  const READABLE = [["text", "background", "Text on background", 4.5, "Easy to read"], ["text", "surface", "Text on panels", 4.5, "Easy to read"], ["accent", "background", "Accent on background", 3, "Stands out"]];
+  // What a pack's colours must reach: WCAG contrast, and the words for a pair that does. Studio sets text in the
+  // accent too (links, chosen tabs, a light page's headings), so it needs what text needs.
+  const READABLE = [["text", "background", "Text on background", 4.5, "Easy to read"], ["text", "surface", "Text on panels", 4.5, "Easy to read"], ["accent", "background", "Accent on background", 4.5, "Reads as text"]];
   // A starting point for a new style when the theme's own colours cannot be read.
   const STARTER = Object.freeze({ accent: "#71cbb7", accent2: "#9db7ff", background: "#050d13", surface: "#101f29", text: "#e7f5ee" });
   const colourName = (key) => COLOURS.find(([id]) => id === key)?.[1] ?? key;
@@ -81787,15 +81788,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return { ok: true, data: clean };
   }
   // The relay's check, here first, so the editor can say what is wrong before anything is sent: the shape, then
-  // whether its text is easy to read ("low-contrast": text needs 4.5:1 on the background and on panels, the
-  // accent 3:1 on the background).
+  // whether its text is easy to read ("low-contrast": text needs 4.5:1 on the background and on panels, and so
+  // does the accent on the background, since it is read as text too).
   function checkPack(data) {
     const shaped = shapeOf(data);
     if (!shaped.ok) return shaped;
     const { palette } = shaped.data;
     for (const [a, b, label, need] of READABLE) {
       const ratio = contrast(palette[a], palette[b]);
-      if (ratio < need) return { ok: false, error: "low-contrast", why: `${label} is ${ratioText(ratio)}. It needs ${need}:1 to be ${a === "accent" ? "seen clearly" : "easy to read"}.`, field: `palette.${a}`, ratio };
+      if (ratio < need) return { ok: false, error: "low-contrast", why: `${label} is ${ratioText(ratio)}. It needs ${need}:1 to ${a === "accent" ? "read as text" : "be easy to read"}.`, field: `palette.${a}`, ratio };
     }
     return shaped;
   }
@@ -81840,7 +81841,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // Publishing or changing a pack.
     "bad-pack": "Studio could not read that style. Check that every colour is #RRGGBB.",
     "too-big": "That style is too big for the Shop: 2 KB at most.",
-    "low-contrast": "Its text is too hard to read: text needs 4.5:1 on the background and on panels, and the accent 3:1 on the background.",
+    "low-contrast": "Its text is too hard to read: text needs 4.5:1 on the background and on panels, and so does the accent on the background (it is read as text too).",
     name: "Give it a name of 2 to 40 characters, on one line.",
     "name-taken": "You already have a listed pack with that name.",
     blurb: "Keep the line about it to 160 characters.",
