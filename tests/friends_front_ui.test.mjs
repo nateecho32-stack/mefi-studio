@@ -291,6 +291,29 @@ test("pop-ups: friends coming online are one toast, invites, requests and plays 
   assert.equal(toasts.length, 5, "turned off: nothing");
 });
 
+test("pop-ups: a member got one of your style packs says what it brought and opens Your packs; Pop-ups from friends turns it off too", async () => {
+  const env = environment();
+  const toasts = [];
+  env.window.MefiToast = (text, kind, options) => toasts.push({ text, kind, label: options?.action?.label, run: options?.action?.run });
+  env.push({ type: "credits", balance: 70, delta: 12, reason: "sale", rank: "ember" });
+  env.push({ type: "credits", balance: 71, delta: 1, reason: "sale", rank: "ember" });
+  env.push({ type: "credits", balance: 71, delta: 0, reason: "sale", rank: "ember" });
+  env.push({ type: "credits", balance: 21, delta: -50, reason: "shop", rank: "ember" });
+  assert.deepEqual(toasts.map((toast) => [toast.text, toast.kind, toast.label]), [
+    ["A member got one of your style packs: +12 credits", "info", "Your packs"],
+    ["A member got one of your style packs: +1 credit", "info", "Your packs"],
+  ], "a sale says so once per payout; nothing for a purchase of your own or a payout of nothing");
+  toasts[0].run();
+  assert.deepEqual(JSON.parse(JSON.stringify(env.goes.at(-1))), ["friends-page", { place: "shop" }], "without the Shop's module, Friends' Shop place");
+  const opened = [];
+  env.window.MefiShop = { open: (view) => opened.push(view) };
+  toasts[1].run();
+  assert.deepEqual(opened, ["make"], "Your packs live in the Shop's Make a style");
+  env.front.popups.set(false);
+  env.push({ type: "credits", balance: 80, delta: 9, reason: "sale", rank: "ember" });
+  assert.equal(toasts.length, 2, "turned off: nothing");
+});
+
 test("Building now: a small tree per friend who shares, and this member's own switch", async () => {
   const people = front().online.people.map((person, n) => (n === 0 ? { ...person, building: { project: "Pixel Forge", running: 3, doneToday: 2 } } : person));
   const env = environment({ page: front({ online: { count: 2, people } }), status: { configured: true, linked: true, state: "ready", user: ME, front: true, shareBuilding: false }, replies: { shareBuilding: (on) => ({ ok: true, shareBuilding: on }) } });
