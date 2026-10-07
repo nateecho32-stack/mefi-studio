@@ -111,11 +111,9 @@ function createCliSetup({ spawn, openExternal, refresh = async () => {}, closed 
     running.add(key);
     try {
       const script = `try {\n${setupScript(id, action)}\n} catch { Write-Host $_.Exception.Message -ForegroundColor Red }\nRead-Host 'Press Enter to close this setup window'`;
-      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd, env: extra ? { ...env(), ...extra } : env(), windowsHide: false, stdio: "ignore" });
-      // Not detached: a detached PowerShell gets no console and exits at once
-      // without running the script. From Studio (no console of its own) this
-      // child opens its own visible terminal, and its close still re-checks.
-      await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
+      // A console of its own (setup-window.cjs, loaded on first use): a CLI's sign-in needs a terminal to ask in. Its close still re-checks.
+      const { openSetupWindow } = require("./setup-window.cjs");
+      const child = await openSetupWindow(spawn, script, { title: `Mefi Studio: ${cli.name} ${action === "login" ? "sign-in" : "setup"}`, cwd, env: extra ? { ...env(), ...extra } : env() });
       child.once("close", () => {
         running.delete(key);
         void Promise.resolve().then(() => refresh()).catch(() => {}).then(() => { try { closed({ id, action, ...(account ? { account } : {}) }); } catch {} });

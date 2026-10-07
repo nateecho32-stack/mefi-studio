@@ -7,6 +7,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Sign in to GitHub can finish.** Its setup window opened blank: the
+  GitHub CLI never showed its one-time code or opened the browser, so the
+  sign-in behind the Git chip, Publish to GitHub, Link to a repository, the
+  launch screen and Your PCs could not complete. The window is now a real
+  console, titled *Mefi Studio: Sign in to GitHub*, where the code shows and
+  Enter opens GitHub. A coding CLI's **Install and sign in** window had the
+  same fault and is fixed too.
+
 - **Make it yours, Ember the dragon, menu effects and the Shop.** The first
   run now starts with **Make it yours**: pick **Light**, **Dark** or
   **Stylized** (glowing colour and bold headings), a colour within it, the

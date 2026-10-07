@@ -55,7 +55,11 @@ test("setup reports launch errors, prevents duplicate windows, and refreshes on 
   assert.equal(launched.launched, true);
   assert.match(launched.message, /Studio refreshes your installed tools when it closes \(or choose Refresh installed tools\)/);
   assert.equal(calls[0].options.windowsHide, false, "the user explicitly opened interactive setup");
-  assert.notEqual(calls[0].options.detached, true, "a detached PowerShell gets no console and exits before its script runs");
+  // scripts/setup-window.cjs: cmd's start gives PowerShell a console of its
+  // own, so a sign-in has a terminal to ask in (tests/setup_window.test.mjs).
+  assert.equal(calls[0].command, "cmd.exe");
+  assert.deepEqual(calls[0].args.slice(3, 7), ["start", '"Mefi Studio: Codex setup"', "/wait", "powershell.exe"]);
+  assert.equal(calls[0].options.cwd, "C:/fixture");
   assert.match(Buffer.from(calls[0].args.at(-1), "base64").toString("utf16le"), /@openai\/codex/);
   assert.equal((await setup.action({ id: "codex", action: "login" })).ok, false);
   child.emit("close", 0);
@@ -86,6 +90,7 @@ test("an added login signs in under its own folder, named by id and resolved by 
   assert.equal(added.ok, true, "the main login's open window does not block another login's");
   assert.match(added.message, /Sign in to the other Claude Code account/);
   assert.deepEqual(calls[1].options.env, { PATH: "C:/bin", CLAUDE_CONFIG_DIR: "C:/logins/claude-a1b2" });
+  assert.equal(calls[1].args[4], '"Mefi Studio: Claude Code sign-in"');
   assert.match(Buffer.from(calls[1].args.at(-1), "base64").toString("utf16le"), /claude auth login/);
   assert.doesNotMatch(Buffer.from(calls[1].args.at(-1), "base64").toString("utf16le"), /logins/, "the folder never rides the script");
   assert.equal((await setup.action({ id: "claude", action: "login", account: "claude-a1b2" })).ok, false, "one window per login");

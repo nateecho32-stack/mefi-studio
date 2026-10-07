@@ -2500,7 +2500,12 @@ button opens that dialog, and nothing is saved that you did not tick. **Publish
 to GitHub** and **Link to a repository** are dialogs too (`showPublish`,
 `showLink`, `showSignIn`, which New app and the launch screen can call).
 Sign-in uses the same setup window as Friends › Your PCs and is polled until an
-account appears; Studio never sees a password or a token. The launch screen's
+account appears; Studio never sees a password or a token. The window is a
+console of its own (`scripts/setup-window.cjs`, through `cmd /c start`), where
+`gh auth login --web` shows its one-time code and opens GitHub in the browser;
+without a console gh does neither. The release check asks gh for its token
+again a minute after it had none, so a sign-in reaches development updates
+without a restart. The launch screen's
 rows carry the same chips through `projects:glance` (local, no network, three
 at a time, a second and a half each).
 

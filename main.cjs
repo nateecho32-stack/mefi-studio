@@ -27587,7 +27587,13 @@ function registerIpc() {
     const result = await pcSetup.status(pcSetupRoot());
     return result?.ok ? { ...result, links: await pcSetupLinks().catch(() => []) } : result;
   });
-  ipcMain.handle("pc-setup:action", async (_event, payload) => pcSetup.action(String(payload?.action ?? ""), { cwd: pcSetupRoot() }));
+  // Logged, so a sign-in that never finished can be told from one never tried.
+  ipcMain.handle("pc-setup:action", async (_event, payload) => {
+    const name = String(payload?.action ?? "");
+    const result = await pcSetup.action(name, { cwd: pcSetupRoot() });
+    logLine(`[pc-setup] ${/^[a-z-]{1,20}$/.test(name) ? name : "unknown action"}: ${result?.ok ? "setup window opened" : String(result?.error ?? "failed").slice(0, 160)}`);
+    return result;
+  });
   ipcMain.handle("pc-setup:repos", async () => pcSetup.repos());
   ipcMain.handle("pc-setup:clone", async (_event, payload) => {
     const repo = String(payload?.repo ?? "");
