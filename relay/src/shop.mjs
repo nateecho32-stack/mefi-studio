@@ -87,11 +87,20 @@ export const CATALOG = Object.freeze([
   studioItem('studio:skin-jade', 'skin', 'Jade scales', 40, 'Ember in green and gold.'),
   studioItem('studio:skin-void', 'skin', 'Void scales', 60, 'Ember in black with a violet glow.'),
   studioItem('studio:skin-gold', 'skin', 'Gold scales', 60, 'Ember in shining gold.'),
+  studioItem('studio:pet-cloud', 'pet', 'Cloud dragon', 120, 'A long, wingless dragon that swims through the air in waves.'),
+  studioItem('studio:pet-phoenix', 'pet', 'Phoenix', 150, 'A firebird with a long, flowing tail of flame feathers.'),
+  studioItem('studio:pet-wisp', 'pet', 'Will-o\'-wisp', 90, 'A small ghostly flame that trails drifting sparks.', { drop: '2026-10' }),
   studioItem('studio:fx-dissolve', 'effect', 'Dissolve', 60, 'Menus crumble into pixels when they close.'),
   studioItem('studio:fx-embers', 'effect', 'Burn away', 90, 'Menus burn away from the edges with glowing embers.'),
   studioItem('studio:fx-stardust', 'effect', 'Stardust', 90, 'Menus scatter into drifting stars.'),
+  studioItem('studio:fx-wind', 'effect', 'Blown away', 60, 'Menus drift aside like sand in the wind.'),
+  studioItem('studio:fx-shatter', 'effect', 'Shatter', 90, 'Menus crack like glass and fall away in shards.'),
+  studioItem('studio:fx-glitch', 'effect', 'Glitch', 60, 'Menus tear into flickering slices and blink out.'),
+  studioItem('studio:fx-spirits', 'effect', 'Spirits', 90, 'Menus fade into ghostly wisps that rise and curl away.', { drop: '2026-10' }),
   studioItem('studio:style-dragonscale', 'nodestyle', 'Dragon scales', 80, 'Nodes covered in shimmering dragon scales, with ember sparks along the wires.'),
   studioItem('studio:style-constellation', 'nodestyle', 'Star chart', 80, 'Nodes as bright stars joined by star-chart lines, with shooting stars.'),
+  studioItem('studio:style-lantern', 'nodestyle', 'Lanterns', 80, 'Glowing paper lanterns that sway, their warm light flickering at work.', { drop: '2026-10' }),
+  studioItem('studio:style-neon', 'nodestyle', 'Neon', 80, 'Bright neon tubes with a soft glow that buzz on when work starts.'),
   studioItem('studio:pack-synthwave', 'pack', 'Synthwave', 50, 'Hot pink and violet on midnight blue.', {
     data: studioPack({ accent: '#ff4fa3', accent2: '#8b5cff', background: '#0d0b1f', surface: '#17132e', text: '#f3ecff', nodeStyle: 'halo', material: 'atmosphere', font: 'display' }),
   }),
@@ -100,6 +109,30 @@ export const CATALOG = Object.freeze([
   }),
   studioItem('studio:pack-sakura', 'pack', 'Sakura (light)', 50, 'Soft pink on warm white, a light look.', {
     data: studioPack({ accent: '#b8325f', accent2: '#8a6bd1', background: '#fbf6f4', surface: '#ffffff', text: '#2b1f24', nodeStyle: 'minimal', material: 'focus', font: 'studio' }),
+  }),
+  studioItem('studio:pack-pumpkin-spice', 'pack', 'Pumpkin Spice', 45, 'Warm pumpkin orange and spiced gold on deep brown.', {
+    data: studioPack({ accent: '#ff8a3d', accent2: '#d4a245', background: '#1b100a', surface: '#2a1a10', text: '#fbeedd', nodeStyle: 'orbs', material: 'studio', font: 'serif' }), drop: '2026-10',
+  }),
+  studioItem('studio:pack-haunted', 'pack', 'Haunted', 50, 'Violet and ghostly green glowing on near-black.', {
+    data: studioPack({ accent: '#b48cff', accent2: '#6ef2b0', background: '#09080e', surface: '#15121c', text: '#ebe6f4', nodeStyle: 'sigil', material: 'atmosphere', font: 'display' }), drop: '2026-10',
+  }),
+  studioItem('studio:pack-candlelight', 'pack', 'Candlelight (light)', 45, 'Warm cream lit by amber candlelight, a light look.', {
+    data: studioPack({ accent: '#a05a00', accent2: '#b0442a', background: '#fbf3e2', surface: '#fffaf0', text: '#2f2418', nodeStyle: 'halo', material: 'focus', font: 'serif' }), drop: '2026-10',
+  }),
+  studioItem('studio:pack-midnight-neon', 'pack', 'Midnight Neon', 50, 'Electric cyan and magenta on midnight navy.', {
+    data: studioPack({ accent: '#2fe4ff', accent2: '#ff3fb1', background: '#06071a', surface: '#10122b', text: '#eef0ff', nodeStyle: 'singularity', material: 'atmosphere', font: 'mono' }),
+  }),
+  studioItem('studio:pack-forest-glade', 'pack', 'Forest Glade', 40, 'Sunlit fern green and gold on deep forest.', {
+    data: studioPack({ accent: '#a5d46a', accent2: '#e3c262', background: '#0b1510', surface: '#14231a', text: '#e7f2e3', nodeStyle: 'glass', material: 'studio', font: 'studio' }),
+  }),
+  studioItem('studio:pack-ocean-breeze', 'pack', 'Ocean Breeze (light)', 40, 'Sea blue and coral on a breezy white, a light look.', {
+    data: studioPack({ accent: '#0a6a86', accent2: '#c2502f', background: '#edf6f8', surface: '#ffffff', text: '#11303a', nodeStyle: 'minimal', material: 'focus', font: 'studio' }),
+  }),
+  studioItem('studio:pack-rose-gold', 'pack', 'Rose Gold (light)', 45, 'Rose and soft gold on blush cream, a light look.', {
+    data: studioPack({ accent: '#a24b59', accent2: '#9a7224', background: '#f9efea', surface: '#fffaf7', text: '#3b2328', nodeStyle: 'prism', material: 'studio', font: 'serif' }),
+  }),
+  studioItem('studio:pack-frost', 'pack', 'Frost', 40, 'Icy blue and pale lilac on cool slate grey.', {
+    data: studioPack({ accent: '#a7dcf3', accent2: '#c7cfff', background: '#1d2731', surface: '#27323e', text: '#e9f0f6', nodeStyle: 'crystal', material: 'atmosphere', font: 'display' }),
   }),
 ]);
 
