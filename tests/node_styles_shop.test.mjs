@@ -100,7 +100,7 @@ test("each keeps inside its budget at every tier and state, frame after frame, a
     dragonscale: { 0: { calls: 70, arc: 10, ellipse: 0, lineTo: 0, fill: 3, stroke: 4 }, 1: { calls: 125, arc: 26, ellipse: 0, lineTo: 0, fill: 3, stroke: 11 }, 2: { calls: 150, arc: 35, ellipse: 0, lineTo: 0, fill: 3, stroke: 13 }, 3: { calls: 160, arc: 38, ellipse: 0, lineTo: 0, fill: 6, stroke: 13 } },
     constellation: { 0: { calls: 48, arc: 2, ellipse: 0, lineTo: 7, fill: 3, stroke: 0 }, 1: { calls: 48, arc: 2, ellipse: 0, lineTo: 7, fill: 3, stroke: 0 }, 2: { calls: 48, arc: 2, ellipse: 0, lineTo: 7, fill: 3, stroke: 0 }, 3: { calls: 60, arc: 2, ellipse: 0, lineTo: 14, fill: 4, stroke: 0 } },
     // the glow, the candle, the paper, its ribs and rim; the caps (T1), the cord and lips (T2), the tassel (T3)
-    lantern: { 0: { calls: 60, arc: 2, ellipse: 3, lineTo: 0, fill: 3, stroke: 2 }, 1: { calls: 82, arc: 2, ellipse: 5, lineTo: 6, fill: 4, stroke: 3 }, 2: { calls: 102, arc: 2, ellipse: 7, lineTo: 9, fill: 4, stroke: 5 }, 3: { calls: 115, arc: 2, ellipse: 7, lineTo: 13, fill: 5, stroke: 5 } },
+    lantern: { 0: { calls: 60, arc: 2, ellipse: 2, lineTo: 0, fill: 3, stroke: 2 }, 1: { calls: 82, arc: 2, ellipse: 2, lineTo: 6, fill: 4, stroke: 3 }, 2: { calls: 102, arc: 2, ellipse: 2, lineTo: 9, fill: 4, stroke: 5 }, 3: { calls: 115, arc: 2, ellipse: 2, lineTo: 13, fill: 5, stroke: 5 } },
     // the plate, the bloom, the tube and its core; the electrodes (T1), the bead (T2), the glass (T3)
     neon: { 0: { calls: 40, arc: 3, ellipse: 0, lineTo: 0, fill: 2, stroke: 2 }, 1: { calls: 48, arc: 5, ellipse: 0, lineTo: 0, fill: 3, stroke: 2 }, 2: { calls: 50, arc: 6, ellipse: 0, lineTo: 0, fill: 3, stroke: 2 }, 3: { calls: 56, arc: 7, ellipse: 0, lineTo: 0, fill: 3, stroke: 3 } },
   };
@@ -336,9 +336,9 @@ test("Star chart's wire is a dotted chart line that stops short of each star; a 
 
 // ---- Lanterns ----
 
-// The ellipses a paint traced, as [x, y, rx, ry, rotation, from, to].
+// The ellipses a paint traced, as [x, y, rx, ry, rotation, from, to]; a lantern's ribs are its quadratic curves.
 const ellipses = (ctx) => ctx.calls.log.filter(([name]) => name === "ellipse").map(([, ...args]) => args);
-const isRib = ([, , , , , from, to]) => from === 0 && Math.abs(to - Math.PI) < 1e-5;
+const ribsOf = (ctx) => ctx.calls.log.filter(([name]) => name === "quadraticCurveTo").map(([, ...args]) => args);
 // The rim: the paper's whole outline, traced in pixels (rx .9 of the radius).
 const rimOf = (ctx, radius) => ellipses(ctx).find(([, , rx, , , from, to]) => from === 0 && Math.abs(to - 2 * Math.PI) < 1e-5 && Math.abs(rx - 0.9 * radius) < 1e-6);
 // The fill colour set next after the first log entry `find` matches.
@@ -351,8 +351,10 @@ function fillAfter(ctx, find) {
 test("Lanterns: a paper lantern on its cord, ribbed by tier, capped from T1, its cord and lit lips from T2 and a tassel at T3", () => {
   const styles = loadNodeStyles();
   const at = (detail, options = {}) => paintOnce(styles, "lantern", RADII[detail], { detail, still: true, ...options });
-  // The ribs (each the lower half of a ring): the middle one, two more from T1, the outer pair from T2.
-  assert.deepEqual([0, 1, 2, 3].map((detail) => ellipses(at(detail)).filter(isRib).length), [1, 3, 5, 5]);
+  // The ribs (each the front of a ring, bowing down): the middle one, two more from T1, the outer pair from T2.
+  assert.deepEqual([0, 1, 2, 3].map((detail) => ribsOf(at(detail)).length), [1, 3, 5, 5]);
+  // (the still pose leans 0.03 rad, so the paper sits half a pixel off the node's centre)
+  for (const [cx, cy, x, y] of ribsOf(at(3))) assert.ok(cy > y && Math.hypot(x - P.x, y - P.y) <= 0.9 * 12 + 0.5, "each bows down, inside the paper");
   // The caps, two closed four-cornered paths from T1; the cord (from the knot) and the caps' two lips from T2; the
   // tassel's cord and its tuft (a third closed path) at T3.
   assert.deepEqual([0, 1, 2, 3].map((detail) => at(detail).calls.closePath), [0, 2, 2, 3]);

@@ -35508,12 +35508,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return cachePut(ctx, tones.key, { body, glow, candle });
   }
   // Ribs `from` to `to` (indexes into LANTERN_RIBS) as subpaths of the
-  // current path: the lower half of each ring, turned with the lantern.
-  function lanternRibs(ctx, p, radius, c, s, swing, from, to) {
+  // current path: the front of each ring, bowing down 0.15 of its half width
+  // in the middle (a quadratic is as round as an elliptic arc at these sizes,
+  // and cheaper), turned with the lantern.
+  function lanternRibs(ctx, p, radius, c, s, from, to) {
     for (let k = from; k < to; k += 1) {
-      const w = LANTERN_RIB_W[k] * radius, at = lanternPoint(p, radius, c, s, 0, LANTERN_RIBS[k]);
+      const w = LANTERN_RIB_W[k] * radius, bow = 0.3 * w, at = lanternPoint(p, radius, c, s, 0, LANTERN_RIBS[k]);
       ctx.moveTo(at.x + c * w, at.y + s * w);
-      ctx.ellipse(at.x, at.y, w, w * 0.15, swing, 0, Math.PI);
+      ctx.quadraticCurveTo(at.x - s * bow, at.y + c * bow, at.x - c * w, at.y - s * w);
     }
   }
   // Both caps, two closed subpaths of the current path.
@@ -35566,10 +35568,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const fade = detail === 1 || detail === 2 ? tierIn(radius, detail) : 1;
     const width = Math.max(0.6, radius * 0.07), ribs = base * (light ? 0.4 : 0.5);
     ctx.lineCap = "round"; ctx.strokeStyle = tones.rib; ctx.lineWidth = width;
-    ctx.beginPath(); lanternRibs(ctx, p, radius, c, s, swing, 0, whole);
+    ctx.beginPath(); lanternRibs(ctx, p, radius, c, s, 0, whole);
     ctx.globalAlpha = ribs; ctx.stroke();
     if (shown > whole && fade > 0.004) {
-      ctx.beginPath(); lanternRibs(ctx, p, radius, c, s, swing, whole, shown);
+      ctx.beginPath(); lanternRibs(ctx, p, radius, c, s, whole, shown);
       ctx.globalAlpha = ribs * fade; ctx.stroke();
     }
     // 4. The rim breathes with the candle (on a light page firmer, never
