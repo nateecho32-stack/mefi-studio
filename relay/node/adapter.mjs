@@ -23,7 +23,7 @@ export const TEST_GUILD_ID = '1345380333302059129';
 
 const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-/** A fetch that plays Discord's two endpoints (and refuses everything else, like oEmbed), on the relay's clock. */
+/** A fetch that plays Discord's two endpoints and a webhook (and refuses everything else, like oEmbed), on the relay's clock. */
 export function fakeDiscord(accounts, { calls = [], now = () => Date.now() } = {}) {
   return async (input, init = {}) => {
     const url = new URL(String(input));
@@ -31,6 +31,11 @@ export function fakeDiscord(accounts, { calls = [], now = () => Date.now() } = {
     calls.push({ path: url.pathname, token });
     const account = accounts[token];
     if (url.hostname !== 'discord.com') return json(404, {});
+    // A moderators' channel webhook (relay/src/alerts.mjs): the line is kept with the call, and Discord answers 204.
+    if (url.pathname.startsWith('/api/webhooks/') && init.method === 'POST') {
+      calls[calls.length - 1].webhook = JSON.parse(String(init.body ?? '{}'));
+      return new Response(null, { status: 204 });
+    }
     if (!account) return json(401, { message: '401: Unauthorized', code: 0 });
     if (account.down) return json(503, {});
     if (url.pathname === '/api/v10/oauth2/@me') {
@@ -43,7 +48,10 @@ export function fakeDiscord(accounts, { calls = [], now = () => Date.now() } = {
     }
     if (url.pathname === `/api/v10/users/@me/guilds/${TEST_GUILD_ID}/member`) {
       if (account.member === null) return json(404, { message: 'Unknown Guild', code: 10004 });
-      return json(200, { user: account.user, roles: [], joined_at: new Date(now() - 30 * 86_400_000).toISOString(), pending: false, ...(account.member ?? {}) });
+      // Joined 30 days ago or more, a few days apart by id, so no two test members look like one person's accounts
+      // brought in together (credits.mjs GUARD batch).
+      const spread = /^\d{1,20}$/.test(String(account.user?.id ?? '')) ? 3 * Number(BigInt(account.user.id) % 200n) : 0;
+      return json(200, { user: account.user, roles: [], joined_at: new Date(now() - (30 + spread) * 86_400_000).toISOString(), pending: false, ...(account.member ?? {}) });
     }
     return json(404, {});
   };

@@ -36,3 +36,6 @@ ROLE_IDS_JSON = "{}"
 OWNER_IDS = "1502092064492617749"
 # "true" refuses every write (maintenance).
 PAUSED = "false"
+# Optional secret, never written here: MOD_ALERT_WEBHOOK, a Discord webhook in a private moderators' channel
+# (`npx wrangler secret put MOD_ALERT_WEBHOOK`). The relay posts one line there, naming nobody, when members newly
+# look like farming credits and when a Build Jam waits for its day of review (src/alerts.mjs).

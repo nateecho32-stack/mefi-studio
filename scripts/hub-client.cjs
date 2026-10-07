@@ -102,6 +102,12 @@ const HISTORY_REPLY_MESSAGES = 100;
 const PROJECT_KINDS = Object.freeze(["game", "app", "tool", "art", "music", "other"]);
 const PROJECT_VIEWS = Object.freeze(["new", "top", "played", "mine"]);
 const CREDIT_HOLDS = Object.freeze(["unknown", "read-only", "new-account", "new-member", "forgot-me"]);
+// What a moderator can switch off while they look into a new trick (relay/src/credits.mjs SWITCHES).
+const CREDIT_SWITCHES = Object.freeze(["plays", "stars", "together", "cowork", "jam", "sales", "featuring", "review", "batches"]);
+// A member who used Forget me, in a moderator's credit review: a random id that names nobody (relay credits.mjs GONE_ID).
+const GONE_ID = /^gone:[A-Za-z0-9_-]{16,22}$/;
+// Why a jam vote counts for nothing, or nothing more, in a moderator's view of the jam (relay events.mjs VOTE_WHYS).
+const VOTE_WHYS = Object.freeze(["no-entry", "standing", "self", "not-played", "own-batch", "same-batch"]);
 const RANK_KEY = /^[a-z_]{1,20}$/;
 // The Shop's shapes (relay/src/shop.mjs and shop-pack.mjs).
 const SHOP_VIEWS = Object.freeze(["studio", "new", "top", "owned", "mine"]);
@@ -454,6 +460,8 @@ function jamOf(value) {
     id: value.id, theme: line(value.theme, 60) ?? "", nextTheme: line(value.nextTheme, 60) ?? "",
     phase: JAM_PHASES.includes(value.phase) ? value.phase : "entries",
     startsAt: timeOf(value.startsAt), entriesUntil: timeOf(value.entriesUntil), endsAt: timeOf(value.endsAt), pool: count(value.pool, 1e6) ?? 0,
+    // When the results come: a day after voting closes, once a moderator had a look (a relay from before says nothing).
+    resultsAt: timeOf(value.resultsAt),
     entries: Array.isArray(value.entries) ? value.entries.map(entry).filter(Boolean).slice(0, 100) : [],
     you: { entered: opaque(value.you?.entered), votesLeft: count(value.you?.votesLeft, 10) ?? 0 },
     results: Array.isArray(value.results) ? value.results.map(jamPayout).filter(Boolean).slice(0, 100) : null,
@@ -468,6 +476,33 @@ function coworkOf(value) {
     attendees: count(value.attendees, 1e4) ?? 0, amount: count(value.amount, 1e4) ?? 0,
   };
 }
+// The switches a moderator turned off (relay credits.mjs SWITCHES), known keys only.
+const switchesOff = (value) => (Array.isArray(value) ? value.filter((key) => CREDIT_SWITCHES.includes(key)) : []);
+// A moderator's view of a Build Jam (GET /v1/admin/jam): each entry in its place now with its voters, whether each vote
+// counts and why not, each voter's account age, server join date and batch letter, and what the pool would pay now.
+function modJamOf(value) {
+  if (!object(value) || !opaque(value.id)) return null;
+  const person = (item) => {
+    const who = user(item);
+    return who ? { ...who, accountCreatedAt: timeOf(item.accountCreatedAt), joinedAt: timeOf(item.joinedAt), batch: /^[A-Z]$/.test(String(item.batch ?? "")) ? item.batch : null } : null;
+  };
+  const entry = (item) => {
+    const who = person(item?.user);
+    if (!who) return null;
+    const voters = Array.isArray(item.voters) ? item.voters.map((one) => {
+      const voter = person(one);
+      return voter ? { ...voter, counted: one.counted === true, why: VOTE_WHYS.includes(one.why) ? one.why : null } : null;
+    }).filter(Boolean).slice(0, 500) : [];
+    return { user: who, project: eventProject(item.project), votes: count(item.votes, 1e6) ?? 0, players: count(item.players, 1e6) ?? 0, resting: item.resting === true, voters };
+  };
+  return {
+    id: value.id, theme: line(value.theme, 60) ?? "",
+    status: ["entries", "voting", "review", "release"].includes(value.status) ? value.status : "review",
+    endsAt: timeOf(value.endsAt), resultsAt: timeOf(value.resultsAt), held: value.held === true, pool: count(value.pool, 1e6) ?? 0,
+    payouts: Array.isArray(value.payouts) ? value.payouts.map(jamPayout).filter(Boolean).slice(0, 100) : [],
+    entries: Array.isArray(value.entries) ? value.entries.map(entry).filter(Boolean).slice(0, 100) : [],
+  };
+}
 // GET /v1/events.
 function eventsPage(data) {
   const last = object(data?.lastJam) && opaque(data.lastJam.id) ? {
@@ -478,6 +513,8 @@ function eventsPage(data) {
   const together = object(data?.together) ? data.together : {};
   return {
     ok: true, now: timeOf(data?.now), jam: jamOf(data?.jam), lastJam: last, cowork: coworkOf(data?.cowork), nextCowork: timeOf(data?.nextCowork),
+    // A jam whose voting closed and whose results wait for a moderator's look: when they come (null while held).
+    reviewing: object(data?.reviewing) && opaque(data.reviewing.id) ? { id: data.reviewing.id, theme: line(data.reviewing.theme, 60) ?? "", resultsAt: timeOf(data.reviewing.resultsAt) } : null,
     together: { ticks: count(together.ticks, 100) ?? 0, needed: count(together.needed, 100) ?? 3, amount: count(together.amount, 1e4) ?? 0, everyMs: count(together.everyMs, 864e5) ?? 600000 },
     budget: { budget: count(budget.budget, 1e7) ?? 0, paid: count(budget.paid, 1e7) ?? 0, left: count(budget.left, 1e7) ?? 0, active: count(budget.active, 1e7) ?? 0 },
   };
@@ -1266,11 +1303,13 @@ function createHubClient(options = {}) {
       if (!answer.ok) return refused(answer);
       const flags = Array.isArray(answer.data.flags) ? answer.data.flags.map((item) => {
         const who = user(item);
-        const top = user(item?.top);
+        // The most a member gave may come from one who used Forget me since: no id, a name that says so.
+        const forgotten = object(item?.top) && item.top.forgotten === true;
+        const top = forgotten ? { id: null, name: text(item.top.name, 100) || "a member who used Forget me" } : user(item?.top);
         if (!who || !top) return null;
         return {
           ...who, total: count(item.total, 1e9) ?? 0, why: item.why === "mutual" ? "mutual" : "one-giver",
-          top: { ...top, amount: count(item.top.amount, 1e9) ?? 0, share: count(item.top.share, 100) ?? 0, accountCreatedAt: Number.isFinite(item.top.accountCreatedAt) ? item.top.accountCreatedAt : null },
+          top: { ...top, amount: count(item.top.amount, 1e9) ?? 0, share: count(item.top.share, 100) ?? 0, accountCreatedAt: Number.isFinite(item.top.accountCreatedAt) ? item.top.accountCreatedAt : null, ...(forgotten ? { forgotten: true } : {}) },
           mutual: Array.isArray(item.mutual) ? item.mutual.map(user).filter(Boolean).slice(0, 5) : [],
         };
       }).filter(Boolean).slice(0, 50) : [];
@@ -1292,7 +1331,9 @@ function createHubClient(options = {}) {
         days: count(data.days, 365) ?? 30,
         total: count(data.total, 1e12) ?? 0,
         givers: Array.isArray(data.givers) ? data.givers.map((item) => ({
-          id: SNOWFLAKE.test(String(item?.id ?? "")) ? String(item.id) : null,
+          // A member's id, or the random one a member who used Forget me has here (modRevoke's `from` takes either).
+          id: SNOWFLAKE.test(String(item?.id ?? "")) || GONE_ID.test(String(item?.id ?? "")) ? String(item.id) : null,
+          forgotten: GONE_ID.test(String(item?.id ?? "")),
           name: text(item?.name, 100) || "member",
           amount: count(item?.amount, 1e12) ?? 0, events: count(item?.events, 1e9) ?? 0, share: count(item?.share, 100) ?? 0,
           accountCreatedAt: when(item?.accountCreatedAt), joinedAt: when(item?.joinedAt),
@@ -1302,7 +1343,7 @@ function createHubClient(options = {}) {
     async modRevoke(userId, options = {}) {
       const from = options?.from == null ? null : String(options.from);
       const days = options?.days == null ? null : Number(options.days);
-      if (!SNOWFLAKE.test(String(userId ?? "")) || (from !== null && !SNOWFLAKE.test(from)) || (days !== null && (!Number.isSafeInteger(days) || days < 1 || days > 180))) return { ok: false, error: "bad-request" };
+      if (!SNOWFLAKE.test(String(userId ?? "")) || (from !== null && !SNOWFLAKE.test(from) && !GONE_ID.test(from)) || (days !== null && (!Number.isSafeInteger(days) || days < 1 || days > 180))) return { ok: false, error: "bad-request" };
       const answer = await authed("POST", `/v1/admin/credits/${userId}/revoke`, { ...(from ? { from } : {}), ...(days ? { days } : {}) });
       if (!answer.ok) return refused(answer);
       return { ok: true, revoked: count(answer.data.revoked, 1e12) ?? 0, credits: { balance: count(answer.data.credits?.balance, 1e12) ?? 0, lifetime: count(answer.data.credits?.lifetime, 1e12) ?? 0, rank: RANK_KEY.test(String(answer.data.credits?.rank ?? "")) ? answer.data.credits.rank : "spark" } };
@@ -1329,6 +1370,30 @@ function createHubClient(options = {}) {
       if (!SNOWFLAKE.test(String(userId ?? "")) || !Number.isSafeInteger(minutes) || minutes < 0 || minutes > 60 * 24 * 365) return bad();
       return simple("POST", `/v1/admin/members/${userId}/suspend`, { minutes });
     },
+    // The switches (relay credits.mjs SWITCHES): which kinds of reward, the jam's prizes or featuring a moderator
+    // turned off for now, and turning one off or back on. -> { ok, off: [key...] }
+    async modSwitches() {
+      const answer = await authed("GET", "/v1/admin/credits/switches");
+      return answer.ok ? { ok: true, off: switchesOff(answer.data.off) } : refused(answer);
+    },
+    async modSwitch(key, on) {
+      if (!CREDIT_SWITCHES.includes(key) || typeof on !== "boolean") return bad();
+      const answer = await authed("POST", "/v1/admin/credits/switches", { key, on });
+      return answer.ok ? { ok: true, off: switchesOff(answer.data.off) } : refused(answer);
+    },
+    // The Build Jam to look at (relay events.mjs, GET /v1/admin/jam): the one waiting for its day of review, else this
+    // week's, every vote with whether it counts and why not, and the voters' account ages, join dates and batches.
+    async modJam() {
+      const answer = await authed("GET", "/v1/admin/jam");
+      return answer.ok ? { ok: true, jam: modJamOf(answer.data.jam) } : refused(answer);
+    },
+    // A voter's votes in that jam no longer count, and they cannot vote in it again.
+    modJamVoid(eventId, userId) {
+      if (!id(eventId) || !SNOWFLAKE.test(String(userId ?? ""))) return bad();
+      return simple("DELETE", `/v1/admin/jam/${eventId}/votes/${userId}`);
+    },
+    // Pay a jam in review now instead of waiting its day out.
+    modJamRelease(eventId) { return id(eventId) ? simple("POST", `/v1/admin/jam/${eventId}/release`) : bad(); },
     async front() {
       if (!features.includes("front")) return { ok: false, error: "unsupported" };
       const answer = await authed("GET", "/v1/front");
@@ -1431,7 +1496,7 @@ function createHubClient(options = {}) {
       if (!features.includes("projects") || !id(projectId) || typeof token !== "string" || token.length > 64) return { ok: false, error: "bad-request" };
       const answer = await authed("POST", `/v1/projects/${projectId}/played`, { token });
       if (!answer.ok) return refused(answer);
-      const why = ["own", "maker-held", "limit", ...CREDIT_HOLDS].includes(answer.data.why) ? answer.data.why : null;
+      const why = ["own", "maker-held", "limit", "paused", ...CREDIT_HOLDS].includes(answer.data.why) ? answer.data.why : null;
       return { ok: true, counted: answer.data.counted === true, credited: { owner: count(answer.data.credited?.owner, 1e6) ?? 0, you: count(answer.data.credited?.you, 1e6) ?? 0 }, why };
     },
     async star(projectId, on = true) {

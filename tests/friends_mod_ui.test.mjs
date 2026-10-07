@@ -41,25 +41,34 @@ const review = {
   givers: [{ ...BOB, amount: 30, events: 9, share: 75, accountCreatedAt: Date.now() - 40 * DAY, joinedAt: Date.now() - 8 * DAY }, { id: null, name: "a member who used Forget me", amount: 10, events: 2, share: 25, accountCreatedAt: null, joinedAt: null }],
 };
 
-function environment({ moderator = true, confirm = true, extraReports = [], packNames = {} } = {}) {
+function environment({ moderator = true, confirm = true, extraReports = [], packNames = {}, switches = null, jam = null, flags = null, reviewed = review } = {}) {
   const calls = [];
+  // The switches a moderator turned off, as the relay keeps them (null: a relay from before the switches).
+  let off = switches;
   const api = {
     hubStatus: async () => ({ ok: true, status: { state: "ready", credits: true, linked: true } }),
     hubProjects: async (method, ...args) => { calls.push([`projects:${method}`, ...args]); return method === "me" ? { ok: true, moderator } : { ok: true }; },
     hubRoom: async (method, ...args) => {
       calls.push([method, ...args]);
-      if (method === "modFlags") return { ok: true, days: 30, flags: [{ ...ALICE, total: 40, why: "one-giver", top: { ...BOB, amount: 30, share: 75, accountCreatedAt: Date.now() - 40 * DAY }, mutual: [] }] };
+      if (method === "modFlags") return { ok: true, days: 30, flags: flags ?? [{ ...ALICE, total: 40, why: "one-giver", top: { ...BOB, amount: 30, share: 75, accountCreatedAt: Date.now() - 40 * DAY }, mutual: [] }] };
+      if (method === "modSwitches") return off ? { ok: true, off: [...off] } : { ok: false, error: "not-found" };
+      if (method === "modSwitch") {
+        off = args[1] ? off.filter((key) => key !== args[0]) : [...new Set([...off, args[0]])];
+        return { ok: true, off: [...off] };
+      }
+      if (method === "modJam") return jam ? { ok: true, jam } : { ok: false, error: "not-found" };
       if (method === "modReports") return { ok: true, reports: [
         { id: "rep_a", kind: "project", projectId: "proj_a", roomId: null, messageId: null, author: ALICE, reporter: BOB, reason: "Spam or a broken link", text: "One · https://alice.itch.io/one", verified: true, createdAt: 1 },
         { id: "rep_b", kind: "message", projectId: null, roomId: "room_a", messageId: "300000000000000001", author: BOB, reporter: ALICE, reason: "rude", text: "go away", verified: true, createdAt: 2 },
         ...extraReports,
       ] };
-      if (method === "modReview") return review;
+      if (method === "modReview") return reviewed;
       if (method === "modRevoke") return { ok: true, revoked: args[1]?.from ? 30 : 40, credits: { balance: 10, lifetime: 90, rank: "ember" } };
       if (method === "searchMembers") return { ok: true, members: [BOB] };
       return { ok: true };
     },
     hubShop: async (method, ...args) => { calls.push([`shop:${method}`, ...JSON.parse(JSON.stringify(args))]); return { ok: true }; },
+    hubEvents: async (method, ...args) => { calls.push([`events:${method}`, ...args]); return { ok: true }; },
   };
   // The Shop's names for packs it has read (renderer/friends-shop.js packName).
   const window = { mefiStudio: api, confirm: () => confirm, MefiShop: { packName: (id) => packNames[id] ?? null } };
@@ -95,7 +104,7 @@ test("farming, reports and a review: take back from one giver or all, suspend, r
   const panel = card.find("friends-mod-review");
   assert.match(panel.textContent, /Discord account 2 years old · in the server 3 months · 40 credits, 120 lifetime \(Ember\) · Can give and earn credits\./);
   assert.match(panel.textContent, /Bob: 30 credits \(75%\)9 plays or stars · Discord account 40 days old/);
-  assert.equal(panel.buttons("Take back 10").length, 0, "a giver who used Forget me cannot be singled out");
+  assert.equal(panel.buttons("Take back 10").length, 0, "a giver who used Forget me cannot be singled out when the relay gives no id for them");
   assert.match(panel.textContent, /a member who used Forget me: 10 credits \(25%\)2 plays or starsTake back all/, "and has no account age to show");
   panel.buttons("Take back 30")[0].click();
   await flush();
@@ -181,4 +190,88 @@ test("main lets the renderer call the moderator methods; the Friends page shows 
   assert.match(main, /modFlags: 0, modReview: 1, modRevoke: 2, modReports: 0, modResolve: 1, modSuspend: 2,/);
   assert.match(hubSource, /\{ id: "mod", label: "Moderation", glyph: "g-flag", about: "[^"]+", modOnly: true \}/);
   assert.match(hubSource, /const shownPlaces = \(\) => FRIENDS_PLACES\.filter\(\(place\) => !place\.modOnly \|\| window\.MefiFriendsMod\?\.isMod\?\.\(\) === true\);/);
+});
+
+test("a giver who used Forget me since can still be taken back by the id the relay gives them, and is flagged under no name", async () => {
+  const gone = "gone:AbCdEfGhIjKlMnOp";
+  const env = environment({
+    flags: [{ ...ALICE, total: 35, why: "one-giver", top: { id: null, name: "a member who used Forget me", forgotten: true, amount: 30, share: 86, accountCreatedAt: null }, mutual: [] }],
+    reviewed: { ...review, givers: [{ id: gone, forgotten: true, name: "a member who used Forget me", amount: 30, events: 6, share: 86, accountCreatedAt: null, joinedAt: null }] },
+  });
+  const card = env.mod.card();
+  await flush();
+  const flags = card.find("friends-mod-flags");
+  assert.match(flags.textContent, /Alice35 credits in 30 days, 86% from a member who used Forget me(?!.*Discord account)/, "no account age to show");
+  flags.buttons("Review")[0].click();
+  await flush();
+  const panel = card.find("friends-mod-review");
+  assert.match(panel.textContent, /a member who used Forget me: 30 credits \(86%\)6 plays or stars · they used Forget me since/);
+  panel.buttons("Take back 30")[0].click();
+  await flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(env.calls.find((call) => call[0] === "modRevoke"))), ["modRevoke", ALICE.id, { from: gone, days: 30 }]);
+});
+
+test("rewards switch off and back on, and the Build Jam's review: every vote, batches, take a voter or an entry out, pay now or hold", async () => {
+  const X0 = { id: "1200000000000000001", name: "X0" }, X1 = { id: "1200000000000000002", name: "X1" };
+  const CARA = { id: "200000000000000003", name: "Cara" };
+  const facts = (days, batch = null) => ({ accountCreatedAt: Date.now() - days * DAY, joinedAt: Date.now() - 20 * DAY, batch });
+  const jam = {
+    id: "jam_w3000", theme: "Echoes", status: "review", endsAt: Date.now() - 3_600_000, resultsAt: Date.now() + 20 * 3_600_000, held: false, pool: 450,
+    payouts: [{ userId: ALICE.id, name: "Alice", place: 1, amount: 125, why: "place", paid: null, projectId: "proj_a" }],
+    entries: [
+      { user: { ...ALICE, ...facts(800) }, project: { id: "proj_a", title: "Void Runner", url: "https://alice.itch.io/void-runner", host: "alice.itch.io", kind: "game" }, votes: 3, players: 4, resting: false,
+        voters: [{ ...CARA, ...facts(900), counted: true, why: null }] },
+      { user: { ...BOB, ...facts(700) }, project: { id: "proj_b", title: "Tiny Farm", url: "https://bob.itch.io/tiny-farm", host: "bob.itch.io", kind: "game" }, votes: 1, players: 3, resting: false,
+        voters: [{ ...X0, ...facts(400, "A"), counted: true, why: null }, { ...X1, ...facts(399, "A"), counted: false, why: "same-batch" }] },
+    ],
+  };
+  const env = environment({ switches: ["sales"], jam });
+  const card = env.mod.card();
+  await flush();
+  const panel = card.find("friends-mod-jam");
+  assert.match(panel.textContent, /Voting has closed\. The prizes pay by themselves .+ unless you hold them\. A pot of 450 credits\./);
+  assert.match(panel.textContent, /A batch letter marks Discord accounts made within 3 days of each other that joined the server within 12 hours of each other/);
+  assert.match(panel.textContent, /Void Runner by Alice3 votes count · 4 players · 1st place, 125 credits now/);
+  assert.match(panel.textContent, /Tiny Farm by Bob1 vote count \(1 more don't\) · 3 players/);
+  assert.match(panel.textContent, /Vote from X1Discord account 13 months old · in the server 20 days · batch A · doesn't count: counted once with accounts made and joined together with it/);
+  assert.ok(card.byClass("friends-mod-voter").length === 3, "each vote sits under its entry");
+  card.find(`friends-mod-jam-void-${BOB.id}-${X1.id}`).click();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "modJamVoid"), ["modJamVoid", "jam_w3000", X1.id]);
+  assert.equal(card.find("friends-mod-status").textContent, "X1's votes no longer count in this jam.");
+  card.find(`friends-mod-jam-remove-${BOB.id}`).click();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "events:removeEntry"), ["events:removeEntry", "jam_w3000", BOB.id]);
+  card.find("friends-mod-jam-release").click();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "modJamRelease"), ["modJamRelease", "jam_w3000"]);
+  card.find("friends-mod-jam-hold").click();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "modSwitch"), ["modSwitch", "jam", false], "Hold the prizes switches the jam's prizes off");
+
+  const rewards = card.find("friends-mod-switches");
+  assert.match(rewards.textContent, /Plays: onPlaying someone's project pays its maker and the player\./);
+  assert.match(rewards.textContent, /Shop sales: off/);
+  assert.match(rewards.textContent, /Build Jam prizes: off/, "held a moment ago");
+  card.find("friends-mod-switch-sales").click();
+  await flush();
+  assert.deepEqual(env.calls.filter((call) => call[0] === "modSwitch").at(-1), ["modSwitch", "sales", true]);
+  assert.match(card.find("friends-mod-switches").textContent, /Shop sales: on/);
+  card.find("friends-mod-switch-plays").click();
+  await flush();
+  assert.deepEqual(env.calls.filter((call) => call[0] === "modSwitch").at(-1), ["modSwitch", "plays", false]);
+  assert.equal(card.find("friends-mod-status").textContent, "Plays is off.");
+});
+
+test("a relay from before the switches and the jam's review shows neither part", async () => {
+  const env = environment();
+  const card = env.mod.card();
+  await flush();
+  assert.equal(card.find("friends-mod-switches"), null);
+  assert.equal(card.find("friends-mod-jam"), null);
+  assert.equal(card.dataset.state, "ready");
+});
+
+test("main lets the renderer call the new moderator methods, and nothing else new", () => {
+  assert.match(main, /modSwitches: 0, modSwitch: 2, modJam: 0, modJamVoid: 2, modJamRelease: 1,/);
 });

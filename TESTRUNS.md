@@ -39,6 +39,33 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-07 Credits harder to farm: Forget me keeps what was given, reward switches, once-a-week Top, Shop and jam gates, the jam's review day and batch rule, moderators' alerts
+
+Branch `fix/credits-guard` (C:\wt\credits-guard, off main c513838). The owner asked whether the credits can be cheated
+("i dont want a system where hackers can ruin the fun for everyone"), then said "do it" to the five fixes proposed. A
+read-only review found no way to change a balance directly. Aged second Discord accounts can still farm within the
+caps, and a throwaway probe against the relay harness confirmed three gaps: five alts paid a main 40 credits with no
+flag, and after they used Forget me the `gone:` rows went in 8 days, so review showed 0 and revoke took 0 while the main
+kept all 40; a revoke stops at a 0 balance and items bought with the credits stay; and an account 3 days old, an hour in
+the server, published a free pack that unaged accounts' free Gets put first on the Shop's Top list. Changed: Forget me
+keeps what a member gave under a random `gone:` id and no project for the usual 180 days, counted in
+`credits.mjs farmingFlags` and taken back by revoke's `from`. Switches (`/v1/admin/credits/switches`, audited, not a
+write route): plays, stars, together, cowork, sales and featuring pay nothing while off, and their rows stay at 0 so the
+time off never pays later; jam holds prizes; review and batches turn the jam's new rules off. Top and the Lobby's week
+count each player once a week per project. A pack's sales count only from buyers in good standing, and publishing (free
+too), listing again and entering the jam need good standing. A closed jam waits a day in `review`, with
+`/v1/admin/jam` (every vote, why not counted, account age, join date and batch letter), votes void plus bar, entry
+removal and release. One batch (made within 3 days, joined within 12 h) counts once and never for its own entry.
+`relay/src/alerts.mjs` posts a nameless line to the optional `MOD_ALERT_WEBHOOK`. Studio: hub-client mod methods,
+HUB_ROOM_METHODS, Friends › Moderation's Build Jam and Rewards, Events' "results come", Project hub's paused words. The
+fake Discord now spreads members' join dates by id (3 days apart) so test members are no batch. Here: relay_credits,
+relay_shop and relay_events 47 pass, 0 fail (9 new, one of them Studio's real hub client against the relay);
+relay_core, relay_e2e, relay_connect, relay_pcs, relay_pets, hub_client, hub_client_shop, friends_mod_ui,
+friends_events_ui, friends_front_ui, rooms_ui and project_hub_ui 127 pass, 0 fail (5 new); check ok; audit 0
+findings; eslint on the changed files clean (npm run lint 47 warnings, as main, none in them). Not run here: the
+full `npm test` (this PC is shared; ci.yml on the pushed branch is the gate). The relay is not deployed: one deploy
+from main once feat/shop-season has landed too.
+
 ## 2026-10-07 Social uses a wide window: Friends over the docked conversation at the right; menus without odd gaps
 
 Branch `ui/social-wide` in C:\wt\social-wide, off main c513838. The owner asked for Social Home's empty sides to be used
@@ -493,21 +520,6 @@ requires it measured there.
 
 unified_studio_render ok (alone, under the lease); team_render, agent_setup_render, settings_render ok; npm run check
 ok; npm run lint 0 errors and 47 warnings, as on clean main 017d51a. Hosted CI (Windows) on ef34f7a: green (37472060180). After merging main 4b150b3 (shell_render at 125% scaling): shell_render ok here, its first pass on this PC, so every window suite is green with this fix.
-
-## 2026-10-06 shell_render passes at 125% display scaling: the inspector check reads the page's own width
-
-Branch `fx/scaling` (on main 017d51a; first proven on 0b2fa14): in `tests/fixtures/shell-render-electron.cjs` the narrow-window
-check "it shrinks to leave the main area its 320" compared the inspector with `1100 - 64 - 344 - 320`. At 125% or
-150% display scaling a 1100 px content size comes out 1101 CSS px (the fixture's resize already allows exactly that
-one pixel) and the inspector takes it, so the suite failed on the owner's PCs even on clean main ("373 !== 372").
-The expected width is now `state.inner[0] - 64 - 344 - 320`, the probe's own innerWidth; the rule itself is
-unchanged.
-
-Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tests/shell_render.test.mjs` 1/1 pass
-(112 s); the same suite on clean main fails at that check. `npm run check` ok. Not run: the full `npm test` (one
-fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
-`layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
-forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
 
 ## Read Before Any Tests
 

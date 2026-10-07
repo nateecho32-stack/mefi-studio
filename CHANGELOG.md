@@ -7,6 +7,25 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Credits are harder to farm, and moderators can act on it.** Nobody could
+  change a balance before either; what changed is how far extra Discord
+  accounts get. The Top list and the Lobby's project of the week count each
+  player once a week per project. The Shop's Top list counts sales only from
+  members who may earn credits, and publishing a style pack (a free one too)
+  or entering the Build Jam needs a member in good standing. What someone who
+  used **Forget me** had given others stays, under an id that names nobody,
+  so a moderator can still see it and take it back. The **Build Jam**'s
+  results now come a day after voting closes (Tuesday): votes from accounts
+  made and brought into the server together count once, and a moderator
+  first sees every vote, whether it counts and why, and each voter's account
+  age. **Friends › Moderation** gains that **Build Jam** review (Don't count a
+  voter, Remove an entry, Pay the prizes now, Hold the prizes) and
+  **Rewards** switches that turn plays, stars, co-work rewards, Shop sales,
+  featuring or the jam's prizes off for a while without pausing anything
+  else (the jam's review day and its one-vote-per-batch rule have switches
+  too). With an optional webhook, the room service also posts a one-line
+  heads-up, naming nobody, to a private moderators' Discord channel.
+
 - **Social uses a wide window.** Home no longer sits in a narrow column with
   empty sides. On a wide window it has a column at the right: **Friends** at
   the top, now compact (one line a row, smaller faces), and the conversation
