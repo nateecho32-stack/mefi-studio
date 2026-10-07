@@ -115546,7 +115546,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         const heading = Math.atan2(dy, dx);
         if (input.turn !== null) input.turns.push({ at, by: wrap(heading - input.turn) });
         input.turn = heading;
-        while (input.turns.length && at - input.turns[0].at > CIRCLE_MS) input.turns.shift();
+        while (input.turns.length && (at - input.turns[0].at > CIRCLE_MS || input.turns.length > 120)) input.turns.shift();
         input.cx = lerp(input.cx || event.clientX, event.clientX, 0.2);
         input.cy = lerp(input.cy || event.clientY, event.clientY, 0.2);
         const spin = input.turns.reduce((sum, turn) => sum + turn.by, 0);
@@ -115911,8 +115911,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     try { paintPreview(entry.canvas, { ...entry.options, time: still ? 0 : at }); } catch { /* the next frame tries again */ }
   }
   function spinShows() {
-    if (shows.raf || !shows.seen.size || typeof requestAnimationFrame !== "function") return;
-    if (motionMode() === "off" || !switches.live || document.visibilityState === "hidden") { for (const entry of shows.seen) showFrame(entry, 0); return; }
+    // A hidden window draws nothing; it picks up again when it shows.
+    if (shows.raf || !shows.seen.size || typeof requestAnimationFrame !== "function" || document.visibilityState === "hidden") return;
+    if (motionMode() === "off" || !switches.live) { for (const entry of shows.seen) showFrame(entry, 0); return; }
     shows.raf = requestAnimationFrame(showLoop);
   }
   function showLoop(at) {
@@ -115927,9 +115928,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!canvas) return null;
     const entry = { canvas, options: { ...options } };
     shows.list.add(entry);
-    showFrame(entry, now() / 1000);
-    // Without a way to know it is on screen, it stays one still frame.
-    if (typeof IntersectionObserver === "function") {
+    const watching = typeof IntersectionObserver === "function";
+    // Without a way to know when it is on screen, it is one still frame now; with one, nothing is drawn until it is seen.
+    if (!watching) showFrame(entry, 0);
+    else {
       shows.watch ??= new IntersectionObserver((entries) => {
         for (const seen of entries) {
           const hit = [...shows.list].find((item) => item.canvas === seen.target);
@@ -115941,7 +115943,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       shows.watch.observe(canvas);
     }
     return {
-      set(next = {}) { Object.assign(entry.options, next); showFrame(entry, now() / 1000); },
+      // New options show at once while it is on screen (or when nothing can say whether it is).
+      set(next = {}) { Object.assign(entry.options, next); if (!watching || shows.seen.has(entry)) showFrame(entry, motionMode() === "off" || !switches.live ? 0 : now() / 1000); },
       stop() { shows.list.delete(entry); shows.seen.delete(entry); shows.watch?.unobserve?.(canvas); },
     };
   }
@@ -116114,7 +116117,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     window.addEventListener("mefi-theme-change", () => {
       themeCache = null;
       if (loop.running) for (const view of views.values()) paint(view);
-      for (const entry of shows.list) showFrame(entry, now() / 1000);
+      // Previews on screen take the new colours now; the rest when they are seen.
+      if (document.visibilityState !== "hidden") for (const entry of shows.seen) showFrame(entry, motionMode() === "off" || !switches.live ? 0 : now() / 1000);
     });
     sync();
   }
