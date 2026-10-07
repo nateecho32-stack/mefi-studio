@@ -6,6 +6,39 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
+
+Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
+hand with both sides kept; d1344bc puts the Playlists entry back to once after an earlier merge took 0e9f37f, not
+d55269f as its message says). Relay: `relay/src/economy.mjs` (a daily community budget, 200 + 25 per member seen this
+week who is old enough to earn) and `relay/src/events.mjs` (the weekly Build Jam, co-work hours at 02:00, 10:00 and
+18:00 UTC, building together), run on the relay's alarm; schema v5; credits.mjs gains together, cowork and jam kinds
+paid through award(). Studio: hub-client events calls, main.cjs HUB_EVENT_METHODS, preload hubEvents,
+renderer/friends-events.js + .css as Friends › Events.
+
+A read-only review of the social side found, in this branch, an alarm that would have woken the relay every second
+before each co-work hour and through a pause, a listed co-work room nobody could approve requests for, prizes two
+votes could win, and Forget me leaving names in results; all fixed in 113ca61 with tests. Its findings in other
+files went to the social session, which landed them on main (711ceb5).
+
+Gate on 132132d (main f1934aa merged): the parallel stage at 4 suites at a time, 7227 tests, 7210 pass, 3 fail, all a
+git time limit hit under load (29 to 780 MB free while other sessions ran): git_actions "a listener that throws does
+not stop a publish half-way", rust_parity_git "the actions answer like the JavaScript" and rust_parity_snapshots
+"the same attempt on two identical repositories". Python contracts 248 OK (1 skipped), normalized-path lock OK,
+`npm run audit` 0 findings. The Electron lane did not finish: media_window_render and layout_contract_render each
+kept an Electron window alive all night (their kill timers never landed at that memory) and held the machine-wide
+lane about nine hours until killed at 06:11 (a stage limit for exactly this is on wip/test-speed). The Electron
+suites were then run one at a time on the merged tree 0d82a1a through the lease with a 12-minute guard each:
+42 of 47 pass on the first pass (layout_contract_render left out: it fails on clean main here and retires with
+ui/v2-only). Of the five: shell_render is the known display-scaling failure on clean main; agent_setup_render and
+unified_studio_render fail on main's own renderer too (a control run in C:\wt\speed, at other assertions:
+load-sensitive); today_render and tree_dynamics_render, which had run 10 and 15 minutes under load, pass alone
+(101 s and 14 s). friends_render, companion_hub_render and friends_two_render pass. The three git time-limit
+suites pass alone: git_actions, rust_parity_git and rust_parity_snapshots, 72/72 in 2 min 41 s through `npm run
+test:one`.
+
+After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
+
 ## 2026-10-06 The social review's fixes land with the polish: say what helps, why a play earned nothing, one vocabulary
 
 Branch `wip/social-polish-2` in `C:\wt\polish2`: wip/social-polish (a676b05, Windows CI green) + 67e5898, the fixes from

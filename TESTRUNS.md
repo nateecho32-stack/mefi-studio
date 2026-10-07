@@ -39,6 +39,23 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-07 Menu effects: Blown away, Shatter, Glitch and Spirits; right-click menus, Search and popovers leave in style
+
+Branch `feat/effects-more` (6e84e14, 02c6146, 03cc92e on c513838), worktree C:\wt\s-fx on the owner's laptop (Node
+24.15, Electron 44.4.1; 700 MB free and paging for most of the run). Asked: two new menu effects, then four (Spirits
+for October's drop, Glitch), effects for right-click and tab menus, Search and popovers, under 2 ms of particle work a
+frame on a 400x500 menu, motion Off and "It fades out" closing at once, a menu reopened mid-effect back at once. The
+Shop's catalog entries are left to the Shop helper (rotation rework). Per-frame JS (mask step plus particles), 400x500
+menu, Electron offscreen, 3 runs each through the windows lane: wind mean 0.42 ms p95 0.8, shatter 0.83/1.2, spirits
+0.57/1.0, glitch 0.54/0.5 (dissolve 0.28/0.5, embers 0.52/1.8, stardust 0.33/0.6), frames 16.7 ms apart (p50); single
+32-38 ms frames (shatter, glitch) did not come back in per-frame reruns (max 3.8 and 1.2 ms), taken as the PC's paging.
+Plans fill in idle slices: 27-43 ms in one task before, 2-9 ms per slice. Suites on the last commit: effects 15/15,
+tabs_strip 68/68, friends_shop_ui, booklet_build, studio_ui, type_into_menu, shop_host, relay_shop, sessions_list,
+shell_frame_state: 210/210; earlier on the branch 20 suites around the change 446/446. Electron, one at a time:
+tabs_render, sessions_render, shell_render, autonomy_render, friends_render, today_render pass. check ok; lint 47
+warnings (baseline); audit 0 findings; Python contracts 248 OK, 1 skipped. Frame strips (dark and light) in
+C:\wt\s-fx-lab\out\*-final.png. Not run: the full `npm test`.
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -485,39 +502,6 @@ Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tes
 fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
 `layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
 forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
-
-## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
-
-Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
-hand with both sides kept; d1344bc puts the Playlists entry back to once after an earlier merge took 0e9f37f, not
-d55269f as its message says). Relay: `relay/src/economy.mjs` (a daily community budget, 200 + 25 per member seen this
-week who is old enough to earn) and `relay/src/events.mjs` (the weekly Build Jam, co-work hours at 02:00, 10:00 and
-18:00 UTC, building together), run on the relay's alarm; schema v5; credits.mjs gains together, cowork and jam kinds
-paid through award(). Studio: hub-client events calls, main.cjs HUB_EVENT_METHODS, preload hubEvents,
-renderer/friends-events.js + .css as Friends › Events.
-
-A read-only review of the social side found, in this branch, an alarm that would have woken the relay every second
-before each co-work hour and through a pause, a listed co-work room nobody could approve requests for, prizes two
-votes could win, and Forget me leaving names in results; all fixed in 113ca61 with tests. Its findings in other
-files went to the social session, which landed them on main (711ceb5).
-
-Gate on 132132d (main f1934aa merged): the parallel stage at 4 suites at a time, 7227 tests, 7210 pass, 3 fail, all a
-git time limit hit under load (29 to 780 MB free while other sessions ran): git_actions "a listener that throws does
-not stop a publish half-way", rust_parity_git "the actions answer like the JavaScript" and rust_parity_snapshots
-"the same attempt on two identical repositories". Python contracts 248 OK (1 skipped), normalized-path lock OK,
-`npm run audit` 0 findings. The Electron lane did not finish: media_window_render and layout_contract_render each
-kept an Electron window alive all night (their kill timers never landed at that memory) and held the machine-wide
-lane about nine hours until killed at 06:11 (a stage limit for exactly this is on wip/test-speed). The Electron
-suites were then run one at a time on the merged tree 0d82a1a through the lease with a 12-minute guard each:
-42 of 47 pass on the first pass (layout_contract_render left out: it fails on clean main here and retires with
-ui/v2-only). Of the five: shell_render is the known display-scaling failure on clean main; agent_setup_render and
-unified_studio_render fail on main's own renderer too (a control run in C:\wt\speed, at other assertions:
-load-sensitive); today_render and tree_dynamics_render, which had run 10 and 15 minutes under load, pass alone
-(101 s and 14 s). friends_render, companion_hub_render and friends_two_render pass. The three git time-limit
-suites pass alone: git_actions, rust_parity_git and rust_parity_snapshots, 72/72 in 2 min 41 s through `npm run
-test:one`.
-
-After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
 
 ## Read Before Any Tests
 
