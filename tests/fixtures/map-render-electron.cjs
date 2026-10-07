@@ -6,7 +6,10 @@
 // over the tree; renderer/nav.js syncMapSwitch in Fleet's and the Agent brain's heads). This opens the Map, measures
 // its bar (the switch, Running only, View ▾ with its four groups and the way to Map look), the colours of the four
 // states, Fit and zoom, the list column and the breadcrumb; moves between the three pages with a real pointer from each
-// switch; checks Running only and View ▾'s choices act; and that nothing reads under 12 px. Screenshots are kept
+// switch; checks Running only and View ▾'s choices act; and that nothing reads under 12 px. Then the Map at a glance:
+// the legend's pills count their work orbs, the pointer on one lights its state up, a click holds it (aria-pressed and
+// #cmd-announce say so) and Esc lets go; the running orb's hover card says "Running · for 40 min" clear of the legend;
+// and the four states keep apart in Daylight at 1920x1080 and at 1440x900, Chrome too. Screenshots are kept
 // when the test is given a capture folder
 // (MEFI_MAP_CAPTURE_DIR). No application main process or live state is loaded; network, permissions and child processes
 // are blocked.
@@ -57,6 +60,9 @@ app.whenReady().then(async () => {
     task("t_run", "Search notes by tag", { status: "active", runId: "run-1", updatedAt: now - 60000 }),
     task("t_ready", "Keyboard shortcut for a new note"),
     task("t_done", "Pin favourite notes", { status: "done", doneAt: now - 7200000, verification: { state: "verified" } }),
+    // A finished attempt being checked (Review) and a build that waits for the owner's go-ahead (Needs you).
+    task("t_review", "Export notes as Markdown", { status: "awaiting_verification", updatedAt: now - 1500000 }),
+    task("t_ask", "Sync notes across devices"),
   ];
   const routing = { provider: "zen", roleProviders: {}, models: { routine: "gpt-6-luna", heavy: "gpt-6-sol" }, providerModels: {}, hasZen: true, autoProviders: ["zen"], autoFallback: true, modelSelection: "fixed", executorCli: "codex", executorModels: {}, executorTierModels: {}, executorTier: "auto" };
   const responses = {
@@ -65,7 +71,7 @@ app.whenReady().then(async () => {
     prefsGet: { ok: true, prefs: { commandHome: false, autoReference: false } },
     assistantState: { ok: true, state: { projectId, status: "running", agents: [], messages: [], prefs: {}, work: [], questions: [] } },
     assistantStatus: { ok: true, status: { projectId, enabled: true, execute: true, autoBuild: true, mode: "swarm", running: [{ taskId: "t_run", runId: "run-1", title: "Search notes by tag", route: "builder-2", phase: "running", currentStep: "Writing parseTags()", startedAt: now - 2400000 }], history: [] } },
-    backlogStatus: { ok: true, projectId, paused: false, counts: { ready: 1, running: 1 }, taskStates: [{ id: "t_run", stage: "running" }, { id: "t_ready", stage: "ready" }], next: [{ id: "t_ready", title: "Keyboard shortcut for a new note", stage: "ready" }] },
+    backlogStatus: { ok: true, projectId, paused: false, counts: { ready: 1, running: 1, approval: 1 }, taskStates: [{ id: "t_run", stage: "running" }, { id: "t_ready", stage: "ready" }, { id: "t_ask", kind: "task", stage: "approval", reason: "Its build waits for your approval" }], next: [{ id: "t_ready", title: "Keyboard shortcut for a new note", stage: "ready" }], approval: [{ kind: "task", id: "t_ask", title: "Sync notes across devices", stage: "approval", reason: "Its build waits for your approval" }] },
     eyesState: { ok: true, sessions: [], todos: [], changes: [], pngs: [] }, eyesCheckpointsRead: { ok: true, checkpoints: {} }, eyesRequestsRead: { ok: true, requests: [] }, eyesBriefingRead: { ok: true, briefing: null }, eyesCollisions: { ok: true, collisions: [], presence: [] }, speedMeasurements: { ok: true, measurements: {} },
     readCatalog: JSON.parse(fs.readFileSync(path.join(root, "data", "models.json"), "utf8")),
     getApiKey: { saved: false }, getAiRouting: routing, cliStatus: [], launchStudio: { ok: true }, firstRunStatus: { ok: true, firstRun: null },
@@ -134,7 +140,7 @@ app.whenReady().then(async () => {
   assert.equal(map.pagesList, false, "no page list over the Map: the column keeps the sessions");
   assert.deepEqual(await switchOf("#idle-hud"), ["Map *", "Fleet", "Pipelines"], "the Map's own switch, Map current");
   report.bar = await run(`const box = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]; };
-    return { bar: box('map-bar'), zoom: box('map-zoom'), legend: [...document.querySelectorAll('#map-legend .map-legend-row')].map((row) => row.textContent.trim()), classicTop: Boolean(document.querySelector('#idle-hud .cmd-top, #idle-hud .cmd-hint, #cmd-dock')) };`);
+    return { bar: box('map-bar'), zoom: box('map-zoom'), legend: [...document.querySelectorAll('#map-legend .map-legend-row')].map((row) => row.querySelector(':scope > span').textContent.trim()), classicTop: Boolean(document.querySelector('#idle-hud .cmd-top, #idle-hud .cmd-hint, #cmd-dock')) };`);
   assert.deepEqual(report.bar.legend, ["Running", "Needs you", "Review", "Done"], "the colours of the four states, as the prototype names them");
   assert.equal(report.bar.classicTop, false, "the classic top bar, hint line and dock are gone");
   assert.ok(report.bar.bar[2] > 200 && report.bar.zoom[2] > 60, `the bar and Fit and zoom are drawn: ${JSON.stringify(report.bar)}`);
@@ -180,6 +186,69 @@ app.whenReady().then(async () => {
   await until("window.MefiNav.current() === 'command' && document.getElementById('idle-hud')?.hidden === false", "back to the Map from the Pipelines' switch");
   assert.deepEqual(tooSmall, [], "nothing in the Map's bar, its menu, its corner or the switch reads under 12 px");
   report.steps.push("the switch moves between the three pages");
+
+  // ---- the Map at a glance: the legend points at its nodes, and a work orb's hover card ----
+  const glance = () => run("return window.MefiIdle.glanceStatus();");
+  const pointer = async (x, y) => { contents.sendInputEvent({ type: "mouseMove", x: Math.round(x), y: Math.round(y) }); await sleep(250); };
+  const centre = (selector) => run(`const r = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;`);
+  const rect = (selector) => run(`const r = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return r && r.width ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null;`);
+  const overlap = (a, b) => Boolean(a && b) && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  // Somewhere that opens nothing: the breadcrumb in the top bar.
+  const away = async () => { const spot = await centre(".shell-trail") ?? { x: 600, y: 10 }; await pointer(spot.x, spot.y); };
+  await until("window.MefiIdle.glanceStatus().counts.active >= 1 && window.MefiIdle.glanceStatus().counts.held >= 1 && window.MefiIdle.glanceStatus().counts.verify >= 1", "the legend counts the running, waiting and checked work");
+  const pills = await run(`return [...document.querySelectorAll('#map-legend .map-legend-row')].map((row) => [row.dataset.state, row.tagName, row.querySelector('.map-legend-count')?.textContent ?? null, row.getAttribute('aria-label'), row.getAttribute('aria-pressed')]);`);
+  report.legendPills = pills;
+  assert.deepEqual(pills, [["active", "BUTTON", "1", "Running: 1 on the Map", "false"], ["held", "BUTTON", "1", "Needs you: 1 on the Map", "false"], ["verify", "BUTTON", "1", "Review: 1 on the Map", "false"], ["done", "BUTTON", "0", "Done: 0 on the Map", "false"]], "each pill counts its work orbs and says so");
+  const held = await centre('#map-legend [data-state="held"]');
+  await pointer(held.x, held.y);
+  await until("window.MefiIdle.glanceStatus().hover === 'held' && window.MefiIdle.glanceStatus().level === 1", "the pointer on Needs you lights its nodes (motion off: at once)");
+  await capture("map-legend-hover-1920x1080.png");
+  await click('#map-legend [data-state="held"]');
+  assert.equal(await run(`return document.querySelector('#map-legend [data-state="held"]').getAttribute('aria-pressed');`), "true", "a click holds it");
+  assert.match(await run("return document.getElementById('cmd-announce').textContent;"), /^Showing Needs you: 1 on the Map\. Press Esc or choose Needs you again to show everything\.$/, "and says so to screen readers");
+  await away();
+  await until("window.MefiIdle.glanceStatus().hover === null && window.MefiIdle.glanceStatus().pin === 'held' && window.MefiIdle.glanceStatus().level === 1", "held, it stays lit after the pointer leaves");
+  await capture("map-legend-held-1920x1080.png");
+  contents.sendInputEvent({ type: "keyDown", keyCode: "Escape" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+  await until("window.MefiIdle.glanceStatus().pin === null && window.MefiIdle.glanceStatus().level === 0", "Esc lets go of it");
+  assert.equal(await run("return window.MefiNav.current() === 'command' && !window.MefiCompanionHub?.isOpen?.();"), true, "that Esc spent itself on the legend: the Map stays and the companion stays closed");
+  assert.equal(await run(`return [...document.querySelectorAll('#map-legend [aria-pressed="true"]')].length;`), 0);
+  report.steps.push("the legend counts, points at and holds its states");
+  // Hovering the running orb: its card says what it is doing and for how long, clear of the legend.
+  const hoverCard = async (name) => {
+    const orb = await run("const node = window.MefiIdle.debugNodes().find((entry) => entry.id.endsWith('t_run') && entry.kind === 'task'); return node && Number.isFinite(node.x) ? { x: node.x, y: node.y } : null;");
+    assert.ok(orb, "the running task is on the Map");
+    await pointer(orb.x, orb.y);
+    await until("document.getElementById('cmd-tip')?.hidden === false && /Running/.test(document.querySelector('#cmd-tip .tip-state-text')?.textContent ?? '')", `the running orb's card shows (${name})`);
+    const card = await run(`const tip = document.getElementById('cmd-tip'); return { title: tip.querySelector('.tip-title').textContent, line: tip.querySelector('.tip-state-text').textContent, dot: getComputedStyle(tip.querySelector('.tip-state .sw')).backgroundColor };`);
+    assert.equal(card.title, "Search notes by tag");
+    assert.match(card.line, /^Running · for 4\d min$/, `a run's own start: ${card.line}`);
+    assert.equal(overlap(await rect("#cmd-tip"), await rect("#cmd-legend")), false, "the card keeps off the legend");
+    tooSmall.push(...await small("#cmd-tip"));
+    await capture(name);
+    await away();
+    return card;
+  };
+  report.card = await hoverCard("map-hover-card-1920x1080.png");
+  tooSmall.push(...await small("#map-legend"));
+  // The four states apart in a light theme too, at the owner's size and at 1440x900.
+  const hue = ([r, g, b]) => { const max = Math.max(r, g, b), d = max - Math.min(r, g, b); if (!d) return 0; const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4; return (h * 60 + 360) % 360; };
+  const apart = (colours) => { const keys = Object.keys(colours); let least = 360; for (let a = 0; a < keys.length; a += 1) for (let b = a + 1; b < keys.length; b += 1) { const d = Math.abs(hue(colours[keys[a]]) - hue(colours[keys[b]])) % 360; least = Math.min(least, d, 360 - d); } return least; };
+  report.themes = {};
+  for (const [theme, size] of [["daylight", [1920, 1080]], ["daylight", [1440, 900]], ["chrome", [1440, 900]]]) {
+    await run(`window.MefiMusic.applyTheme(${JSON.stringify(theme)}, false);`);
+    window.setContentSize(size[0], size[1]);
+    await sleep(900);
+    const name = `${theme}-${size[0]}x${size[1]}`;
+    const status = await glance();
+    report.themes[name] = { colours: status.colours, least: apart({ active: status.colours.active, held: status.colours.held, verify: status.colours.verify, done: status.colours.done }) };
+    if (theme !== "chrome") assert.ok(report.themes[name].least >= 40, `${name}: the four states keep 40 degrees of hue apart (${report.themes[name].least})`);
+    assert.equal(overlap(await rect("#cmd-legend"), await rect("#map-zoom")), false, `${name}: the legend and Fit and zoom keep apart`);
+    await capture(`map-${name}.png`);
+    if (size[0] === 1440) report.themes[name].card = await hoverCard(`map-hover-card-${name}.png`);
+  }
+  assert.deepEqual(tooSmall, [], "the card and the pills read at 12 px or more");
+  report.steps.push("the four states keep apart in Daylight, at 1920x1080 and 1440x900");
   report.complete = true;
   finish();
 }).catch(finish);

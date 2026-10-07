@@ -1663,6 +1663,47 @@ failed process stays an error and cannot produce briefing requests.
   the hub and quiet work wear none. Task orbs are a size up from the rest.
   `mefiStudio.mapRings` saved as `off` in localStorage turns the rings off
   (both switches are read when the Map loads).
+- **State changes at a glance.** When a work orb's state changes (it starts
+  running, needs you, goes to Review or is done), its ring sends out one
+  soft ripple in the new state's colour, about 0.8 s, at the hot cadence for
+  that long; only the node that changed does any work (`noteGlance` keeps the
+  state and when it began on the node's motion record). A node's first sight,
+  the first moment after the Map opens over a tree nobody was drawing
+  (`quietGlances`), motion Off, the rings off and Home's scenery send none.
+  `mefiStudio.mapRipple` saved as `off` turns the ripple off.
+- **The legend points at its nodes.** Running, Needs you, Review and Done
+  are pills in `#map-legend`, each with the count of its work orbs on the
+  Map (written only when a count moves). Pointing at one, or tabbing to it,
+  keeps that state's orbs at full strength and brightens their rings while
+  everything else dims toward a quarter; the dim eases in and out
+  (`stepLegendPoint`) and cross-fades from pill to pill. A click holds it
+  (`aria-pressed`, and `#cmd-announce` says how to let go) until the pill is
+  clicked again or Esc, which lets go of a held state before it opens the
+  companion; pointing at another pill meanwhile shows that one until the
+  pointer leaves. `mefiStudio.mapLegendPoint` saved as `off` puts back the
+  plain colour keys.
+- **A work orb's hover card.** Hovering a work orb shows the Map's tooltip
+  (`#cmd-tip`) as a small card, over its callout too: the title, the state in
+  the legend's words with its colour, and how long it has been so
+  ("Running · for 12 min"). The time is the run's own start for Running and
+  the finish for Done, else the change the Map saw; failing both it is a
+  lower bound ("for at least 5 min"). Quiet work says what it is doing in the
+  app's one vocabulary (Up next, Ready, Retry scheduled). Over the legend's
+  corner the card opens above the pointer. `mefiStudio.mapHoverCard` saved
+  as `off` keeps the old tooltip.
+- **The four states keep apart in every theme.** Running wears the theme's
+  accent; Needs you (amber), Review (blue) and Done (green) each keep at
+  least 40 degrees of hue from it and from one another as the Map draws
+  them, turning within their family when an accent comes close
+  (`glancePalette`, once per theme): Review toward violet on Daylight and
+  Midnight, Done toward lime on Forest and Aurora, Needs you toward rose on
+  Studio gold and Eclipse and toward yellow on Ember and Paper. A grey accent
+  (Chrome's silver) has no hue to meet. On a light page each state's colour
+  darkens only as far as 4.5:1 against the page needs, so its hue still
+  shows; words in a node's colour (a callout's number and status line, a
+  work label) take that colour's ink at 5.5:1. Bodies, badges, rings,
+  ripples, legend dots and the hover card share the colours.
+  `mefiStudio.mapStateHues` saved as `off` keeps the colours as they were.
 - The **Ambience** popover keeps the quick audio-source control beside the
   canvas and links to canonical **Appearance** and **Audio** settings.
   Appearance opens beside the live tree in a compact sidebar. **Theme**,
