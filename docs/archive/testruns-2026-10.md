@@ -6,6 +6,21 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 shell_render passes at 125% display scaling: the inspector check reads the page's own width
+
+Branch `fx/scaling` (on main 017d51a; first proven on 0b2fa14): in `tests/fixtures/shell-render-electron.cjs` the narrow-window
+check "it shrinks to leave the main area its 320" compared the inspector with `1100 - 64 - 344 - 320`. At 125% or
+150% display scaling a 1100 px content size comes out 1101 CSS px (the fixture's resize already allows exactly that
+one pixel) and the inspector takes it, so the suite failed on the owner's PCs even on clean main ("373 !== 372").
+The expected width is now `state.inner[0] - 64 - 344 - 320`, the probe's own innerWidth; the rule itself is
+unchanged.
+
+Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tests/shell_render.test.mjs` 1/1 pass
+(112 s); the same suite on clean main fails at that check. `npm run check` ok. Not run: the full `npm test` (one
+fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
+`layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
+forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
+
 ## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
 
 Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by

@@ -56,6 +56,38 @@ tabs_render, sessions_render, shell_render, autonomy_render, friends_render, tod
 warnings (baseline); audit 0 findings; Python contracts 248 OK, 1 skipped. Frame strips (dark and light) in
 C:\wt\s-fx-lab\out\*-final.png. Not run: the full `npm test`.
 
+## 2026-10-07 The Map at a glance: state ripples, a legend that points at its nodes, a hover card, the four states apart in every theme
+
+Branch `feat/map-glance` (4d923fa and ec3784a, from origin/main c513838), worktree C:\wt\s-map on the owner's laptop
+(Node 24.15, 170 MB to 1.6 GB free, other sessions gating beside it). Asked: make the Map easier to read at a glance: a
+ripple when a task's state changes, legend pills that count and point at their nodes (hover, click to hold, Esc), a
+hover card with the title, the state and how long, and a polish pass at 1920x1080 and 1440x900 in Chrome and Daylight;
+the coordinator added that Daylight's Running and Review dots were the same blue. Built: noteGlance/drawStateRipple
+(0.8 s, none on first sight, the quiet entry, motion Off, rings off or Home's scenery), the legend pills with counts,
+stepLegendPoint's eased dim and aria-pressed/#cmd-announce, nav.js's Escape letting go of a held state before it opens
+the companion (which took Esc on the Map before), the #cmd-tip hover card ("Running · for 40 min", kept off the legend),
+and glancePalette: the four states at least 40 degrees of hue apart in every built-in theme (Review violet on Daylight
+and Midnight, Done lime on Forest and Aurora, Needs you rose on Studio gold and Eclipse, yellow on Ember and Paper;
+Chrome's grey accent exempt), light-page inks at 4.5:1, and coloured canvas words (callout numbers, status lines, work
+labels) at 4.5:1 on the page and on a number chip. Kill switches mefiStudio.mapRipple, mapLegendPoint, mapHoverCard and
+mapStateHues, each pinned by a test. Frame cost (tools/profile_studio.mjs command-150-3d, interleaved pairs against
+c513838): 6 pairs, command.frame mean 5.94 -> 5.81 ms (paired median -0.17), p95 9.2 -> 8.2; with the legend holding
+Running lit, 5 pairs, 5.11 -> 4.96 ms (-0.37), p95 6.9 -> 6.2; the added per-frame JavaScript timed alone for the
+288-node board about 0.09 ms. Node: command_graph and command_toolbar 132/132, every suite that loads idle.js 1077/1077,
+every suite that loads nav.js 677/677; check ok; lint 47 warnings (as main); audit 0 findings; Python contracts 248 OK
+(1 skipped). Electron, one at a time, each run under a 600 s tree kill (GNU timeout in Git Bash ends only npm, not the
+lease or Electron under it) with a free-memory guard: node_paint_cache 1/1 (1.7 s); map_render passed in 26 s
+(electron.exe 1.0-1.4 GB, flat); command_render first stopped at its 120 s limit after the fixture had passed every
+check in 80 s (exit code null, free memory down to 197 MB), then passed alone in 97 s; node_views_render first stopped
+at its 150 s limit with no report while the PC was starved (the memory sampler itself got no answer for 147 s), then
+passed alone in 115 s with all 48 captures. An earlier map_render held the Electron lane for 2 h 44 min until a
+watchdog stopped it: its waiter had been orphaned by GNU timeout, waited 124 min, and the lease's escape hatch then ran
+it beside three holders that were each "running 0 min", four Electron runs at once with 38 MB free; it had reached its
+last capture. The same code alone takes 26 s, and no loop or promise in the new code can spin. Not run here: the full
+`npm test`. Left open: the canvas's own 9 to 11 px callout and label type predates this work and still reads under 12
+px; dimmed labels and cards (search, Running only, the legend's dim) fall under 4.5:1 on a light page by design; the
+lease's running-anyway escape should not admit a waiter beside holders that have only just started.
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -487,21 +519,6 @@ requires it measured there.
 
 unified_studio_render ok (alone, under the lease); team_render, agent_setup_render, settings_render ok; npm run check
 ok; npm run lint 0 errors and 47 warnings, as on clean main 017d51a. Hosted CI (Windows) on ef34f7a: green (37472060180). After merging main 4b150b3 (shell_render at 125% scaling): shell_render ok here, its first pass on this PC, so every window suite is green with this fix.
-
-## 2026-10-06 shell_render passes at 125% display scaling: the inspector check reads the page's own width
-
-Branch `fx/scaling` (on main 017d51a; first proven on 0b2fa14): in `tests/fixtures/shell-render-electron.cjs` the narrow-window
-check "it shrinks to leave the main area its 320" compared the inspector with `1100 - 64 - 344 - 320`. At 125% or
-150% display scaling a 1100 px content size comes out 1101 CSS px (the fixture's resize already allows exactly that
-one pixel) and the inspector takes it, so the suite failed on the owner's PCs even on clean main ("373 !== 372").
-The expected width is now `state.inner[0] - 64 - 344 - 320`, the probe's own innerWidth; the rule itself is
-unchanged.
-
-Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tests/shell_render.test.mjs` 1/1 pass
-(112 s); the same suite on clean main fails at that check. `npm run check` ok. Not run: the full `npm test` (one
-fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
-`layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
-forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
 
 ## Read Before Any Tests
 
