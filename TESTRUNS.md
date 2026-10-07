@@ -131,6 +131,40 @@ Paper or the dark default; Tab reaches a card with a 2 px ring round it, Enter o
 detail. check ok; lint 47 warnings (as main); audit 0 findings; Python contracts 248 OK, 1 skipped. Not run here: the
 full `npm test`.
 
+## 2026-10-07 Shop node styles Lanterns and Neon; eight style packs for October's drop and the classic shelf
+
+Branch `feat/styles-more` (C:\wt\s-styles, from main c513838): dc3c06a (the painters), 3c55da2 (Settings gating and
+thumbnails), 068527c (the packs fixture and Shop tests), 59a7146 (cheaper lantern ribs), 2802afd (docs), 007e4c7 (test tweaks). Asked: new node
+styles and themes for the Shop's monthly drops ("Haunted Hollow", drop "2026-10") and its classic shelf, at Dragon scales'
+quality and within its paint cost. The catalog files (relay/src/shop.mjs CATALOG, main.cjs SHOP_STUDIO_ITEMS) were left
+alone (another helper restructures them); the eight packs live in tests/fixtures/shop-themes-2026-10.json as catalog
+entries and the two node style entries (studio:style-lantern, drop "2026-10"; studio:style-neon, classic) join at merge.
+
+Measured. Lab paint (offscreen Electron page, 20 nodes and 19 wires, software raster forced every frame, median of 5
+interleaved rounds, ms a frame), quiet machine: orbs 0.79, Star chart 0.66, Prism 0.90, Neon 0.97, Lanterns 1.07, Dragon
+scales 1.50; on the final code under load: orbs 1.28, Star chart 1.13, Prism 1.44, Neon 1.52, Lanterns 1.61, Dragon
+scales 2.20. The whole Command view, 150 tasks in 3D (tools/profile_studio.mjs, three runs with the style order rotated,
+medians, frame JS mean / p95, ms): orbs 7.49 / 10.30, Dragon scales 7.34 / 11.70, Lanterns 7.70 / 10.30 (+0.21 over orbs,
+inside the 1.5 ms gate), Neon 7.15 / 9.30; the machine was loaded (orbs had read 4.53 in the 10-06 row), so the node
+span is the steadier read: orbs 1.65, Dragon scales 2.04, Lanterns 2.31, Neon 1.57 ms, before the lantern ribs became
+quadratic curves (59a7146; JS-only lab node time after it: Lanterns 1.74, Dragon scales 2.37). tools/capture_node_styles.mjs
+(aurora, void, light, with strips): both animated, still pose identical, reach 1.47 / 1.27, Extra glow 2.14, arrival 1.87 /
+1.96, no gradient on a steady frame, no blur or filter, no state leaks. Each pack was painted in the real app look (an
+offscreen booklet with a seeded board: Social's Home and the Map at 1440x900) and tuned there: Haunted and Forest Glade
+first had green accents, which made a working node read like a done one; Haunted now leads with violet, Forest Glade's
+fern leans to a sunlit yellow. Every pack's text and accent hold 4.5:1 on its page and its panels (lowest: Candlelight's
+accent 4.81:1 on its page) and Studio's own contrast pass keeps each text colour as chosen. The same harness with a fake
+hub:shop selling all four node styles and the eight packs showed Friends › Shop: a live board in each new style, and
+each pack's card painted in its own colours, face and node style. Settings' new thumbnails were checked in dark, Aurora
+and light tokens, moving and with reduced motion.
+
+Tests, one suite at a time through `npm run test:one` (the Electron ones alone in the lane): node_styles_shop 21/21,
+node_styles 30/30, music 137/137, shop_pack 5/5, friends_shop_ui 29/29, command_visuals, node_styles_free,
+node_styles_overlays and node_styles_wires pass; node_paint_cache 1/1, node_views_render 1/1 (92 s) and settings_render
+1/1 (53 s) pass. check ok, lint 47 warnings (as main), audit 0 findings, Python contracts 248 OK (1 skipped). A
+settings_render run sat in the lane behind another helper's hung window test until it was killed; the rerun passed. Not
+run here: the full `npm test`, friends_render (the Shop's window fixture: its catalog has no new items until the merge).
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -502,31 +536,6 @@ Electron's chrome_100_percent.pak and chrome_200_percent.pak before a locked DLL
 Electron's download cache and an `npm ci --ignore-scripts` scratch copy; all 15 lock entries match, `electron.exe
 --version` is 44.4.1 and window suites pass again. A window suite that failed oddly on this PC between 08:26 and 08:31
 should be run again.
-
-## 2026-10-06 A test stage that runs past its limit is stopped with everything it started
-
-Branch `wip/test-speed` (C:\wt\speed), main 017d51a merged in. Overnight an economy-events gate held the machine-wide
-Electron lane about nine hours: media_window_render and layout_contract_render each kept an Electron window alive
-after their own kill timers failed (29 to 300 MB free), so `node --test` never finished, until killed by hand.
-run-node-tests now gives each stage a limit (scripts/test-lease.mjs stageLimitMs: 120 min for the parallel stage,
-90 for the Electron lane, 30 for each exclusive fixture; MEFI_TEST_STAGE_LIMIT_MIN) and past it ends the stage's
-whole tree (killTree: taskkill /T, three tries, then SIGKILL), names the suites still running and fails the stage.
-test_lease.test.mjs no longer spells a fixture name, so it runs with the quick suites and in test:fast.
-
-Tried and dropped, measured alone: running the parity suites' JavaScript and Rust halves side by side.
-rust_parity_repo went from 115 s to 75 s, but rust_parity_git from 78 s to 366 s with a failure (both halves start
-many processes at once; at ~500 MB free a filesystem check timed out), and at the 4-wide width this laptop usually
-gets, the parallel stage is bound by total work, which side-by-side halves do not reduce.
-
-`npm run check` ok, eslint on the changed files 0 problems, `npm run audit` 0 findings, hosted CI (ci.yml, Windows)
-green on e2eb757 in 7 min 9 s. `npm run test:fast` here at 4 suites at a time (223 to 510 MB free while other
-sessions ran Electron suites through the lease): 7409 tests, 7392 pass, 14 skipped, 2 fail plus one cancelled, all
-process-heavy suites under that load: git_actions "a push maps sign-in and network failures", project_preview "a
-real npm preview process reaches readiness" and rust_parity_repo "sync answers the same". Alone through `npm run
-test:one`: 85 of 86 pass; rust_parity_repo's sync test hit its own 240 s timeout again at ~200 MB free (it passed
-in 115 s on main's copy earlier today, and this branch does not touch it). The new suites pass:
-run_node_tests_stage_limit (a copy of the runner meets a suite kept alive by a child that never ends: stopped in
-about 5 s, named, the run failed, the turn given back, no process left) and test_lease 13/13.
 
 ## Read Before Any Tests
 

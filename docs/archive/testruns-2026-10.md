@@ -6,6 +6,31 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 A test stage that runs past its limit is stopped with everything it started
+
+Branch `wip/test-speed` (C:\wt\speed), main 017d51a merged in. Overnight an economy-events gate held the machine-wide
+Electron lane about nine hours: media_window_render and layout_contract_render each kept an Electron window alive
+after their own kill timers failed (29 to 300 MB free), so `node --test` never finished, until killed by hand.
+run-node-tests now gives each stage a limit (scripts/test-lease.mjs stageLimitMs: 120 min for the parallel stage,
+90 for the Electron lane, 30 for each exclusive fixture; MEFI_TEST_STAGE_LIMIT_MIN) and past it ends the stage's
+whole tree (killTree: taskkill /T, three tries, then SIGKILL), names the suites still running and fails the stage.
+test_lease.test.mjs no longer spells a fixture name, so it runs with the quick suites and in test:fast.
+
+Tried and dropped, measured alone: running the parity suites' JavaScript and Rust halves side by side.
+rust_parity_repo went from 115 s to 75 s, but rust_parity_git from 78 s to 366 s with a failure (both halves start
+many processes at once; at ~500 MB free a filesystem check timed out), and at the 4-wide width this laptop usually
+gets, the parallel stage is bound by total work, which side-by-side halves do not reduce.
+
+`npm run check` ok, eslint on the changed files 0 problems, `npm run audit` 0 findings, hosted CI (ci.yml, Windows)
+green on e2eb757 in 7 min 9 s. `npm run test:fast` here at 4 suites at a time (223 to 510 MB free while other
+sessions ran Electron suites through the lease): 7409 tests, 7392 pass, 14 skipped, 2 fail plus one cancelled, all
+process-heavy suites under that load: git_actions "a push maps sign-in and network failures", project_preview "a
+real npm preview process reaches readiness" and rust_parity_repo "sync answers the same". Alone through `npm run
+test:one`: 85 of 86 pass; rust_parity_repo's sync test hit its own 240 s timeout again at ~200 MB free (it passed
+in 115 s on main's copy earlier today, and this branch does not touch it). The new suites pass:
+run_node_tests_stage_limit (a copy of the runner meets a suite kept alive by a child that never ends: stopped in
+about 5 s, named, the run failed, the turn given back, no process left) and test_lease 13/13.
+
 ## 2026-10-06 Sharing playlists in rooms and on the Project hub lands on main
 
 Branch `feat/playlists-share` in `C:\wt\playlists` (aadb6ad; parked first as `wip/playlists-share` 48e3a8a), rebased

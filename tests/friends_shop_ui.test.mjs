@@ -757,7 +757,7 @@ test("motion Calm: the cards hold their still frame; only the banner's pieces an
 // The catalog's two new node styles (relay/src/shop.mjs: Lanterns in October's drop, Neon a classic): the Shop
 // shows any node style it sells, each card with its own live board, and its detail tries, buys and wears it.
 test("Lanterns (October's drop) and Neon are node style cards once the catalog sells them: a live board in each style, Try, Buy and Use", async () => {
-  const LANTERN = studioItem("studio:style-lantern", "nodestyle", "Lanterns", 80, { blurb: "Glowing paper lanterns that sway on their cords, with a warm light that flickers while they work.", ...IN_DROP });
+  const LANTERN = studioItem("studio:style-lantern", "nodestyle", "Lanterns", 80, { blurb: "Glowing paper lanterns that sway, their warm light flickering at work.", ...IN_DROP });
   const NEON = studioItem("studio:style-neon", "nodestyle", "Neon", 80, { blurb: "Bright neon tubes with a soft glow that buzz on when work starts." });
   const env = environment({
     painters: true,
