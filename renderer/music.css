@@ -478,6 +478,55 @@ html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .mu
   .music-node-style[aria-pressed="true"] .music-preview-constellation i:first-child::after { animation: music-node-meteor calc(2.6s * var(--node-tempo)) ease-in infinite; }
 }
 
+/* node style: lantern */
+/* Paper lanterns (a Shop style): a lantern in the theme's colour lit from
+   within (a warm heart low in the paper), ringed with bamboo ribs that bow
+   down, black caps at its top and bottom and its cord above; two small ones
+   beside it. They swing on their cords. The chosen tile works: the candles
+   flicker and two fireflies drift round the big lantern. i:1 is the big
+   lantern, i:2 and i:3 the small ones; each one's ::before is its cord and
+   caps, its ::after the candle's light; the preview's ::before and ::after
+   are the fireflies. */
+.music-preview-lantern i:nth-child(n) { overflow: visible; border: 0; border-radius: 50%; opacity: 1; background: repeating-radial-gradient(circle at 50% -150%, transparent 0 7.4%, color-mix(in srgb, currentColor 40%, #1a0d08) 7.4% 8.7%), radial-gradient(ellipse at 50% 64%, color-mix(in srgb, currentColor 22%, #fff4da), color-mix(in srgb, currentColor 55%, #ffc27a) 34%, currentColor 66%, color-mix(in srgb, currentColor 55%, var(--bg-deep))); box-shadow: 0 0 7px color-mix(in srgb, currentColor 30%, transparent); transform-origin: 50% -40%; }
+.music-preview-lantern i:first-child { width: 24px; height: 21px; top: 12px; left: calc(50% - 12px); }
+.music-preview-lantern i:nth-child(2) { width: 12px; height: 10.5px; top: 6px; left: calc(50% - 33px); opacity: .8; }
+.music-preview-lantern i:nth-child(3) { width: 12px; height: 10.5px; top: 25px; left: calc(50% + 21px); opacity: .8; }
+.music-preview-lantern i::before { content: ""; position: absolute; top: -24%; bottom: -12%; left: 30%; right: 30%; background: linear-gradient(color-mix(in srgb, currentColor 35%, #4a2e1f), color-mix(in srgb, currentColor 35%, #4a2e1f)) 50% 0 / 1px 16% no-repeat, linear-gradient(transparent 0 15%, #1d110b 15% 25%, transparent 25% 86%, #1d110b 86% 95%, transparent 95%); }
+.music-preview-lantern i::after { content: ""; position: absolute; inset: 22% 18% 8%; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, #fff6dc 80%, transparent), transparent); opacity: .85; }
+.music-preview-lantern::before, .music-preview-lantern::after { content: ""; position: absolute; width: 2.5px; height: 2.5px; top: 13px; left: calc(50% - 22px); border-radius: 50%; background: #e4ff9e; box-shadow: 0 0 4px 1px color-mix(in srgb, #d6ff8a 60%, transparent); opacity: 0; }
+.music-preview-lantern::after { top: 30px; left: calc(50% + 8px); }
+.music-node-choice[aria-pressed="true"] .music-preview-lantern::before, .music-node-choice[aria-pressed="true"] .music-preview-lantern::after { opacity: .9; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-lantern i { animation: music-node-swing calc(4.6s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-lantern i:nth-child(2) { animation-delay: -1.5s; }
+  .music-preview-lantern i:nth-child(3) { animation-delay: -3.1s; }
+  .music-node-choice[aria-pressed="true"] .music-preview-lantern i::after { animation: music-node-candle calc(1.4s * var(--node-tempo)) linear infinite; }
+  .music-node-choice[aria-pressed="true"] .music-preview-lantern::before, .music-node-choice[aria-pressed="true"] .music-preview-lantern::after { animation: music-node-firefly calc(5s * var(--node-tempo)) ease-in-out infinite; }
+  .music-node-choice[aria-pressed="true"] .music-preview-lantern::after { animation-delay: calc(-2.5s * var(--node-tempo)); }
+}
+
+/* node style: neon */
+/* Neon signs (a Shop style): a glass tube bent into a ring with a soft glow,
+   its two ends turned back into the plate at the bottom (two electrodes), a
+   bead burning in its middle; two small signs beside it, one in the theme's
+   second hue. The tubes hum; the chosen tile works: its sign buzzes on (a few
+   quick flickers, then steady). i:1 is the big sign, i:2 and i:3 the small
+   ones; each one's ::before is its ring, its ::after its bead, and its own
+   background its electrodes. */
+.music-preview-neon i:nth-child(n) { border: 0; opacity: 1; background: radial-gradient(circle at 35% 91%, color-mix(in srgb, var(--ivory) 45%, var(--bg-deep)) 0 1.1px, transparent 1.6px), radial-gradient(circle at 65% 91%, color-mix(in srgb, var(--ivory) 45%, var(--bg-deep)) 0 1.1px, transparent 1.6px); }
+.music-preview-neon i:first-child { width: 24px; height: 24px; top: 9px; left: calc(50% - 12px); }
+.music-preview-neon i:nth-child(2) { width: 12px; height: 12px; top: 4px; left: calc(50% - 32px); }
+.music-preview-neon i:nth-child(3) { width: 12px; height: 12px; top: 26px; left: calc(50% + 20px); color: var(--accent-2, currentColor); }
+.music-preview-neon i::before { content: ""; position: absolute; inset: 0; border: 2px solid color-mix(in srgb, currentColor 72%, #fff); border-radius: 50%; box-shadow: 0 0 3px currentColor, 0 0 8px color-mix(in srgb, currentColor 50%, transparent), inset 0 0 4px color-mix(in srgb, currentColor 45%, transparent); mask: conic-gradient(from 160deg, transparent 0 40deg, #000 0); }
+.music-preview-neon i:not(:first-child)::before { border-width: 1.5px; box-shadow: 0 0 2px currentColor, 0 0 5px color-mix(in srgb, currentColor 45%, transparent); }
+.music-preview-neon i::after { content: ""; position: absolute; width: 4px; height: 4px; top: calc(50% - 2px); left: calc(50% - 2px); border-radius: 50%; background: color-mix(in srgb, currentColor 35%, #fff); box-shadow: 0 0 4px currentColor; }
+.music-preview-neon i:not(:first-child)::after { width: 2px; height: 2px; top: calc(50% - 1px); left: calc(50% - 1px); box-shadow: 0 0 2px currentColor; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-neon i::before { animation: music-node-flicker calc(2.4s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-neon i:nth-child(3)::before { animation-delay: -1.2s; }
+  .music-node-choice[aria-pressed="true"] .music-preview-neon i:first-child::before, .music-node-choice[aria-pressed="true"] .music-preview-neon i:first-child::after { animation: music-node-buzz calc(9s * var(--node-tempo)) step-end infinite; }
+}
+
 /* The thumbnails' loops (only the carves' motion blocks above run them). */
 @keyframes music-node-turn { from { rotate: 0deg; } to { rotate: 1turn; } }
 @keyframes music-node-breathe { 0%, 100% { opacity: .55; scale: .9; } 50% { opacity: 1; scale: 1.05; } }
@@ -500,6 +549,10 @@ html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .mu
 @keyframes music-node-ember { 0% { translate: 0 0; opacity: 0; } 20% { opacity: 1; } 100% { translate: 1px -8px; opacity: 0; } }
 @keyframes music-node-spikes { 0%, 100% { scale: .8; opacity: .8; } 50% { scale: 1.08; opacity: 1; } }
 @keyframes music-node-meteor { 0% { translate: 0 0; opacity: 0; } 15% { opacity: 1; } 55%, 100% { translate: 24px 10px; opacity: 0; } }
+@keyframes music-node-swing { 0%, 100% { rotate: -5deg; } 50% { rotate: 5deg; } }
+@keyframes music-node-candle { 0%, 100% { opacity: .95; } 22% { opacity: .62; } 38% { opacity: .9; } 55% { opacity: .7; } 72% { opacity: 1; } 86% { opacity: .78; } }
+@keyframes music-node-firefly { 0%, 100% { translate: 0 0; opacity: .25; } 25% { translate: 6px -4px; opacity: 1; } 50% { translate: 11px 1px; opacity: .45; } 75% { translate: 4px 5px; opacity: .95; } }
+@keyframes music-node-buzz { 0% { opacity: .3; } 1.5% { opacity: 1; } 3% { opacity: .2; } 4.5% { opacity: .95; } 6% { opacity: .4; } 8% { opacity: 1; } }
 
 .music-node-layout .music-node-preview { width: 80px; max-width: 100%; align-self: center; }
 .music-node-layout .music-node-preview i { width: 6px; height: 6px; opacity: .8; }

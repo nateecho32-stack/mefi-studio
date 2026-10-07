@@ -10,8 +10,8 @@
 // transport, a volume and quick tree switches, that unfolds into sections.
 // It also owns the light themes, the three looks the first run offers (Light,
 // Dark, Stylized) with their heading faces, and the Shop's style packs: see
-// "Looks and style packs" below for the calls. The two node styles the Shop
-// sells go on once they are owned ("Node styles from the Shop").
+// "Looks and style packs" below for the calls. The node styles the Shop sells
+// go on once they are owned ("Node styles from the Shop").
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -59,11 +59,13 @@
     singularity: { name: "Singularity", detail: "A black hole with a turning disc", collection: "void" },
     prism: { name: "Prism", detail: "A turning crystal that splits light", collection: "void" },
     sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", collection: "void" },
-    // The two the Shop sells (`shop` is the item: relay/src/shop.mjs CATALOG).
+    // The ones the Shop sells (`shop` is the item: relay/src/shop.mjs CATALOG).
     dragonscale: { name: "Dragon scales", detail: "Scaled gems with ember sparks", shop: "studio:style-dragonscale" },
     constellation: { name: "Star chart", detail: "Bright stars and shooting stars", shop: "studio:style-constellation" },
+    lantern: { name: "Lanterns", detail: "Paper lanterns that sway and glow", shop: "studio:style-lantern" },
+    neon: { name: "Neon", detail: "Glowing tubes that buzz on at work", shop: "studio:style-neon" },
   };
-  // Every theme and node style is free but the two the Shop sells; `collection`
+  // Every theme and node style is free but the ones the Shop sells; `collection`
   // only groups the pickers. A Shop style is worn once MefiShop says it is owned.
   const isTheme = (key) => key === "custom" || typeof key === "string" && Object.hasOwn(THEMES, key);
   const isVoidTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].collection === "void";

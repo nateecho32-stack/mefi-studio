@@ -51,6 +51,36 @@ test("WCAG contrast: black on white is 21, a colour on itself 1, and the limits 
   assert.deepEqual([...FONTS], ["studio", "display", "serif", "mono"]);
 });
 
+// The packs for October's drop ("2026-10", Haunted Hollow) and the classic shelf, kept as catalog entries until they
+// join relay/src/shop.mjs CATALOG at merge: each passes the check exactly as kept, its accent reads at 4.5:1 on its
+// panels as well as its page (a light pack's accent is text on both), and its words are plain.
+test("the October drop's and the classic style packs pass the check exactly as kept, with plain words and fair prices", async () => {
+  const themes = JSON.parse(await readFile(new URL("./fixtures/shop-themes-2026-10.json", import.meta.url), "utf8"));
+  assert.deepEqual(themes.map((item) => [item.name, item.drop]), [
+    ["Pumpkin Spice", "2026-10"], ["Haunted", "2026-10"], ["Candlelight (light)", "2026-10"],
+    ["Midnight Neon", null], ["Forest Glade", null], ["Ocean Breeze (light)", null], ["Rose Gold (light)", null], ["Frost", null],
+  ]);
+  assert.equal(new Set(themes.map((item) => item.id)).size, themes.length, "every id once");
+  const studioIds = new Set(CATALOG.map((item) => item.id)), studioNames = new Set(CATALOG.map((item) => item.name));
+  for (const item of themes) {
+    assert.deepEqual(Object.keys(item), ["id", "kind", "name", "price", "blurb", "drop", "data"], item.id);
+    assert.match(item.id, /^studio:pack-[a-z0-9-]{1,35}$/);
+    assert.ok(!studioIds.has(item.id) && !studioNames.has(item.name), `${item.name} is new to the Shop`);
+    assert.equal(item.kind, "pack");
+    assert.ok(Number.isInteger(item.price) && item.price >= 40 && item.price <= 50, `${item.name}: ${item.price} credits`);
+    assert.ok(item.name.length >= PACK_LIMITS.nameMin && item.name.length <= PACK_LIMITS.nameMax && item.blurb.length <= PACK_LIMITS.blurbMax);
+    assert.doesNotMatch(`${item.name} ${item.blurb}`, /perk|unlock|premium|entitlement/i);
+    assert.deepEqual(checkPack(item.data), { ok: true, pack: JSON.parse(JSON.stringify(item.data)) }, item.name);
+    const { accent, background, surface, text } = item.data.palette;
+    assert.ok(contrastRatio(accent, surface) >= 4.5 && contrastRatio(text, surface) >= 4.5, `${item.name}: the accent and text read on the panels`);
+    assert.ok(NODE_STYLES.includes(item.data.nodeStyle), `${item.name} wears a node style Studio comes with`);
+    // A light look says so in its name and its words, as Sakura (light) does.
+    const light = (item.name.endsWith("(light)"));
+    assert.equal(light, contrastRatio(background, "#000000") > contrastRatio(background, "#ffffff"), `${item.name}: a light page is named a light look`);
+    if (light) assert.match(item.blurb, /a light look\.$/);
+  }
+});
+
 test("Studio's own packs pass the same check, exactly as they are kept", () => {
   const packs = CATALOG.filter((item) => item.kind === "pack");
   assert.equal(packs.length, 3);

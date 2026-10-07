@@ -1738,16 +1738,16 @@ test("MefiMusic exports what other modules read: isNodeStyle for the tree painte
   assert.match(source.slice(0, 400), /^\/\/ Style & sound: Studio's color themes, node styles and layouts \(the two-tone\r?\n\/\/ Void collection among them, free like the rest\)/);
 });
 
-// The two node styles the Shop sells (renderer/node-styles.js paints them; relay/src/shop.mjs sells them).
-const SHOP_STYLES = { dragonscale: "studio:style-dragonscale", constellation: "studio:style-constellation" };
+// The node styles the Shop sells (renderer/node-styles.js paints them; relay/src/shop.mjs sells them).
+const SHOP_STYLES = { dragonscale: "studio:style-dragonscale", constellation: "studio:style-constellation", lantern: "studio:style-lantern", neon: "studio:style-neon" };
 const treeEvents = (env) => env.events.filter((event) => event.type === "mefi-tree-preferences");
 
 test("the Shop's node styles are listed in Settings, said to be in the Shop and off until owned; every other style stays free", () => {
   const env = environment({ shop: new Set() });
   const group = env.ids.get("music-shop-styles");
   assert.equal(env.ids.get("music-shop-style-label").text, "From the Shop");
-  assert.deepEqual(group.children.map((choice) => choice.dataset.nodeStyle), ["dragonscale", "constellation"]);
-  assert.deepEqual(group.children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [true, "Star chart (in the Shop)"]]);
+  assert.deepEqual(group.children.map((choice) => choice.dataset.nodeStyle), ["dragonscale", "constellation", "lantern", "neon"]);
+  assert.deepEqual(group.children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [true, "Star chart (in the Shop)"], [true, "Lanterns (in the Shop)"], [true, "Neon (in the Shop)"]]);
   assert.deepEqual(env.ids.get("music-node-styles").children.map((choice) => choice.dataset.nodeStyle), ["orbs", "glass", "minimal", "halo", "crystal"], "the free styles keep their own group");
   assert.ok([...env.ids.get("music-node-styles").children, ...env.ids.get("music-void-styles").children].every((choice) => !choice.disabled), "every other style stays free to choose");
   assert.equal(env.ids.get("music-shop-line").hidden, false, "a way to the Shop while one is still there to get");
@@ -1764,17 +1764,19 @@ test("the Shop's node styles are listed in Settings, said to be in the Shop and 
   assert.deepEqual(JSON.parse(JSON.stringify(env.music.shopStyles())), [
     { key: "dragonscale", item: "studio:style-dragonscale", name: "Dragon scales", detail: "Scaled gems with ember sparks", owned: false },
     { key: "constellation", item: "studio:style-constellation", name: "Star chart", detail: "Bright stars and shooting stars", owned: false },
+    { key: "lantern", item: "studio:style-lantern", name: "Lanterns", detail: "Paper lanterns that sway and glow", owned: false },
+    { key: "neon", item: "studio:style-neon", name: "Neon", detail: "Glowing tubes that buzz on at work", owned: false },
   ]);
-  assert.equal(env.music.isNodeStyle("dragonscale"), true, "the tree painters know both");
+  for (const key of Object.keys(SHOP_STYLES)) assert.equal(env.music.isNodeStyle(key), true, `the tree painters know ${key}`);
   // A style pack never carries a Shop style (the relay's pack check allows the free ones only).
-  assert.equal(helpers.safePack({ palette: SYNTHWAVE.palette, nodeStyle: "dragonscale" }), null);
+  for (const key of Object.keys(SHOP_STYLES)) assert.equal(helpers.safePack({ palette: SYNTHWAVE.palette, nodeStyle: key }), null, key);
   assert.equal(helpers.safePack({ palette: SYNTHWAVE.palette, nodeStyle: "sigil" }).nodeStyle, "sigil");
 });
 
 test("an owned Shop style is chosen and saved like any other, and the Shop hearing of one later puts it on", () => {
   const owned = new Set([SHOP_STYLES.constellation]);
   const env = environment({ shop: owned });
-  assert.deepEqual(env.ids.get("music-shop-styles").children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [false, "Star chart"]]);
+  assert.deepEqual(env.ids.get("music-shop-styles").children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [false, "Star chart"], [true, "Lanterns (in the Shop)"], [true, "Neon (in the Shop)"]]);
   env.ids.get("music-node-style-constellation").click();
   assert.equal(env.music.graphPreferences().nodeStyle, "constellation");
   assert.equal(env.music.nodeStyle(), "constellation");
@@ -1787,7 +1789,13 @@ test("an owned Shop style is chosen and saved like any other, and the Shop heari
   env.emit("mefi-shop-owned", { ids: [...owned] });
   assert.equal(env.ids.get("music-node-style-dragonscale").disabled, false);
   assert.equal(env.ids.get("music-node-style-dragonscale").children[1].text, "Dragon scales");
+  assert.equal(env.ids.get("music-shop-line").hidden, false, "Lanterns and Neon are still there to get");
+  owned.add(SHOP_STYLES.lantern); owned.add(SHOP_STYLES.neon);
+  env.emit("mefi-shop-owned", { ids: [...owned] });
+  assert.deepEqual(env.ids.get("music-shop-styles").children.map((choice) => [choice.disabled, choice.children[1].text]), [[false, "Dragon scales"], [false, "Star chart"], [false, "Lanterns"], [false, "Neon"]]);
   assert.equal(env.ids.get("music-shop-line").hidden, true, "nothing left to get");
+  assert.equal(env.music.applyNodeStyle("lantern"), "lantern");
+  assert.equal(env.music.applyNodeStyle("neon"), "neon");
   assert.equal(env.music.applyNodeStyle("dragonscale"), "dragonscale");
   // No longer owned (the Shop says so): Classic orbs, quietly, and the choice stays saved for when it comes back.
   owned.clear();
@@ -1832,6 +1840,10 @@ test("previewNodeStyle shows a Shop style on the tree for the Shop's Try, saves 
   assert.equal(env.music.status().theme, "midnight");
   assert.equal(env.music.previewNodeStyle("constellation"), true, "one try at a time: the next replaces it");
   assert.equal(env.music.graphPreferences().nodeStyle, "constellation");
+  for (const key of ["lantern", "neon"]) {
+    assert.equal(env.music.previewNodeStyle(key), true, `${key} may be tried too`);
+    assert.equal(treeEvents(env).at(-1).detail.nodeStyle, key);
+  }
   assert.equal(env.music.endPreview(), true);
   assert.equal(env.music.graphPreferences().nodeStyle, "glass");
   assert.equal(treeEvents(env).at(-1).detail.nodeStyle, "glass");

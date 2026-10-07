@@ -5757,6 +5757,55 @@ html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .mu
   .music-node-style[aria-pressed="true"] .music-preview-constellation i:first-child::after { animation: music-node-meteor calc(2.6s * var(--node-tempo)) ease-in infinite; }
 }
 
+/* node style: lantern */
+/* Paper lanterns (a Shop style): a lantern in the theme's colour lit from
+   within (a warm heart low in the paper), ringed with bamboo ribs that bow
+   down, black caps at its top and bottom and its cord above; two small ones
+   beside it. They swing on their cords. The chosen tile works: the candles
+   flicker and two fireflies drift round the big lantern. i:1 is the big
+   lantern, i:2 and i:3 the small ones; each one's ::before is its cord and
+   caps, its ::after the candle's light; the preview's ::before and ::after
+   are the fireflies. */
+.music-preview-lantern i:nth-child(n) { overflow: visible; border: 0; border-radius: 50%; opacity: 1; background: repeating-radial-gradient(circle at 50% -150%, transparent 0 7.4%, color-mix(in srgb, currentColor 40%, #1a0d08) 7.4% 8.7%), radial-gradient(ellipse at 50% 64%, color-mix(in srgb, currentColor 22%, #fff4da), color-mix(in srgb, currentColor 55%, #ffc27a) 34%, currentColor 66%, color-mix(in srgb, currentColor 55%, var(--bg-deep))); box-shadow: 0 0 7px color-mix(in srgb, currentColor 30%, transparent); transform-origin: 50% -40%; }
+.music-preview-lantern i:first-child { width: 24px; height: 21px; top: 12px; left: calc(50% - 12px); }
+.music-preview-lantern i:nth-child(2) { width: 12px; height: 10.5px; top: 6px; left: calc(50% - 33px); opacity: .8; }
+.music-preview-lantern i:nth-child(3) { width: 12px; height: 10.5px; top: 25px; left: calc(50% + 21px); opacity: .8; }
+.music-preview-lantern i::before { content: ""; position: absolute; top: -24%; bottom: -12%; left: 30%; right: 30%; background: linear-gradient(color-mix(in srgb, currentColor 35%, #4a2e1f), color-mix(in srgb, currentColor 35%, #4a2e1f)) 50% 0 / 1px 16% no-repeat, linear-gradient(transparent 0 15%, #1d110b 15% 25%, transparent 25% 86%, #1d110b 86% 95%, transparent 95%); }
+.music-preview-lantern i::after { content: ""; position: absolute; inset: 22% 18% 8%; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, #fff6dc 80%, transparent), transparent); opacity: .85; }
+.music-preview-lantern::before, .music-preview-lantern::after { content: ""; position: absolute; width: 2.5px; height: 2.5px; top: 13px; left: calc(50% - 22px); border-radius: 50%; background: #e4ff9e; box-shadow: 0 0 4px 1px color-mix(in srgb, #d6ff8a 60%, transparent); opacity: 0; }
+.music-preview-lantern::after { top: 30px; left: calc(50% + 8px); }
+.music-node-choice[aria-pressed="true"] .music-preview-lantern::before, .music-node-choice[aria-pressed="true"] .music-preview-lantern::after { opacity: .9; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-lantern i { animation: music-node-swing calc(4.6s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-lantern i:nth-child(2) { animation-delay: -1.5s; }
+  .music-preview-lantern i:nth-child(3) { animation-delay: -3.1s; }
+  .music-node-choice[aria-pressed="true"] .music-preview-lantern i::after { animation: music-node-candle calc(1.4s * var(--node-tempo)) linear infinite; }
+  .music-node-choice[aria-pressed="true"] .music-preview-lantern::before, .music-node-choice[aria-pressed="true"] .music-preview-lantern::after { animation: music-node-firefly calc(5s * var(--node-tempo)) ease-in-out infinite; }
+  .music-node-choice[aria-pressed="true"] .music-preview-lantern::after { animation-delay: calc(-2.5s * var(--node-tempo)); }
+}
+
+/* node style: neon */
+/* Neon signs (a Shop style): a glass tube bent into a ring with a soft glow,
+   its two ends turned back into the plate at the bottom (two electrodes), a
+   bead burning in its middle; two small signs beside it, one in the theme's
+   second hue. The tubes hum; the chosen tile works: its sign buzzes on (a few
+   quick flickers, then steady). i:1 is the big sign, i:2 and i:3 the small
+   ones; each one's ::before is its ring, its ::after its bead, and its own
+   background its electrodes. */
+.music-preview-neon i:nth-child(n) { border: 0; opacity: 1; background: radial-gradient(circle at 35% 91%, color-mix(in srgb, var(--ivory) 45%, var(--bg-deep)) 0 1.1px, transparent 1.6px), radial-gradient(circle at 65% 91%, color-mix(in srgb, var(--ivory) 45%, var(--bg-deep)) 0 1.1px, transparent 1.6px); }
+.music-preview-neon i:first-child { width: 24px; height: 24px; top: 9px; left: calc(50% - 12px); }
+.music-preview-neon i:nth-child(2) { width: 12px; height: 12px; top: 4px; left: calc(50% - 32px); }
+.music-preview-neon i:nth-child(3) { width: 12px; height: 12px; top: 26px; left: calc(50% + 20px); color: var(--accent-2, currentColor); }
+.music-preview-neon i::before { content: ""; position: absolute; inset: 0; border: 2px solid color-mix(in srgb, currentColor 72%, #fff); border-radius: 50%; box-shadow: 0 0 3px currentColor, 0 0 8px color-mix(in srgb, currentColor 50%, transparent), inset 0 0 4px color-mix(in srgb, currentColor 45%, transparent); mask: conic-gradient(from 160deg, transparent 0 40deg, #000 0); }
+.music-preview-neon i:not(:first-child)::before { border-width: 1.5px; box-shadow: 0 0 2px currentColor, 0 0 5px color-mix(in srgb, currentColor 45%, transparent); }
+.music-preview-neon i::after { content: ""; position: absolute; width: 4px; height: 4px; top: calc(50% - 2px); left: calc(50% - 2px); border-radius: 50%; background: color-mix(in srgb, currentColor 35%, #fff); box-shadow: 0 0 4px currentColor; }
+.music-preview-neon i:not(:first-child)::after { width: 2px; height: 2px; top: calc(50% - 1px); left: calc(50% - 1px); box-shadow: 0 0 2px currentColor; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-neon i::before { animation: music-node-flicker calc(2.4s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-neon i:nth-child(3)::before { animation-delay: -1.2s; }
+  .music-node-choice[aria-pressed="true"] .music-preview-neon i:first-child::before, .music-node-choice[aria-pressed="true"] .music-preview-neon i:first-child::after { animation: music-node-buzz calc(9s * var(--node-tempo)) step-end infinite; }
+}
+
 /* The thumbnails' loops (only the carves' motion blocks above run them). */
 @keyframes music-node-turn { from { rotate: 0deg; } to { rotate: 1turn; } }
 @keyframes music-node-breathe { 0%, 100% { opacity: .55; scale: .9; } 50% { opacity: 1; scale: 1.05; } }
@@ -5779,6 +5828,10 @@ html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .mu
 @keyframes music-node-ember { 0% { translate: 0 0; opacity: 0; } 20% { opacity: 1; } 100% { translate: 1px -8px; opacity: 0; } }
 @keyframes music-node-spikes { 0%, 100% { scale: .8; opacity: .8; } 50% { scale: 1.08; opacity: 1; } }
 @keyframes music-node-meteor { 0% { translate: 0 0; opacity: 0; } 15% { opacity: 1; } 55%, 100% { translate: 24px 10px; opacity: 0; } }
+@keyframes music-node-swing { 0%, 100% { rotate: -5deg; } 50% { rotate: 5deg; } }
+@keyframes music-node-candle { 0%, 100% { opacity: .95; } 22% { opacity: .62; } 38% { opacity: .9; } 55% { opacity: .7; } 72% { opacity: 1; } 86% { opacity: .78; } }
+@keyframes music-node-firefly { 0%, 100% { translate: 0 0; opacity: .25; } 25% { translate: 6px -4px; opacity: 1; } 50% { translate: 11px 1px; opacity: .45; } 75% { translate: 4px 5px; opacity: .95; } }
+@keyframes music-node-buzz { 0% { opacity: .3; } 1.5% { opacity: 1; } 3% { opacity: .2; } 4.5% { opacity: .95; } 6% { opacity: .4; } 8% { opacity: 1; } }
 
 .music-node-layout .music-node-preview { width: 80px; max-width: 100%; align-self: center; }
 .music-node-layout .music-node-preview i { width: 6px; height: 6px; opacity: .8; }
@@ -29960,9 +30013,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // ===== infra =====
 
   // The looks: the five first ones, the Void collection (PREMIUM, the name it
-  // had while it was for members; free since 0.4.4 like the rest) and the two
+  // had while it was for members; free since 0.4.4 like the rest) and the ones
   // the Shop sells (renderer/music.js NODE_STYLES says which item each is).
-  const STYLES = Object.freeze(["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil", "dragonscale", "constellation"]);
+  const STYLES = Object.freeze(["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil", "dragonscale", "constellation", "lantern", "neon"]);
   const PREMIUM = Object.freeze(["singularity", "prism", "sigil"]);
   const TAU = Math.PI * 2;
   const WHITE = Object.freeze([255, 255, 255]);
@@ -35445,6 +35498,1075 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   LOOKS.constellation = { speedup: 2.2, paint: paintConstellation, glyph: { scale: 0.56, ringGap: 3.5, ink: (tint, currentTheme) => starTones(tint, currentTheme).glyphInk }, ring: null, hubDress: null, orbit: null, arrival: starArrival, select: starSelect, done: starDone, absorb: starAbsorb, wire: starWire, surge: starSurge, land: starLand, reach: starReach };
 
+// ===== style: lantern =====
+
+  // Lanterns, a Shop style (studio:style-lantern, from October's drop):
+  // every node a paper lantern hung on a short cord, in the node's own
+  // colour and lit from within. The paper is the tint, warmed toward its
+  // candle's light at the middle (the candle sits low) and deepening toward
+  // its curving edge; black lacquered caps close it at the top and the
+  // bottom, bamboo ribs ring it (seen a little from above, so each bows
+  // down) and a warm glow lies round it. It swings on its cord about the
+  // knot above it (a swing in 4.6 s, in its own phase, and a push when a
+  // pulse lands), and its candle breathes; at work the candle flickers, the
+  // glow grows and the swing quickens. Wires are strings of festival lights
+  // that twinkle, a chase running toward the work along one that carries
+  // it; pulses are small lanterns floating along the wire; the chosen
+  // lantern draws three fireflies. Detail by tier: below T1 the paper, its
+  // glow, its middle rib and the rim; T1 two more ribs and the caps; T2 the
+  // outer ribs and the cord; T3 the caps' lit lips and a tassel (each tier's
+  // own fading in over its first 1.2 px). A glyph is inked on a paper label
+  // in the middle, and that lantern swings less, so the glyph stays on it.
+  // A light page keeps the paper's hue, inks the ribs, caps and cord, deepens
+  // the rim and dims the glow. Reduced motion holds one pose: the lantern
+  // hanging a little to one side, its candle steady. (The rim follows the
+  // free looks' rules, so it shares their helpers: freeBreath, freeRim and
+  // the stale dash.)
+  const LANTERN_CANDLE = Object.freeze([255, 196, 120]); // the candle's warm light
+  const LANTERN_FLAME = Object.freeze([255, 244, 218]); // its white-hot heart
+  const LANTERN_LACQUER = Object.freeze([24, 13, 9]); // the caps' black lacquer
+  const LANTERN_PAPER = Object.freeze([252, 240, 214]); // a glyph's label
+  const LANTERN_FIREFLY = Object.freeze([206, 255, 132]);
+  const LANTERN_RX = 0.9, LANTERN_RY = 0.8; // the paper's half width and half height, in radii
+  const LANTERN_KNOT = 1.2; // the cord's knot above the centre: the swing turns about it
+  const LANTERN_SWING = 0.055; // radians either way at rest (1.3 times that at work)
+  const LANTERN_PERIOD = 4.6; // animation seconds a swing takes
+  const LANTERN_LEAN = 0.03; // the still pose's lean
+  const LANTERN_GLOW = 1.55; // the glow's reach, in radii
+  const LANTERN_FLARE = 0.58; // the candle's light round its flame, in radii
+  // The ribs: their heights in radii (nested by tier, so a zoom only adds
+  // ribs), each one's half width on the paper, and how many each tier shows.
+  const LANTERN_RIBS = Object.freeze([0, -0.3, 0.3, -0.58, 0.52]);
+  const LANTERN_RIB_W = (() => {
+    const out = [];
+    for (let index = 0; index < LANTERN_RIBS.length; index += 1) out.push(LANTERN_RX * Math.sqrt(1 - (LANTERN_RIBS[index] / LANTERN_RY) ** 2));
+    return Object.freeze(out);
+  })();
+  const LANTERN_RIB_TIERS = Object.freeze([1, 3, 5, 5]);
+  // The caps in the lantern's frame, x and y in radii: the top one's corners
+  // (top left, top right, lip right, lip left), then the bottom one's.
+  const LANTERN_CAPS = Object.freeze([-0.21, -0.9, 0.21, -0.9, 0.31, -0.72, -0.31, -0.72, -0.27, 0.71, 0.27, 0.71, 0.19, 0.87, -0.19, 0.87]);
+  const LANTERN_SKY = new Float64Array(6); // the done beat's sky lanterns, x and y each
+  const LANTERN_NO_DASH = Object.freeze([]);
+  const LANTERN_AT = { x: 0, y: 0 };
+  const LANTERN_MID = { x: 0, y: 0 };
+  const lanternLevel = (value, fallback) => Number.isFinite(value) ? clamp01(value) : fallback;
+  // The candle's flicker, 0..1: three quick beats in the lantern's own phase,
+  // mostly low, now and then a deep dip.
+  const lanternFlicker = (clock, seedValue) => (0.5 + 0.5 * Math.sin(clock * 9.7 + seedValue * 31)) * (0.5 + 0.5 * Math.sin(clock * 6.3 + seedValue * 13)) * (0.6 + 0.4 * Math.sin(clock * 15.1 + seedValue * 7));
+  // A point of the lantern's frame ((x, y) in radii round the paper's
+  // centre, turned by the swing about the knot) in pixels, into LANTERN_AT.
+  function lanternPoint(p, radius, c, s, x, y) {
+    LANTERN_AT.x = p.x + radius * (c * x - s * (y + LANTERN_KNOT));
+    LANTERN_AT.y = p.y + radius * (s * x + c * (y + LANTERN_KNOT) - LANTERN_KNOT);
+    return LANTERN_AT;
+  }
+
+  // The tones of one tint under one theme, cached per triple (rebuilt when
+  // the theme changes): the paper's stops (the candle's heart, the lit
+  // paper, the tint, the curving edge), the glow, the flame, the ribs, the
+  // caps and their lips, the cord, the tassel, the rim, a label's paper and
+  // its ink, the selection's light and its fireflies, and the motes.
+  const lanternToneMemo = new WeakMap();
+  function lanternTones(tint, currentTheme) {
+    let tones = lanternToneMemo.get(tint);
+    if (tones && tones.theme === currentTheme) return tones;
+    const light = currentTheme.light === true, hi = currentTheme.hi, bg = currentTheme.bg;
+    const warm = mix(tint, LANTERN_CANDLE, light ? 0.3 : 0.42);
+    tones = {
+      theme: currentTheme, light, key: `lantern|${tint.join(",")}|${currentTheme.key}`,
+      heart: light ? mix(tint, WHITE, 0.6) : mix(LANTERN_FLAME, tint, 0.3), lit: light ? mix(tint, WHITE, 0.3) : mix(tint, LANTERN_CANDLE, 0.36), tint,
+      edge: light ? mix(tint, hi, 0.3) : mix(tint, bg, 0.52),
+      glow: light ? mix(warm, WHITE, 0.2) : warm, flame: light ? mix(LANTERN_FLAME, WHITE, 0.4) : LANTERN_FLAME,
+      rib: rgba(light ? mix(tint, hi, 0.5) : mix(tint, LANTERN_LACQUER, 0.62), 1),
+      cap: rgba(light ? mix(tint, hi, 0.84) : mix(tint, LANTERN_LACQUER, 0.84), 1),
+      lip: rgba(light ? mix(warm, WHITE, 0.45) : mix(warm, LANTERN_FLAME, 0.45), 1),
+      cord: rgba(light ? mix(tint, hi, 0.7) : mix(warm, bg, 0.3), 1),
+      tassel: rgba(light ? mix(warm, hi, 0.45) : mix(warm, LANTERN_LACQUER, 0.2), 1),
+      rim: light ? mix(tint, hi, 0.72) : tint,
+      paper: rgba(light ? mix(tint, WHITE, 0.84) : mix(LANTERN_PAPER, tint, 0.18), 1),
+      ink: rgba(mix(tint, LANTERN_LACQUER, 0.88), 1),
+      ring: rgba(light ? mix(warm, hi, 0.5) : mix(warm, WHITE, 0.25), 1),
+      fly: Object.freeze(light ? mix(mix(LANTERN_FIREFLY, warm, 0.3), hi, 0.55) : mix(LANTERN_FIREFLY, warm, 0.3)),
+      mote: rgba(light ? mix(warm, hi, 0.45) : mix(LANTERN_FLAME, warm, 0.3), 1),
+    };
+    tones.flyDot = rgba(light ? tones.fly : mix(tones.fly, WHITE, 0.4), 1);
+    lanternToneMemo.set(tint, tones);
+    return tones;
+  }
+  // The lantern's three paints in its unit space, built once per canvas,
+  // tint and theme: the paper (its light low in the middle, deepening out to
+  // its edge), the glow round it and the candle's light inside it.
+  function lanternPaints(ctx, tones) {
+    const cached = cacheGet(ctx, tones.key);
+    if (cached) return cached;
+    const light = tones.light;
+    const body = ctx.createRadialGradient(0, 0.18, 0, 0, 0.06, 0.98);
+    body.addColorStop(0, rgba(tones.heart, 0.98));
+    body.addColorStop(0.3, rgba(tones.lit, 0.98));
+    body.addColorStop(0.66, rgba(tones.tint, 0.98));
+    body.addColorStop(1, rgba(tones.edge, 0.98));
+    const glow = ctx.createRadialGradient(0, 0, 0.45, 0, 0, LANTERN_GLOW);
+    glow.addColorStop(0, rgba(tones.glow, light ? 0.26 : 0.4));
+    glow.addColorStop(0.3, rgba(tones.glow, light ? 0.13 : 0.2));
+    glow.addColorStop(0.62, rgba(tones.glow, light ? 0.04 : 0.07));
+    glow.addColorStop(1, rgba(tones.glow, 0));
+    const candle = ctx.createRadialGradient(0, 0.12, 0, 0, 0.12, LANTERN_FLARE);
+    candle.addColorStop(0, rgba(tones.flame, light ? 0.5 : 0.78));
+    candle.addColorStop(0.45, rgba(tones.flame, light ? 0.18 : 0.3));
+    candle.addColorStop(1, rgba(tones.flame, 0));
+    return cachePut(ctx, tones.key, { body, glow, candle });
+  }
+  // Ribs `from` to `to` (indexes into LANTERN_RIBS) as subpaths of the
+  // current path: the lower half of each ring, turned with the lantern.
+  function lanternRibs(ctx, p, radius, c, s, swing, from, to) {
+    for (let k = from; k < to; k += 1) {
+      const w = LANTERN_RIB_W[k] * radius, at = lanternPoint(p, radius, c, s, 0, LANTERN_RIBS[k]);
+      ctx.moveTo(at.x + c * w, at.y + s * w);
+      ctx.ellipse(at.x, at.y, w, w * 0.15, swing, 0, Math.PI);
+    }
+  }
+  // Both caps, two closed subpaths of the current path.
+  function lanternCaps(ctx, p, radius, c, s) {
+    for (let cap = 0; cap < 16; cap += 8) {
+      for (let corner = 0; corner < 8; corner += 2) {
+        const at = lanternPoint(p, radius, c, s, LANTERN_CAPS[cap + corner], LANTERN_CAPS[cap + corner + 1]);
+        if (corner === 0) ctx.moveTo(at.x, at.y);
+        else ctx.lineTo(at.x, at.y);
+      }
+      ctx.closePath();
+    }
+  }
+
+  function paintLantern(ctx, p, radius, tint, n, m) {
+    if (!(radius > 0)) return;
+    const tones = lanternTones(tint, n.theme ?? INK_DEFAULTS), paints = lanternPaints(ctx, tones);
+    const base = n.alpha, still = m.still === true || n.still === true, light = tones.light;
+    const detail = n.detail >= 3 ? 3 : n.detail >= 2 ? 2 : n.detail >= 1 ? 1 : 0;
+    const lit = lanternLevel(m.lit, n.active || n.selected ? 1 : 0), sel = lanternLevel(m.sel, n.selected ? 1 : 0);
+    const work = lanternLevel(m.work, n.active ? 1 : 0), kick = still ? 0 : lanternLevel(m.kick, 0);
+    const breath = swell(m, 4.2);
+    // 1. The swing about the knot, and the candle: it breathes, and at work
+    // it flickers in the lantern's own phase (a landing's kick lights it).
+    const swing = (still ? LANTERN_LEAN : LANTERN_SWING * (1 + 0.3 * work) * Math.sin(TAU * cycle(m, LANTERN_PERIOD)) + 0.06 * kick) * (n.glyph ? 0.35 : 1);
+    const c = Math.cos(swing), s = Math.sin(swing);
+    const flicker = still || work <= 0.02 || !Number.isFinite(m.clock) ? 0 : work * lanternFlicker(m.clock, Number.isFinite(m.seed) ? m.seed : 0);
+    const candle = Math.max(0.05, Math.min(1, (0.36 + 0.3 * lit + 0.24 * work) * (0.86 + 0.14 * breath) - 0.34 * flicker + 0.4 * kick));
+    const glow = Math.max(0.05, Math.min(1, (0.46 + 0.4 * lit + 0.14 * work) * (0.84 + 0.16 * breath) - 0.24 * flicker + 0.45 * kick));
+    const mid = lanternPoint(p, radius, c, s, 0, 0);
+    LANTERN_MID.x = mid.x; LANTERN_MID.y = mid.y;
+    // 2. The glow (round the node: it does not swing), the paper at the
+    // caller's alpha and the candle's light (both swinging with the
+    // lantern): three cached radials in the lantern's unit space.
+    const dx = -s * LANTERN_KNOT, dy = (c - 1) * LANTERN_KNOT;
+    freeEnter(ctx, p, radius);
+    ctx.arc(0, 0, LANTERN_GLOW, 0, TAU);
+    ctx.globalAlpha = base * glow; ctx.fillStyle = paints.glow; ctx.fill();
+    ctx.beginPath(); ctx.translate(dx, dy);
+    ctx.ellipse(0, 0, LANTERN_RX, LANTERN_RY, swing, 0, TAU);
+    ctx.globalAlpha = base; ctx.fillStyle = paints.body; ctx.fill();
+    ctx.beginPath(); ctx.arc(0, 0.12, LANTERN_FLARE, 0, TAU);
+    ctx.globalAlpha = base * candle; ctx.fillStyle = paints.candle; ctx.fill();
+    ctx.beginPath(); ctx.translate(-dx, -dy);
+    freeLeave(ctx, p, radius);
+    // 3. The ribs, traced in pixels: the middle one, two more from T1 and
+    // the outer pair from T2; a tier's own fade in over its first 1.2 px
+    // (drawn apart from the ones the tier below already shows).
+    const shown = LANTERN_RIB_TIERS[detail], whole = detail >= 3 ? shown : LANTERN_RIB_TIERS[detail > 0 ? detail - 1 : 0];
+    const fade = detail === 1 || detail === 2 ? tierIn(radius, detail) : 1;
+    const width = Math.max(0.6, radius * 0.07), ribs = base * (light ? 0.4 : 0.5);
+    ctx.lineCap = "round"; ctx.strokeStyle = tones.rib; ctx.lineWidth = width;
+    ctx.beginPath(); lanternRibs(ctx, p, radius, c, s, swing, 0, whole);
+    ctx.globalAlpha = ribs; ctx.stroke();
+    if (shown > whole && fade > 0.004) {
+      ctx.beginPath(); lanternRibs(ctx, p, radius, c, s, swing, whole, shown);
+      ctx.globalAlpha = ribs * fade; ctx.stroke();
+    }
+    // 4. The rim breathes with the candle (on a light page firmer, never
+    // under 85%, and at least 1.4 px from 6 px up); a stale lantern's is
+    // dashed (T1 up).
+    ctx.beginPath(); ctx.ellipse(LANTERN_MID.x, LANTERN_MID.y, LANTERN_RX * radius, LANTERN_RY * radius, swing, 0, TAU);
+    ctx.globalAlpha = base;
+    ctx.strokeStyle = rgba(tones.rim, qa((light ? 0.88 + 0.12 * lit : 0.42 + 0.3 * lit + 0.2 * sel) * freeBreath(m, light)));
+    ctx.lineWidth = freeRim((0.85 + 0.45 * lit + 0.6 * sel) * (0.85 + 0.3 * breath), radius, light);
+    const stale = n.stale && detail >= 1;
+    if (stale) ctx.setLineDash?.(FREE_STALE_DASH);
+    ctx.stroke();
+    if (stale) ctx.setLineDash?.(FREE_NO_DASH);
+    // 5. The caps (T1 up), black lacquer over the paper's top and bottom.
+    const caps = detail >= 1 ? (detail === 1 ? tierIn(radius, 1) : 1) : 0;
+    if (caps > 0.004) {
+      ctx.beginPath(); lanternCaps(ctx, p, radius, c, s);
+      ctx.globalAlpha = base * caps; ctx.fillStyle = tones.cap; ctx.fill();
+    }
+    // 6. A glyph's label: paper in the middle, edged in the ribs' ink.
+    if (n.glyph) {
+      ctx.beginPath(); ctx.ellipse(LANTERN_MID.x, LANTERN_MID.y, radius * 0.56, radius * 0.52, swing, 0, TAU);
+      ctx.globalAlpha = base; ctx.fillStyle = tones.paper; ctx.fill();
+      ctx.globalAlpha = base * 0.7; ctx.strokeStyle = tones.rib; ctx.lineWidth = width; ctx.stroke();
+    }
+    // 7. T2 up: the cord, from the knot (it stays put) down to the top cap,
+    // and the caps' lips, catching the paper's light.
+    const cord = detail >= 2 ? (detail === 2 ? tierIn(radius, 2) : 1) : 0;
+    if (cord > 0.004) {
+      let at = lanternPoint(p, radius, c, s, 0, -0.9);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y - LANTERN_KNOT * radius); ctx.lineTo(at.x, at.y);
+      ctx.globalAlpha = base * 0.85 * cord; ctx.strokeStyle = tones.cord; ctx.lineWidth = Math.max(0.6, radius * 0.055); ctx.stroke();
+      ctx.beginPath();
+      at = lanternPoint(p, radius, c, s, -0.3, -0.72); ctx.moveTo(at.x, at.y);
+      at = lanternPoint(p, radius, c, s, 0.3, -0.72); ctx.lineTo(at.x, at.y);
+      at = lanternPoint(p, radius, c, s, -0.26, 0.71); ctx.moveTo(at.x, at.y);
+      at = lanternPoint(p, radius, c, s, 0.26, 0.71); ctx.lineTo(at.x, at.y);
+      ctx.globalAlpha = base * 0.8 * cord; ctx.strokeStyle = tones.lip; ctx.lineWidth = Math.max(0.55, radius * 0.04); ctx.stroke();
+    }
+    // 8. T3: a tassel hangs from the bottom cap, swinging half as far as the
+    // lantern: its cord, then its tuft (narrow at the knot, fanning out).
+    const tassel = detail >= 3 ? tierIn(radius, 3) : 0;
+    if (tassel > 0.004) {
+      const at = lanternPoint(p, radius, c, s, 0, 0.87), hang = swing * 0.5, hx = -Math.sin(hang), hy = Math.cos(hang);
+      const x1 = at.x + hx * radius * 0.13, y1 = at.y + hy * radius * 0.13, x2 = x1 + hx * radius * 0.17, y2 = y1 + hy * radius * 0.17;
+      const knot = radius * 0.035, fan = radius * 0.08;
+      ctx.beginPath(); ctx.moveTo(at.x, at.y); ctx.lineTo(x1, y1);
+      ctx.globalAlpha = base * tassel; ctx.strokeStyle = tones.tassel; ctx.lineWidth = Math.max(0.6, radius * 0.05); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x1 - hy * knot, y1 + hx * knot); ctx.lineTo(x1 + hy * knot, y1 - hx * knot);
+      ctx.lineTo(x2 + hy * fan, y2 - hx * fan); ctx.lineTo(x2 - hy * fan, y2 + hx * fan); ctx.closePath();
+      ctx.fillStyle = tones.tassel; ctx.fill();
+    }
+    if (n.monogram) { ctx.globalAlpha = base; freeMonogram(ctx, LANTERN_MID, n, tones.ink); }
+  }
+
+  // A soft light: a unit radial in one tone, cached per canvas and tone
+  // (keyed by value; each triple remembers its key), drawn as a disc `size`
+  // px round (x, y) at globalAlpha `alpha`. The fireflies, pulses and
+  // landings share it.
+  const lanternGlowKeys = new WeakMap();
+  function lanternGlowAt(ctx, rgb, x, y, size, alpha) {
+    if (!(alpha > 0.004) || !(size > 0)) return;
+    let key = lanternGlowKeys.get(rgb);
+    if (key === undefined) { key = `lantern|glow|${rgb.join(",")}`; lanternGlowKeys.set(rgb, key); }
+    let glow = cacheGet(ctx, key);
+    if (glow === undefined) {
+      glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      glow.addColorStop(0, rgba(mix(rgb, LANTERN_FLAME, 0.5), 0.72));
+      glow.addColorStop(0.32, rgba(rgb, 0.3));
+      glow.addColorStop(1, rgba(rgb, 0));
+      cachePut(ctx, key, glow);
+    }
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(size, size);
+    ctx.globalAlpha = alpha; ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+
+  // Hover and selection: a warm ring of light just off the paper; the
+  // chosen lantern also draws three fireflies, each a soft light on a slow
+  // loop round it (a turn in 11 s, each weaving and bobbing on its own) that
+  // blinks. Both fade with the eased selection; reduced motion holds the
+  // fireflies where they are, lit.
+  function lanternSelect(ctx, p, radius, tint, o) {
+    const m = motionOf(o), still = o.still === true || m.still === true;
+    const chosen = o.chosen === true, marked = o.selected === true || chosen;
+    const sel = still ? (marked ? 1 : 0) : lanternLevel(m.sel, marked ? 1 : 0);
+    if (sel <= 0.01 && !chosen) return true;
+    const level = chosen ? Math.max(sel, 0.6) : sel;
+    const tones = lanternTones(tint, o.theme ?? INK_DEFAULTS), alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
+    const ring = Math.max(radius * 1.24, radius + 3);
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.6 * level; ctx.strokeStyle = tones.ring; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, TAU); ctx.stroke();
+    if (chosen) {
+      const clock = still || !Number.isFinite(m.clock) ? 0 : m.clock, seedValue = Number.isFinite(m.seed) ? m.seed : 0;
+      const spin = still ? 0.5 : turn(m, 11), rx = ring * 1.2, ry = ring * 0.62;
+      for (let k = 0; k < 3; k += 1) {
+        const angle = spin + k * TAU / 3 + (still ? 0 : 0.35 * Math.sin(clock * 1.7 + k * 2.1));
+        const x = p.x + Math.cos(angle) * rx, y = p.y + Math.sin(angle) * ry - (still ? 0 : 2 * Math.sin(clock * 2.3 + k));
+        const blink = still ? 1 : 0.55 + 0.45 * Math.sin(clock * 2.9 + k * 2.4 + seedValue * TAU);
+        if (!tones.light) lanternGlowAt(ctx, tones.fly, x, y, 5, alpha * level * blink);
+        ctx.beginPath(); ctx.arc(x, y, 1.25, 0, TAU);
+        ctx.globalAlpha = alpha * level * (0.4 + 0.6 * blink); ctx.fillStyle = tones.flyDot; ctx.fill();
+      }
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // Arrival: the lantern is lit. A warm ring in the paper's shape leaves its
+  // rim on an ease-out, thinning as it fades, and five sparks of the match
+  // rise off its top and go out. The caller grows the node meanwhile;
+  // reduced motion: the lantern simply appears.
+  function lanternArrival(ctx, p, radius, tint, t01, o) {
+    const m = motionOf(o);
+    if (o.still === true || o.motion != null && m.still === true || !(t01 < 1)) return true;
+    const t = clamp01(t01), tones = lanternTones(tint, o.theme ?? INK_DEFAULTS), alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
+    const out = easeOut(t), fade = 1 - t, seedValue = Number.isFinite(m.seed) ? m.seed : 0;
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.75 * fade * fade; ctx.strokeStyle = tones.ring; ctx.lineWidth = 0.6 + 1.4 * fade;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, radius * LANTERN_RX * (1 + 0.7 * out), radius * LANTERN_RY * (1 + 0.7 * out), 0, 0, TAU); ctx.stroke();
+    const size = Math.max(0.55, radius * 0.08) * fade;
+    if (size > 0.05) {
+      ctx.beginPath();
+      for (let k = 0; k < 5; k += 1) {
+        const x = p.x + radius * (k - 2) * 0.26 + Math.sin(TAU * (t + hash(seedValue, k))) * radius * 0.1;
+        const y = p.y - radius * (0.7 + (0.5 + 0.5 * hash(seedValue, k + 5)) * out);
+        ctx.moveTo(x + size, y); ctx.arc(x, y, size, 0, TAU);
+      }
+      ctx.globalAlpha = alpha * 0.9 * fade; ctx.fillStyle = tones.mote; ctx.fill();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // Lanterns' finish beats: done, three sky lanterns rise off the node,
+  // drifting apart and swaying as they go, as a ring of light leaves its rim,
+  // all in the beat's ink (the theme's done green, amber for a failed
+  // check); absorb, five fireflies in the agent's tint weave in to the
+  // lantern, whose paper rings once with their light. A sky lantern here is
+  // a small paper shell over its open rim, its flame beneath.
+  function lanternDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.4), ink = finishInk(o), fade = finishFade(t, o), out = easeOut(t);
+    const s = Math.max(2, radius * 0.26) * (1 - 0.3 * t);
+    for (let k = 0; k < 3; k += 1) {
+      LANTERN_SKY[k * 2] = p.x + (k - 1) * radius * (0.3 + 0.9 * out) + Math.sin(TAU * t * 1.4 + k * 2.1) * radius * 0.12;
+      LANTERN_SKY[k * 2 + 1] = p.y - radius * (0.5 + (2.1 + 0.3 * (k % 2)) * out);
+    }
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.strokeStyle = rgba(ink, qa(0.7 * (1 - t) * fade)); ctx.lineWidth = 1 + 1.2 * (1 - t);
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, radius * LANTERN_RX * (1.15 + 0.8 * out), radius * LANTERN_RY * (1.15 + 0.8 * out), 0, 0, TAU); ctx.stroke();
+    // (each a paper shell: a round crown, sides tapering to its open rim)
+    ctx.strokeStyle = ctx.fillStyle = rgba(ink, qa(0.95 * fade)); ctx.lineWidth = 1.2; ctx.lineJoin = "round";
+    ctx.beginPath();
+    for (let k = 0; k < 6; k += 2) {
+      const x = LANTERN_SKY[k], y = LANTERN_SKY[k + 1];
+      ctx.moveTo(x - 0.62 * s, y - 0.25 * s); ctx.ellipse(x, y - 0.25 * s, 0.62 * s, 0.75 * s, 0, Math.PI, TAU);
+      ctx.lineTo(x + 0.42 * s, y + s); ctx.lineTo(x - 0.42 * s, y + s); ctx.closePath();
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    for (let k = 0; k < 6; k += 2) { const x = LANTERN_SKY[k], y = LANTERN_SKY[k + 1] + 0.62 * s; ctx.moveTo(x + 0.26 * s, y); ctx.arc(x, y, 0.26 * s, 0, TAU); }
+    ctx.fill();
+    ctx.restore();
+    return true;
+  }
+  function lanternAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.5), fade = finishFade(t, o), mark = finishTint(tint, o);
+    const fly = easeOut(Math.min(1, t / 0.7)), settle = clamp01((t - 0.7) / 0.3), size = Math.max(1.1, radius * 0.11);
+    ctx.save();
+    ctx.beginPath();
+    for (let k = 0; k < 5; k += 1) {
+      const angle = k * TAU / 5 - Math.PI / 2 + 0.6, d = radius * (1.05 + 2.3 * (1 - fly)), weave = radius * 0.32 * (1 - fly) * Math.sin(TAU * t * 1.6 + k * 1.9);
+      const x = p.x + Math.cos(angle) * d - Math.sin(angle) * weave, y = p.y + Math.sin(angle) * d + Math.cos(angle) * weave;
+      ctx.moveTo(x + size, y); ctx.arc(x, y, size, 0, TAU);
+    }
+    ctx.fillStyle = rgba(mark, qa(0.9 * fade)); ctx.fill();
+    if (settle > 0) {
+      ctx.strokeStyle = rgba(mark, qa(0.85 * Math.sin(Math.PI * settle))); ctx.lineWidth = 1.8;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, radius * LANTERN_RX * 1.12, radius * LANTERN_RY * 1.12, 0, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // Wires: a string of festival lights. The caller's line as asked (its
+  // pen, dash and march, the hub's double line, the tree's S-curve); on a
+  // lively wire (one that carries work, a lit one, a session's, or any from
+  // T2) small warm lights hang along it, one every 15 px or so (2 to 18).
+  // Along a wire that carries work a chase runs toward b (a band of brighter
+  // lights every 84 px, 70 px/s); on the others a light twinkles now and
+  // then (a new few every 0.65 s). A still pose parks the chase where its
+  // seed puts it and holds the twinkles. The far (blurred) pen, the rail and
+  // the hub's double line keep the line alone. On a light page the line and
+  // the lights keep the tint's hue, deepened as far as they need (the shared
+  // wire tones). Every alpha is a gain on the canvas's own, and the canvas
+  // comes back with its alpha, cap, dash and offset, set back by hand.
+  const LANTERN_WIRE_MAX = 5;
+  const LANTERN_LIGHT_GAP = 15; // px between two lights
+  const LANTERN_LIGHTS = 18; // at most, on one wire
+  const LANTERN_CHASE = 84; // px from one band of the chase to the next
+  const LANTERN_ALONG = { x: 0, y: 0 };
+  // A point u along the wire (its S-curve `cp` when it has one), into LANTERN_ALONG.
+  function lanternAlong(a, b, cp, u) {
+    if (cp) {
+      const v = 1 - u;
+      LANTERN_ALONG.x = v * v * v * a.x + 3 * v * v * u * cp.x1 + 3 * v * u * u * cp.x2 + u * u * u * b.x;
+      LANTERN_ALONG.y = v * v * v * a.y + 3 * v * v * u * cp.y1 + 3 * v * u * u * cp.y2 + u * u * u * b.y;
+    } else {
+      LANTERN_ALONG.x = a.x + (b.x - a.x) * u; LANTERN_ALONG.y = a.y + (b.y - a.y) * u;
+    }
+    return LANTERN_ALONG;
+  }
+  // A wire's tones, cached per tint and theme: the line, its lights and the
+  // brighter ones of a chase or a twinkle.
+  const lanternWireMemo = new WeakMap();
+  function lanternWireTones(tint, currentTheme) {
+    let tones = lanternWireMemo.get(tint);
+    if (tones && tones.theme === currentTheme) return tones;
+    const light = currentTheme.light === true, lift = light ? wireLightTone(tint, currentTheme) : null, warm = mix(tint, LANTERN_CANDLE, 0.5);
+    tones = {
+      theme: currentTheme, light,
+      line: rgba(light ? lift.line : tint, 1),
+      bead: rgba(light ? mix(lift.deep, LANTERN_CANDLE, 0.15) : mix(warm, LANTERN_FLAME, 0.2), 1),
+      glint: rgba(light ? lift.deep : mix(LANTERN_FLAME, warm, 0.2), 1),
+    };
+    lanternWireMemo.set(tint, tones);
+    return tones;
+  }
+  function lanternWire(ctx, a, b, o) {
+    const tint = o.tint;
+    if (!tint || !a || !b) return false;
+    const chord = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!(chord > 1)) return true;
+    const tones = lanternWireTones(tint, o.theme ?? INK_DEFAULTS);
+    const rail = o.rail === true, far = o.far === true, still = o.still === true, double = o.double === true;
+    const cp = !double && o.curved === true && o.cp ? o.cp : null;
+    const alpha = Number.isFinite(o.alpha) ? clamp01(o.alpha) : 1, width = Math.min(LANTERN_WIRE_MAX, o.width > 0 ? o.width : 1);
+    const time = Number.isFinite(o.time) ? o.time : 0, seed = Number.isFinite(o.seed) ? o.seed : 0;
+    const base = ctx.globalAlpha, cap = ctx.lineCap;
+    if (cap !== "round") ctx.lineCap = "round";
+    const dash = o.dash && o.dash.length ? o.dash : null;
+    if (dash) {
+      // The dashes march toward b (a tether's faster), as the plain lines do.
+      let period = 0;
+      if (o.march === true && !still) { for (let index = 0; index < dash.length; index += 1) period += dash[index]; if (dash.length % 2) period *= 2; }
+      ctx.setLineDash?.(dash);
+      ctx.lineDashOffset = period > 0 ? -((time / (o.kind === "tether" ? 40 : 60)) % period) : 0;
+    }
+    ctx.beginPath();
+    if (double) {
+      // The hub link: two parallel lines 3.2 px apart, one stroke.
+      const nx = (a.y - b.y) / chord * 1.6, ny = (b.x - a.x) / chord * 1.6;
+      ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny);
+      ctx.moveTo(a.x - nx, a.y - ny); ctx.lineTo(b.x - nx, b.y - ny);
+    } else {
+      ctx.moveTo(a.x, a.y);
+      if (cp) ctx.bezierCurveTo(cp.x1, cp.y1, cp.x2, cp.y2, b.x, b.y);
+      else ctx.lineTo(b.x, b.y);
+    }
+    ctx.globalAlpha = base * alpha; ctx.strokeStyle = tones.line; ctx.lineWidth = width; ctx.stroke();
+    if (dash) { ctx.setLineDash?.(LANTERN_NO_DASH); ctx.lineDashOffset = 0; }
+    const active = o.active === true, lit = active || o.inspected === true;
+    const flowing = typeof o.flow === "boolean" ? o.flow : active;
+    const detail = Number.isFinite(o.detail) ? o.detail : 3;
+    if (!far && !rail && !double && (flowing || lit || o.kind === "session" || detail >= 2)) {
+      const span = cp ? chord * 1.12 : chord;
+      const count = Math.max(2, Math.min(LANTERN_LIGHTS, Math.round(span / LANTERN_LIGHT_GAP)));
+      const head = still ? seed * LANTERN_CHASE : ((time / 1000) * 70 + seed * LANTERN_CHASE) % LANTERN_CHASE;
+      const step = still ? 0 : Math.floor(time / 650);
+      const gain = base * Math.min(1, alpha * (lit ? 2 : 1.6) * (tones.light ? 0.85 : 1));
+      // The dim lights, then the bright ones: one path and one fill each.
+      for (let pass = 0; pass < 2; pass += 1) {
+        const size = pass ? 1.3 + 0.35 * width : 0.85 + 0.3 * width;
+        let any = false;
+        ctx.beginPath();
+        for (let index = 0; index < count; index += 1) {
+          const u = (index + 0.5) / count;
+          const bright = flowing ? ((u * span - head) % LANTERN_CHASE + LANTERN_CHASE) % LANTERN_CHASE < 22 : hash(seed, index * 13 + step) > 0.8;
+          if (bright !== (pass === 1)) continue;
+          const at = lanternAlong(a, b, cp, u);
+          ctx.moveTo(at.x + size, at.y); ctx.arc(at.x, at.y, size, 0, TAU);
+          any = true;
+        }
+        if (any) { ctx.globalAlpha = pass ? gain : gain * (flowing ? 0.5 : 0.62); ctx.fillStyle = pass ? tones.glint : tones.bead; ctx.fill(); }
+      }
+    }
+    ctx.globalAlpha = base;
+    if (cap !== "round") ctx.lineCap = cap;
+    return true;
+  }
+
+  // Pulses: a small lantern floating along the wire. A warm paper shell in
+  // the pulse's colour (warmed toward the candle), a dark cap on its top and
+  // its flame inside, in a soft glow (none on a light page or the rail); it
+  // bobs as it floats (1.4 px, in its own phase), swings a little, and two
+  // motes of light drift up behind it. A wave pulse floats bigger with a
+  // third mote; a packet rides it as a small turning diamond. On the tree's
+  // S-curve (o.cp) it rides the curve as drawn; over the last fifth its light
+  // reaches the target first. Reduced motion: one still lantern near the end
+  // of its wire. On a light page it keeps its hue (the shared wire tones).
+  const lanternPulseColours = new Map();
+  function lanternPulseRgb(pulse) {
+    const text = typeof pulse?.color === "string" ? pulse.color : "#a9ffcd";
+    let triple = lanternPulseColours.get(text);
+    if (!triple) {
+      triple = parseHex(text) ?? parseHex("#a9ffcd");
+      if (lanternPulseColours.size >= 32) lanternPulseColours.clear();
+      lanternPulseColours.set(text, triple);
+    }
+    return triple;
+  }
+  // A pulse's own stable number (its start time, hashed), for its bob and motes.
+  const lanternPulseSeed = (pulse) => hash(((Number.isFinite(pulse?.start) ? pulse.start : 0) % 9973) / 9973, 9);
+  // A floating lantern's tones per colour and theme (each colour keeps them
+  // per theme, so a frame builds nothing): its warm tone (the glow's), its
+  // paper, flame, cap, motes and the landing's ring.
+  const lanternFloatMemo = new WeakMap();
+  function lanternFloatTones(rgb, currentTheme) {
+    let tones = lanternFloatMemo.get(rgb);
+    if (tones && tones.theme === currentTheme) return tones;
+    const light = currentTheme.light === true, warm = Object.freeze(mix(rgb, LANTERN_CANDLE, 0.4));
+    const lift = light ? wireLightTone(warm, currentTheme) : null;
+    tones = {
+      theme: currentTheme, light, warm,
+      body: rgba(light ? lift.line : mix(warm, LANTERN_FLAME, 0.25), 1),
+      flame: rgba(light ? lift.deep : LANTERN_FLAME, 1),
+      cap: rgba(light ? mix(warm, currentTheme.hi, 0.8) : mix(warm, LANTERN_LACQUER, 0.8), 1),
+      mote: rgba(light ? lift.deep : mix(LANTERN_FLAME, warm, 0.35), 1),
+      ring: rgba(light ? lift.line : warm, 1),
+    };
+    lanternFloatMemo.set(rgb, tones);
+    return tones;
+  }
+  function lanternSurge(ctx, from, to, t, pulse, o) {
+    if (!pulse || !from || !to) return false;
+    const chord = Math.hypot(to.x - from.x, to.y - from.y);
+    if (!(t >= 0) || !(chord >= 2)) return true;
+    const rail = o.rail === true, still = o.still === true, cp = !rail && o.cp ? o.cp : null;
+    const tones = lanternFloatTones(lanternPulseRgb(pulse), o.theme ?? INK_DEFAULTS);
+    const small = pulse.small === true, wave = pulse.wave === true || o.kind === "wave";
+    const time = Number.isFinite(o.time) ? o.time : 0, seedValue = lanternPulseSeed(pulse);
+    const size = (small ? 0.75 : wave ? 1.3 : 1) * (rail ? 0.65 : 1);
+    const head = still ? 0.84 : clamp01(t), span = cp ? chord * 1.12 : chord;
+    ctx.save();
+    const base = ctx.globalAlpha;
+    ctx.lineCap = "round"; ctx.setLineDash?.(LANTERN_NO_DASH);
+    // The motes it leaves, 8 px apart behind it, rising as they fall behind.
+    ctx.beginPath();
+    let any = false;
+    for (let j = 1, motes = rail ? 1 : wave ? 3 : 2; j <= motes; j += 1) {
+      const u = head - j * 8 / span;
+      if (u <= 0) break;
+      const at = lanternAlong(from, to, cp, u), r = Math.max(0.4, (1.15 - 0.28 * j) * size), y = at.y - 1.5 * j * size;
+      ctx.moveTo(at.x + r, y); ctx.arc(at.x, y, r, 0, TAU);
+      any = true;
+    }
+    if (any) { ctx.globalAlpha = base * 0.7; ctx.fillStyle = tones.mote; ctx.fill(); }
+    // The lantern: its glow, its paper, its flame and its cap.
+    const at = lanternAlong(from, to, cp, head);
+    const hx = at.x, hy = at.y + (still ? 0 : Math.sin((time / 1000) * 5.2 + seedValue * TAU) * 1.4 * size);
+    const swing = still ? 0 : 0.2 * Math.sin((time / 1000) * 3.1 + seedValue * 9), c = Math.cos(swing), s = Math.sin(swing);
+    if (!rail && !tones.light) lanternGlowAt(ctx, tones.warm, hx, hy, size * 7, base * 0.85);
+    ctx.globalAlpha = base;
+    ctx.beginPath(); ctx.ellipse(hx, hy, 2.3 * size, 1.95 * size, swing, 0, TAU); ctx.fillStyle = tones.body; ctx.fill();
+    ctx.beginPath(); ctx.arc(hx - s * 0.2 * size, hy + c * 0.2 * size, 0.85 * size, 0, TAU); ctx.fillStyle = tones.flame; ctx.fill();
+    const tx = hx + s * 1.95 * size, ty = hy - c * 1.95 * size;
+    ctx.beginPath(); ctx.moveTo(tx - c * 1.1 * size, ty - s * 1.1 * size); ctx.lineTo(tx + c * 1.1 * size, ty + s * 1.1 * size);
+    ctx.strokeStyle = tones.cap; ctx.lineWidth = Math.max(0.8, 0.9 * size); ctx.stroke();
+    if (pulse.packet === true) {
+      const turnAt = Math.PI / 4 + head * Math.PI, dc = Math.cos(turnAt) * size * 3.6, ds = Math.sin(turnAt) * size * 3.6;
+      ctx.beginPath(); ctx.moveTo(hx + dc, hy + ds); ctx.lineTo(hx - ds, hy + dc); ctx.lineTo(hx - dc, hy - ds); ctx.lineTo(hx + ds, hy - dc); ctx.closePath();
+      ctx.globalAlpha = base * 0.85; ctx.strokeStyle = tones.ring; ctx.lineWidth = 1; ctx.stroke();
+    }
+    // Its light reaches the target first, over the last fifth.
+    const landing = (head - 0.8) / 0.2;
+    if (landing > 0 && !still && !tones.light) lanternGlowAt(ctx, tones.warm, to.x, to.y, Math.max(rail ? 8 : 12, (o.rTo > 0 ? o.rTo : 0) + (rail ? 5 : 8)), base * 0.42 * landing * (rail ? 0.6 : 1));
+    ctx.restore();
+    return true;
+  }
+
+  // A landing: the target's light swells: a warm bloom on it (none on a
+  // light page) and a ring of light leaving its rim, and four motes rise off
+  // it and go out (the lantern takes the push itself: stepMotion's kick
+  // swings it). The rail, and a far, dimmed or moving target (detail ≤ 1),
+  // get the ring alone. Reduced motion: nothing more.
+  function lanternLand(ctx, p, radius, tint, u, o) {
+    if (!p || !tint) return false;
+    if (o.still === true || !(u < 1)) return true;
+    const tones = lanternFloatTones(o.pulse ? lanternPulseRgb(o.pulse) : tint, o.theme ?? INK_DEFAULTS);
+    const k = clamp01(u), out = easeOut(k), fade = 1 - k, r = radius > 3 ? radius : 3;
+    ctx.save();
+    const base = ctx.globalAlpha;
+    ctx.globalAlpha = base * 0.65 * fade * fade; ctx.strokeStyle = tones.ring; ctx.lineWidth = 0.6 + 1.1 * fade;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r + 1.5 + (3.5 + 0.45 * r) * out, 0, TAU); ctx.stroke();
+    if (o.rail !== true && !(Number.isFinite(o.detail) && o.detail <= 1) && fade > 0.02) {
+      if (!tones.light) lanternGlowAt(ctx, tones.warm, p.x, p.y, r * 1.5 + 6, base * 0.5 * fade);
+      const seedValue = o.pulse ? lanternPulseSeed(o.pulse) : 0, small = o.pulse?.small === true ? 0.75 : 1;
+      ctx.beginPath();
+      for (let j = 0; j < 4; j += 1) {
+        const x = p.x + (j - 1.5) * r * 0.42 + (hash(seedValue, j + 21) - 0.5) * r * 0.2;
+        const y = p.y - r * (0.85 + (0.55 + 0.45 * hash(seedValue, j + 3)) * out);
+        const size = (0.6 + 0.6 * hash(seedValue, j + 9)) * fade * small;
+        ctx.moveTo(x + size, y); ctx.arc(x, y, size, 0, TAU);
+      }
+      ctx.globalAlpha = base * 0.9 * Math.sqrt(fade); ctx.fillStyle = tones.mote; ctx.fill();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // How far the look reaches: the cord and the tassel (1.12 radii), the
+  // glow's bright part at work (1.3) and the fireflies as the selection
+  // eases in.
+  function lanternReach(m) {
+    return Math.max(1.12 + 0.18 * lanternLevel(m?.work, 0), 1 + 0.62 * lanternLevel(m?.sel, 0));
+  }
+  LOOKS.lantern = { speedup: 1.8, paint: paintLantern, glyph: { scale: 0.5, ringGap: 3.5, ink: (tint, currentTheme) => lanternTones(tint, currentTheme).ink }, ring: null, hubDress: null, orbit: null, arrival: lanternArrival, select: lanternSelect, done: lanternDone, absorb: lanternAbsorb, wire: lanternWire, surge: lanternSurge, land: lanternLand, reach: lanternReach };
+
+// ===== style: neon =====
+
+  // Neon, a Shop style (studio:style-neon): every node a small neon sign. A
+  // glass tube bent into a ring burns in the node's own colour (pushed a
+  // little purer, as a lit gas looks), a white-hot core runs inside it and a
+  // soft bloom lights the dark plate it is mounted on. The ring is broken at
+  // the bottom, where its two ends turn back into the plate at their
+  // electrodes; from T2 a bead of the same tube burns in its middle. It hums
+  // (the bloom breathes, a faint ripple runs through it), and when work
+  // starts the tube buzzes on: it stutters off and on through the work's
+  // first second, then burns steady and brighter, now and then dropping out
+  // for a blink. Wires are lit tubes: a bloom under the caller's line and a
+  // hot core over it, the core running as current toward the work along one
+  // that carries it; pulses are sparks of current that crackle as they run
+  // and zap where they land; the chosen sign gets a second tube in the
+  // theme's second hue, two arcs turning round it. Detail by tier: below T1
+  // the ring whole, with its bloom and core; T1 its break and electrodes; T2
+  // the bead, growing in; T3 a highlight on the glass (each coming in over
+  // its tier's first 1.2 px). A glyph burns inside the ring in place of the
+  // bead, in the core's light. A light page shows lit glass by day: the tube
+  // a deep shade of the colour round a pale core, under a faint bloom. A
+  // stale sign's tubes are dead in places (broken into dashes, T1 up).
+  // Reduced motion: lit, steady and still.
+  const NEON_TUBE = 0.78; // the ring tube's centre line, in radii
+  const NEON_GAP = 0.32; // half the ring's break (at the bottom), radians
+  const NEON_BEAD = 0.1, NEON_BEAD_MAX = 2; // the bead's radius: in radii, and at most in px
+  const NEON_BLOOM = 1.32; // the bloom's reach, in radii
+  const NEON_STUTTER = 6; // animation seconds between a working sign's chances to drop out
+  const NEON_DEAD = Object.freeze([3, 4]); // a stale tube's dead stretches, px (the stale rims' 3:4)
+  const NEON_NO_DASH = Object.freeze([]);
+  const NEON_CURRENT = [0, 0]; // a wire's current, dash and gap, refilled per wire (setLineDash copies it)
+  // The strike: the tube's level through the work's first second, as
+  // (until, level) pairs in seconds of work; full from the last on.
+  const NEON_STRIKE = Object.freeze([0.06, 0.18, 0.12, 1, 0.18, 0.08, 0.25, 0.9, 0.3, 0.22, 0.44, 1, 0.49, 0.38, 0.95, 1]);
+  const NEON_AT = { x: 0, y: 0, tx: 1, ty: 0 };
+  const neonLevel = (value, fallback) => Number.isFinite(value) ? clamp01(value) : fallback;
+  function neonStrike(age) {
+    if (!(age >= 0)) return 1;
+    for (let index = 0; index < NEON_STRIKE.length; index += 2) if (age < NEON_STRIKE[index]) return NEON_STRIKE[index + 1];
+    return 1;
+  }
+  // The tint pushed a little purer, as a gas burns in glass: each channel
+  // moved 30% further from the triple's own mean (clamped), so the hue holds
+  // and a grey stays grey. Built on a cache miss only.
+  function neonPure(tint) {
+    const mean = (tint[0] + tint[1] + tint[2]) / 3, push = (channel) => Math.max(0, Math.min(255, Math.round(mean + (channel - mean) * 1.3)));
+    return Object.freeze([push(tint[0]), push(tint[1]), push(tint[2])]);
+  }
+
+  // The tones of one tint under one theme, cached per triple (rebuilt when
+  // the theme changes): the purer colour (the bloom's), the tube, its core,
+  // the plate, the electrodes, the glass's highlight, a glyph's ink and the
+  // selection's tube.
+  const neonToneMemo = new WeakMap();
+  function neonTones(tint, currentTheme) {
+    let tones = neonToneMemo.get(tint);
+    if (tones && tones.theme === currentTheme) return tones;
+    const light = currentTheme.light === true, hi = currentTheme.hi, bg = currentTheme.bg, pure = neonPure(tint);
+    tones = {
+      theme: currentTheme, light, key: `neon|${tint.join(",")}|${currentTheme.key}`, pure,
+      halo: rgba(pure, 1),
+      tube: rgba(light ? mix(pure, hi, 0.56) : mix(pure, WHITE, 0.1), 1),
+      core: rgba(light ? mix(pure, WHITE, 0.5) : mix(pure, WHITE, 0.8), 1),
+      plate: rgba(light ? mix(bg, pure, 0.07) : mix(bg, pure, 0.08), 1),
+      electrode: rgba(light ? mix(hi, bg, 0.4) : mix(bg, currentTheme.text, 0.42), 1),
+      glass: rgba(light ? WHITE : mix(pure, WHITE, 0.92), 1),
+      glyphInk: rgba(light ? mix(pure, hi, 0.75) : mix(pure, WHITE, 0.84), 1),
+    };
+    neonToneMemo.set(tint, tones);
+    return tones;
+  }
+  // The bloom in the sign's unit space, built once per canvas, tint and
+  // theme (the first time it shows): a soft light peaking on the outer tube
+  // and fading out to NEON_BLOOM, a little of it left on the plate inside.
+  function neonPaints(ctx, tones) {
+    const cached = cacheGet(ctx, tones.key);
+    if (cached) return cached;
+    const peak = tones.light ? 0.22 : 0.46, pure = tones.pure, at = (radius) => radius / NEON_BLOOM;
+    const bloom = ctx.createRadialGradient(0, 0, 0, 0, 0, NEON_BLOOM);
+    bloom.addColorStop(0, rgba(pure, peak * 0.2));
+    bloom.addColorStop(at(0.48), rgba(pure, peak * 0.3));
+    bloom.addColorStop(at(NEON_TUBE), rgba(pure, peak));
+    bloom.addColorStop(at(1), rgba(pure, peak * 0.32));
+    bloom.addColorStop(at(1.16), rgba(pure, peak * 0.09));
+    bloom.addColorStop(1, rgba(pure, 0));
+    return cachePut(ctx, tones.key, { bloom });
+  }
+
+  function paintNeon(ctx, p, radius, tint, n, m) {
+    if (!(radius > 0)) return;
+    const tones = neonTones(tint, n.theme ?? INK_DEFAULTS), paints = neonPaints(ctx, tones);
+    const base = n.alpha, still = m.still === true || n.still === true;
+    const detail = n.detail >= 3 ? 3 : n.detail >= 2 ? 2 : n.detail >= 1 ? 1 : 0;
+    const lit = neonLevel(m.lit, n.active || n.selected ? 1 : 0), work = neonLevel(m.work, n.active ? 1 : 0), kick = still ? 0 : neonLevel(m.kick, 0);
+    const breath = swell(m, 3.6), clock = Number.isFinite(m.clock) ? m.clock : 0, seedValue = Number.isFinite(m.seed) ? m.seed : 0;
+    // 1. How lit the gas is: struck through the work's first second, then
+    // now and then, at work, a blink where it drops out; and a faint hum.
+    let on = 1;
+    if (!still && n.active === true) {
+      on = neonStrike(m.age);
+      const round = Math.floor(clock / NEON_STUTTER), at = clock - round * NEON_STUTTER;
+      if (on >= 1 && hash(seedValue, round) < 0.45 && Math.abs(at - NEON_STUTTER * (0.2 + 0.6 * hash(seedValue, round + 101))) < 0.07) on = 0.38;
+    }
+    const hum = still ? 1 : 0.94 + 0.06 * Math.sin(clock * 31 + seedValue * 47);
+    const glow = Math.min(1, (0.46 + 0.3 * lit + 0.24 * work + 0.35 * kick) * (0.82 + 0.18 * breath)) * hum * (0.22 + 0.78 * on);
+    // 2. The plate at the caller's alpha, then the bloom over it (the sign
+    // lights its own board): one cached radial in the sign's unit space.
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
+    ctx.globalAlpha = base; ctx.fillStyle = tones.plate; ctx.fill();
+    freeEnter(ctx, p, radius);
+    ctx.arc(0, 0, NEON_BLOOM, 0, TAU);
+    ctx.globalAlpha = base * glow; ctx.fillStyle = paints.bloom; ctx.fill();
+    freeLeave(ctx, p, radius);
+    // 3. The tubes, one path: the ring (whole below T1, its break opening
+    // over T1's first 1.2 px) and from T2 the bead in its middle (growing in
+    // over T2's first 1.2 px, at most 2 px round); the tube, then its core. A
+    // stale sign's are dead in places (T1 up).
+    const open = detail >= 1 ? (detail === 1 ? tierIn(radius, 1) : 1) : 0, gap = NEON_GAP * open;
+    ctx.arc(p.x, p.y, NEON_TUBE * radius, Math.PI / 2 + gap, Math.PI / 2 - gap + TAU);
+    const bead = detail >= 2 && !n.glyph ? Math.min(NEON_BEAD_MAX, Math.max(1, radius * NEON_BEAD)) * (detail === 2 ? tierIn(radius, 2) : 1) : 0;
+    if (bead > 0.1) { ctx.moveTo(p.x + bead, p.y); ctx.arc(p.x, p.y, bead, 0, TAU); }
+    const tube = Math.max(1.05, radius * 0.13), stale = n.stale && detail >= 1;
+    ctx.lineCap = "round";
+    if (stale) ctx.setLineDash?.(NEON_DEAD);
+    ctx.globalAlpha = base * (0.35 + 0.65 * on); ctx.strokeStyle = tones.tube; ctx.lineWidth = tube; ctx.stroke();
+    ctx.globalAlpha = base * on * (0.72 + 0.28 * Math.max(lit, work)); ctx.strokeStyle = tones.core; ctx.lineWidth = Math.max(0.5, tube * 0.4); ctx.stroke();
+    if (stale) ctx.setLineDash?.(NEON_NO_DASH);
+    // 4. The electrodes (T1 up), where the ring's two ends turn back into the plate.
+    if (open > 0.004) {
+      const size = Math.max(0.65, radius * 0.085), reach = NEON_TUBE * radius;
+      ctx.beginPath();
+      for (let side = -1; side <= 1; side += 2) {
+        const x = p.x + Math.cos(Math.PI / 2 + side * gap) * reach, y = p.y + Math.sin(Math.PI / 2 + side * gap) * reach;
+        ctx.moveTo(x + size, y); ctx.arc(x, y, size, 0, TAU);
+      }
+      ctx.globalAlpha = base * open; ctx.fillStyle = tones.electrode; ctx.fill();
+    }
+    // 5. T3: a highlight on the glass, along the ring's upper left.
+    const shine = detail >= 3 ? tierIn(radius, 3) : 0;
+    if (shine > 0.004) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, NEON_TUBE * radius + tube * 0.18, -2.55, -2.05);
+      ctx.globalAlpha = base * 0.5 * shine; ctx.strokeStyle = tones.glass; ctx.lineWidth = Math.max(0.45, tube * 0.28); ctx.stroke();
+    }
+    if (n.monogram) { ctx.globalAlpha = base; freeMonogram(ctx, p, n, tones.glyphInk); }
+  }
+
+  // Hover and selection: an outer tube just off the plate in the node's own
+  // colour (its bloom, the tube and its core); the chosen sign wears it in
+  // the theme's second hue, broken into two arcs that turn round it (a turn
+  // in 9 s). Both fade with the eased selection; reduced motion holds the
+  // arcs.
+  function neonSelect(ctx, p, radius, tint, o) {
+    const m = motionOf(o), still = o.still === true || m.still === true;
+    const chosen = o.chosen === true, marked = o.selected === true || chosen;
+    const sel = still ? (marked ? 1 : 0) : neonLevel(m.sel, marked ? 1 : 0);
+    if (sel <= 0.01 && !chosen) return true;
+    const level = chosen ? Math.max(sel, 0.6) : sel, currentTheme = o.theme ?? INK_DEFAULTS;
+    const tones = neonTones(chosen ? currentTheme.orbit : tint, currentTheme), alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
+    const ring = Math.max(radius * 1.3, radius + 3.5), tube = chosen ? 1.5 : 1.1;
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    if (chosen) {
+      const spin = (still ? 0 : turn(m, 9)) - Math.PI / 4;
+      for (let arc = 0; arc < 2; arc += 1) {
+        const from = spin + arc * Math.PI;
+        ctx.moveTo(p.x + Math.cos(from) * ring, p.y + Math.sin(from) * ring);
+        ctx.arc(p.x, p.y, ring, from, from + Math.PI * 0.72);
+      }
+    } else ctx.arc(p.x, p.y, ring, 0, TAU);
+    ctx.globalAlpha = alpha * (tones.light ? 0.14 : 0.22) * level; ctx.strokeStyle = tones.halo; ctx.lineWidth = tube * 3.4; ctx.stroke();
+    ctx.globalAlpha = alpha * 0.9 * level; ctx.strokeStyle = tones.tube; ctx.lineWidth = tube; ctx.stroke();
+    ctx.globalAlpha = alpha * level; ctx.strokeStyle = tones.core; ctx.lineWidth = Math.max(0.5, tube * 0.4); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+
+  // Arrival: the sign strikes. Its ring flashes on and off through the grow
+  // (the strike's own stutter) as a thin ring of light opens round it and
+  // fades. The caller grows the node meanwhile; reduced motion: the sign
+  // simply appears.
+  function neonArrival(ctx, p, radius, tint, t01, o) {
+    const m = motionOf(o);
+    if (o.still === true || o.motion != null && m.still === true || !(t01 < 1)) return true;
+    const t = clamp01(t01), tones = neonTones(tint, o.theme ?? INK_DEFAULTS), alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.85 * neonStrike(t * 0.95) * (1 - t); ctx.strokeStyle = tones.core; ctx.lineWidth = Math.max(1.2, radius * 0.16);
+    ctx.beginPath(); ctx.arc(p.x, p.y, NEON_TUBE * radius, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = alpha * 0.55 * (1 - t) ** 1.4; ctx.strokeStyle = tones.tube; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1 + 0.85 * easeOut(t)), 0, TAU); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+
+  // Neon's finish beats: done, the sign blinks: two rings of light round it
+  // flash on, off, on, off and on as they open a little, with eight short
+  // rays round the outer one, all in the beat's ink (the theme's done green,
+  // amber for a failed check); absorb, four sparks of current in the agent's
+  // tint run in along their wires to the ring, which flares once.
+  const neonBlink = (t) => t < 0.14 || t >= 0.24 && t < 0.4 || t >= 0.48 ? 1 : 0.16;
+  function neonDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.6), ink = finishInk(o), fade = finishFade(t, o), out = easeOut(t);
+    const blink = o.still === true ? 1 : neonBlink(t), inner = radius * (1.15 + 0.3 * out), outer = radius * (1.5 + 0.55 * out);
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.strokeStyle = rgba(ink, qa(0.9 * blink * fade)); ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(p.x + inner, p.y); ctx.arc(p.x, p.y, inner, 0, TAU);
+    ctx.moveTo(p.x + outer, p.y); ctx.arc(p.x, p.y, outer, 0, TAU);
+    ctx.stroke();
+    ctx.strokeStyle = rgba(ink, qa(0.75 * blink * fade)); ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    for (let k = 0; k < 8; k += 1) {
+      const angle = k * TAU / 8 + Math.PI / 8, c = Math.cos(angle), s = Math.sin(angle);
+      ctx.moveTo(p.x + c * (outer + 2), p.y + s * (outer + 2)); ctx.lineTo(p.x + c * (outer + 2 + radius * 0.3), p.y + s * (outer + 2 + radius * 0.3));
+    }
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+  function neonAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.5), fade = finishFade(t, o), mark = finishTint(tint, o);
+    const run = easeOut(Math.min(1, t / 0.65)), flare = clamp01((t - 0.65) / 0.35);
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.strokeStyle = rgba(mark, qa(0.9 * fade)); ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let k = 0; k < 4; k += 1) {
+      const angle = k * TAU / 4 + Math.PI / 4, c = Math.cos(angle), s = Math.sin(angle);
+      const head = radius * (NEON_TUBE + 0.3 + 2.2 * (1 - run)), tail = head + radius * 0.45 * (1 - 0.6 * run) + 1.5;
+      ctx.moveTo(p.x + c * tail, p.y + s * tail); ctx.lineTo(p.x + c * head, p.y + s * head);
+    }
+    ctx.stroke();
+    if (flare > 0) {
+      ctx.strokeStyle = rgba(mark, qa(0.9 * Math.sin(Math.PI * flare))); ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, NEON_TUBE * radius, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // Wires: lit tubes. The caller's line as asked (its pen, dash and march,
+  // the hub's double line, the tree's S-curve); on a lively wire (one that
+  // carries work, a lit one, a session's, or any from T2) a soft bloom lies
+  // under it and a hot core runs over it; along a wire that carries work the
+  // core runs as current, its dashes flowing toward b (90 px/s; a still pose
+  // holds them). The far (blurred) pen, the rail and the hub's double line
+  // keep the line alone. On a light page the line, its bloom and its core
+  // keep the tint's hue, deepened as far as they need (the shared wire
+  // tones). Every alpha is a gain on the canvas's own, and the canvas comes
+  // back with its alpha, cap, dash and offset, set back by hand.
+  const NEON_WIRE_MAX = 5;
+  // A point u along the wire (its S-curve `cp` when it has one) and its unit
+  // direction there, into NEON_AT.
+  function neonAlong(a, b, cp, u) {
+    const v = 1 - u;
+    let tx = b.x - a.x, ty = b.y - a.y;
+    if (cp) {
+      NEON_AT.x = v * v * v * a.x + 3 * v * v * u * cp.x1 + 3 * v * u * u * cp.x2 + u * u * u * b.x;
+      NEON_AT.y = v * v * v * a.y + 3 * v * v * u * cp.y1 + 3 * v * u * u * cp.y2 + u * u * u * b.y;
+      const cx = 3 * v * v * (cp.x1 - a.x) + 6 * v * u * (cp.x2 - cp.x1) + 3 * u * u * (b.x - cp.x2);
+      const cy = 3 * v * v * (cp.y1 - a.y) + 6 * v * u * (cp.y2 - cp.y1) + 3 * u * u * (b.y - cp.y2);
+      if (Math.hypot(cx, cy) > 1e-6) { tx = cx; ty = cy; }
+    } else {
+      NEON_AT.x = a.x + tx * u; NEON_AT.y = a.y + ty * u;
+    }
+    const length = Math.hypot(tx, ty) || 1;
+    NEON_AT.tx = tx / length; NEON_AT.ty = ty / length;
+    return NEON_AT;
+  }
+  // A wire's (or a pulse's) tones, cached per tint and theme: the line, its
+  // bloom, its core and the hottest white of a spark.
+  const neonWireMemo = new WeakMap();
+  function neonWireTones(tint, currentTheme) {
+    let tones = neonWireMemo.get(tint);
+    if (tones && tones.theme === currentTheme) return tones;
+    const light = currentTheme.light === true, lift = light ? wireLightTone(tint, currentTheme) : null, pure = neonPure(tint);
+    tones = {
+      theme: currentTheme, light, pure,
+      line: rgba(light ? lift.line : tint, 1),
+      bloom: rgba(light ? lift.line : pure, 1),
+      core: rgba(light ? mix(lift.line, WHITE, 0.55) : mix(pure, WHITE, 0.78), 1),
+      hot: rgba(light ? lift.deep : mix(pure, WHITE, 0.9), 1),
+    };
+    neonWireMemo.set(tint, tones);
+    return tones;
+  }
+  function neonWire(ctx, a, b, o) {
+    const tint = o.tint;
+    if (!tint || !a || !b) return false;
+    const chord = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!(chord > 1)) return true;
+    const tones = neonWireTones(tint, o.theme ?? INK_DEFAULTS);
+    const rail = o.rail === true, far = o.far === true, still = o.still === true, double = o.double === true;
+    const cp = !double && o.curved === true && o.cp ? o.cp : null;
+    const alpha = Number.isFinite(o.alpha) ? clamp01(o.alpha) : 1, width = Math.min(NEON_WIRE_MAX, o.width > 0 ? o.width : 1);
+    const time = Number.isFinite(o.time) ? o.time : 0, seed = Number.isFinite(o.seed) ? o.seed : 0;
+    const active = o.active === true, lit = active || o.inspected === true;
+    const flowing = typeof o.flow === "boolean" ? o.flow : active;
+    const detail = Number.isFinite(o.detail) ? o.detail : 3;
+    const lively = !far && !rail && !double && (flowing || lit || o.kind === "session" || detail >= 2);
+    const base = ctx.globalAlpha, cap = ctx.lineCap;
+    if (cap !== "round") ctx.lineCap = "round";
+    const dash = o.dash && o.dash.length ? o.dash : null;
+    if (dash) {
+      // The dashes march toward b (a tether's faster), as the plain lines do.
+      let period = 0;
+      if (o.march === true && !still) { for (let index = 0; index < dash.length; index += 1) period += dash[index]; if (dash.length % 2) period *= 2; }
+      ctx.setLineDash?.(dash);
+      ctx.lineDashOffset = period > 0 ? -((time / (o.kind === "tether" ? 40 : 60)) % period) : 0;
+    }
+    ctx.beginPath();
+    if (double) {
+      // The hub link: two parallel lines 3.2 px apart, one stroke.
+      const nx = (a.y - b.y) / chord * 1.6, ny = (b.x - a.x) / chord * 1.6;
+      ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny);
+      ctx.moveTo(a.x - nx, a.y - ny); ctx.lineTo(b.x - nx, b.y - ny);
+    } else {
+      ctx.moveTo(a.x, a.y);
+      if (cp) ctx.bezierCurveTo(cp.x1, cp.y1, cp.x2, cp.y2, b.x, b.y);
+      else ctx.lineTo(b.x, b.y);
+    }
+    // The bloom under the line, then the line as asked.
+    if (lively) { ctx.globalAlpha = base * Math.min(1, alpha * (lit ? 0.42 : 0.3)) * (tones.light ? 0.6 : 1); ctx.strokeStyle = tones.bloom; ctx.lineWidth = width + (lit ? 5 : 3.8); ctx.stroke(); }
+    ctx.globalAlpha = base * alpha; ctx.strokeStyle = tones.line; ctx.lineWidth = width; ctx.stroke();
+    if (lively) {
+      // The core over it: as current along a wire that carries work.
+      if (flowing) {
+        NEON_CURRENT[0] = 9; NEON_CURRENT[1] = 7;
+        ctx.setLineDash?.(NEON_CURRENT);
+        ctx.lineDashOffset = -((still ? seed * 16 : (time / 1000) * 90 + seed * 16) % 16);
+      }
+      ctx.globalAlpha = base * Math.min(1, alpha * (lit ? 1.6 : 1.2)); ctx.strokeStyle = tones.core; ctx.lineWidth = Math.max(0.55, width * 0.45); ctx.stroke();
+    }
+    if (dash || lively && flowing) { ctx.setLineDash?.(NEON_NO_DASH); ctx.lineDashOffset = 0; }
+    ctx.globalAlpha = base;
+    if (cap !== "round") ctx.lineCap = cap;
+    return true;
+  }
+
+  // Pulses: a spark of current. A short white-hot streak in the pulse's
+  // colour (its bloom, the tube and the core over the last 14 px of its run)
+  // with a soft light at its head (none on a light page or the rail) and a
+  // crackle flickering ahead of it (a zigzag, new every 60 ms from the
+  // pulse's own seed). A wave pulse runs a longer streak; a packet rides it
+  // as a small turning diamond. On the tree's S-curve (o.cp) it rides the
+  // curve as drawn; over the last fifth a light opens on the target.
+  // Reduced motion: one still streak near the end of its wire, no crackle.
+  // On a light page it keeps its hue (the shared wire tones).
+  const neonPulseColours = new Map();
+  function neonPulseRgb(pulse) {
+    const text = typeof pulse?.color === "string" ? pulse.color : "#a9ffcd";
+    let triple = neonPulseColours.get(text);
+    if (!triple) {
+      triple = parseHex(text) ?? parseHex("#a9ffcd");
+      if (neonPulseColours.size >= 32) neonPulseColours.clear();
+      neonPulseColours.set(text, triple);
+    }
+    return triple;
+  }
+  const neonPulseSeed = (pulse) => hash(((Number.isFinite(pulse?.start) ? pulse.start : 0) % 9973) / 9973, 11);
+  // A spark's light per canvas and colour (a unit radial, built the first
+  // time a pulse there needs one; each triple remembers its key).
+  const neonGlowKeys = new WeakMap();
+  function neonGlowAt(ctx, rgb, x, y, size, alpha) {
+    if (!(alpha > 0.004) || !(size > 0)) return;
+    let key = neonGlowKeys.get(rgb);
+    if (key === undefined) { key = `neon|glow|${rgb.join(",")}`; neonGlowKeys.set(rgb, key); }
+    let glow = cacheGet(ctx, key);
+    if (glow === undefined) {
+      glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      glow.addColorStop(0, rgba(mix(rgb, WHITE, 0.55), 0.8));
+      glow.addColorStop(0.28, rgba(rgb, 0.34));
+      glow.addColorStop(1, rgba(rgb, 0));
+      cachePut(ctx, key, glow);
+    }
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(size, size);
+    ctx.globalAlpha = alpha; ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function neonSurge(ctx, from, to, t, pulse, o) {
+    if (!pulse || !from || !to) return false;
+    const chord = Math.hypot(to.x - from.x, to.y - from.y);
+    if (!(t >= 0) || !(chord >= 2)) return true;
+    const rail = o.rail === true, still = o.still === true, cp = !rail && o.cp ? o.cp : null;
+    const rgb = neonPulseRgb(pulse), tones = neonWireTones(rgb, o.theme ?? INK_DEFAULTS);
+    const small = pulse.small === true, wave = pulse.wave === true || o.kind === "wave";
+    const time = Number.isFinite(o.time) ? o.time : 0, seedValue = neonPulseSeed(pulse);
+    const size = (small ? 0.75 : wave ? 1.2 : 1) * (rail ? 0.65 : 1), span = cp ? chord * 1.12 : chord;
+    const head = still ? 0.86 : clamp01(t), length = Math.min(head, Math.max(0.03, (wave ? 22 : 14) * size / span));
+    ctx.save();
+    const base = ctx.globalAlpha;
+    ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.setLineDash?.(NEON_NO_DASH);
+    // The streak, three pieces along the wire to the head: its bloom, the tube and the core.
+    ctx.beginPath();
+    let at = neonAlong(from, to, cp, head - length);
+    ctx.moveTo(at.x, at.y);
+    for (let piece = 1; piece <= 3; piece += 1) { at = neonAlong(from, to, cp, head - length * (1 - piece / 3)); ctx.lineTo(at.x, at.y); }
+    const hx = at.x, hy = at.y, tx = at.tx, ty = at.ty;
+    if (!tones.light) { ctx.globalAlpha = base * 0.28; ctx.strokeStyle = tones.bloom; ctx.lineWidth = size * 5; ctx.stroke(); }
+    ctx.globalAlpha = base; ctx.strokeStyle = tones.line; ctx.lineWidth = size * 2.2; ctx.stroke();
+    ctx.strokeStyle = tones.hot; ctx.lineWidth = size; ctx.stroke();
+    // Its light, and the crackle ahead of it: two short zigs off the line.
+    if (!rail && !tones.light) neonGlowAt(ctx, tones.pure, hx, hy, size * 6, base * 0.9);
+    if (!still && !rail) {
+      const beat = Math.floor(time / 60);
+      ctx.beginPath(); ctx.moveTo(hx, hy);
+      for (let zig = 1; zig <= 2; zig += 1) {
+        const ahead = 3.2 * zig * size, side = (hash(seedValue, beat * 7 + zig) - 0.5) * 5 * size;
+        ctx.lineTo(hx + tx * ahead - ty * side, hy + ty * ahead + tx * side);
+      }
+      ctx.globalAlpha = base * 0.8; ctx.strokeStyle = tones.hot; ctx.lineWidth = 0.8; ctx.stroke();
+    }
+    if (pulse.packet === true) {
+      const turnAt = Math.PI / 4 + head * Math.PI, c = Math.cos(turnAt) * size * 3.4, s = Math.sin(turnAt) * size * 3.4;
+      ctx.beginPath(); ctx.moveTo(hx + c, hy + s); ctx.lineTo(hx - s, hy + c); ctx.lineTo(hx - c, hy - s); ctx.lineTo(hx + s, hy - c); ctx.closePath();
+      ctx.globalAlpha = base * 0.85; ctx.strokeStyle = tones.core; ctx.lineWidth = 1; ctx.stroke();
+    }
+    // A light opens on the target over the last fifth.
+    const landing = (head - 0.8) / 0.2;
+    if (landing > 0 && !still && !tones.light) neonGlowAt(ctx, tones.pure, to.x, to.y, Math.max(rail ? 7 : 11, (o.rTo > 0 ? o.rTo : 0) + (rail ? 4 : 7)), base * 0.4 * landing * (rail ? 0.6 : 1));
+    ctx.restore();
+    return true;
+  }
+
+  // A landing: a zap. The target's tube flares (a hot ring on it that
+  // fades), a thin ring opens off its plate, and five short sparks jump off
+  // its edge, flickering; the rail, and a far, dimmed or moving target
+  // (detail ≤ 1), get the rings alone. Reduced motion: nothing more.
+  function neonLand(ctx, p, radius, tint, u, o) {
+    if (!p || !tint) return false;
+    if (o.still === true || !(u < 1)) return true;
+    const tones = neonWireTones(o.pulse ? neonPulseRgb(o.pulse) : tint, o.theme ?? INK_DEFAULTS);
+    const k = clamp01(u), out = easeOut(k), fade = 1 - k, r = radius > 3 ? radius : 3;
+    ctx.save();
+    const base = ctx.globalAlpha;
+    ctx.lineCap = "round";
+    ctx.globalAlpha = base * 0.8 * fade; ctx.strokeStyle = tones.core; ctx.lineWidth = Math.max(1.2, r * 0.16);
+    ctx.beginPath(); ctx.arc(p.x, p.y, NEON_TUBE * r, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = base * 0.6 * fade * fade; ctx.strokeStyle = tones.line; ctx.lineWidth = 0.6 + 0.9 * fade;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r * (1.05 + 0.6 * out) + 1, 0, TAU); ctx.stroke();
+    if (o.rail !== true && !(Number.isFinite(o.detail) && o.detail <= 1) && fade > 0.02) {
+      const seedValue = o.pulse ? neonPulseSeed(o.pulse) : 0, beat = Math.floor(k * 12);
+      ctx.beginPath();
+      for (let j = 0; j < 5; j += 1) {
+        if (hash(seedValue, j * 17 + beat) < 0.25) continue;
+        const angle = TAU * (j / 5 + 0.1 * hash(seedValue, j + 31)), c = Math.cos(angle), s = Math.sin(angle), from = r * 1.04 + 1, to = from + 2 + 3.5 * out;
+        ctx.moveTo(p.x + c * from, p.y + s * from); ctx.lineTo(p.x + c * to, p.y + s * to);
+      }
+      ctx.globalAlpha = base * 0.85 * Math.sqrt(fade); ctx.strokeStyle = tones.hot; ctx.lineWidth = 1; ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // How far the look reaches: the bloom's bright part (1.12 radii, 1.3 at
+  // work) and the selection's tube as the selection eases in.
+  function neonReach(m) {
+    return Math.max(1.12 + 0.18 * neonLevel(m?.work, 0), 1 + 0.42 * neonLevel(m?.sel, 0));
+  }
+  LOOKS.neon = { speedup: 2.2, paint: paintNeon, glyph: { scale: 0.56, ringGap: 3.5, ink: (tint, currentTheme) => neonTones(tint, currentTheme).glyphInk }, ring: null, hubDress: null, orbit: null, arrival: neonArrival, select: neonSelect, done: neonDone, absorb: neonAbsorb, wire: neonWire, surge: neonSurge, land: neonLand, reach: neonReach };
+
 // ===== overlays =====
 
   // Every overlay dispatcher: the style's hook draws and the caller skips its
@@ -36550,9 +37672,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // Singularity keeps its whole bend: its pulses ride that same curve.
   // Dragon scales' dome is round. Star chart's lines stop past the star,
   // as a chart's do: a small gap round every star (its glow fades there).
+  // A lantern's paper is lower than it is wide (and it swings a little);
+  // a neon sign's plate is round.
   const WIRE_INSET = Object.freeze(Object.assign(Object.create(null), {
     orbs: 0.96, glass: 0.96, minimal: 0.38, halo: 0.96, crystal: 0.85, singularity: 0, prism: 0.56, sigil: 0.84,
-    dragonscale: 0.96, constellation: 1.2,
+    dragonscale: 0.96, constellation: 1.2, lantern: 0.74, neon: 0.96,
   }));
   const TRIM_A = { x: 0, y: 0 }, TRIM_B = { x: 0, y: 0 }, TRIM_CP = { x1: 0, y1: 0, x2: 0, y2: 0 }, CROSS_AT = { x: 0, y: 0 };
   // Where the curve in PATH crosses the circle of radius r round (cx, cy),
@@ -73185,8 +74309,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // transport, a volume and quick tree switches, that unfolds into sections.
 // It also owns the light themes, the three looks the first run offers (Light,
 // Dark, Stylized) with their heading faces, and the Shop's style packs: see
-// "Looks and style packs" below for the calls. The two node styles the Shop
-// sells go on once they are owned ("Node styles from the Shop").
+// "Looks and style packs" below for the calls. The node styles the Shop sells
+// go on once they are owned ("Node styles from the Shop").
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -73234,11 +74358,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     singularity: { name: "Singularity", detail: "A black hole with a turning disc", collection: "void" },
     prism: { name: "Prism", detail: "A turning crystal that splits light", collection: "void" },
     sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", collection: "void" },
-    // The two the Shop sells (`shop` is the item: relay/src/shop.mjs CATALOG).
+    // The ones the Shop sells (`shop` is the item: relay/src/shop.mjs CATALOG).
     dragonscale: { name: "Dragon scales", detail: "Scaled gems with ember sparks", shop: "studio:style-dragonscale" },
     constellation: { name: "Star chart", detail: "Bright stars and shooting stars", shop: "studio:style-constellation" },
+    lantern: { name: "Lanterns", detail: "Paper lanterns that sway and glow", shop: "studio:style-lantern" },
+    neon: { name: "Neon", detail: "Glowing tubes that buzz on at work", shop: "studio:style-neon" },
   };
-  // Every theme and node style is free but the two the Shop sells; `collection`
+  // Every theme and node style is free but the ones the Shop sells; `collection`
   // only groups the pickers. A Shop style is worn once MefiShop says it is owned.
   const isTheme = (key) => key === "custom" || typeof key === "string" && Object.hasOwn(THEMES, key);
   const isVoidTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].collection === "void";
