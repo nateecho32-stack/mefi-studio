@@ -1833,6 +1833,8 @@
     document.body.append(tip);
     lookNote.el = tip;
     placeLookTip();
+    // Key tips step aside now rather than at their next pass (they wait while this note is open).
+    window.MefiKeyTips?.tick?.();
     window.addEventListener?.("resize", placeLookTip);
     document.addEventListener?.("pointerdown", lookTipOutside, true);
     write(LOOK_TIP_KEY, "seen");

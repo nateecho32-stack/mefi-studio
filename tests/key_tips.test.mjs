@@ -31,13 +31,13 @@ function load({ storage = new Map(), vibe = true } = {}) {
   const context = vm.createContext({
     window, document, console,
     localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)), removeItem: (key) => storage.delete(key) },
-    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
+    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout: (id) => { if (id > 0 && id <= timers.length) timers[id - 1] = null; },
   });
   vm.runInContext(source, context);
   const tips = window.MefiKeyTips;
   const shown = () => document.body.children.filter((node) => node.className === "key-tip");
   const key = (value, extra = {}) => { for (const callback of events.keydown || []) callback({ key: value, ctrlKey: false, metaKey: false, ...extra }); };
-  return { window, document, get, storage, registered, toasts, tips, shown, key };
+  return { window, document, get, storage, registered, toasts, tips, shown, key, timers };
 }
 
 test("a first launch shows two Vibe tips beside their controls, with keycaps", () => {
@@ -108,6 +108,22 @@ test("a tip never pops over the first run's welcome, and comes once it is closed
   open = false;
   env.tips.tick();
   assert.equal(env.tips.shown().length, 2);
+});
+
+test("another pop-up can make the tips step aside at once: a pass called from outside hides them and leaves one pass waiting", () => {
+  const env = load();
+  // Passes only (a hidden tip's own removal timer is not one).
+  const waiting = () => env.timers.filter((fn) => fn?.name === "tick").length;
+  env.tips.tick();
+  assert.equal(env.tips.shown().length, 2);
+  assert.equal(waiting(), 1, "one pass waits");
+  // The first run's note on where the look lives opens and calls a pass (renderer/setup-helper.js showLookTip).
+  const note = env.document.createElement("div");
+  note.id = "setup-look-tip";
+  env.document.body.append(note);
+  env.tips.tick();
+  assert.deepEqual([...env.tips.shown()], [], "the note is open: the tips step aside");
+  assert.equal(waiting(), 1, "still one pass waiting, not a second chain");
 });
 
 test("a click fades a tip away for good; pressing its key does too", () => {

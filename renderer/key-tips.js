@@ -181,6 +181,9 @@
   // One pass: drop tips whose place is gone, move the rest, then add unseen
   // ones for what is on screen until MAX_SHOWN stand.
   function tick() {
+    // Safe to call from outside (another pop-up just opened): a pass that was
+    // waiting is dropped, so there is never a second chain of passes.
+    if (state.timer) clearTimeout(state.timer);
     state.timer = null;
     if (!enabled() || headless) { clear(); return; }
     if (busy()) { for (const id of [...state.shown.keys()]) hide(id); schedule(TICK_MS); return; }

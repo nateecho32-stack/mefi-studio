@@ -816,8 +816,11 @@ test("after the welcome, a note beside the Settings button says where the look l
   env.helper.welcome();
   await settle();
   assert.equal(env.helper.lookTip(), false, "never while the welcome is open");
+  let passes = 0;
+  env.window.MefiKeyTips = { tick: () => { passes += 1; } };
   await env.welcome().querySelector("#setup-welcome-skip").click();
   assert.equal(env.helper.lookTip(), true);
+  assert.equal(passes, 1, "key tips are asked to step aside as soon as the note shows");
   const tip = env.document.body.children.find((node) => node.id === "setup-look-tip");
   assert.ok(tip);
   assert.match(tip.textContent, /Settings › Appearance/);
