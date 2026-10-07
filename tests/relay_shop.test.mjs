@@ -4,6 +4,7 @@ import test from "node:test";
 import { GUARD, createCredits } from "../relay/src/credits.mjs";
 import { CREDIT_REASONS, FEATURES } from "../relay/src/protocol.mjs";
 import { CATALOG, ITEM_KINDS, PACK_ID, SHOP, createShop } from "../relay/src/shop.mjs";
+import { saleOf } from "../relay/src/shop-drops.mjs";
 import { MIGRATIONS, SCHEMA_VERSION, createStore } from "../relay/src/store.mjs";
 import { hmacKey, randomBytes } from "../relay/src/util.mjs";
 import { ALICE, BOB, CARA, MOD, makeRelay, member, connectAll, rawSocket, until } from "./fixtures/relay-harness.mjs";
@@ -77,38 +78,60 @@ async function connected(relay, token) {
   return raw;
 }
 
-test("the Studio catalog: twelve items as the spec lists them (Ember is free, so not sold), the packs with their data, nothing owned yet", async () => {
+test("the Studio catalog: every item in code with its drop (Ember is free, so not sold), the list is what is on sale that day, the packs with their data, nothing owned yet", async () => {
   const clock = morning();
   const relay = makeRelay({ now: () => clock });
   const as = api(relay);
   const shop = await as("tok-alice", "GET", "/v1/shop?view=studio");
   assert.equal(shop.status, 200);
-  assert.deepEqual(shop.items.map((item) => [item.id, item.kind, item.name, item.price, item.requires]), [
-    ["studio:skin-frost", "skin", "Frost scales", 40, null],
-    ["studio:skin-jade", "skin", "Jade scales", 40, null],
-    ["studio:skin-void", "skin", "Void scales", 60, null],
-    ["studio:skin-gold", "skin", "Gold scales", 60, null],
-    ["studio:fx-dissolve", "effect", "Dissolve", 60, null],
-    ["studio:fx-embers", "effect", "Burn away", 90, null],
-    ["studio:fx-stardust", "effect", "Stardust", 90, null],
-    ["studio:style-dragonscale", "nodestyle", "Dragon scales", 80, null],
-    ["studio:style-constellation", "nodestyle", "Star chart", 80, null],
-    ["studio:pack-synthwave", "pack", "Synthwave", 50, null],
-    ["studio:pack-deep-sea", "pack", "Deep sea", 50, null],
-    ["studio:pack-sakura", "pack", "Sakura (light)", 50, null],
+  // The catalog in code, in order: classic items (always on sale) and October's drop, "2026-10" (shop-drops.mjs).
+  assert.deepEqual(CATALOG.map((item) => [item.id, item.kind, item.name, item.price, item.requires, item.drop]), [
+    ["studio:skin-frost", "skin", "Frost scales", 40, null, null],
+    ["studio:skin-jade", "skin", "Jade scales", 40, null, null],
+    ["studio:skin-void", "skin", "Void scales", 60, null, null],
+    ["studio:skin-gold", "skin", "Gold scales", 60, null, null],
+    ["studio:pet-cloud", "pet", "Cloud dragon", 120, null, null],
+    ["studio:pet-phoenix", "pet", "Phoenix", 150, null, null],
+    ["studio:pet-wisp", "pet", "Will-o'-wisp", 90, null, "2026-10"],
+    ["studio:fx-dissolve", "effect", "Dissolve", 60, null, null],
+    ["studio:fx-embers", "effect", "Burn away", 90, null, null],
+    ["studio:fx-stardust", "effect", "Stardust", 90, null, null],
+    ["studio:fx-wind", "effect", "Blown away", 60, null, null],
+    ["studio:fx-shatter", "effect", "Shatter", 90, null, null],
+    ["studio:fx-glitch", "effect", "Glitch", 60, null, null],
+    ["studio:fx-spirits", "effect", "Spirits", 90, null, "2026-10"],
+    ["studio:style-dragonscale", "nodestyle", "Dragon scales", 80, null, null],
+    ["studio:style-constellation", "nodestyle", "Star chart", 80, null, null],
+    ["studio:style-lantern", "nodestyle", "Lanterns", 80, null, "2026-10"],
+    ["studio:style-neon", "nodestyle", "Neon", 80, null, null],
+    ["studio:pack-synthwave", "pack", "Synthwave", 50, null, null],
+    ["studio:pack-deep-sea", "pack", "Deep sea", 50, null, null],
+    ["studio:pack-sakura", "pack", "Sakura (light)", 50, null, null],
+    ["studio:pack-pumpkin-spice", "pack", "Pumpkin Spice", 45, null, "2026-10"],
+    ["studio:pack-haunted", "pack", "Haunted", 50, null, "2026-10"],
+    ["studio:pack-candlelight", "pack", "Candlelight (light)", 45, null, "2026-10"],
+    ["studio:pack-midnight-neon", "pack", "Midnight Neon", 50, null, null],
+    ["studio:pack-forest-glade", "pack", "Forest Glade", 40, null, null],
+    ["studio:pack-ocean-breeze", "pack", "Ocean Breeze (light)", 40, null, null],
+    ["studio:pack-rose-gold", "pack", "Rose Gold (light)", 45, null, null],
+    ["studio:pack-frost", "pack", "Frost", 40, null, null],
   ]);
+  // The day's list: every classic item and the items of the drop on sale that day, in catalog order.
+  const onSale = CATALOG.filter((item) => saleOf(item, clock).available).map((item) => item.id);
+  assert.ok(CATALOG.filter((item) => !item.drop).every((item) => onSale.includes(item.id)), "classic items are always on sale");
+  assert.deepEqual(shop.items.map((item) => item.id), onSale);
   for (const item of shop.items) {
     assert.deepEqual([item.owned, item.maker, item.status, item.sales], [false, null, "listed", 0], item.id);
     assert.equal(item.data === null, item.kind !== "pack", `${item.id}: only packs carry data`);
     assert.ok(item.blurb.endsWith("."), item.id);
   }
   assert.deepEqual(shop.items.map((item) => item.blurb).slice(0, 4), ["Ember in icy blue.", "Ember in green and gold.", "Ember in black with a violet glow.", "Ember in shining gold."]);
-  assert.deepEqual(shop.items.filter((item) => item.kind === "nodestyle").map((item) => item.blurb), ["Nodes covered in shimmering dragon scales, with ember sparks along the wires.", "Nodes as bright stars joined by star-chart lines, with shooting stars."], "the two node styles, sold like the other Studio items (no data, no tip)");
+  assert.deepEqual(CATALOG.filter((item) => item.kind === "nodestyle").map((item) => item.blurb), ["Nodes covered in shimmering dragon scales, with ember sparks along the wires.", "Nodes as bright stars joined by star-chart lines, with shooting stars.", "Glowing paper lanterns that sway, their warm light flickering at work.", "Bright neon tubes with a soft glow that buzz on when work starts."], "the node styles, sold like the other Studio items (no data, no tip)");
   assert.deepEqual([...ITEM_KINDS], ["pet", "skin", "effect", "nodestyle", "pack"]);
   assert.ok(!shop.items.some((item) => item.id === "studio:pet-dragon"), "Ember the dragon is free in every Studio");
   assert.deepEqual(shop.items.find((item) => item.id === "studio:pack-sakura").data, { v: 1, palette: { accent: "#b8325f", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" });
   assert.deepEqual([shop.view, shop.next, shop.balance, shop.canEarn, shop.hold], ["studio", null, 0, true, null]);
-  assert.equal((await as("tok-alice", "GET", "/v1/shop")).items.length, 12, "the catalog is the default list");
+  assert.equal((await as("tok-alice", "GET", "/v1/shop")).items.length, onSale.length, "the catalog on sale is the default list");
   assert.equal((await as("tok-alice", "GET", "/v1/shop?view=everything")).status, 400);
   assert.equal((await as("tok-newbie", "GET", "/v1/shop")).hold.reason, "new-member", "the list says why a member cannot earn yet");
   assert.ok(Object.isFrozen(CATALOG) && CATALOG.every((item) => Object.isFrozen(item)), "the catalog is fixed in code");
@@ -563,8 +586,10 @@ test("Studio's client: the Shop's lists, a price that changed, a pack published,
   assert.equal(alice.client.status().shop, true, "the relay lists the Shop in ready.features");
   give(relay, BOB.id, 300);
   const studio = await bob.client.shop("studio");
-  assert.deepEqual([studio.ok, studio.view, studio.items.length, studio.balance, studio.canEarn, studio.hold, studio.next], [true, "studio", 12, 300, true, null, null]);
-  assert.deepEqual(studio.items.filter((item) => item.kind === "nodestyle").map((item) => [item.id, item.price, item.data]), [["studio:style-dragonscale", 80, null], ["studio:style-constellation", 80, null]], "the node styles reach Studio through its own client");
+  // What is on sale that day: every classic item and the drop running then (shop-drops.mjs).
+  const onSale = CATALOG.filter((item) => saleOf(item, clock).available);
+  assert.deepEqual([studio.ok, studio.view, studio.items.length, studio.balance, studio.canEarn, studio.hold, studio.next], [true, "studio", onSale.length, 300, true, null, null]);
+  assert.deepEqual(studio.items.filter((item) => item.kind === "nodestyle").map((item) => [item.id, item.price, item.data]), onSale.filter((item) => item.kind === "nodestyle").map((item) => [item.id, 80, null]), "the node styles reach Studio through its own client");
   assert.deepEqual(studio.items.find((item) => item.id === "studio:pack-synthwave").data.palette, studioItem("studio:pack-synthwave").data.palette);
   assert.deepEqual(await bob.client.shopBuy("studio:fx-embers", 80), { ok: false, error: "price-changed", price: 90 });
   const gold = await bob.client.shopBuy("studio:skin-gold", 60);

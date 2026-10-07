@@ -51,8 +51,8 @@ test("WCAG contrast: black on white is 21, a colour on itself 1, and the limits 
   assert.deepEqual([...FONTS], ["studio", "display", "serif", "mono"]);
 });
 
-// The packs for October's drop ("2026-10", Haunted Hollow) and the classic shelf, kept as catalog entries until they
-// join relay/src/shop.mjs CATALOG at merge: each passes the check exactly as kept, its accent reads at 4.5:1 on its
+// The packs for October's drop ("2026-10", Haunted Hollow) and the classic shelf, kept in a fixture and sold from
+// relay/src/shop.mjs CATALOG exactly as kept: each passes the check, its accent reads at 4.5:1 on its
 // panels as well as its page (a light pack's accent is text on both), and its words are plain.
 test("the October drop's and the classic style packs pass the check exactly as kept, with plain words and fair prices", async () => {
   const themes = JSON.parse(await readFile(new URL("./fixtures/shop-themes-2026-10.json", import.meta.url), "utf8"));
@@ -61,11 +61,13 @@ test("the October drop's and the classic style packs pass the check exactly as k
     ["Midnight Neon", null], ["Forest Glade", null], ["Ocean Breeze (light)", null], ["Rose Gold (light)", null], ["Frost", null],
   ]);
   assert.equal(new Set(themes.map((item) => item.id)).size, themes.length, "every id once");
-  const studioIds = new Set(CATALOG.map((item) => item.id)), studioNames = new Set(CATALOG.map((item) => item.name));
+  const sold = new Map(CATALOG.map((item) => [item.id, item]));
   for (const item of themes) {
     assert.deepEqual(Object.keys(item), ["id", "kind", "name", "price", "blurb", "drop", "data"], item.id);
     assert.match(item.id, /^studio:pack-[a-z0-9-]{1,35}$/);
-    assert.ok(!studioIds.has(item.id) && !studioNames.has(item.name), `${item.name} is new to the Shop`);
+    const entry = sold.get(item.id);
+    assert.ok(entry, `${item.name} is in the catalog`);
+    assert.deepEqual([entry.kind, entry.name, entry.price, entry.blurb, entry.drop, JSON.parse(JSON.stringify(entry.data))], [item.kind, item.name, item.price, item.blurb, item.drop, item.data], `${item.name}: the catalog keeps it exactly`);
     assert.equal(item.kind, "pack");
     assert.ok(Number.isInteger(item.price) && item.price >= 40 && item.price <= 50, `${item.name}: ${item.price} credits`);
     assert.ok(item.name.length >= PACK_LIMITS.nameMin && item.name.length <= PACK_LIMITS.nameMax && item.blurb.length <= PACK_LIMITS.blurbMax);
@@ -83,7 +85,7 @@ test("the October drop's and the classic style packs pass the check exactly as k
 
 test("Studio's own packs pass the same check, exactly as they are kept", () => {
   const packs = CATALOG.filter((item) => item.kind === "pack");
-  assert.equal(packs.length, 3);
+  assert.equal(packs.length, 11, "Synthwave, Deep sea, Sakura and the eight from tests/fixtures/shop-themes-2026-10.json");
   for (const item of packs) assert.deepEqual(checkPack(item.data), { ok: true, pack: JSON.parse(JSON.stringify(item.data)) }, item.id);
   assert.ok(CATALOG.filter((item) => item.kind !== "pack").every((item) => item.data === null), "pets, skins and effects carry no data");
 });
