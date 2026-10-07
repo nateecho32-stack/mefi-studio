@@ -96849,7 +96849,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function showLookTip() {
     if (read(LOOK_TIP_KEY) || lookNote.el || headless) return false;
     const nav = window.MefiNav?.state;
-    const waiting = nav?.sheet || nav?.transient || welcome.open || state.open || document.getElementById?.("walkthrough-overlay")?.hidden === false;
+    // One note at a time: a toast still up goes first (skipping the welcome
+    // leaves one about the guided tour in the same corner, for about ten seconds).
+    const toastUp = Boolean(document.querySelector?.("#toast-host .toast.show"));
+    const waiting = nav?.sheet || nav?.transient || welcome.open || state.open || document.getElementById?.("walkthrough-overlay")?.hidden === false || toastUp;
     if (waiting) { if (lookNote.tries++ < 30) setTimeout(() => showLookTip(), 2000); return false; }
     const tip = node("div", "setup-look-tip");
     tip.id = "setup-look-tip";

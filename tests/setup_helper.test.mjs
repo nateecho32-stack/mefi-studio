@@ -833,6 +833,25 @@ test("after the welcome, a note beside the Settings button says where the look l
   assert.equal(env.helper.lookTip(), false, "once only");
 });
 
+test("the look note waits for a toast still up (skipping the welcome leaves one about the tour), then comes", async () => {
+  const env = load({ layout: "v2" });
+  welcomeBridge(env);
+  const settings = env.document.createElement("button");
+  settings.dataset.nav = "studio";
+  settings.getBoundingClientRect = () => ({ left: 4, top: 700, right: 64, bottom: 744, width: 60, height: 44 });
+  const foot = env.document.createElement("div"); foot.id = "app-rail-foot"; foot.append(settings); env.document.body.append(foot);
+  const host = env.document.createElement("div"); host.id = "toast-host";
+  const toast = env.document.createElement("div"); toast.className = "toast info show";
+  host.append(toast); env.document.body.append(host);
+  env.helper.welcome();
+  await settle();
+  await env.welcome().querySelector("#setup-welcome-skip").click();
+  assert.equal(env.helper.lookTip(), false, "a toast is up: the note waits its turn");
+  assert.equal(env.helper.lookTipOpen(), false);
+  toast.className = "toast info";
+  assert.equal(env.helper.lookTip(), true, "the toast has gone: the note comes");
+});
+
 test("an update still brings the sheet in the 0.5 layout, and the classic layout keeps the sheet for a first run", async () => {
   const returning = load({ layout: "v2", store: { "mefiStudio.commandHome": "1" } });
   assert.equal(returning.helper.startup(), true);
