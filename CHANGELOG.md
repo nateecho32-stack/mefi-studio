@@ -24,6 +24,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   sign-in made while Studio is open counts for the updater within a minute,
   and the in-memory relay tests wait up to ten seconds on a slow PC.
 
+- **Friends › Your PCs starts with Connect another PC.** Three plain
+  steps (open Studio on the other PC, sign in to Friends with the same
+  Discord account on both, press Pair and check that both show the same six
+  numbers) follow what Studio sees as you go, and fold to one button once a
+  PC of yours is paired. Your PCs come next. Keeping this PC in step with
+  GitHub, power and battery, lending this PC, setting it up, paired workers
+  and reaching it from Discord are folded groups below, the GitHub line
+  still showing when this PC is behind, and sharing has its own heading,
+  Share projects.
+
 - **A more compact Studio: less empty space, more of your work on screen.**
   Today puts its board about 130 px higher. The line of keys under the box
   is gone (Talk it over shows Enter, Build it shows Ctrl Enter), the scope

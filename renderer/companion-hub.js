@@ -513,7 +513,7 @@
     // renderer/friends-front.js: Friends' front page, and the sign-in card for anyone not signed in yet.
     { id: "lobby", label: "The Lobby", glyph: "g-community", about: "Who's online, the rooms open now and what your friends are making." },
     { id: "rooms", label: "Rooms", glyph: "g-chat", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
-    { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
+    { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Connect another PC and see your PCs at a glance. Keeping work in step through GitHub, power, lending and sharing wait folded below." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
     { id: "hub", label: "Project hub", glyph: "g-spark", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },

@@ -14,23 +14,61 @@ PC runs work with its own agents and its own subscriptions.
 
 ## What you see
 
-- **Each PC's row:** its name, This PC, online or "offline since …", CPU,
-  free memory, the battery (or "plugged in"), what runs against how many it
-  may run, and why it is not taking work when it is not.
-- **Keep this PC on:** a switch that keeps the PC awake with nothing running,
-  so the others can send it work. It holds only while the PC is plugged in.
-  Keeping it awake while work runs stays the assistant's own switch in
-  Settings ("Keep this computer awake"). Closing a laptop's lid still
-  follows Windows' lid setting; Studio never changes power settings.
-- **Send work here:** a new task (a title and a brief), or one of the open
-  project's ready cards, for a paired PC that has the project open. It runs
-  there as your own work, and the answer comes back to "Sent from here".
-- **Out on other PCs:** the open project's cards that moved, with Bring back.
-- **Each project's switch:** "My other PCs may take this project's work". On
-  by default for a project with a GitHub repository; a project without one
-  stays on this PC.
-- **Handoffs:** work a PC parked for the others, with Pick up and Drop.
-- **Pair a PC / Lend this PC:** below the list.
+Friends › Your PCs reads top to bottom:
+
+1. **Connect another PC**, three numbered steps that follow what this PC
+   sees (`renderer/pc-fleet.js`):
+   1. *Open Studio on your other PC*, with the download page
+      (github.com/nateecho32-stack/mefi-studio/releases) to open or copy.
+   2. *Sign in to Friends with the same Discord account on both PCs.* It
+      says whether this PC is signed in, and as whom, so the two accounts can
+      be compared; otherwise it offers Sign in with Discord (Friends' own
+      sign-in: `MefiCommunity.link`, then connect), Join the Discord and Check
+      again for an account outside the server, or Connect.
+   3. *When your other PC shows up, press Pair and check that both screens
+      show the same six numbers.* It says "Waiting for your other PC to sign
+      in…", or "Found Desk:" with Pair, then the six numbers to compare, or
+      Pair and Not mine when the other PC asked first.
+
+   The steps are out until a PC of yours is paired; then they fold to one
+   **Connect another PC** button that opens them again. Pressing it (or
+   folding them) is remembered while Studio runs.
+2. **My PCs**, the list:
+   - **Each PC's row:** its name, This PC, online or "offline since …", CPU,
+     free memory, the battery (or "plugged in"), what runs against how many
+     it may run, and why it is not taking work when it is not. Pair, Send
+     work here and Forget sit on the other PCs' rows; Rename on this PC's.
+   - **Pairing asks** with the six numbers (a friend's ask to borrow this PC
+     too); the walkthrough shows your own PCs' asks while it is open.
+   - **Send work here:** a new task (a title and a brief), or one of the open
+     project's ready cards, for a paired PC that has the project open. It
+     runs there as your own work, and the answer comes back to "Sent from
+     here".
+   - **Out on other PCs:** the open project's cards that moved, with Bring
+     back. **Friends' tasks waiting for your OK.** Each shows only when it
+     has something.
+   - **Each project's switch:** "My other PCs may take this project's work",
+     shown once a PC of yours is paired. On by default for a project with a
+     GitHub repository; a project without one stays on this PC.
+   - **Handoffs:** work a PC parked for the others, with Pick up and Drop,
+     and Check GitHub now; shown while one waits (or GitHub could not be
+     asked). **Lately**, folded, lists what happened.
+3. Folded groups, each a row that opens in place: **Keep this PC in step
+   with GitHub** (Sync this PC; [your-pcs.md](your-pcs.md)),
+   **Power and battery**, **Lend this PC to a friend**, **Set up this PC**,
+   **Paired workers** ([paired-workers.md](paired-workers.md)) and **Reach
+   this PC from Discord** ([remote.md](remote.md)). While the GitHub group
+   is folded, its status line and Sync this PC still show when something
+   needs you: commits to pull, work only this PC has, a GitHub that could
+   not be checked, or a sync that stopped.
+   - **Power and battery: Keep this PC on**, a switch that keeps the PC awake
+     with nothing running, so the others can send it work. It holds only
+     while the PC is plugged in. Keeping it awake while work runs stays the
+     assistant's own switch in Settings ("Keep this computer awake"). Closing
+     a laptop's lid still follows Windows' lid setting; Studio never changes
+     power settings. On a laptop, the two battery lines below it.
+4. **Share projects**, a group of its own: Share between my PCs (the vault)
+   and Share with friends, both folded until opened (`renderer/pc-vault.js`).
 
 ## Pairing: the numbers on both screens
 
@@ -39,7 +77,8 @@ alone lets a PC see the others' rows, never send them work: a Discord login
 must never be enough to run code on your PCs (the same rule as
 [remote.md](remote.md)).
 
-1. On PC A choose **Pair** on PC B's row.
+1. On PC A choose **Pair** on PC B's row, or on "Found PC B" in Connect
+   another PC.
 2. Both screens show six numbers made from both PCs' keys.
 3. On PC B, if the numbers match, choose **Pair**. Not mine refuses it.
 
@@ -265,8 +304,10 @@ card from another PC may have finished.
   there and reports back"); battery, friend and came-back holds say so.
 - `relay/src/pcs.mjs`: the relay side; `scripts/hub-client.cjs`: `setPc`,
   `pcState`, `pcSend` and the `pcs`, `pcState`, `pcMsg` events.
-- `renderer/pc-fleet.js`: the My PCs section of the Your PCs card, mounted
-  by `renderer/pc-sync.js`; its styles are in `renderer/companion-hub.css`.
+- `renderer/pc-fleet.js`: Connect another PC, My PCs, and the Power and
+  battery and Lend this PC to a friend groups of the Your PCs card, mounted
+  by `renderer/pc-sync.js` (which places the two groups after its GitHub
+  one); its styles are in `renderer/companion-hub.css`.
 - Tests: `pc_trust`, `pc_power`, `pc_fleet`, `pc_handoff` (real git),
   `pcs_host` (the main block, several PCs on a fake relay), `pc_fleet_ui`,
   `relay_pcs`, `hub_client_pcs`.

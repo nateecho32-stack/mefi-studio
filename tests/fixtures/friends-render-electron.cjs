@@ -6,7 +6,9 @@
 // with a real pointer at 1920x1080 and measures: the list in the prototype's order, the current row, the breadcrumb
 // (Friends / <place>), the page's title and the line under it, the one card that shows, nothing wider than the page,
 // and no text under 12 px. The rail's Friends, Search's Rooms, Your PCs and Playground, and the companion's Friends
-// bubble land on the page; a tab per place. Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
+// bubble land on the page; a tab per place. Your PCs' Connect another PC walks through its states (signed out, waiting,
+// a PC found, paired and folded to its button, which a real press opens again) above My PCs and the folded groups.
+// Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
 // process or live state is loaded; network, permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
@@ -84,6 +86,16 @@ app.whenReady().then(async () => {
     pcSetupStatus: { ok: true, ready: true, account: "fixture-owner", tools: [{ id: "git", name: "Git", installed: true, version: "2.47.1" }, { id: "gh", name: "GitHub CLI", installed: true, version: "2.63.0" }], project: { root: "C:/Notes app", github: "fixture-owner/notes-app", hook: true }, steps: [], notes: [] },
     vaultStatus: { ok: true, linked: false, pcs: [], shelves: [] },
   };
+  // Your PCs' My PCs as main's pcs:status hands it over (main.cjs pcsStatus): this PC, and the owner's laptop.
+  const pcState = { v: 1, cpu: 18, freeMB: 9216, totalMB: 32768, battery: null, stage: "ok", stayOn: "working", slots: { running: 1, max: 3, canStart: true, hold: null }, accepting: true, projects: [] };
+  const selfRow = { id: "pc-fixture", name: "DESKTOP-FIXTURE", kind: "desktop", self: true, mine: true, online: true, paired: true, relation: "mine", heard: { state: pcState, at: now }, why: null };
+  const laptopRow = (paired) => ({ id: "pc-laptop", name: "LAPTOP-FIXTURE", kind: "laptop", mine: true, online: true, paired, relation: "mine", heard: paired ? { state: { ...pcState, battery: { level: 64, plugged: false } }, at: now } : null, why: paired ? null : "Not answering yet" });
+  const pcsView = (rows, linked = true) => ({ ok: true, me: { id: "pc-fixture", name: "DESKTOP-FIXTURE" }, relay: linked ? { state: "ready", error: null, carries: true, linked: true } : { state: "off", error: null, carries: false, linked: false }, encryption: true,
+    power: { reading: null, stage: "ok", continuedAt: null, lines: { low: 20, stop: 10 }, words: "No battery" }, stayOn: "working", awake: true, rows, asks: [],
+    project: { id: projectId, name: "Notes app", github: true, share: true }, offers: [], movable: [], moved: [], waiting: [], held: 0, sent: [],
+    handoffs: { at: now, error: null, list: [] }, lend: [], notes: [], limits: { movedPerProject: 2, parkedPerProject: 3 } });
+  const PCS_STATES = [["signin", pcsView([selfRow], false), "signin", true], ["waiting", pcsView([selfRow]), "waiting", true], ["found", pcsView([selfRow, laptopRow(false)]), "found", true], ["paired", pcsView([selfRow, laptopRow(true)]), "waiting", false]];
+  responses.pcsStatus = PCS_STATES[2][1];
   // The Lobby's front page as hub-client hands it over (scripts/hub-client.cjs frontPage).
   const front = {
     ok: true,
@@ -133,7 +145,7 @@ app.whenReady().then(async () => {
     bridge.hubRoom=async(method)=>{calls.push('hubRoom:'+method);return roomReplies[method]??{ok:true};};
     bridge.hubEvents=async(method)=>{calls.push('hubEvents:'+method);return eventReplies[method]??{ok:true};};
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
-    contextBridge.exposeInMainWorld('friendsFixture',{calls:()=>calls.slice(),signedIn:(on)=>{responses.hubStatus.status.linked=on===true;}});
+    contextBridge.exposeInMainWorld('friendsFixture',{calls:()=>calls.slice(),signedIn:(on)=>{responses.hubStatus.status.linked=on===true;},pcsView:(view)=>{responses.pcsStatus=view;}});
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));localStorage.setItem('mefiStudio.whatsNew.seen','vibe-build-1');localStorage.setItem('mefiStudio.setupHelper.seen','setup-helper-1');
   `);
   const window = new BrowserWindow({ show: false, width: 1920, height: 1080, useContentSize: true, frame: false, enableLargerThanScreen: true, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
@@ -317,6 +329,57 @@ app.whenReady().then(async () => {
       if (id === "pcs" || wrong.length) await capture(`friends-${id}-${width}x${height}@${zoom}.png`);
     }
   }
+  // Your PCs: Connect another PC through its states at the smallest window and a large one, My PCs under it, the folded
+  // groups in order, and Share projects last. The card is built again for each state (the place is left and opened again).
+  const pcsFacts = `
+    const shown = (node) => Boolean(node) && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden';
+    const reach = (node) => { if (!shown(node)) return false; node.scrollIntoView({ block: 'nearest' }); const r = node.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return Boolean(hit) && (hit === node || node.contains(hit)); };
+    const walk = document.getElementById('pc-walk'), card = document.querySelector('#friends-place-body .pc-sync');
+    const groups = [...card.querySelectorAll(':scope > .pc-group, :scope > .pc-share-group > .pc-group')].map((node) => {
+      const head = node.matches('details') ? node.querySelector(':scope > summary') : node.querySelector('.pc-group-toggle');
+      return { name: head.firstChild.textContent.trim(), open: node.matches('details') ? node.open : head.getAttribute('aria-expanded') === 'true' };
+    });
+    const facts = {
+      stage: walk?.dataset.stage, open: walk?.open, head: walk?.querySelector(':scope > summary')?.textContent,
+      steps: [...(walk?.querySelectorAll('.pc-walk-what') ?? [])].map((node) => node.textContent), marks: [...(walk?.querySelectorAll('.pc-walk-step') ?? [])].map((node) => node.dataset.state),
+      signed: document.getElementById('pc-walk-signed')?.textContent, live: document.getElementById('pc-walk-status')?.textContent, signIn: shown(document.getElementById('pc-walk-signin')),
+      parts: [...card.children].filter(shown).map((node) => node.id || String(node.className).split(' ')[0]), groups, share: document.getElementById('pc-share-group-title')?.textContent,
+      rows: document.querySelectorAll('#pc-fleet-rows > li').length, syncLine: shown(document.getElementById('pc-sync-head')),
+      pair: reach(walk?.querySelector('#pc-walk-status button')), headReach: reach(walk?.querySelector(':scope > summary')), syncRun: reach(document.getElementById('pc-sync-run')),
+    };
+    document.getElementById('friends-overlay').scrollTop = 0;
+    return facts;`;
+  const GROUPS = ["Keep this PC in step with GitHub", "Power and battery", "Lend this PC to a friend", "Set up this PC", "Paired workers", "Reach this PC from Discord", "Share between my PCs", "Share with friends"];
+  report.walk = [];
+  for (const [width, height, zoom] of [[600, 560, 1.5], [1920, 1080, 1]]) {
+    await resize(width, height, zoom);
+    for (const [name, view, stage, open] of PCS_STATES) {
+      await run(`window.friendsFixture.pcsView(${JSON.stringify(view)});`);
+      await go("friends-page", { place: "rooms" });
+      await until(placeIs("rooms"), `Rooms before Your PCs (${name})`);
+      await go("friends-page", { place: "pcs" });
+      const ready = name === "waiting" ? " && document.getElementById('pc-walk-signed')?.textContent.includes('as Mefi')" : "";
+      await until(placeIs("pcs") + ` && document.getElementById('pc-walk')?.dataset.stage === ${JSON.stringify(stage)} && document.querySelector('#friends-overlay .pc-sync')?.dataset.state === 'pending'${ready}`, `Your PCs, ${name}, at ${width}x${height}@${zoom}`);
+      await sleep(400);
+      const size = `${width}x${height}@${zoom}`;
+      found.push(...problems(await run(measure), `Your PCs (${name}) at ${size}`));
+      const facts = await run(pcsFacts);
+      facts.state = name; facts.size = size;
+      report.walk.push(facts);
+      assert.equal(facts.open, open, `${name} at ${size}: the steps are ${open ? "out" : "folded"} ${JSON.stringify(facts)}`);
+      assert.deepEqual(facts.steps, ["Open Studio on your other PC.", "Sign in to Friends with the same Discord account on both PCs.", "When your other PC shows up, press Pair and check that both screens show the same six numbers."]);
+      assert.deepEqual(facts.parts, ["pc-fleet", "pc-sync-group", "pc-fleet-power", "pc-fleet-lending", "pc-setup", "pc-paired-workers", "pc-remote", "pc-share-group"], `${name} at ${size}: the card's order`);
+      assert.deepEqual(facts.groups, GROUPS.map((group) => ({ name: group, open: false })), `${name} at ${size}: every group folded, in order`);
+      assert.equal(facts.share, "Share projects");
+      assert.ok(facts.syncLine && facts.syncRun, `${name} at ${size}: GitHub is behind, so its line and Sync this PC are out and reachable`);
+      if (name === "signin") assert.ok(facts.signIn && facts.signed === "This PC is not signed in yet." && facts.live === "Your other PC shows up here once both PCs are signed in.", JSON.stringify(facts));
+      if (name === "waiting") assert.ok(facts.signed === "✓ This PC is signed in as Mefi." && facts.live === "Waiting for your other PC to sign in…" && !facts.signIn, JSON.stringify(facts));
+      if (name === "found") assert.ok(facts.live === "Found LAPTOP-FIXTURE:Pair" && facts.pair && facts.rows === 2, `found at ${size}: a pointer reaches Pair ${JSON.stringify(facts)}`);
+      if (name === "paired") assert.ok(facts.head === "Connect another PC" && facts.headReach, `paired at ${size}: one Connect another PC button ${JSON.stringify(facts)}`);
+      await capture(`friends-pcs-${name}-${size}.png`);
+    }
+  }
+  report.steps.push("Connect another PC");
   // A light palette (the app's own custom colours): every place, and an open room, still fit with no text under 12 px.
   await resize(1440, 900);
   assert.equal(await run("return window.MefiMusic.applyCustomColors({ accent: '#8A5A00', background: '#F4F0E6', surface: '#FFFFFF', text: '#1D1B17' });"), true);
@@ -335,6 +398,18 @@ app.whenReady().then(async () => {
   found.push(...problems(await run(measure), "an open room in a light palette"));
   await capture("friends-light-room-1440x900.png");
   report.steps.push("a light palette");
+  // Folded once a PC is paired, Connect another PC opens again with a real press, and says who is paired.
+  await run(`window.friendsFixture.pcsView(${JSON.stringify(PCS_STATES[3][1])});`);
+  await go("friends-page", { place: "rooms" });
+  await until(placeIs("rooms"), "Rooms before Your PCs, paired");
+  await go("friends-page", { place: "pcs" });
+  await until(placeIs("pcs") + " && document.getElementById('pc-walk')?.open === false", "Your PCs, paired: the steps folded");
+  await click("#pc-walk > summary");
+  await until("document.getElementById('pc-walk')?.open === true && document.getElementById('pc-walk-status')?.textContent === 'Paired with LAPTOP-FIXTURE. Waiting for another PC to sign in…'", "a press opens Connect another PC again");
+  await sleep(300);
+  found.push(...problems(await run(measure), "Connect another PC opened again in a light palette"));
+  await capture("friends-light-pcs-reopened-1440x900.png");
+  report.steps.push("Connect another PC opens again");
   assert.deepEqual(found, [], "every Friends place fits at every size, with no text under 12 px");
   await resize(1920, 1080);
   report.complete = true;
