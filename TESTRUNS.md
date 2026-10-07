@@ -39,6 +39,29 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-07 Social uses a wide window: Friends over the docked conversation at the right; menus without odd gaps
+
+Branch `ui/social-wide` in C:\wt\social-wide, off main c513838. The owner asked for Social Home's empty sides to be used
+(the column stopped at 1180 px), then for Friends to sit where the conversation is, compact, and for every menu to lose
+its odd spacing. A wide Home (layer 1440 px or wider) now has a column at the right: the Friends card over the docked
+conversation, the box at the foot of its thread (renderer/vibe.js syncDock, renderer/today.js placeBox). A menu audit
+captured about 30 Social surfaces and 25 of Studio's offscreen at 1920x1080 and 1440x900, and fixed what styles.css's
+page heading rule (every <header> without padding of its own: 9 found by a DOM sweep) and button minimum (36 px, nowrap)
+did to card titles, both What's new cards, the tab settings, the coach, the Model Lab's cards, the Layout switches, the
+Inbox's text links and the permission choices, plus panel gaps, stretched cards, the project menu on Home and the
+Friends places shown twice. Node here through `npm run test:one`: today_page, today_inbox, today_model,
+today_home, vibe_home, vibe_frame, vibe_model, vibe_panels, vibe_pipeline, vibe_flow, social, layout_contract_css,
+shell_frame_css, shell_frame_bars, key_tips, onboarding, tabs_strip and autonomy_ui 398/398 (213/213 again after the
+last header fixes); test:fast 7741 of 7756 with 14 skipped (306 MB free): its one failure, sync's "a session hook only
+reports recent lost work" at 61 s, and on a rerun two others (one a `git init` that failed), all pass alone, 23/23 on
+this branch and on clean main c513838; the branch changes nothing under scripts/ or in main.cjs.
+Windows: one lane run of 14 window files 9/14 under memory pressure (setup_helper "Escape closes the helper" timeout,
+size_render "the first control has the keyboard", startup_render workspace step error, today_render a Tab stop wrapping
+early, unified_studio "Renderer stopped"); each of the five passes alone (today_render 59 s, setup_helper 35 s,
+size_render 58 s, startup_render 15 s, unified_studio 227 s), and tabs_render passes again after the tab settings fix.
+Earlier in the branch sessions_render, size_render and startup_render failed once in a loaded lane and passed alone, and
+sessions_render passes on clean main c513838 too. check ok, lint 47 warnings (as main), audit 0 findings.
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -485,39 +508,6 @@ Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tes
 fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
 `layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
 forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
-
-## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
-
-Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
-hand with both sides kept; d1344bc puts the Playlists entry back to once after an earlier merge took 0e9f37f, not
-d55269f as its message says). Relay: `relay/src/economy.mjs` (a daily community budget, 200 + 25 per member seen this
-week who is old enough to earn) and `relay/src/events.mjs` (the weekly Build Jam, co-work hours at 02:00, 10:00 and
-18:00 UTC, building together), run on the relay's alarm; schema v5; credits.mjs gains together, cowork and jam kinds
-paid through award(). Studio: hub-client events calls, main.cjs HUB_EVENT_METHODS, preload hubEvents,
-renderer/friends-events.js + .css as Friends › Events.
-
-A read-only review of the social side found, in this branch, an alarm that would have woken the relay every second
-before each co-work hour and through a pause, a listed co-work room nobody could approve requests for, prizes two
-votes could win, and Forget me leaving names in results; all fixed in 113ca61 with tests. Its findings in other
-files went to the social session, which landed them on main (711ceb5).
-
-Gate on 132132d (main f1934aa merged): the parallel stage at 4 suites at a time, 7227 tests, 7210 pass, 3 fail, all a
-git time limit hit under load (29 to 780 MB free while other sessions ran): git_actions "a listener that throws does
-not stop a publish half-way", rust_parity_git "the actions answer like the JavaScript" and rust_parity_snapshots
-"the same attempt on two identical repositories". Python contracts 248 OK (1 skipped), normalized-path lock OK,
-`npm run audit` 0 findings. The Electron lane did not finish: media_window_render and layout_contract_render each
-kept an Electron window alive all night (their kill timers never landed at that memory) and held the machine-wide
-lane about nine hours until killed at 06:11 (a stage limit for exactly this is on wip/test-speed). The Electron
-suites were then run one at a time on the merged tree 0d82a1a through the lease with a 12-minute guard each:
-42 of 47 pass on the first pass (layout_contract_render left out: it fails on clean main here and retires with
-ui/v2-only). Of the five: shell_render is the known display-scaling failure on clean main; agent_setup_render and
-unified_studio_render fail on main's own renderer too (a control run in C:\wt\speed, at other assertions:
-load-sensitive); today_render and tree_dynamics_render, which had run 10 and 15 minutes under load, pass alone
-(101 s and 14 s). friends_render, companion_hub_render and friends_two_render pass. The three git time-limit
-suites pass alone: git_actions, rust_parity_git and rust_parity_snapshots, 72/72 in 2 min 41 s through `npm run
-test:one`.
-
-After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
 
 ## Read Before Any Tests
 
