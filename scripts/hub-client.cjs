@@ -58,7 +58,9 @@
 //   - Pets (relay feature "pets", relay/src/pets.mjs): setPet names this
 //     member's pet ({ kind, skin, name } or null), said again after every
 //     `ready`, and the rooms this Studio has open answer with `roomPets`
-//     events: the pets of the members there, this member's own included.
+//     events: the pets of the members there, this member's own included. A
+//     kind newer than the relay's pets generation (its "pets.<n>" feature)
+//     goes as Ember, so an older relay never refuses the frame.
 //   - The Shop (relay feature "shop", relay/src/shop.mjs): shop() lists
 //     Studio's own items and members' style packs, shopOwned() what this
 //     member owns (for a new PC), shopBuy / shopPublish / shopUpdate /
@@ -94,8 +96,8 @@ const PRESENCE_EVERY_MS = 30_000;
 // Cloudflare without waking the relay (relay/src/hub-object.mjs).
 const KEEPALIVE_EVERY_MS = 30_000;
 const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
-// What this Studio tells the hub it can do (hello.features).
-const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs", "pets"]);
+// What this Studio tells the hub it can do (hello.features); "pets.2": it draws the Shop's pets too.
+const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs", "pets", "pets.2"]);
 // A historyReply must fit the hub's 16 KB frame limit.
 const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
@@ -117,8 +119,10 @@ const PACK_MATERIALS = Object.freeze(["focus", "studio", "atmosphere"]);
 const PACK_FONTS = Object.freeze(["studio", "display", "serif", "mono"]);
 const PACK_PRICE_MAX = 250;
 const PACK_TIP_MAX = 100; // a tip for a community pack's maker, in credits
-// Pets' shapes (relay/src/protocol.mjs PET_KINDS, PET_SKINS; renderer/pets.js).
-const PET_KINDS = Object.freeze(["dragon"]);
+// Pets' shapes (relay/src/protocol.mjs PET_KINDS, PET_GENERATION, PET_SKINS; renderer/pets.js). Each kind
+// came with a pets generation, and a relay's ready names the newest it knows ("pets.2").
+const PET_KINDS = Object.freeze(["dragon", "cloud", "phoenix", "wisp"]);
+const PET_GENERATION = Object.freeze({ dragon: 1, cloud: 2, phoenix: 2, wisp: 2 });
 const PET_SKINS = Object.freeze(["theme", "frost", "jade", "void", "gold"]);
 const PET_NAME_MAX = 24;
 const ROOM_PETS_MAX = 12;
@@ -576,6 +580,22 @@ function petLook(value) {
   const name = typeof value.name === "string" ? value.name.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim().slice(0, PET_NAME_MAX).trim() : "";
   return { kind: value.kind, skin: value.skin, name };
 }
+// The newest pets generation a features list names ("pets" alone is the first), or 0.
+function petsGenerationOf(features) {
+  let newest = 0;
+  for (const name of Array.isArray(features) ? features : []) {
+    if (name === "pets") newest = Math.max(newest, 1);
+    const match = /^pets\.(\d{1,3})$/.exec(String(name));
+    if (match) newest = Math.max(newest, Number(match[1]));
+  }
+  return newest;
+}
+// A pet as a relay of that generation may take it: a kind newer than the
+// relay knows goes as Ember, so an older relay never refuses the frame.
+function petForRelay(pet, generation) {
+  if (!pet || (PET_GENERATION[pet.kind] ?? Infinity) <= Math.max(1, generation)) return pet;
+  return { ...pet, kind: "dragon" };
+}
 // A room's pets from the relay, each member once and at most 12, or null
 // when it is not a list: { id, userId, name, pet }, where id and userId are
 // the member's user id (id is what renderer/pets.js MefiPets.guests() reads)
@@ -1016,17 +1036,19 @@ function createHubClient(options = {}) {
   }
   const pcReady = () => state === "ready" && features.includes("pcs") && Boolean(pc);
   // The pet frame to a relay that carries pets: at most one every PET_EVERY_MS
-  // (the latest pet waits its turn), and never one the relay already has.
+  // (the latest pet waits its turn), and never one the relay already has. A
+  // pet the relay does not know yet goes as Ember.
   function sendPetSoon() {
     if (petTimer || state !== "ready" || !features.includes("pets")) return;
-    if (JSON.stringify(myPet) === JSON.stringify(petHeard)) return;
+    const pet = petForRelay(myPet, petsGenerationOf(features));
+    if (JSON.stringify(pet) === JSON.stringify(petHeard)) return;
     const wait = petSentAt + PET_EVERY_MS - now();
     if (wait > 0) {
       petTimer = later(() => { petTimer = null; sendPetSoon(); }, wait);
       return;
     }
-    if (send({ type: "pet", pet: myPet })) {
-      petHeard = myPet;
+    if (send({ type: "pet", pet })) {
+      petHeard = pet;
       petSentAt = now();
     }
   }
@@ -1724,5 +1746,5 @@ module.exports = {
   KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,
   eventsPage, eventsFront,
   SHOP_VIEWS, SHOP_ITEM_KINDS, itemCard, packData, packFields,
-  PET_KINDS, PET_SKINS, petLook, roomPetsOf,
+  PET_KINDS, PET_GENERATION, PET_SKINS, petLook, roomPetsOf, petsGenerationOf, petForRelay,
 };

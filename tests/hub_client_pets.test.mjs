@@ -80,7 +80,46 @@ test("setPet takes Studio's pets only, its name on one line of 24 at most", () =
   assert.deepEqual(hub.petLook({ kind: "dragon", skin: "gold" }), { kind: "dragon", skin: "gold", name: "" }, "a pet may have no name");
   assert.equal(h.client.setPet(null), true);
   assert.deepEqual([...hub.PET_SKINS], ["theme", "frost", "jade", "void", "gold"]);
+  assert.deepEqual([...hub.PET_KINDS], ["dragon", "cloud", "phoenix", "wisp"], "Ember and the Shop's pets");
+  for (const kind of hub.PET_KINDS) assert.equal(hub.petLook({ kind, skin: "theme", name: "x" })?.kind, kind);
   assert.ok(hub.CLIENT_FEATURES.includes("pets"), "hello tells the relay this Studio understands roomPets");
+  assert.ok(hub.CLIENT_FEATURES.includes("pets.2"), "and that it draws the second generation's pets");
+});
+
+test("a pet the relay does not know yet goes as Ember: the relay's ready names its pets generation", async () => {
+  const blaze = { kind: "phoenix", skin: "gold", name: "Blaze" };
+  assert.deepEqual(hub.petForRelay(blaze, 1), { kind: "dragon", skin: "gold", name: "Blaze" });
+  assert.equal(hub.petForRelay(blaze, 2), blaze);
+  assert.equal(hub.petForRelay(null, 1), null);
+  assert.deepEqual([[], ["pets"], ["keepalive", "pets", "pets.2"]].map(hub.petsGenerationOf), [0, 1, 2]);
+  // An older relay (pets, no pets.2) is told Ember, the skin and the name kept.
+  const h = harness();
+  h.client.setPet(blaze);
+  await h.client.connect();
+  await h.ready(["pets"]);
+  assert.deepEqual(h.pets(), [{ kind: "dragon", skin: "gold", name: "Blaze" }], "the frame an older relay takes");
+  // The same relay, updated: after the reconnect it hears the phoenix.
+  h.socket().onclose?.({ code: 1006 });
+  await h.advance(1000);
+  await h.ready(["pets", "pets.2"]);
+  assert.deepEqual(h.pets(), [blaze]);
+  // Ember itself needs no newer relay.
+  const ember = harness();
+  ember.client.setPet(EMBER);
+  await ember.client.connect();
+  await ember.ready(["pets"]);
+  assert.deepEqual(ember.pets(), [EMBER]);
+  // A Shop pet changed to another the old relay also cannot take is the same Ember: nothing new goes.
+  h.socket().onclose?.({ code: 1006 });
+  await h.advance(1000);
+  await h.ready(["pets"]);
+  assert.deepEqual(h.pets(), [{ kind: "dragon", skin: "gold", name: "Blaze" }]);
+  h.client.setPet({ ...blaze, kind: "wisp" });
+  await h.advance(20_000);
+  assert.equal(h.pets().length, 1, "the relay already has that Ember");
+  // A friend's Shop pet in a room comes through as itself.
+  h.socket().onmessage({ data: JSON.stringify({ type: "roomPets", roomId: "room_a", pets: [{ userId: "200000000000000100", name: "P0", pet: { kind: "cloud", skin: "jade", name: "Nimbus" } }] }) });
+  assert.deepEqual(h.events.filter((event) => event.type === "roomPets").at(-1).pets[0].pet, { kind: "cloud", skin: "jade", name: "Nimbus" });
 });
 
 test("the pet goes only to a relay that carries pets, and is said again after every ready", async () => {
