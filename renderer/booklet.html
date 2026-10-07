@@ -110581,7 +110581,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function maskAt(values, columns, rows, progress) {
     if (!maskCanvas) maskCanvas = document.createElement("canvas");
     maskCanvas.width = columns; maskCanvas.height = rows;
-    const ctx = maskCanvas.getContext("2d");
+    const ctx = maskCanvas.getContext?.("2d");
     if (!ctx) return null;
     const image = ctx.createImageData(columns, rows);
     const data = image.data;
@@ -110624,12 +110624,15 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     while (plans.size > 24) plans.delete(plans.keys().next().value);
     return plan;
   }
-  // Made ahead while a menu is open, so its exit starts at once.
+  // Made ahead while a menu is open, so its exit starts at once; the menu's
+  // own display is noted too (hold pins it).
+  const shownDisplay = new WeakMap();
   function prepare(element) {
     const id = active();
     if (id === "none" || still() || !element?.isConnected || typeof element.getBoundingClientRect !== "function") return false;
     const rect = element.getBoundingClientRect();
     if (!(rect.width > 4 && rect.height > 4)) return false;
+    try { const shown = getComputedStyle(element).display; if (shown && shown !== "none") shownDisplay.set(element, shown); } catch { /* not noted */ }
     const grid = gridOf(rect);
     planFor(id, grid.columns, grid.rows);
     return true;
@@ -110667,7 +110670,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
     canvas.style.transform = `translate3d(${Math.round(rect.left - margin)}px, ${Math.round(rect.top - margin)}px, 0)`;
     document.body.append(canvas);
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext?.("2d") ?? null;
     ctx?.setTransform(dpr, 0, 0, dpr, 0, 0);
     return { canvas, ctx, width, height };
   }
@@ -110675,12 +110678,34 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // ---- playing one exit -----------------------------------------------------------
   const playing = new Map(); // element -> run
   const HOLD = [["opacity", "1"], ["translate", "none"], ["scale", "1"], ["pointer-events", "none"]];
+  // Holds a closing menu shown, still and in place for the effect's length.
+  // Its display is pinned inline (an inline !important outranks [hidden]), so
+  // it stays even when something read the page right after it closed and its
+  // own short fade had already begun; the value is what it showed as: still
+  // there while a display transition runs, or noted by prepare() when it opened.
   function hold(element, ms) {
-    const saved = HOLD.map(([name]) => [name, element.style.getPropertyValue(name), element.style.getPropertyPriority(name)]);
-    saved.push(["transition", element.style.getPropertyValue("transition"), element.style.getPropertyPriority("transition")]);
+    // A [popover] keeps its place through the top layer's own transition
+    // (beforetoggle comes before it closes), so its display is never pinned.
+    let display = null;
+    if (!element.matches?.("[popover]")) {
+      try { const now = getComputedStyle(element).display; if (now && now !== "none") display = now; } catch { display = null; }
+      display ||= shownDisplay.get(element) || null;
+    }
+    const names = [...HOLD.map(([name]) => name), "transition", "display", "visibility"];
+    const saved = names.map((name) => [name, element.style.getPropertyValue(name), element.style.getPropertyPriority(name)]);
     for (const [name, value] of HOLD) element.style.setProperty(name, value, "important");
     element.style.setProperty("transition", `display ${ms}ms allow-discrete, overlay ${ms}ms allow-discrete`, "important");
+    if (display) { element.style.setProperty("display", display, "important"); element.style.setProperty("visibility", "visible", "important"); }
     return () => { for (const [name, value, priority] of saved) { if (value) element.style.setProperty(name, value, priority); else element.style.removeProperty(name); } };
+  }
+  // A menu that left keeps its last, empty mask until it opens again, so
+  // letting go of the hold never shows it for the length of its own fade.
+  const masked = new WeakSet();
+  function unmask(element) {
+    if (!masked.has(element)) return;
+    masked.delete(element);
+    setMask(element, null);
+    element.style.removeProperty("image-rendering");
   }
   function setMask(element, url) {
     const value = url ? `url("${url}")` : "";
@@ -110750,6 +110775,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const progress = clamp(t, 0, 1) * 1.08;
       const step = Math.min(STEPS, Math.floor(clamp(t, 0, 1) * STEPS));
       if (step !== shown) { shown = step; setMask(element, urls[step]); }
+      if (step >= STEPS) run.complete = true;
       while (pending.length && pending[0].at <= clamp(t, 0, 1)) spawn(effect.id, pending.shift(), bits, colours);
       const at = now();
       const dt = clamp((at - (run.last || at)) / 1000, 0, 0.05);
@@ -110833,10 +110859,16 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (run.raf) cancelAnimationFrame(run.raf);
     run.layer.canvas.remove();
     if (run.mode === "remove") { run.element.remove(); playing.delete(run.element); return; }
+    playing.delete(run.element);
+    if (run.mode === "exit" && run.element.hidden && run.complete) {
+      // Gone: the empty mask stays on until the menu is shown again.
+      masked.add(run.element);
+      run.release();
+      return;
+    }
     setMask(run.element, null);
     run.element.style.removeProperty("image-rendering");
     run.release();
-    playing.delete(run.element);
   }
   function stopRun(element) { const run = playing.get(element); if (run) finish(run); }
 
@@ -110877,6 +110909,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
         if (record.oldValue !== null || !element.matches?.(MENUS) || leaving.includes(element)) continue;
         leaving.push(element);
       } else {
+        unmask(element);
         if (playing.has(element)) stopRun(element);
         // A menu opened: its exit is made ready while it is read.
         if (element.matches?.(MENUS)) soon(() => { if (!element.hidden) prepare(element); });
@@ -110888,7 +110921,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!enabled()) return;
     const element = event.target;
     if (!element?.matches?.("[popover]")) return;
-    if (event.newState === "open") soon(() => prepare(element));
+    if (event.newState === "open") { unmask(element); soon(() => prepare(element)); }
     else if (event.newState === "closed" && element.matches?.(":popover-open")) play(element, active());
   }
 

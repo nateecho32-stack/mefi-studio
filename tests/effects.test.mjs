@@ -95,3 +95,52 @@ test("a dropdown handed to leave() goes at once when no effect is on, or when mo
     assert.equal(popup.parentNode, null, "removed straight away");
   }
 });
+
+test("a closing menu is held where it was: its display pinned (even after its own fade began), shown again when it reopens", () => {
+  const storage = new Map();
+  let observed = null;
+  class FakeObserver { constructor(callback) { observed = callback; } observe() {} }
+  const { document } = createDom();
+  document.readyState = "complete";
+  document.documentElement.dataset.motion = "on";
+  const style = () => {
+    const values = new Map();
+    return {
+      setProperty(name, value, priority = "") { values.set(name, [String(value), priority]); },
+      getPropertyValue(name) { return values.get(name)?.[0] ?? ""; },
+      getPropertyPriority(name) { return values.get(name)?.[1] ?? ""; },
+      removeProperty(name) { values.delete(name); },
+      has: (name) => values.has(name),
+    };
+  };
+  const menu = new Element("div");
+  menu.id = "app-help-menu";
+  menu.style = style();
+  menu.isConnected = true;
+  menu.getBoundingClientRect = () => ({ left: 10, top: 500, right: 250, bottom: 700, width: 240, height: 200 });
+  document.body.append(menu);
+  const timers = [];
+  const window = { innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, addEventListener() {}, dispatchEvent() { return true; }, MefiShop: { owns: () => true } };
+  const context = vm.createContext({
+    window, document, console, Math, JSON, Number, Array, Object, Float32Array, CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    MutationObserver: FakeObserver,
+    localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)) },
+    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
+    requestAnimationFrame: () => 1, cancelAnimationFrame() {}, performance: { now: () => 0 },
+    // Its own fade has begun: the page reads it as still a flex box while the display transition runs.
+    getComputedStyle: () => ({ display: "flex", getPropertyValue: () => "", backgroundColor: "rgb(30, 35, 48)", color: "rgb(230, 230, 230)" }),
+  });
+  vm.runInContext(source, context);
+  for (const fn of timers.splice(0)) fn();
+  window.MefiEffects.use("dissolve");
+  menu.hidden = true;
+  observed([{ attributeName: "hidden", oldValue: null, target: menu }]);
+  assert.equal(menu.style.getPropertyValue("display"), "flex", "pinned to what it showed as");
+  assert.equal(menu.style.getPropertyPriority("display"), "important", "inline !important outranks [hidden]");
+  assert.equal(menu.style.getPropertyValue("opacity"), "1");
+  assert.equal(menu.style.getPropertyValue("pointer-events"), "none", "the pointer passes through a leaving menu");
+  menu.hidden = false;
+  observed([{ attributeName: "hidden", oldValue: "", target: menu }]);
+  assert.equal(menu.style.has("display"), false, "opened again: let go at once");
+  assert.equal(menu.style.has("opacity"), false);
+});
