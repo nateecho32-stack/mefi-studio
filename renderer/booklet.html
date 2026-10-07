@@ -43575,6 +43575,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       el.legendList?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
       el.mapLegend?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
     }
+    // Needs you and Done keep their own colours; on a light sky they take the
+    // deep ink the state rings use, so the legend's dots read on the pale ground.
+    const light = state.nodeTheme?.light === true;
+    const styles = globalThis.window?.MefiNodeStyles;
+    for (const [key, triple] of [["held", NODE_RGB.amber], ["done", NODE_RGB.done]]) {
+      const tint = light ? styles?.inkOf?.(triple, state.nodeTheme)?.hot ?? triple : triple;
+      const entry = LEGEND.find((item) => item.key === key);
+      if (entry) entry.sw = rgb(tint);
+      el.legendList?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
+      el.mapLegend?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
+    }
   }
 
   // The role colours live in the tree's palette (window.MefiTree.agentColor) so
