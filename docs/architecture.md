@@ -639,6 +639,23 @@ settings and per-model work-kind summaries for the shared controls.
   it, plays with your Ember, and flies out when its owner leaves or you leave
   the room. Visitors come only while your own pet is on, never with motion
   Off, five at most.
+- **Menu effects** (`renderer/effects.js`, `window.MefiEffects`; Shop items,
+  picked in Settings › Appearance › Interface, **When a menu closes**):
+  **Dissolve**, **Burn away**, **Stardust**, **Blown away** (the menu drifts
+  aside while its grains stream off with the wind), **Shatter** (cracks run
+  out from a blow, then the pieces fall), **Glitch** (slices of the real menu
+  jump with a colour split and blink out) and **Spirits** (October's: it
+  fades into wisps of smoke that rise and curl). They play when a menu, a
+  popover (permissions, the chat's tools, the Inbox, Build's More, the
+  session panel's menus, the Layout card, info boxes), a dropdown, a
+  right-click or tab menu, or Search closes; Search's scrim fades as usual
+  while its sheet leaves. A leaving menu is inert and hidden from screen
+  readers at once, its closer sends focus back at once, the pointer passes
+  through it, and opening it again mid-effect brings it back whole. With
+  motion Off or **It fades out** every menu closes at once. The Shop's
+  previews call `MefiEffects.demo` (one play) or `MefiEffects.loop` (plays,
+  comes back gently and plays again, only while the sample is on screen and
+  motion is on; it returns `stop`).
 - **Share between my PCs** (renderer/pc-vault.js; main.cjs "Your PCs vault";
   scripts/pc-vault.cjs, vault-crypto.cjs, vault-shelves.cjs, share-review.cjs).
   A private `<account>/mefi-studio-vault` repository, every file sealed
