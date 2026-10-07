@@ -39,6 +39,26 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-07 The Shop as a page of its own, monthly drops with a Featured shelf, the signed-out showroom and sale pop-ups
+
+Branch `feat/shop-showroom` (C:\wt\s-shop, from origin/main c513838; 906cfbe..448f311, not pushed), on the owner's
+laptop with Node 24.15 and 250 to 900 MB free. Asked: a showroom while signed out, a pop-up when a member gets one of
+your packs, then (the owner) "make the shop its own whole page, make it clean, nice, like discords shop almost, lets
+have the shop rotate in and out styles". Built: relay/src/shop-drops.mjs (DROPS, the windows, the Featured shelf;
+feature shop.drops, refusal not-available) mirrored by main.cjs (SHOP_DROPS, shopCatalog); the route "shop" (the month's
+drop as a banner made from its data, Featured this week, categories, a detail dialog per item, the showroom with Sign in
+to get it); Friends' sale pop-up; the page's head and card names clear of styles.css's header and button rules.
+Relay not deployed (the owner decides). Every Electron run went through the lane with a 600 s limit.
+
+Results: relay_shop_drops 8/8, relay_shop 18/18, shop_host 6/6 (main's rules equal the relay's at 130 times),
+hub_client_shop 8/8, friends_shop_ui 33/33, friends_front_ui 15/15, friends_navigation 13/13; the 20 suites around the
+change 258/258; friends_render (Electron) passed at 34c96d7 (101 s) and on 448f311 (160 s), now walking the Shop's own page
+at 1920x1080 and 1440x900 in Studio and Social, 1100x720 and 600x560@1.5, the showroom and a light palette, with even card
+columns and the column filling the page beside the list. By hand in a real window: no text under 4.5:1 in Daylight,
+Paper or the dark default; Tab reaches a card with a 2 px ring round it, Enter opens its detail, Esc closes only the
+detail. check ok; lint 47 warnings (as main); audit 0 findings; Python contracts 248 OK, 1 skipped. Not run here: the
+full `npm test`.
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -485,39 +505,6 @@ Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tes
 fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
 `layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
 forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
-
-## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
-
-Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
-hand with both sides kept; d1344bc puts the Playlists entry back to once after an earlier merge took 0e9f37f, not
-d55269f as its message says). Relay: `relay/src/economy.mjs` (a daily community budget, 200 + 25 per member seen this
-week who is old enough to earn) and `relay/src/events.mjs` (the weekly Build Jam, co-work hours at 02:00, 10:00 and
-18:00 UTC, building together), run on the relay's alarm; schema v5; credits.mjs gains together, cowork and jam kinds
-paid through award(). Studio: hub-client events calls, main.cjs HUB_EVENT_METHODS, preload hubEvents,
-renderer/friends-events.js + .css as Friends › Events.
-
-A read-only review of the social side found, in this branch, an alarm that would have woken the relay every second
-before each co-work hour and through a pause, a listed co-work room nobody could approve requests for, prizes two
-votes could win, and Forget me leaving names in results; all fixed in 113ca61 with tests. Its findings in other
-files went to the social session, which landed them on main (711ceb5).
-
-Gate on 132132d (main f1934aa merged): the parallel stage at 4 suites at a time, 7227 tests, 7210 pass, 3 fail, all a
-git time limit hit under load (29 to 780 MB free while other sessions ran): git_actions "a listener that throws does
-not stop a publish half-way", rust_parity_git "the actions answer like the JavaScript" and rust_parity_snapshots
-"the same attempt on two identical repositories". Python contracts 248 OK (1 skipped), normalized-path lock OK,
-`npm run audit` 0 findings. The Electron lane did not finish: media_window_render and layout_contract_render each
-kept an Electron window alive all night (their kill timers never landed at that memory) and held the machine-wide
-lane about nine hours until killed at 06:11 (a stage limit for exactly this is on wip/test-speed). The Electron
-suites were then run one at a time on the merged tree 0d82a1a through the lease with a 12-minute guard each:
-42 of 47 pass on the first pass (layout_contract_render left out: it fails on clean main here and retires with
-ui/v2-only). Of the five: shell_render is the known display-scaling failure on clean main; agent_setup_render and
-unified_studio_render fail on main's own renderer too (a control run in C:\wt\speed, at other assertions:
-load-sensitive); today_render and tree_dynamics_render, which had run 10 and 15 minutes under load, pass alone
-(101 s and 14 s). friends_render, companion_hub_render and friends_two_render pass. The three git time-limit
-suites pass alone: git_actions, rust_parity_git and rust_parity_snapshots, 72/72 in 2 min 41 s through `npm run
-test:one`.
-
-After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
 
 ## Read Before Any Tests
 
