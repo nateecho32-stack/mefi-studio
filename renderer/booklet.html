@@ -14833,6 +14833,8 @@ body.no-motion :is(.paper-skel, .paper-enter, .paper-refresh .paper-glyph), html
 .settings-flair-body { display: grid; gap: 16px; }
 .settings-flair-body > .field { display: grid; gap: 8px; }
 .settings-flair-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Its Try and Shop buttons wrap their words rather than run past a narrow card (styles.css keeps buttons on one line). */
+.settings-flair-row > button { max-width: 100%; height: auto; white-space: normal; text-align: start; }
 .settings-flair-name { width: min(200px, 100%); }
 .settings-flair-shop { justify-self: start; }
 /* The pet's live picture, and its three picks side by side (one under another when narrow). */

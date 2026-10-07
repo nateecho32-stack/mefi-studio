@@ -6,6 +6,22 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 A way to Routing opens More settings at Routing; the background check reads the Settings strip where Settings shows
+
+Branch `fix/routing-narrow` in `C:\wt\routing`, off main 017d51a. The full Electron lane on main 0b2fa14 (here, one
+suite at a time under the test lease) had 43 of 47 ok: command_render and today_render passed alone again (flakes),
+shell_render stops at the display-scaling check as before, and unified_studio_render failed every time at
+"#ai-role-routine-choice fits in narrow Routing". The Seats and models page (wip/models, 6c9126b) files Routing into
+the closed More settings, and go("agents", {pane: "routing"}) left it closed, so the controls were laid out but
+folded away (about 5,800 px down, nothing hit). agents.js openTeam now opens More at #settings-routing for a Routing
+way in that names no control. The suite then reached its contrast sweep, where `.settings-nav` read transparent:
+its solid fill is a container query on the Settings page, and since the window-scroll fix (efec563, bf0d0ce) the tab
+pages are not laid out under another page; the sweep now reads the strip with Settings open in the Studio mode and
+requires it measured there.
+
+unified_studio_render ok (alone, under the lease); team_render, agent_setup_render, settings_render ok; npm run check
+ok; npm run lint 0 errors and 47 warnings, as on clean main 017d51a. Hosted CI (Windows) on ef34f7a: green (37472060180). After merging main 4b150b3 (shell_render at 125% scaling): shell_render ok here, its first pass on this PC, so every window suite is green with this fix.
+
 ## 2026-10-06 shell_render passes at 125% display scaling: the inspector check reads the page's own width
 
 Branch `fx/scaling` (on main 017d51a; first proven on 0b2fa14): in `tests/fixtures/shell-render-electron.cjs` the narrow-window

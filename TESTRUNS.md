@@ -88,6 +88,29 @@ last capture. The same code alone takes 26 s, and no loop or promise in the new 
 px; dimmed labels and cards (search, Running only, the legend's dim) fall under 4.5:1 on a light page by design; the
 lease's running-anyway escape should not admit a waiter beside holders that have only just started.
 
+## 2026-10-07 Pets: petting and the chase, little things, three Shop pets, a live pet card; relay pets generations
+
+Branch `feat/pets-more` (C:\wt\s-pets, from origin/main c513838; 414c7f6, cdda867, 3d93d0f, d78b331, 17c954d).
+Asked: pet Ember (rest the pointer on it: it stops, looks, purrs, hearts, its name; quick circles: a chase), rare
+little things (stretch and yawn on waking, tail flick, spark sneeze, a firefly), a cloud dragon for the Shop, then
+"add more pets" (a phoenix and a will-o'-wisp), Shop catalog entries left to the Shop's rotation work, relay kinds with
+compatibility, and Settings' pet card with a live preview and a name. Not deployed: the relay changes are code only.
+
+Measured (perf lab, the page's own paint path, 4 interleaved rounds of 20 s at 60 fps with a loop, fireflies and
+petting, main's Ember beside the new code; Chromium's timer is 0.1 ms): dpr 1.25 main's Ember mean 0.13/0.11 ms
+(theme/gold), now 0.12/0.12; cloud 0.15/0.12, phoenix 0.16/0.16, wisp 0.11/0.10; dpr 2 every kind 0.10 to 0.14;
+every p95 0.3 ms or less. A rest with a purr, stretch, flick or firefly paints at 60 fps (15 before), one with a
+drifting trail at 30; sleep keeps 6; motion Off one still pose; a live preview draws nothing until it is on screen.
+
+Tests, each through `npm run test:one` (Node suites) or the Electron lane with a 600 s limit: pets 25/25 (11 before),
+relay_pets 14/14 and hub_client_pets 5/5, hub_client 18/18, friends_shop_ui 29/29 (Ember's switch now sets kind
+dragon; a Shop pet's card; previews on seconds, they were given milliseconds), setup_helper 33/33, rooms_ui, shop_host,
+hub_client_shop, relay_shop and pets_host green (80/80 together); Electron: setup_helper_render 1/1 (34 s),
+settings_render 1/1 (57 s), one run each. check ok; lint 47 warnings (as main); audit 0 findings; Python contracts
+248 OK (1 skipped). Contact sheets (dark Chrome and light Daylight; poses, skins, 96x64 to 360x240) and frame strips
+of petting, waking, sneezing, the flick, fireflies and the chase were rendered offscreen and kept locally in
+C:\wt\s-pets-lab\out. Not run: the full `npm test`.
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -503,22 +526,6 @@ Seen in a browser preview of the real renderer files with a stub room service: S
 active rooms you're in (the Lobby first), Post sent 1,337 characters to the Lobby, the chat card plays and saves once
 (then Saved and Open in Playlists), Add to the Project hub sent a 226-character link with a blurb naming the channels,
 and the hub shelf offers Save; no console errors.
-
-## 2026-10-06 A way to Routing opens More settings at Routing; the background check reads the Settings strip where Settings shows
-
-Branch `fix/routing-narrow` in `C:\wt\routing`, off main 017d51a. The full Electron lane on main 0b2fa14 (here, one
-suite at a time under the test lease) had 43 of 47 ok: command_render and today_render passed alone again (flakes),
-shell_render stops at the display-scaling check as before, and unified_studio_render failed every time at
-"#ai-role-routine-choice fits in narrow Routing". The Seats and models page (wip/models, 6c9126b) files Routing into
-the closed More settings, and go("agents", {pane: "routing"}) left it closed, so the controls were laid out but
-folded away (about 5,800 px down, nothing hit). agents.js openTeam now opens More at #settings-routing for a Routing
-way in that names no control. The suite then reached its contrast sweep, where `.settings-nav` read transparent:
-its solid fill is a container query on the Settings page, and since the window-scroll fix (efec563, bf0d0ce) the tab
-pages are not laid out under another page; the sweep now reads the strip with Settings open in the Studio mode and
-requires it measured there.
-
-unified_studio_render ok (alone, under the lease); team_render, agent_setup_render, settings_render ok; npm run check
-ok; npm run lint 0 errors and 47 warnings, as on clean main 017d51a. Hosted CI (Windows) on ef34f7a: green (37472060180). After merging main 4b150b3 (shell_render at 125% scaling): shell_render ok here, its first pass on this PC, so every window suite is green with this fix.
 
 ## Read Before Any Tests
 
