@@ -56,7 +56,7 @@ const known = [...painters.STYLES];
 const styles = list(value("--styles", known.join(",")));
 const unknown = styles.filter((style) => !known.includes(style));
 if (!styles.length || unknown.length) throw new Error(`Unknown node style: ${unknown.join(", ") || "(none chosen)"}; known: ${known.join(", ")}`);
-const STYLE_NAMES = { orbs: "Classic orbs", glass: "Soft glass", minimal: "Minimal", halo: "Halo", crystal: "Crystal", singularity: "Singularity", prism: "Prism", sigil: "Sigil" };
+const STYLE_NAMES = { orbs: "Classic orbs", glass: "Soft glass", minimal: "Minimal", halo: "Halo", crystal: "Crystal", singularity: "Singularity", prism: "Prism", sigil: "Sigil", dragonscale: "Dragon scales", constellation: "Constellation" };
 
 // Canvas palettes exactly as music.js resolves them (resolvePalette(theme).canvas, what idle.js syncGraphTheme and
 // the module's theme() read). "light" is a light custom palette through the same resolver.

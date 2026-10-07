@@ -17,7 +17,10 @@
 
 // ===== infra =====
 
-  const STYLES = Object.freeze(["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]);
+  // The looks: the five first ones, the Void collection (PREMIUM, the name it
+  // had while it was for members; free since 0.4.4 like the rest) and the two
+  // the Shop sells (renderer/music.js NODE_STYLES says which item each is).
+  const STYLES = Object.freeze(["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil", "dragonscale", "constellation"]);
   const PREMIUM = Object.freeze(["singularity", "prism", "sigil"]);
   const TAU = Math.PI * 2;
   const WHITE = Object.freeze([255, 255, 255]);
@@ -4407,6 +4410,1099 @@
   OUTLINES.sigil = (ctx, x, y, r) => { sigilHex(ctx, x, y, SIGIL_SEAL * r); return 6; };
   LOOKS.sigil = { speedup: 3, paint: paintSigil, glyph: { scale: 0.52, ringGap: 3.5, ink: sigilGlyphInk }, ring: sigilRing, hubDress: sigilHub, orbit: sigilOrbit, arrival: sigilArrival, select: sigilSelect, done: sigilDone, absorb: sigilAbsorb, wire: sigilWire, surge: sigilSurge, land: sigilLand, reach: sigilReach };
 
+// ===== style: dragonscale =====
+
+  // Dragon scales, a Shop style (studio:style-dragonscale): Ember's hide on
+  // every node. A domed gem in the node's own colour, lit from the upper left
+  // and warming toward its lower right (the tint pulled toward Ember's fire:
+  // its warmer second tone), covered in rows of overlapping scales, each a
+  // small arc whose free edge catches the light, its shadow on the scale
+  // below. A shimmer sweeps across them from the upper left and flashes one
+  // scale after another (a pass every 5.2 s, 2.4 times as often at work); a
+  // lit gem glows warm and a working one sheds embers. Wires are a thin
+  // ribbon that twists and flows toward the work, pulses embers that flicker
+  // along the wire and burst into sparks where they land, and the chosen gem
+  // is circled by a coiling tail. Detail by tier: below T1 the gem, its rim
+  // and one pair of scales; T1 a second row and the glare; T2 the top and
+  // bottom rows and the scales' shadows; T3 the embers (each fading in over
+  // its tier's first 1.2 px). The tint stays the body's colour: the warm tone
+  // is only its shade and its light. A light page keeps the dome's hue and
+  // deepens its rim and the scales' shadows. Reduced motion holds one pose:
+  // the shimmer parked on the upper scales, the embers where they rose.
+  // (The rim follows the free looks' rules, so it shares their helpers:
+  // freeBreath, freeRim and the stale dash.)
+  const DRAGON_FIRE = Object.freeze([255, 150, 64]); // Ember's fire (renderer/pets.js)
+  const DRAGON_HOT = Object.freeze([255, 238, 200]); // an ember's white-hot heart
+  const DRAGON_SOOT = Object.freeze([10, 6, 4]);
+  const DRAGON_SCALE = 0.3; // a scale's radius, in radii
+  const DRAGON_GLOW = 1.5; // the warm glow's reach, in radii
+  const DRAGON_PASS = 5.2; // seconds a shimmer pass takes (a band crossing, then a rest)
+  const DRAGON_SPAN = 0.34; // the shimmer band's half width, along its sweep
+  const DRAGON_STILL_BAND = -0.42; // the still pose's band, across the upper scales
+  const DRAGON_SWEEP = 0.62, DRAGON_SWEEP_X = Math.cos(DRAGON_SWEEP), DRAGON_SWEEP_Y = Math.sin(DRAGON_SWEEP);
+  // The scales, three numbers each in the gem's unit space: a ∪ of radius
+  // DRAGON_SCALE round (x, y) (the lower half of its circle, so its free edge
+  // hangs over the row below), and where its lowest point sits along the
+  // shimmer's sweep. Rows of the classic interlocking pattern (each one's ends
+  // meet the lowest points of the row above), nested by tier so a zoom only
+  // ever adds scales: a todo's pair, then T1's middle row, then T2's top and
+  // bottom rows, all inside .92 of the rim.
+  const DRAGON_TIERS = Object.freeze([2, 5, 8, 8]);
+  const DRAGON_ARCS = (() => {
+    const out = [];
+    for (const [y, xs] of [[0.15, [-0.3, 0.3]], [-0.15, [-0.6, 0, 0.6]], [-0.45, [-0.3, 0.3]], [0.45, [0]]]) {
+      for (const x of xs) out.push(x, y, x * DRAGON_SWEEP_X + (y + DRAGON_SCALE) * DRAGON_SWEEP_Y);
+    }
+    return Object.freeze(out);
+  })();
+  // The still pose's embers: how far each has risen.
+  const DRAGON_EMBER_POSE = Object.freeze([0.3, 0.62, 0.84]);
+  const DRAGON_NO_DASH = Object.freeze([]);
+  const dragonLevel = (value, fallback) => Number.isFinite(value) ? clamp01(value) : fallback;
+  // Where the shimmer band is along its sweep in a pass (it crosses over the
+  // first 65% and rests the rest of it), or -9: resting, nothing lit.
+  const dragonBand = (u) => u < 0.65 ? -1.3 + 2.6 * u / 0.65 : -9;
+
+  // The tones of one tint under one theme, cached per triple (rebuilt when
+  // the theme changes), every colour string built once: the dome's stops
+  // (light, the tint, the warm shade, the deep rim), the scales' light edge
+  // and shadow, the shimmer's flash, the glare, the rim's tone, the embers
+  // and the glyph's well and ink. A light page keeps the tint nearer itself
+  // and sinks the shadows toward its ink instead of its paper.
+  const dragonToneMemo = new WeakMap();
+  function dragonTones(tint, currentTheme) {
+    let tones = dragonToneMemo.get(tint);
+    if (tones && tones.theme === currentTheme) return tones;
+    const light = currentTheme.light === true, low = light ? currentTheme.hi : currentTheme.bg;
+    const warm = mix(tint, DRAGON_FIRE, light ? 0.3 : 0.4), inks = inkOf(tint, currentTheme);
+    tones = {
+      theme: currentTheme, light, key: `dragonscale|${tint.join(",")}|${currentTheme.key}`,
+      top: mix(tint, WHITE, light ? 0.42 : 0.38), tint, warm: mix(warm, low, light ? 0.18 : 0.38), deep: mix(tint, low, light ? 0.5 : 0.8),
+      glow: light ? mix(warm, WHITE, 0.3) : warm,
+      scale: rgba(light ? mix(tint, WHITE, 0.62) : mix(warm, WHITE, 0.55), 1),
+      shadow: rgba(light ? mix(tint, currentTheme.hi, 0.6) : mix(tint, DRAGON_SOOT, 0.78), 1),
+      // the light along each scale's lit side, and the fire in the seams of a working gem
+      sheen: rgba(light ? WHITE : mix(DRAGON_HOT, tint, 0.3), 1),
+      seam: rgba(light ? mix(DRAGON_FIRE, currentTheme.hi, 0.18) : mix(DRAGON_FIRE, DRAGON_HOT, 0.2), 1),
+      flash: rgba(light ? WHITE : mix(DRAGON_HOT, tint, 0.12), 1),
+      glare: rgba(mix(tint, WHITE, 0.84), 1),
+      // the rim: the tint, or on a light page the edge tone the free looks deepen to
+      edge: light ? mix(tint, currentTheme.hi, 0.72) : tint,
+      coil: rgba(light ? mix(warm, currentTheme.hi, 0.5) : mix(warm, WHITE, 0.3), 1),
+      ember: rgba(light ? mix(DRAGON_FIRE, currentTheme.hi, 0.42) : mix(DRAGON_FIRE, DRAGON_HOT, 0.35), 1),
+      well: rgba(inks.deep, 0.94), ink: rgba(inks.ink, 1),
+    };
+    dragonToneMemo.set(tint, tones);
+    return tones;
+  }
+  // The dome's paints in the gem's unit space, built once per canvas, tint
+  // and theme: the body radial (its light at the upper left, the tint at its
+  // middle, the warm shade and the deep rim toward the lower right), and the
+  // warm glow, built the first time it shows.
+  function dragonPaints(ctx, tones) {
+    const cached = cacheGet(ctx, tones.key);
+    if (cached) return cached;
+    const body = ctx.createRadialGradient(-0.36, -0.44, 0, -0.1, -0.12, 1.14);
+    body.addColorStop(0, rgba(tones.top, 0.98));
+    body.addColorStop(0.16, rgba(mix(tones.top, tones.tint, 0.6), 0.98));
+    body.addColorStop(0.42, rgba(tones.tint, 0.98));
+    body.addColorStop(0.74, rgba(tones.warm, 0.98));
+    body.addColorStop(1, rgba(tones.deep, 0.98));
+    return cachePut(ctx, tones.key, { body, glow: null });
+  }
+  function dragonGlow(ctx, tones) {
+    const glow = ctx.createRadialGradient(0, 0, 0.7, 0, 0, DRAGON_GLOW);
+    glow.addColorStop(0, rgba(tones.glow, tones.light ? 0.3 : 0.4));
+    glow.addColorStop(0.4, rgba(tones.glow, tones.light ? 0.1 : 0.15));
+    glow.addColorStop(1, rgba(tones.glow, 0));
+    return glow;
+  }
+  // Scales `from` to `to` (indexes into DRAGON_ARCS) as subpaths of the
+  // current path, in pixels round (x, y), `dy` px lower.
+  function dragonScales(ctx, x, y, radius, from, to, dy) {
+    const s = DRAGON_SCALE * radius;
+    for (let k = from; k < to; k += 1) {
+      const cx = x + DRAGON_ARCS[k * 3] * radius, cy = y + DRAGON_ARCS[k * 3 + 1] * radius + dy;
+      ctx.moveTo(cx + s, cy);
+      ctx.arc(cx, cy, s, 0, Math.PI);
+    }
+  }
+  // The lit side of each scale that faces the light (the ones on the gem's
+  // upper left, up to DRAGON_SHEEN_REACH along the sweep): the left part of
+  // its free edge.
+  const DRAGON_SHEEN_FROM = Math.PI * 0.56, DRAGON_SHEEN_TO = Math.PI * 0.94, DRAGON_SHEEN_REACH = 0.12;
+  const DRAGON_SHEEN_X = Math.cos(DRAGON_SHEEN_FROM), DRAGON_SHEEN_Y = Math.sin(DRAGON_SHEEN_FROM);
+  function dragonSheen(ctx, x, y, radius, from, to) {
+    const s = DRAGON_SCALE * radius;
+    for (let k = from; k < to; k += 1) {
+      if (DRAGON_ARCS[k * 3 + 2] > DRAGON_SHEEN_REACH) continue;
+      const cx = x + DRAGON_ARCS[k * 3] * radius, cy = y + DRAGON_ARCS[k * 3 + 1] * radius;
+      ctx.moveTo(cx + DRAGON_SHEEN_X * s, cy + DRAGON_SHEEN_Y * s);
+      ctx.arc(cx, cy, s, DRAGON_SHEEN_FROM, DRAGON_SHEEN_TO);
+    }
+  }
+
+  function paintDragonscale(ctx, p, radius, tint, n, m) {
+    if (!(radius > 0)) return;
+    const tones = dragonTones(tint, n.theme ?? INK_DEFAULTS), paints = dragonPaints(ctx, tones);
+    const base = n.alpha, still = m.still === true || n.still === true, light = tones.light;
+    const detail = n.detail >= 3 ? 3 : n.detail >= 2 ? 2 : n.detail >= 1 ? 1 : 0;
+    const lit = dragonLevel(m.lit, n.active || n.selected ? 1 : 0), sel = dragonLevel(m.sel, n.selected ? 1 : 0);
+    const work = dragonLevel(m.work, n.active ? 1 : 0), kick = still ? 0 : dragonLevel(m.kick, 0);
+    const breath = swell(m, 4.2);
+    // 1. The warm glow of a lit gem (breathing) and of a landing's kick, under
+    // the dome; then the dome itself at the caller's alpha. Both are cached
+    // radials in the gem's unit space.
+    const glow = Math.min(1, lit * (0.6 + 0.4 * swell(m, 2.4)) + 0.6 * kick);
+    freeEnter(ctx, p, radius);
+    if (glow > 0.01) {
+      ctx.arc(0, 0, DRAGON_GLOW, 0, TAU);
+      ctx.globalAlpha = base * glow; ctx.fillStyle = paints.glow ??= dragonGlow(ctx, tones); ctx.fill();
+      ctx.beginPath();
+    }
+    ctx.arc(0, 0, 1, 0, TAU);
+    ctx.globalAlpha = base; ctx.fillStyle = paints.body; ctx.fill();
+    freeLeave(ctx, p, radius);
+    // 2. The scales, traced in pixels. From T1 up a thin dark bezel inside the
+    // rim sets the gem, and each scale's shadow lies a little below its edge
+    // (firmer from T2); in a working gem that seam glows with Ember's fire,
+    // pulsing (1.6 s). Then the edges in the warm light (brighter as a
+    // landing kicks) and, from T1, a sheen on the lit side of the scales that
+    // face the light. The rows a tier brings fade in over its first 1.2 px
+    // (drawn apart from the ones the tier below already shows).
+    const shown = DRAGON_TIERS[detail], whole = detail >= 3 ? shown : DRAGON_TIERS[detail > 0 ? detail - 1 : 0];
+    const fade = detail === 1 || detail === 2 ? tierIn(radius, detail) : 1;
+    const width = Math.max(0.65, radius * 0.075), drop = Math.max(0.6, radius * 0.06);
+    ctx.lineCap = "round";
+    if (detail >= 1) {
+      // (the bezel and the shadows are one path, so a working gem's fire
+      // rings it inside the rim as well as running in its seams)
+      const bezel = radius - Math.max(1, radius * 0.08);
+      ctx.beginPath(); ctx.moveTo(p.x + bezel, p.y); ctx.arc(p.x, p.y, bezel, 0, TAU);
+      dragonScales(ctx, p.x, p.y, radius, 0, shown, drop);
+      ctx.globalAlpha = base * (light ? 0.5 : 0.66) * (detail === 1 ? 0.6 * fade : detail === 2 ? 0.6 + 0.4 * fade : 1);
+      ctx.strokeStyle = tones.shadow; ctx.lineWidth = width * 1.5; ctx.stroke();
+      const fire = work > 0.02 ? work * (0.55 + 0.45 * swell(m, 1.6, 0.7)) * (detail === 1 ? fade : 1) : 0;
+      if (fire > 0.01) { ctx.globalAlpha = base * fire; ctx.strokeStyle = tones.seam; ctx.stroke(); }
+    }
+    const edges = base * Math.min(1, 0.6 + 0.2 * lit + 0.45 * kick);
+    ctx.strokeStyle = tones.scale; ctx.lineWidth = width;
+    ctx.beginPath(); dragonScales(ctx, p.x, p.y, radius, 0, whole, 0);
+    ctx.globalAlpha = edges; ctx.stroke();
+    if (shown > whole && fade > 0.004) {
+      ctx.beginPath(); dragonScales(ctx, p.x, p.y, radius, whole, shown, 0);
+      ctx.globalAlpha = edges * fade; ctx.stroke();
+    }
+    if (detail >= 1) {
+      ctx.beginPath(); dragonSheen(ctx, p.x, p.y, radius, 0, shown);
+      ctx.globalAlpha = base * (light ? 0.7 : 0.62) * (detail === 1 ? fade : 1); ctx.strokeStyle = tones.sheen; ctx.lineWidth = width * 0.9; ctx.stroke();
+    }
+    // 3. The shimmer: a band crossing from the upper left flashes every scale
+    // it passes, the nearest brightest: each lit edge burns white (one short
+    // stroke apiece; a few at a time, the outer ones faint, none while the
+    // band rests between passes), and the brightest scale's face lights too.
+    const band = still ? DRAGON_STILL_BAND : dragonBand(cycle(m, DRAGON_PASS));
+    if (band > -9) {
+      ctx.strokeStyle = ctx.fillStyle = tones.flash; ctx.lineWidth = width + 0.35;
+      let best = -1, bestGain = 0;
+      for (let k = 0; k < shown; k += 1) {
+        const near = 1 - Math.abs(DRAGON_ARCS[k * 3 + 2] - band) / DRAGON_SPAN;
+        if (near <= 0.02) continue;
+        const gain = base * smooth01(near) * (k >= whole ? fade : 1) * (0.72 + 0.28 * lit);
+        if (gain > bestGain) { best = k; bestGain = gain; }
+        ctx.beginPath(); dragonScales(ctx, p.x, p.y, radius, k, k + 1, 0);
+        ctx.globalAlpha = gain; ctx.stroke();
+      }
+      if (best >= 0) {
+        // (its face: the crescent along the free edge)
+        const s = DRAGON_SCALE * radius, cx = p.x + DRAGON_ARCS[best * 3] * radius, cy = p.y + DRAGON_ARCS[best * 3 + 1] * radius;
+        ctx.beginPath(); ctx.moveTo(cx + s, cy); ctx.arc(cx, cy, s, 0, Math.PI); ctx.arc(cx, cy, s * 0.52, Math.PI, 0, true);
+        ctx.globalAlpha = bestGain * (light ? 0.34 : 0.3); ctx.fill();
+      }
+    }
+    // 4. The glare on the dome's upper left (T1 up).
+    if (detail >= 1) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.84, Math.PI * 1.12, Math.PI * 1.4);
+      ctx.globalAlpha = base * 0.6 * (detail === 1 ? fade : 1); ctx.strokeStyle = tones.glare; ctx.lineWidth = Math.max(0.8, radius * 0.1); ctx.stroke();
+    }
+    // 5. A glyph (an agent's role, the hub's monogram) sits in a smooth well.
+    if (n.glyph) {
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 0.6, 0, TAU);
+      ctx.globalAlpha = base; ctx.fillStyle = tones.well; ctx.fill();
+      ctx.globalAlpha = base * 0.7; ctx.strokeStyle = tones.scale; ctx.lineWidth = width; ctx.stroke();
+    }
+    // 6. The rim breathes with the gem (on a light page firmer, never under
+    // 85%, and at least 1.4 px from 6 px up); a stale gem's is dashed (T1 up).
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius, 0, TAU);
+    ctx.globalAlpha = base;
+    ctx.strokeStyle = rgba(tones.edge, qa((light ? 0.88 + 0.12 * lit : 0.52 + 0.3 * lit + 0.18 * sel) * freeBreath(m, light)));
+    ctx.lineWidth = freeRim((0.9 + 0.5 * lit + 0.7 * sel) * (0.85 + 0.3 * breath), radius, light);
+    const stale = n.stale && detail >= 1;
+    if (stale) ctx.setLineDash?.(FREE_STALE_DASH);
+    ctx.stroke();
+    if (stale) ctx.setLineDash?.(FREE_NO_DASH);
+    // 7. Embers (T3, at work): three rise off the top of the gem, swaying and
+    // dimming as they go, each a beat behind the last.
+    const embers = detail >= 3 && work > 0.02 ? work * tierIn(radius, 3) : 0;
+    if (embers > 0) {
+      ctx.fillStyle = tones.ember;
+      const pass = still ? 0 : cycle(m, 1.9), size = Math.max(0.55, radius * 0.085);
+      for (let k = 0; k < 3; k += 1) {
+        const u = still ? DRAGON_EMBER_POSE[k] : (pass + k * 0.37) % 1;
+        const angle = -Math.PI / 2 + (k - 1) * 0.62;
+        ctx.beginPath();
+        ctx.arc(p.x + Math.cos(angle) * radius * 0.86 + Math.sin(TAU * u + 2 * k) * radius * 0.12, p.y + Math.sin(angle) * radius * 0.86 - u * radius * 0.55, size * (1 - 0.6 * u), 0, TAU);
+        ctx.globalAlpha = base * embers * Math.sin(Math.PI * u); ctx.fill();
+      }
+    }
+    if (n.monogram) { ctx.globalAlpha = base; freeMonogram(ctx, p, n, tones.ink); }
+  }
+
+  // Hover and selection: a warm ring just off the rim; the chosen gem is
+  // circled by Ember's tail instead, two tapered arcs coiling slowly round it
+  // (a turn in 9 s) with an ember at each head. Both fade with the eased
+  // selection; reduced motion holds the coil with its heads at the top and
+  // the bottom.
+  function dragonSelect(ctx, p, radius, tint, o) {
+    const m = motionOf(o), still = o.still === true || m.still === true;
+    const chosen = o.chosen === true, marked = o.selected === true || chosen;
+    const sel = still ? (marked ? 1 : 0) : dragonLevel(m.sel, marked ? 1 : 0);
+    if (sel <= 0.01 && !chosen) return true;
+    const level = chosen ? Math.max(sel, 0.6) : sel;
+    const tones = dragonTones(tint, o.theme ?? INK_DEFAULTS), alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
+    const ring = Math.max(radius * 1.24, radius + 2.8);
+    ctx.save();
+    ctx.lineCap = "round"; ctx.strokeStyle = tones.coil;
+    if (!chosen) {
+      ctx.globalAlpha = alpha * 0.62 * level; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, ring, 0, TAU); ctx.stroke();
+    } else {
+      const spin = still ? -Math.PI / 2 : turn(m, 9) - Math.PI / 2;
+      for (let tail = 0; tail < 2; tail += 1) {
+        const head = spin + tail * Math.PI;
+        // three pieces behind the head, thinner and fainter toward the tail
+        for (let piece = 0; piece < 3; piece += 1) {
+          ctx.globalAlpha = alpha * level * (0.9 - 0.26 * piece); ctx.lineWidth = 1.7 - 0.45 * piece;
+          ctx.beginPath(); ctx.arc(p.x, p.y, ring, head - 0.42 * (piece + 1), head - 0.42 * piece); ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = alpha * level; ctx.fillStyle = tones.ember;
+      ctx.beginPath();
+      for (let tail = 0; tail < 2; tail += 1) {
+        const head = spin + tail * Math.PI, x = p.x + Math.cos(head) * ring, y = p.y + Math.sin(head) * ring;
+        ctx.moveTo(x + 1.5, y); ctx.arc(x, y, 1.5, 0, TAU);
+      }
+      ctx.fill();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // Arrival: a warm ring leaves the rim on an ease-out, thinning as it fades,
+  // and six embers are thrown out with it and fall away. The caller grows the
+  // node (easeOutBack) meanwhile; reduced motion: the gem simply appears.
+  function dragonArrival(ctx, p, radius, tint, t01, o) {
+    const m = motionOf(o);
+    if (o.still === true || o.motion != null && m.still === true || !(t01 < 1)) return true;
+    const t = clamp01(t01), tones = dragonTones(tint, o.theme ?? INK_DEFAULTS), alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
+    const out = easeOut(t), fade = 1 - t, turn0 = (Number.isFinite(m.seed) ? m.seed : 0) * TAU;
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.75 * fade * fade; ctx.strokeStyle = tones.coil; ctx.lineWidth = 0.6 + 1.4 * fade;
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1 + 0.8 * out), 0, TAU); ctx.stroke();
+    const size = Math.max(0.6, radius * 0.1) * fade;
+    if (size > 0.05) {
+      ctx.beginPath();
+      for (let k = 0; k < 6; k += 1) {
+        const angle = turn0 + k * TAU / 6, d = radius * (1.05 + 0.9 * out);
+        const x = p.x + Math.cos(angle) * d, y = p.y + Math.sin(angle) * d + radius * 0.3 * t * t;
+        ctx.moveTo(x + size, y); ctx.arc(x, y, size, 0, TAU);
+      }
+      ctx.globalAlpha = alpha * 0.9 * fade; ctx.fillStyle = tones.ember; ctx.fill();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // Dragon scales' finish beats: done, the gem sheds eight scales that spin
+  // out and fall away as a ring flares, all in the beat's ink (the theme's
+  // done green, amber for a failed check); absorb, five scales in the agent's
+  // tint fly in, settle on the receiving rim, and glint there once. A scale
+  // here is a ∪ of size s at (x, y), turned by `angle`.
+  function dragonScaleMark(ctx, x, y, s, angle) {
+    ctx.moveTo(x + Math.cos(angle) * s, y + Math.sin(angle) * s);
+    ctx.arc(x, y, s, angle, angle + Math.PI);
+  }
+  function dragonDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.4), ink = finishInk(o), fade = finishFade(t, o), out = easeOut(t);
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.strokeStyle = rgba(ink, qa(0.75 * (1 - t) * fade)); ctx.lineWidth = 1 + 1.4 * (1 - t);
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1.1 + 0.9 * out), 0, TAU); ctx.stroke();
+    ctx.strokeStyle = rgba(ink, qa(0.95 * fade)); ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    for (let k = 0; k < 8; k += 1) {
+      const angle = k * TAU / 8 + 0.3, d = radius * (0.9 + 2.1 * out);
+      dragonScaleMark(ctx, p.x + Math.cos(angle) * d, p.y + Math.sin(angle) * d + radius * 0.6 * t * t, Math.max(2, radius * 0.28) * (1 - 0.35 * t), angle + 3 * t);
+    }
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+  function dragonAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.55), fade = finishFade(t, o), mark = finishTint(tint, o);
+    const fly = easeOut(Math.min(1, t / 0.62)), settle = clamp01((t - 0.62) / 0.38);
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.strokeStyle = rgba(mark, qa(0.9 * fade)); ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    for (let k = 0; k < 5; k += 1) {
+      const angle = k * TAU / 5 - Math.PI / 2, d = radius * (1.1 + 2.2 * (1 - fly));
+      dragonScaleMark(ctx, p.x + Math.cos(angle) * d, p.y + Math.sin(angle) * d, Math.max(1.8, radius * 0.24), angle - Math.PI / 2);
+    }
+    ctx.stroke();
+    if (settle > 0) {
+      ctx.strokeStyle = rgba(mark, qa(0.85 * Math.sin(Math.PI * settle))); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(p.x, p.y, radius * 1.1, -Math.PI / 2 - 0.5, -Math.PI / 2 + 0.5); ctx.stroke();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // Wires: a thin ribbon. The caller's line as asked (its pen, dash and
+  // march, the hub's double line, the tree's S-curve); on a lively wire (one
+  // that carries work, a lit one, a session's, or one between larger gems)
+  // a ribbon twists along it, wide where a face turns toward you and thin
+  // where it turns edge-on, narrowing into both ends; its twist flows toward
+  // b, quickly on a wire that carries work (46 px/s, the ribbon burning with
+  // Ember's fire) and slowly otherwise (12), and a still pose holds it at the
+  // wire's own phase. The far (blurred) pen,
+  // the rail and the hub's double line keep the line alone. On a light page
+  // the line and the ribbon keep the tint's hue, deepened as far as they need
+  // (the shared wire tones). Every alpha is a gain on the canvas's own, and
+  // the canvas comes back with its alpha, cap, dash and offset, set back by
+  // hand (cheaper than a save and a restore on every edge).
+  const DRAGON_WIRE_MAX = 5;
+  const DRAGON_TWIST = 32; // px from one wide face of the ribbon to the next
+  const DRAGON_STEP = 8; // px between the ribbon's samples
+  const DRAGON_RIBBON_MAX = 30;
+  const DRAGON_RIBBON = new Float64Array((DRAGON_RIBBON_MAX + 1) * 4); // x, y and the half width's normal, per sample
+  const DRAGON_AT = { x: 0, y: 0, tx: 1, ty: 0 };
+  // A point u along the wire (its S-curve `cp` when it has one) and its unit
+  // direction there, into DRAGON_AT.
+  function dragonAlong(a, b, cp, u) {
+    const v = 1 - u;
+    let tx = b.x - a.x, ty = b.y - a.y;
+    if (cp) {
+      DRAGON_AT.x = v * v * v * a.x + 3 * v * v * u * cp.x1 + 3 * v * u * u * cp.x2 + u * u * u * b.x;
+      DRAGON_AT.y = v * v * v * a.y + 3 * v * v * u * cp.y1 + 3 * v * u * u * cp.y2 + u * u * u * b.y;
+      const cx = 3 * v * v * (cp.x1 - a.x) + 6 * v * u * (cp.x2 - cp.x1) + 3 * u * u * (b.x - cp.x2);
+      const cy = 3 * v * v * (cp.y1 - a.y) + 6 * v * u * (cp.y2 - cp.y1) + 3 * u * u * (b.y - cp.y2);
+      if (Math.hypot(cx, cy) > 1e-6) { tx = cx; ty = cy; }
+    } else {
+      DRAGON_AT.x = a.x + tx * u; DRAGON_AT.y = a.y + ty * u;
+    }
+    const length = Math.hypot(tx, ty) || 1;
+    DRAGON_AT.tx = tx / length; DRAGON_AT.ty = ty / length;
+    return DRAGON_AT;
+  }
+  // The S-curve's length (six chords) or the line's.
+  function dragonSpan(a, b, cp, chord) {
+    if (!cp) return chord;
+    let x = a.x, y = a.y, total = 0;
+    for (let step = 1; step <= 6; step += 1) {
+      const at = dragonAlong(a, b, cp, step / 6);
+      total += Math.hypot(at.x - x, at.y - y);
+      x = at.x; y = at.y;
+    }
+    return total;
+  }
+  function dragonTrace(ctx, a, b, cp) {
+    ctx.beginPath(); ctx.moveTo(a.x, a.y);
+    if (cp) ctx.bezierCurveTo(cp.x1, cp.y1, cp.x2, cp.y2, b.x, b.y);
+    else ctx.lineTo(b.x, b.y);
+  }
+  // A wire's tones, cached per tint and theme: the line, the ribbon (the
+  // tint warmed and paled toward its light) and the ribbon of a wire that
+  // carries work, burning with Ember's fire.
+  const dragonWireMemo = new WeakMap();
+  function dragonWireTones(tint, currentTheme) {
+    let tones = dragonWireMemo.get(tint);
+    if (tones && tones.theme === currentTheme) return tones;
+    const light = currentTheme.light === true, lift = light ? wireLightTone(tint, currentTheme) : null;
+    tones = {
+      theme: currentTheme, light,
+      line: rgba(light ? lift.line : tint, 1),
+      ribbon: rgba(light ? mix(lift.line, DRAGON_FIRE, 0.18) : mix(mix(tint, DRAGON_FIRE, 0.3), WHITE, 0.28), 1),
+      fire: rgba(light ? mix(lift.line, DRAGON_FIRE, 0.45) : mix(mix(tint, DRAGON_FIRE, 0.6), DRAGON_HOT, 0.3), 1),
+    };
+    dragonWireMemo.set(tint, tones);
+    return tones;
+  }
+  // The ribbon: a sample every DRAGON_STEP px (6 to 30), its half width the
+  // |cos| of the twist (never under a sixth of it) times a taper into both
+  // ends; one closed path, filled.
+  function dragonRibbon(ctx, a, b, cp, chord, width, gain, flowing, lit, still, time, seed, style) {
+    const span = dragonSpan(a, b, cp, chord);
+    const count = Math.max(6, Math.min(DRAGON_RIBBON_MAX, Math.round(span / DRAGON_STEP)));
+    const phase = seed * TAU - (still ? 0 : (time / 1000) * (flowing ? 46 : 12) * Math.PI / DRAGON_TWIST);
+    const half = 0.5 * width + (lit ? 1.5 : 1.2);
+    for (let index = 0; index <= count; index += 1) {
+      const u = index / count, s = u * span, at = dragonAlong(a, b, cp, u);
+      const w = half * (0.16 + 0.84 * Math.abs(Math.cos(Math.PI * s / DRAGON_TWIST + phase))) * smooth01(Math.min(s, span - s) / 12);
+      const k = index * 4;
+      DRAGON_RIBBON[k] = at.x; DRAGON_RIBBON[k + 1] = at.y; DRAGON_RIBBON[k + 2] = -at.ty * w; DRAGON_RIBBON[k + 3] = at.tx * w;
+    }
+    ctx.beginPath();
+    ctx.moveTo(DRAGON_RIBBON[0] + DRAGON_RIBBON[2], DRAGON_RIBBON[1] + DRAGON_RIBBON[3]);
+    for (let index = 1; index <= count; index += 1) { const k = index * 4; ctx.lineTo(DRAGON_RIBBON[k] + DRAGON_RIBBON[k + 2], DRAGON_RIBBON[k + 1] + DRAGON_RIBBON[k + 3]); }
+    for (let index = count; index >= 0; index -= 1) { const k = index * 4; ctx.lineTo(DRAGON_RIBBON[k] - DRAGON_RIBBON[k + 2], DRAGON_RIBBON[k + 1] - DRAGON_RIBBON[k + 3]); }
+    ctx.closePath();
+    ctx.globalAlpha = gain; ctx.fillStyle = style; ctx.fill();
+  }
+  function dragonWire(ctx, a, b, o) {
+    const tint = o.tint;
+    if (!tint || !a || !b) return false;
+    const chord = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!(chord > 1)) return true;
+    const tones = dragonWireTones(tint, o.theme ?? INK_DEFAULTS);
+    const rail = o.rail === true, far = o.far === true, still = o.still === true, double = o.double === true;
+    const cp = !double && o.curved === true && o.cp ? o.cp : null;
+    const alpha = Number.isFinite(o.alpha) ? clamp01(o.alpha) : 1, width = Math.min(DRAGON_WIRE_MAX, o.width > 0 ? o.width : 1);
+    const time = Number.isFinite(o.time) ? o.time : 0, seed = Number.isFinite(o.seed) ? o.seed : 0;
+    const base = ctx.globalAlpha, cap = ctx.lineCap;
+    if (cap !== "round") ctx.lineCap = "round";
+    const dash = o.dash && o.dash.length ? o.dash : null;
+    if (dash) {
+      // The dashes march toward b (a tether's faster), as the plain lines do.
+      let period = 0;
+      if (o.march === true && !still) { for (let index = 0; index < dash.length; index += 1) period += dash[index]; if (dash.length % 2) period *= 2; }
+      ctx.setLineDash?.(dash);
+      ctx.lineDashOffset = period > 0 ? -((time / (o.kind === "tether" ? 40 : 60)) % period) : 0;
+    }
+    if (double) {
+      // The hub link: two parallel lines 3.2 px apart, one stroke.
+      const nx = (a.y - b.y) / chord * 1.6, ny = (b.x - a.x) / chord * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny);
+      ctx.moveTo(a.x - nx, a.y - ny); ctx.lineTo(b.x - nx, b.y - ny);
+    } else dragonTrace(ctx, a, b, cp);
+    ctx.globalAlpha = base * alpha; ctx.strokeStyle = tones.line; ctx.lineWidth = width; ctx.stroke();
+    if (dash) { ctx.setLineDash?.(DRAGON_NO_DASH); ctx.lineDashOffset = 0; }
+    const active = o.active === true, lit = active || o.inspected === true;
+    const flowing = typeof o.flow === "boolean" ? o.flow : active;
+    const detail = Number.isFinite(o.detail) ? o.detail : 3;
+    if (!far && !rail && !double && (flowing || lit || o.kind === "session" || detail >= 2)) {
+      // (a deep ribbon on a pale page reads heavier: it takes a little less;
+      // one that carries work burns with fire, held still as well)
+      dragonRibbon(ctx, a, b, cp, chord, width, base * Math.min(1, alpha * (lit ? 1.1 : 0.9) * (tones.light ? 0.75 : 1)), flowing, lit, still, time, seed, flowing ? tones.fire : tones.ribbon);
+    }
+    ctx.globalAlpha = base;
+    if (cap !== "round") ctx.lineCap = cap;
+    return true;
+  }
+
+  // Pulses: an ember flickering along the wire. A hot heart in the pulse's
+  // colour warmed toward Ember's fire inside a soft glow (none on a light
+  // page or on the rail), a short warm streak behind it and the sparks it
+  // sheds, each drifting off the line and dying, some blinking out; its size
+  // and brightness flicker (a new step every 70 ms, from the pulse's own
+  // seed). A wave pulse burns bigger with more sparks and warms its whole
+  // wire; a packet rides it as a coal (a small turning diamond). On the
+  // tree's S-curve (o.cp) it rides the curve as drawn; over the last fifth a
+  // warm bloom opens on the target. Reduced motion: one still ember near the
+  // end of its wire. On a light page it keeps its hue (the shared wire tones).
+  const dragonPulseColours = new Map();
+  function dragonPulseRgb(pulse) {
+    const text = typeof pulse?.color === "string" ? pulse.color : "#a9ffcd";
+    let triple = dragonPulseColours.get(text);
+    if (!triple) {
+      triple = parseHex(text) ?? parseHex("#a9ffcd");
+      if (dragonPulseColours.size >= 32) dragonPulseColours.clear();
+      dragonPulseColours.set(text, triple);
+    }
+    return triple;
+  }
+  // A pulse's own stable number (its start time, hashed), for its flicker and sparks.
+  const dragonPulseSeed = (pulse) => hash(((Number.isFinite(pulse?.start) ? pulse.start : 0) % 9973) / 9973, 5);
+  // An ember's paints per canvas, colour and theme: its heart, its core,
+  // its sparks and streak, and its glow (a unit radial, built the first
+  // time a pulse there needs one).
+  const dragonEmberKeys = new WeakMap();
+  function dragonEmberPaints(ctx, rgb, currentTheme) {
+    let memo = dragonEmberKeys.get(rgb);
+    if (!memo || memo.theme !== currentTheme) {
+      memo = { theme: currentTheme, key: `dragonscale|ember|${rgb.join(",")}|${currentTheme.key}` };
+      dragonEmberKeys.set(rgb, memo);
+    }
+    const cached = cacheGet(ctx, memo.key);
+    if (cached) return cached;
+    const light = currentTheme.light === true, warm = mix(rgb, DRAGON_FIRE, 0.35);
+    const lift = light ? wireLightTone(warm, currentTheme) : null;
+    return cachePut(ctx, memo.key, {
+      light, glow: null, tone: warm,
+      heart: rgba(light ? lift.deep : mix(DRAGON_HOT, warm, 0.2), 1),
+      core: rgba(light ? lift.line : mix(warm, WHITE, 0.25), 1),
+      spark: rgba(light ? lift.deep : mix(warm, DRAGON_HOT, 0.45), 1),
+      streak: rgba(light ? lift.line : warm, 1),
+    });
+  }
+  function dragonEmberGlow(ctx, paints) {
+    if (paints.glow) return paints.glow;
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    glow.addColorStop(0, rgba(mix(paints.tone, DRAGON_HOT, 0.5), 0.7));
+    glow.addColorStop(0.35, rgba(paints.tone, 0.3));
+    glow.addColorStop(1, rgba(paints.tone, 0));
+    paints.glow = glow;
+    return glow;
+  }
+  // The glow sprite as a disc `radius` px round (x, y) at globalAlpha `alpha`.
+  function dragonGlowAt(ctx, paints, x, y, radius, alpha) {
+    if (!(alpha > 0.004) || !(radius > 0)) return;
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(radius, radius);
+    ctx.globalAlpha = alpha; ctx.fillStyle = dragonEmberGlow(ctx, paints);
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  const DRAGON_SPARKS = 5;
+  function dragonSurge(ctx, from, to, t, pulse, o) {
+    if (!pulse || !from || !to) return false;
+    const chord = Math.hypot(to.x - from.x, to.y - from.y);
+    if (!(t >= 0) || !(chord >= 2)) return true;
+    const rail = o.rail === true, still = o.still === true, cp = !rail && o.cp ? o.cp : null;
+    const paints = dragonEmberPaints(ctx, dragonPulseRgb(pulse), o.theme ?? INK_DEFAULTS);
+    const small = pulse.small === true, wave = pulse.wave === true || o.kind === "wave";
+    const time = Number.isFinite(o.time) ? o.time : 0, seedValue = dragonPulseSeed(pulse);
+    const size = (small ? 0.75 : wave ? 1.3 : 1) * (rail ? 0.65 : 1);
+    const head = still ? 0.82 : clamp01(t);
+    const flick = still ? 0.85 : 0.72 + 0.28 * hash(seedValue, Math.floor(time / 70));
+    ctx.save();
+    const base = ctx.globalAlpha;
+    ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.setLineDash?.(DRAGON_NO_DASH);
+    // A wave warms its whole wire while it is on it.
+    if (wave && !still) {
+      dragonTrace(ctx, from, to, cp);
+      ctx.globalAlpha = base * 0.22 * Math.sin(Math.PI * head); ctx.strokeStyle = paints.streak; ctx.lineWidth = (small ? 1.2 : 1.7) * (rail ? 0.6 : 1); ctx.stroke();
+    }
+    // The streak: two pieces behind the head (about 14 px), brighter toward it.
+    const tail = Math.min(head, Math.max(0.03, 14 / chord) * (wave ? 1.4 : 1));
+    let at = dragonAlong(from, to, cp, head - tail);
+    let px = at.x, py = at.y;
+    ctx.strokeStyle = paints.streak;
+    for (let piece = 1; piece <= 2; piece += 1) {
+      at = dragonAlong(from, to, cp, head - tail * (1 - piece / 2));
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(at.x, at.y);
+      ctx.globalAlpha = base * (0.25 + 0.25 * piece); ctx.lineWidth = size * (0.9 + 0.6 * piece); ctx.stroke();
+      px = at.x; py = at.y;
+    }
+    const hx = px, hy = py;
+    // The sparks it shed, 7 px apart behind it: each drifts off the line as
+    // it ages and shrinks, and blinks out now and then (its own 90 ms steps).
+    const sparks = rail ? 2 : wave ? DRAGON_SPARKS + 2 : DRAGON_SPARKS;
+    const gap = 7 / dragonSpan(from, to, cp, chord);
+    ctx.beginPath();
+    let any = false;
+    for (let j = 1; j <= sparks; j += 1) {
+      const u = head - j * gap;
+      if (u <= 0) break;
+      if (!still && hash(seedValue, j * 31 + Math.floor(time / 90)) < 0.22) continue;
+      const age = j / (sparks + 1), drift = (hash(seedValue, j) - 0.5) * 2 * (1.5 + 5 * age) * size;
+      const point = dragonAlong(from, to, cp, u);
+      const x = point.x - point.ty * drift, y = point.y + point.tx * drift - 2.5 * age * size;
+      const r = Math.max(0.35, (1 - age) * 1.25 * size);
+      ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, TAU);
+      any = true;
+    }
+    if (any) { ctx.globalAlpha = base * 0.85; ctx.fillStyle = paints.spark; ctx.fill(); }
+    // The heart: its glow (not on a light page or the rail), a warm core and
+    // a white-hot heart, flickering; a packet's coal turns over it.
+    if (!rail && !paints.light) dragonGlowAt(ctx, paints, hx, hy, size * 6.5 * flick, base * flick);
+    ctx.globalAlpha = base;
+    ctx.beginPath(); ctx.arc(hx, hy, size * 2 * flick, 0, TAU); ctx.fillStyle = paints.core; ctx.fill();
+    ctx.beginPath(); ctx.arc(hx, hy, size * 1.05 * flick, 0, TAU); ctx.fillStyle = paints.heart; ctx.fill();
+    if (pulse.packet === true) {
+      const turnAt = Math.PI / 4 + head * Math.PI, c = Math.cos(turnAt) * size * 3.2, s = Math.sin(turnAt) * size * 3.2;
+      ctx.beginPath(); ctx.moveTo(hx + c, hy + s); ctx.lineTo(hx - s, hy + c); ctx.lineTo(hx - c, hy - s); ctx.lineTo(hx + s, hy - c); ctx.closePath();
+      ctx.globalAlpha = base * 0.9; ctx.strokeStyle = paints.spark; ctx.lineWidth = 1.1; ctx.stroke();
+    }
+    // The landing's first warmth: a bloom on the target over the last fifth.
+    const landing = (head - 0.8) / 0.2;
+    if (landing > 0 && !still && !paints.light) dragonGlowAt(ctx, paints, to.x, to.y, Math.max(rail ? 8 : 12, (o.rTo > 0 ? o.rTo : 0) + (rail ? 5 : 8)), base * 0.45 * landing * (rail ? 0.6 : 1));
+    ctx.restore();
+    return true;
+  }
+
+  // A landing: the ember bursts into sparks off the node's rim, six thrown
+  // out and falling away as they shrink, and a warm ring swells off the rim
+  // and fades. The rail, and a far, dimmed or moving target (detail ≤ 1),
+  // get the ring alone. Reduced motion: nothing more (the still ember
+  // already sits at the end of its wire).
+  function dragonLand(ctx, p, radius, tint, u, o) {
+    if (!p || !tint) return false;
+    if (o.still === true || !(u < 1)) return true;
+    const paints = dragonEmberPaints(ctx, o.pulse ? dragonPulseRgb(o.pulse) : tint, o.theme ?? INK_DEFAULTS);
+    const k = clamp01(u), out = easeOut(k), fade = 1 - k, r = radius > 3 ? radius : 3;
+    ctx.save();
+    const base = ctx.globalAlpha;
+    ctx.globalAlpha = base * 0.7 * fade * fade; ctx.strokeStyle = paints.streak; ctx.lineWidth = 0.6 + 1.2 * fade;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r + 1.5 + (4 + 0.5 * r) * out, 0, TAU); ctx.stroke();
+    if (o.rail !== true && !(Number.isFinite(o.detail) && o.detail <= 1) && fade > 0.02) {
+      const seedValue = o.pulse ? dragonPulseSeed(o.pulse) : 0, small = o.pulse?.small === true ? 0.75 : 1;
+      ctx.beginPath();
+      for (let j = 0; j < 6; j += 1) {
+        const angle = TAU * (j / 6 + 0.12 * hash(seedValue, j + 11)), d = r + 1 + (5 + 0.6 * r) * out;
+        const x = p.x + Math.cos(angle) * d, y = p.y + Math.sin(angle) * d + 5 * k * k;
+        const s = (0.6 + 0.9 * hash(seedValue, j + 23)) * fade * small;
+        ctx.moveTo(x + s, y); ctx.arc(x, y, s, 0, TAU);
+      }
+      ctx.globalAlpha = base * 0.9 * Math.sqrt(fade); ctx.fillStyle = paints.spark; ctx.fill();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // How far the look reaches: the embers at work (1.45 radii), the selection
+  // ring and the chosen coil as the selection eases in.
+  function dragonReach(m) {
+    return Math.max(1 + 0.45 * dragonLevel(m?.work, 0), 1 + 0.4 * dragonLevel(m?.sel, 0));
+  }
+  LOOKS.dragonscale = { speedup: 2.4, paint: paintDragonscale, glyph: { scale: 0.56, ringGap: 3.5, ink: (tint, currentTheme) => dragonTones(tint, currentTheme).ink }, ring: null, hubDress: null, orbit: null, arrival: dragonArrival, select: dragonSelect, done: dragonDone, absorb: dragonAbsorb, wire: dragonWire, surge: dragonSurge, land: dragonLand, reach: dragonReach };
+
+// ===== style: constellation =====
+
+  // Constellation, a Shop style (studio:style-constellation): every node a
+  // star. A soft glow in the node's colour round a small bright core (white
+  // hot at its heart, the tint at its edge), crossed by four thin
+  // diffraction spikes whose length breathes (6.5 s). A lit star burns
+  // brighter; a working one's spikes reach further, its core scintillates
+  // and a fainter diagonal pair twinkles in, turning slowly; a landing flares
+  // it. Wires are faint dotted star-chart lines that stop short of every star
+  // (WIRE_INSET), with a small star running along one that carries work;
+  // pulses are tiny shooting stars that flash where they land; the selected
+  // node wears a delicate ring of tiny stars. Detail by tier: below T1 the
+  // glow, the core and the spikes; T2 the scintillation; T3 the diagonal pair
+  // (each fading in over its tier's first 1.2 px). The tint stays the star's
+  // colour: only the heart is whiter. A light page prints it like a star
+  // atlas: an ink-dark core and spikes in the tint's deepened tone under a
+  // pale glow. A stale star wears a broken ring (T1 up). Reduced motion: the
+  // spikes at their middle length, nothing turning or twinkling.
+  const STAR_GLOW = 1.3; // the glow's reach, in radii
+  const STAR_SPIKES = 1.66; // the spikes' paint fades out by here
+  const STAR_CORE = 0.29; // the core's radius, in radii (never under 1.3 px)
+  const STAR_WAIST = 0.075; // the spikes' half width where they meet, in radii (never under .55 px)
+  const STAR_NO_DASH = Object.freeze([]);
+  const STAR_STALE = [0, 0]; // a stale star's broken ring, refilled in its unit space
+  const starLevel = (value, fallback) => Number.isFinite(value) ? clamp01(value) : fallback;
+  // A concave four-point star round (x, y) as one closed subpath: arms `arm`
+  // long along the axes turned by (c, s), pinched to `waist` between them.
+  // The caller begins and fills.
+  function starPath(ctx, x, y, arm, waist, c, s) {
+    ctx.moveTo(x + c * arm, y + s * arm);
+    ctx.lineTo(x + (c - s) * waist, y + (s + c) * waist);
+    ctx.lineTo(x - s * arm, y + c * arm);
+    ctx.lineTo(x - (c + s) * waist, y + (c - s) * waist);
+    ctx.lineTo(x - c * arm, y - s * arm);
+    ctx.lineTo(x - (c - s) * waist, y - (s + c) * waist);
+    ctx.lineTo(x + s * arm, y - c * arm);
+    ctx.lineTo(x + (c + s) * waist, y - (c - s) * waist);
+    ctx.closePath();
+  }
+  // A star's twinkle, 0..1: two slow beats in its own phase, mostly low.
+  const starTwinkle = (clock, seedValue) => (0.5 + 0.5 * Math.sin(clock * 7.3 + seedValue * 41)) * (0.5 + 0.5 * Math.sin(clock * 4.1 + seedValue * 17));
+
+  // The tones of one tint under one theme, cached per triple (rebuilt when
+  // the theme changes): the heart, the tint the core and the spikes fade
+  // into (deepened toward the ink on a light page, where a pale star would
+  // vanish), the glow's tone, the tiny stars of a selection, a stale star's
+  // ring and the glyph's well and ink.
+  const starToneMemo = new WeakMap();
+  function starTones(tint, currentTheme) {
+    let tones = starToneMemo.get(tint);
+    if (tones && tones.theme === currentTheme) return tones;
+    const light = currentTheme.light === true, hi = currentTheme.hi, inks = inkOf(tint, currentTheme);
+    tones = {
+      theme: currentTheme, light, key: `constellation|${tint.join(",")}|${currentTheme.key}`,
+      heart: light ? mix(tint, hi, 0.8) : mix(tint, WHITE, 0.84),
+      ink: light ? mix(tint, hi, 0.5) : tint,
+      glow: light ? mix(tint, WHITE, 0.12) : tint,
+      spark: rgba(light ? mix(tint, hi, 0.58) : mix(tint, WHITE, 0.72), 1),
+      ring: light ? mix(tint, hi, 0.62) : mix(tint, WHITE, 0.2),
+      well: rgba(inks.deep, 0.94), glyphInk: rgba(inks.ink, 1),
+    };
+    starToneMemo.set(tint, tones);
+    return tones;
+  }
+  // The star's three paints in its unit space, built once per canvas, tint
+  // and theme: the glow, the spikes' falloff (the heart at the centre, the
+  // tint, then nothing by STAR_SPIKES) and the core.
+  function starPaints(ctx, tones) {
+    const cached = cacheGet(ctx, tones.key);
+    if (cached) return cached;
+    const light = tones.light;
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, STAR_GLOW);
+    glow.addColorStop(0, rgba(tones.glow, light ? 0.32 : 0.5));
+    glow.addColorStop(0.24, rgba(tones.glow, light ? 0.18 : 0.28));
+    glow.addColorStop(0.55, rgba(tones.glow, light ? 0.06 : 0.09));
+    glow.addColorStop(1, rgba(tones.glow, 0));
+    const spikes = ctx.createRadialGradient(0, 0, 0, 0, 0, STAR_SPIKES);
+    spikes.addColorStop(0, rgba(tones.heart, 1));
+    spikes.addColorStop(0.16, rgba(tones.ink, 0.95));
+    spikes.addColorStop(0.5, rgba(tones.ink, 0.45));
+    spikes.addColorStop(1, rgba(tones.ink, 0));
+    // (on a dark sky the core's edge softens into the glow, a point of light;
+    // a light page prints it whole, as an atlas prints its stars)
+    const core = ctx.createRadialGradient(0, 0, 0, 0, 0, STAR_CORE);
+    core.addColorStop(0, rgba(tones.heart, 1));
+    core.addColorStop(0.4, rgba(mix(tones.heart, tones.ink, 0.45), 1));
+    core.addColorStop(0.78, rgba(tones.ink, 1));
+    core.addColorStop(1, rgba(tones.ink, light ? 1 : 0.45));
+    return cachePut(ctx, tones.key, { glow, spikes, core });
+  }
+
+  function paintConstellation(ctx, p, radius, tint, n, m) {
+    if (!(radius > 0)) return;
+    const tones = starTones(tint, n.theme ?? INK_DEFAULTS), paints = starPaints(ctx, tones);
+    const base = n.alpha, still = m.still === true || n.still === true, pixel = 1 / radius;
+    const detail = n.detail >= 3 ? 3 : n.detail >= 2 ? 2 : n.detail >= 1 ? 1 : 0;
+    const lit = starLevel(m.lit, n.active || n.selected ? 1 : 0), sel = starLevel(m.sel, n.selected ? 1 : 0);
+    const work = starLevel(m.work, n.active ? 1 : 0), kick = still ? 0 : starLevel(m.kick, 0);
+    const breathe = swell(m, 6.5);
+    // The scintillation (T2 up, never still): the core and the spikes dim a
+    // little now and then, in the star's own phase.
+    const scint = still || detail < 2 || !Number.isFinite(m.clock) ? 0 : starTwinkle(m.clock, Number.isFinite(m.seed) ? m.seed : 0) * (detail === 2 ? tierIn(radius, 2) : 1);
+    const arm = Math.min(1.58, 0.98 + 0.4 * breathe + 0.14 * work + 0.08 * sel + 0.3 * kick);
+    const waist = Math.max(STAR_WAIST, 0.55 * pixel);
+    // The whole star in its unit space, one transform (paint() restores the
+    // canvas); a stroke divides its pixel width by the radius.
+    freeEnter(ctx, p, radius);
+    // 1. The glow, breathing with the spikes, brighter while lit or kicked.
+    ctx.arc(0, 0, STAR_GLOW, 0, TAU);
+    ctx.globalAlpha = base * Math.min(1, (0.62 + 0.38 * lit) * (0.86 + 0.14 * breathe) + 0.35 * kick); ctx.fillStyle = paints.glow; ctx.fill();
+    // 2. The four spikes, one fill; then (T3, at work or on a kick) the
+    // fainter diagonal pair, turning slowly (a turn in 26 s).
+    ctx.beginPath(); starPath(ctx, 0, 0, arm, waist, 1, 0);
+    ctx.globalAlpha = base * (0.84 + 0.16 * lit) * (1 - 0.18 * scint); ctx.fillStyle = paints.spikes; ctx.fill();
+    const diagonal = detail >= 3 ? Math.max(work, kick) * tierIn(radius, 3) : 0;
+    if (diagonal > 0.02) {
+      const spin = Math.PI / 4 + turn(m, 26);
+      ctx.beginPath(); starPath(ctx, 0, 0, arm * 0.62, waist * 0.8, Math.cos(spin), Math.sin(spin));
+      ctx.globalAlpha = base * 0.55 * diagonal * (0.75 + 0.25 * swell(m, 1.7)); ctx.fill();
+    }
+    // 3. The core at the caller's alpha (dimming a little as it
+    // scintillates), or the well a glyph sits in, ringed in the tint.
+    ctx.beginPath();
+    if (n.glyph) {
+      ctx.arc(0, 0, 0.62, 0, TAU);
+      ctx.globalAlpha = base; ctx.fillStyle = tones.well; ctx.fill();
+      ctx.globalAlpha = base * 0.8; ctx.strokeStyle = rgba(tones.ink, 1); ctx.lineWidth = 0.9 * pixel; ctx.stroke();
+    } else {
+      ctx.arc(0, 0, Math.max(STAR_CORE * (1 + 0.1 * work + 0.22 * kick), 1.3 * pixel), 0, TAU);
+      ctx.globalAlpha = base * (1 - 0.14 * scint); ctx.fillStyle = paints.core; ctx.fill();
+    }
+    // 4. A stale star's broken ring (T1 up): 1.5 px on, 2 off.
+    if (n.stale && detail >= 1) {
+      ctx.beginPath(); ctx.arc(0, 0, 0.74, 0, TAU);
+      STAR_STALE[0] = 1.5 * pixel; STAR_STALE[1] = 2 * pixel; ctx.setLineDash?.(STAR_STALE);
+      ctx.globalAlpha = base; ctx.strokeStyle = rgba(tones.ring, tones.light ? 0.9 : 0.7); ctx.lineWidth = (tones.light ? 1.2 : 1) * pixel; ctx.stroke();
+      ctx.setLineDash?.(STAR_NO_DASH);
+    }
+    if (n.monogram) { freeLeave(ctx, p, radius); ctx.globalAlpha = base; freeMonogram(ctx, p, n, tones.glyphInk); }
+  }
+
+  // Selection: a delicate ring of tiny stars round the node, eight on a
+  // hover, twelve brighter ones on the chosen node, each twinkling in its own
+  // phase as the ring turns slowly (a turn in 40 s); it fades in and out with
+  // the eased selection. Reduced motion: still, each at its own size.
+  function starSelect(ctx, p, radius, tint, o) {
+    const m = motionOf(o), still = o.still === true || m.still === true;
+    const chosen = o.chosen === true, marked = o.selected === true || chosen;
+    const sel = still ? (marked ? 1 : 0) : starLevel(m.sel, marked ? 1 : 0);
+    if (sel <= 0.01 && !chosen) return true;
+    const level = chosen ? Math.max(sel, 0.6) : sel;
+    const tones = starTones(tint, o.theme ?? INK_DEFAULTS), alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
+    const count = chosen ? 12 : 8, ring = Math.max(radius * 1.5, radius + 4.5);
+    const spin = (still ? 0 : turn(m, 40)) - Math.PI / 2, clock = still ? 0 : m.clock, seedValue = Number.isFinite(m.seed) ? m.seed : 0;
+    ctx.save();
+    ctx.beginPath();
+    for (let k = 0; k < count; k += 1) {
+      const angle = spin + k * TAU / count;
+      const twinkle = still ? hash(0.37, k) : 0.5 + 0.5 * Math.sin(clock * 2.2 + k * 2.4 + seedValue * TAU);
+      const arm = ((chosen ? 1.5 : 1.15) + (chosen ? 1.1 : 0.8) * twinkle) * (0.6 + 0.4 * level);
+      starPath(ctx, p.x + Math.cos(angle) * ring, p.y + Math.sin(angle) * ring, arm, arm * 0.24, 1, 0);
+    }
+    ctx.globalAlpha = alpha * (chosen ? 0.95 : 0.8) * level; ctx.fillStyle = tones.spark; ctx.fill();
+    ctx.restore();
+    return true;
+  }
+
+  // Arrival: the star ignites; its four spikes flash out to twice their
+  // length and draw back as a thin ring opens round it and fades. The caller
+  // grows the node meanwhile; reduced motion: the star simply appears.
+  function starArrival(ctx, p, radius, tint, t01, o) {
+    const m = motionOf(o);
+    if (o.still === true || o.motion != null && m.still === true || !(t01 < 1)) return true;
+    const t = clamp01(t01), tones = starTones(tint, o.theme ?? INK_DEFAULTS), alpha = Number.isFinite(o.alpha) ? o.alpha : 1;
+    const flare = Math.sin(Math.PI * Math.min(1, t / 0.7));
+    ctx.save();
+    if (flare > 0.01) {
+      ctx.beginPath(); starPath(ctx, p.x, p.y, radius * (1 + 1.05 * flare), Math.max(0.6, radius * 0.07), 1, 0);
+      ctx.globalAlpha = alpha * 0.85 * flare; ctx.fillStyle = tones.spark; ctx.fill();
+    }
+    ctx.globalAlpha = alpha * 0.6 * (1 - t) ** 1.4; ctx.strokeStyle = tones.spark; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(p.x, p.y, radius * (1 + 0.9 * easeOut(t)), 0, TAU); ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+
+  // Constellation's finish beats: done, a nova (the star flares into a long
+  // four-point burst while eight tiny stars fly out and fade), all in the
+  // beat's ink (the theme's done green, amber for a failed check); absorb, six
+  // tiny stars in the agent's tint spiral in and the receiving star flashes.
+  function starDone(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.35), ink = finishInk(o), fade = finishFade(t, o), out = easeOut(t);
+    const flare = Math.sin(Math.PI * Math.min(1, t / 0.6));
+    ctx.save();
+    ctx.beginPath();
+    if (flare > 0.01) starPath(ctx, p.x, p.y, radius * (1.1 + 1.5 * flare), Math.max(0.8, radius * 0.08), 1, 0);
+    for (let k = 0; k < 8; k += 1) {
+      const angle = k * TAU / 8 + Math.PI / 8, d = radius * (1 + 2.3 * out), arm = Math.max(1.4, radius * 0.2) * (1 - 0.5 * t);
+      starPath(ctx, p.x + Math.cos(angle) * d, p.y + Math.sin(angle) * d, arm, arm * 0.24, 1, 0);
+    }
+    ctx.fillStyle = rgba(ink, qa(0.92 * fade)); ctx.fill();
+    ctx.restore();
+    return true;
+  }
+  function starAbsorb(ctx, p, radius, tint, u, o) {
+    const t = finishAt(u, o, 0.5), mark = finishTint(tint, o), fade = finishFade(t, o), fly = easeOut(Math.min(1, t / 0.7));
+    const flash = clamp01((t - 0.7) / 0.3);
+    ctx.save();
+    ctx.beginPath();
+    for (let k = 0; k < 6; k += 1) {
+      const angle = k * TAU / 6 + 2.4 * t, d = radius * (0.5 + 2.3 * (1 - fly)), arm = Math.max(1.3, radius * 0.17);
+      starPath(ctx, p.x + Math.cos(angle) * d, p.y + Math.sin(angle) * d, arm, arm * 0.24, 1, 0);
+    }
+    if (flash > 0) starPath(ctx, p.x, p.y, radius * (1 + 0.8 * Math.sin(Math.PI * flash)), Math.max(0.7, radius * 0.07), 1, 0);
+    ctx.fillStyle = rgba(mark, qa(0.9 * fade)); ctx.fill();
+    ctx.restore();
+    return true;
+  }
+
+  // Wires: faint dotted star-chart lines that stop short of every star (a
+  // chart leaves a gap round each one: WIRE_INSET). The caller's pen is kept,
+  // its alpha and width, a dash of its own (a todo's, a tether's) and its
+  // march, the hub's double line and the tree's S-curve; a line the caller
+  // draws solid is dotted here (dots a little wider than its width). A
+  // lit wire lays a faint solid trace under its dots; on a wire that carries
+  // work a small star runs from a to b (90 px/s), a short streak behind it,
+  // and a still pose parks it two thirds of the way. The far (blurred) pen
+  // and the rail keep the dots alone. On a light page every mark keeps the
+  // tint's hue, deepened as far as it needs (the shared wire tones). The
+  // canvas comes back with its alpha, cap, dash and offset, set back by hand.
+  const STAR_WIRE_MAX = 5;
+  const STAR_DOTS = [1.3, 4]; // a dotted line's dot and gap, refilled per wire (setLineDash copies it)
+  const STAR_AT = { x: 0, y: 0 };
+  // A point u along the wire (its S-curve `cp` when it has one), into STAR_AT.
+  function starAlong(a, b, cp, u) {
+    if (cp) {
+      const v = 1 - u;
+      STAR_AT.x = v * v * v * a.x + 3 * v * v * u * cp.x1 + 3 * v * u * u * cp.x2 + u * u * u * b.x;
+      STAR_AT.y = v * v * v * a.y + 3 * v * v * u * cp.y1 + 3 * v * u * u * cp.y2 + u * u * u * b.y;
+    } else {
+      STAR_AT.x = a.x + (b.x - a.x) * u; STAR_AT.y = a.y + (b.y - a.y) * u;
+    }
+    return STAR_AT;
+  }
+  function starTrace(ctx, a, b, cp, double, chord) {
+    ctx.beginPath();
+    if (double) {
+      const nx = (a.y - b.y) / chord * 1.6, ny = (b.x - a.x) / chord * 1.6;
+      ctx.moveTo(a.x + nx, a.y + ny); ctx.lineTo(b.x + nx, b.y + ny);
+      ctx.moveTo(a.x - nx, a.y - ny); ctx.lineTo(b.x - nx, b.y - ny);
+      return;
+    }
+    ctx.moveTo(a.x, a.y);
+    if (cp) ctx.bezierCurveTo(cp.x1, cp.y1, cp.x2, cp.y2, b.x, b.y);
+    else ctx.lineTo(b.x, b.y);
+  }
+  // A wire's (or a pulse's) tones, cached per tint and theme: the line, and
+  // the brighter star that runs it.
+  const starWireMemo = new WeakMap();
+  function starWireTones(tint, currentTheme) {
+    let tones = starWireMemo.get(tint);
+    if (tones && tones.theme === currentTheme) return tones;
+    const light = currentTheme.light === true, lift = light ? wireLightTone(tint, currentTheme) : null;
+    tones = {
+      theme: currentTheme, light,
+      line: rgba(light ? lift.line : tint, 1),
+      star: rgba(light ? lift.deep : mix(tint, WHITE, 0.7), 1),
+      trail: rgba(light ? lift.line : mix(tint, WHITE, 0.35), 1),
+      glow: light ? null : tint,
+    };
+    starWireMemo.set(tint, tones);
+    return tones;
+  }
+  function starWire(ctx, a, b, o) {
+    const tint = o.tint;
+    if (!tint || !a || !b) return false;
+    const chord = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!(chord > 1)) return true;
+    const tones = starWireTones(tint, o.theme ?? INK_DEFAULTS);
+    const rail = o.rail === true, far = o.far === true, still = o.still === true, double = o.double === true;
+    const cp = !double && o.curved === true && o.cp ? o.cp : null;
+    const alpha = Number.isFinite(o.alpha) ? clamp01(o.alpha) : 1, width = Math.min(STAR_WIRE_MAX, o.width > 0 ? o.width : 1);
+    const time = Number.isFinite(o.time) ? o.time : 0, seed = Number.isFinite(o.seed) ? o.seed : 0;
+    const active = o.active === true, lit = active || o.inspected === true;
+    const flowing = rail ? false : typeof o.flow === "boolean" ? o.flow : active;
+    const base = ctx.globalAlpha, cap = ctx.lineCap;
+    if (cap !== "round") ctx.lineCap = "round";
+    ctx.strokeStyle = tones.line;
+    // A lit wire's faint solid trace, under its dots.
+    if (lit && !far && !rail) {
+      starTrace(ctx, a, b, cp, double, chord);
+      ctx.globalAlpha = base * alpha * 0.22; ctx.lineWidth = width + 1.2; ctx.stroke();
+    }
+    // The dots (or the caller's own dash), marching toward b when asked. A
+    // dot is a dash as long as the line is wide, with butt caps: at this
+    // size it reads as round, and a canvas fills hundreds of them a frame
+    // at a quarter of what round caps cost.
+    const dash = o.dash && o.dash.length ? o.dash : null;
+    const dot = Math.max(1.3, width * 1.25);
+    let period = 0;
+    if (dash) { for (let index = 0; index < dash.length; index += 1) period += dash[index]; if (dash.length % 2) period *= 2; ctx.setLineDash?.(dash); }
+    else { STAR_DOTS[0] = dot; STAR_DOTS[1] = dot * 2.2 + 1.8; period = STAR_DOTS[0] + STAR_DOTS[1]; ctx.setLineDash?.(STAR_DOTS); }
+    ctx.lineDashOffset = o.march === true && !still ? -((time / (o.kind === "tether" ? 40 : 60)) % period) : 0;
+    ctx.lineCap = "butt";
+    starTrace(ctx, a, b, cp, double, chord);
+    // (dots carry less ink than a line: half as bright again, so the chart still reads)
+    ctx.globalAlpha = base * Math.min(1, alpha * 1.5); ctx.lineWidth = dash ? width : dot; ctx.stroke();
+    ctx.setLineDash?.(STAR_NO_DASH); ctx.lineDashOffset = 0; ctx.lineCap = "round";
+    // The running star on a wire that carries work.
+    if (flowing && !far && !double) {
+      const span = chord * (cp ? 1.12 : 1), travel = span + 40;
+      const s = still ? span * 0.66 : ((time / 1000) * 90 + seed * travel) % travel - 20;
+      if (s > 2 && s < span - 2) {
+        const gain = base * Math.min(1, alpha * 2.4) * (o.kind === "session" || o.kind === "todo" ? 0.7 : 1);
+        const u = s / span, back = Math.max(0, u - 14 / span);
+        let at = starAlong(a, b, cp, back);
+        const tx = at.x, ty = at.y;
+        at = starAlong(a, b, cp, u);
+        ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(at.x, at.y);
+        ctx.globalAlpha = gain * 0.55; ctx.strokeStyle = tones.trail; ctx.lineWidth = Math.max(1, width); ctx.stroke();
+        ctx.beginPath(); starPath(ctx, at.x, at.y, 3 + width, 0.75, 1, 0);
+        ctx.globalAlpha = gain; ctx.fillStyle = tones.star; ctx.fill();
+      }
+    }
+    ctx.globalAlpha = base;
+    if (cap !== "round") ctx.lineCap = cap;
+    return true;
+  }
+
+  // Pulses: a tiny shooting star. A bright head with a small four-point glint
+  // over it and a soft glow (none on a light page or the rail), and a long
+  // thin streak fading behind it in four pieces; a wave pulse's streak is
+  // longer, and a packet rides it as a tiny turning diamond. On the tree's
+  // S-curve (o.cp) it rides the curve as drawn; over its last fifth the
+  // target star brightens. Reduced motion: one still streak near the end of
+  // its wire. On a light page it keeps its hue (the shared wire tones).
+  const starPulseColours = new Map();
+  function starPulseRgb(pulse) {
+    const text = typeof pulse?.color === "string" ? pulse.color : "#a9ffcd";
+    let triple = starPulseColours.get(text);
+    if (!triple) {
+      triple = parseHex(text) ?? parseHex("#a9ffcd");
+      if (starPulseColours.size >= 32) starPulseColours.clear();
+      starPulseColours.set(text, triple);
+    }
+    return triple;
+  }
+  // A shooting star's glow per canvas and colour (a unit radial, built the
+  // first time a pulse there needs one; each triple remembers its key).
+  const starGlowKeys = new WeakMap();
+  function starGlowAt(ctx, rgb, x, y, radius, alpha) {
+    if (!(alpha > 0.004) || !(radius > 0)) return;
+    let key = starGlowKeys.get(rgb);
+    if (key === undefined) { key = `constellation|glow|${rgb.join(",")}`; starGlowKeys.set(rgb, key); }
+    let glow = cacheGet(ctx, key);
+    if (glow === undefined) {
+      glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+      glow.addColorStop(0, rgba(mix(rgb, WHITE, 0.6), 0.8));
+      glow.addColorStop(0.3, rgba(rgb, 0.28));
+      glow.addColorStop(1, rgba(rgb, 0));
+      cachePut(ctx, key, glow);
+    }
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(radius, radius);
+    ctx.globalAlpha = alpha; ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(0, 0, 1, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  function starSurge(ctx, from, to, t, pulse, o) {
+    if (!pulse || !from || !to) return false;
+    const chord = Math.hypot(to.x - from.x, to.y - from.y);
+    if (!(t >= 0) || !(chord >= 2)) return true;
+    const rail = o.rail === true, still = o.still === true, cp = !rail && o.cp ? o.cp : null;
+    const rgb = starPulseRgb(pulse), tones = starWireTones(rgb, o.theme ?? INK_DEFAULTS);
+    const small = pulse.small === true, wave = pulse.wave === true || o.kind === "wave";
+    const size = (small ? 0.75 : wave ? 1.2 : 1) * (rail ? 0.65 : 1);
+    const head = still ? 0.9 : clamp01(t);
+    const streak = Math.min(head, Math.min(0.32, (wave ? 80 : 54) * size / chord));
+    ctx.save();
+    const base = ctx.globalAlpha;
+    ctx.lineCap = "round"; ctx.setLineDash?.(STAR_NO_DASH);
+    // The streak: four pieces from its tail to the head, brighter and wider toward it.
+    let at = starAlong(from, to, cp, head - streak);
+    let px = at.x, py = at.y;
+    ctx.strokeStyle = tones.trail;
+    for (let piece = 1; piece <= 4; piece += 1) {
+      at = starAlong(from, to, cp, head - streak * (1 - piece / 4));
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(at.x, at.y);
+      ctx.globalAlpha = base * (0.1 + 0.18 * piece); ctx.lineWidth = size * (0.45 + 0.3 * piece); ctx.stroke();
+      px = at.x; py = at.y;
+    }
+    // The head: its glow, a small glint and a bright point; a packet turns over it.
+    if (!rail && !tones.light) starGlowAt(ctx, rgb, px, py, size * 5.5, base * 0.9);
+    ctx.globalAlpha = base; ctx.fillStyle = tones.star;
+    ctx.beginPath(); starPath(ctx, px, py, size * 3.4, size * 0.55, 1, 0); ctx.fill();
+    ctx.beginPath(); ctx.arc(px, py, size * 1.25, 0, TAU); ctx.fill();
+    if (pulse.packet === true) {
+      const turnAt = Math.PI / 4 + head * Math.PI, c = Math.cos(turnAt) * size * 3.4, s = Math.sin(turnAt) * size * 3.4;
+      ctx.beginPath(); ctx.moveTo(px + c, py + s); ctx.lineTo(px - s, py + c); ctx.lineTo(px - c, py - s); ctx.lineTo(px + s, py - c); ctx.closePath();
+      ctx.globalAlpha = base * 0.85; ctx.strokeStyle = tones.star; ctx.lineWidth = 1; ctx.stroke();
+    }
+    // The target brightens over the last fifth (a soft light on it).
+    const landing = (head - 0.8) / 0.2;
+    if (landing > 0 && !still && !tones.light) starGlowAt(ctx, rgb, to.x, to.y, Math.max(rail ? 7 : 11, (o.rTo > 0 ? o.rTo : 0) + (rail ? 4 : 7)), base * 0.4 * landing * (rail ? 0.6 : 1));
+    ctx.restore();
+    return true;
+  }
+
+  // A landing: the star flashes, a four-point flare opening off it and
+  // fading with a thin ring round it; the rail, and a far, dimmed or moving
+  // target (detail ≤ 1), get the ring alone. Reduced motion: nothing more.
+  function starLand(ctx, p, radius, tint, u, o) {
+    if (!p || !tint) return false;
+    if (o.still === true || !(u < 1)) return true;
+    const tones = starWireTones(o.pulse ? starPulseRgb(o.pulse) : tint, o.theme ?? INK_DEFAULTS);
+    const k = clamp01(u), out = easeOut(k), fade = 1 - k, r = radius > 3 ? radius : 3;
+    ctx.save();
+    const base = ctx.globalAlpha;
+    ctx.globalAlpha = base * 0.6 * fade * fade; ctx.strokeStyle = tones.trail; ctx.lineWidth = 0.6 + 0.8 * fade;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r * (1.05 + 0.75 * out) + 1.5, 0, TAU); ctx.stroke();
+    if (o.rail !== true && !(Number.isFinite(o.detail) && o.detail <= 1)) {
+      ctx.beginPath(); starPath(ctx, p.x, p.y, r * (0.9 + 1.1 * out), Math.max(0.6, r * 0.07) * fade + 0.2, 1, 0);
+      ctx.globalAlpha = base * 0.8 * fade; ctx.fillStyle = tones.star; ctx.fill();
+    }
+    ctx.restore();
+    return true;
+  }
+
+  // How far the look reaches: the spikes (their bright part to 1.3 radii,
+  // 1.45 at work) and the ring of tiny stars as the selection eases in.
+  function starReach(m) {
+    return Math.max(1.3 + 0.15 * starLevel(m?.work, 0), 1 + 0.65 * starLevel(m?.sel, 0));
+  }
+  LOOKS.constellation = { speedup: 2.2, paint: paintConstellation, glyph: { scale: 0.56, ringGap: 3.5, ink: (tint, currentTheme) => starTones(tint, currentTheme).glyphInk }, ring: null, hubDress: null, orbit: null, arrival: starArrival, select: starSelect, done: starDone, absorb: starAbsorb, wire: starWire, surge: starSurge, land: starLand, reach: starReach };
+
 // ===== overlays =====
 
   // Every overlay dispatcher: the style's hook draws and the caller skips its
@@ -5510,8 +6606,11 @@
   // gap: just inside its narrowest edge (Sigil's flat sides .85, Crystal's
   // tilting octagon .86, Prism's kite .58, Minimal's breathing dot .4).
   // Singularity keeps its whole bend: its pulses ride that same curve.
+  // Dragon scales' dome is round. Constellation's lines stop past the star,
+  // as a chart's do: a small gap round every star (its glow fades there).
   const WIRE_INSET = Object.freeze(Object.assign(Object.create(null), {
     orbs: 0.96, glass: 0.96, minimal: 0.38, halo: 0.96, crystal: 0.85, singularity: 0, prism: 0.56, sigil: 0.84,
+    dragonscale: 0.96, constellation: 1.2,
   }));
   const TRIM_A = { x: 0, y: 0 }, TRIM_B = { x: 0, y: 0 }, TRIM_CP = { x1: 0, y1: 0, x2: 0, y2: 0 }, CROSS_AT = { x: 0, y: 0 };
   // Where the curve in PATH crosses the circle of radius r round (cx, cy),
