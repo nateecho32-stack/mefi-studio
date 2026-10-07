@@ -421,6 +421,8 @@ test("the legend's states are pills: each counts its nodes, says so to screen re
   el.announce.textContent = "";
   env.pinLegend("done", { announce: false });
   assert.equal(el.announce.textContent, "", "letting go quietly (the Map closing) says nothing");
+  // A pill is a button that stays small: the page's `button` rule (36 px tall, 14 px padding, a border) is undone.
+  assert.match(styles, /html\[data-frame\] #idle-hud button\.map-legend-row \{\n  min-height: 0; height: 26px; padding: 0 7px 0 9px; border: 0;/);
   // The click handler toggles: the same pill again lets go.
   const click = section("  function init() {", "  // The broadcast carries the list");
   assert.ok(click.includes('el.mapLegend?.addEventListener("click", (event) => { const pill = legendPillOf(event.target); if (pill) pinLegend(state.legendPin === pill.dataset.state ? null : pill.dataset.state); });'));
