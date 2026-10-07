@@ -7,6 +7,35 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Make it yours, Ember the dragon, menu effects and the Shop.** The first
+  run now starts with **Make it yours**: pick **Light**, **Dark** or
+  **Stylized** (glowing colour and bold headings), a colour within it, the
+  text size and how much things move, and see Studio change behind the card
+  as you pick. When the welcome closes, a small note by the Settings button
+  says all of it lives in **Settings › Appearance**. New light themes,
+  **Daylight** and **Paper**, hold 4.5:1 contrast on every page, and the
+  two-tone Void themes paint their second colour again. Every Studio comes
+  with **Ember**, a little dragon that flies around the window, naps on the
+  top and status bars, comes to look at your pointer, loops with a puff of
+  fire when a job finishes and flies to the Inbox when something needs you.
+  It stays on its perch while you type, sleeps when you step away and sits
+  still with motion Off. A new install starts with Ember on (the first run
+  has the switch); on an existing install, turn it on in Settings ›
+  Appearance › Interface. In a room, friends' dragons fly in and play with
+  yours. The new **Shop** (Friends › Shop, also from Settings › Appearance)
+  has skins for Ember, menu effects that make menus **Dissolve**, **Burn
+  away** or turn to **Stardust** when they close, node styles and style
+  packs, all for credits you earn on the social side; credits can't be
+  bought or cashed out. Try anything free for two minutes first. Anyone can
+  make a style pack (colours, node style, font) and list it free or for
+  credits; buyers can add a tip, the maker gets three quarters, and the rest
+  is taken out of circulation.
+- **The Map shows each job's state at a glance.** Every task orb wears a
+  ring in the legend's colours: it breathes while the job runs, pulses when
+  it needs you, and holds still for Review and Done (on a light theme the
+  rings and the legend take deeper inks). Task orbs are a size bigger, and a
+  small tree spreads out to fill the 3D view instead of sitting in the
+  middle.
 - **A more compact Studio: less empty space, more of your work on screen.**
   Today puts its board about 130 px higher. The line of keys under the box
   is gone (Talk it over shows Enter, Build it shows Ctrl Enter), the scope
