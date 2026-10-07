@@ -15,7 +15,9 @@ and what later phases add. The short version is in the README's
 
 ## Nothing is locked behind the link
 
-Every theme and node style is free for everyone, in every build. The
+Every theme and node style Studio comes with is free for everyone, in every
+build (the Shop's two extra node styles, Dragon scales and Constellation, are
+for credits members earn, never for money). The
 two-tone **Void collection** (themes Void, Eclipse, Abyss and Neon Dusk; node
 styles Singularity, Prism and Sigil) sits in **Settings › Appearance** under
 its own small heading, and saves like any other choice. The link is what

@@ -270,13 +270,13 @@ settings and per-model work-kind summaries for the shared controls.
 | **Fleet / seat / pod / generation** | Live › Fleet (OpenRig's vocabulary, built natively): a **seat** is one agent's stable address on the team (`builder-2@project`), a **generation** is one run it took, and seats sit in four **pods** (Lead, Build, Check, Keep) wired by handoffs, checks and asks. A retry returns to the seat that last worked the task. |
 | **Companion** | The roaming character (named under General): click it to talk, see what it and the team are doing, handle its needs-you queue, suggest work or take its picks, meet friends' companions, or set its personality (Straight work, Balanced, Friendly & expressive). It also gives a welcome-back digest, can be petted, and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
-| **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five classic, three in the two-tone Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, the finish beats (`done` at a step whose work came back, `absorb` at the lead taking an agent in), wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
+| **Node style / `MefiNodeStyles`** | How a node is drawn: one of ten looks (five classic, three in the two-tone Void collection, and Dragon scales and Constellation, which the Shop sells for credits), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, the finish beats (`done` at a step whose work came back, `absorb` at the lead taking an agent in), wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
-| **Void collection** | Four two-tone themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil), free for everyone like every other look. Settings › Appearance lists them under their own small heading, and a choice saves like any other. A theme with a second hue sets `data-studio-theme-tier="duo"`, which the stylesheets paint with. |
+| **Void collection** | Four two-tone themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil), free for everyone like every look Studio comes with. Settings › Appearance lists them under their own small heading, and a choice saves like any other. A theme with a second hue sets `data-studio-theme-tier="duo"`, which the stylesheets paint with. |
 | **Light themes / tone** | Daylight (cool neutral) and Paper (warm) are light themes: every ink holds 4.5:1 on their pages and panels. `renderer/music.js` sets `html[data-studio-theme-tone]` from the reading background (Custom palettes and packs included); a light tone switches `color-scheme` to light, deepens the status hues and softens shadows and the scrim (`styles.css`, section 2). |
 | **Look** | Light, Dark or Stylized: a set of themes plus a material (a `MefiAppearance` preset) and a heading face (`html[data-studio-font]`: Studio, Display, Serif or Mono, system faces only). `MefiMusic.looks()` lists them and `applyLook(lookId, themeKey)` puts one on and keeps it; Light and Dark put the plain material and each theme's own headings back, Stylized opens the glass and sets the display face. Settings › Appearance has the heading faces under **Headings**. |
-| **Style pack** | A small data-only look from the Shop: a palette (with an optional second hue), and optionally a node style, material and heading face. `MefiMusic.applyPack` paints it as the theme `pack` the way Custom is painted and keeps it for the next launch; `previewPack` and `endPreview` are the Shop's Try, which saves nothing and puts back exactly what was there. |
+| **Style pack** | A small data-only look from the Shop: a palette (with an optional second hue), and optionally a node style (one Studio comes with, never one the Shop sells), material and heading face. `MefiMusic.applyPack` paints it as the theme `pack` the way Custom is painted and keeps it for the next launch; `previewPack` and `endPreview` are the Shop's Try, which saves nothing and puts back exactly what was there. |
 | **Community link** | An optional Discord login (Settings › Community, which **Community** at the menu foot opens) for Listen together and the rooms hub; it unlocks nothing. It lets Studio read your membership and roles in the Void Engine server: when you link, then every seven days (after a failed check, in an hour, six hours, then daily) and whenever you press **Check now**. The data is kept in `settings.community`, and the refresh token is encrypted in `community-auth.json`. |
 
 ## Highlights
@@ -572,8 +572,10 @@ settings and per-model work-kind summaries for the shared controls.
   does, Friends says so and Pip is there to practice.
 - **Friends › Shop** (`renderer/friends-shop.js`, `window.MefiShop`; main's
   `hub:shop` channel; the relay's `relay/src/shop.mjs`): scales for Ember,
-  menu effects and style packs for the credits members earn (never bought
-  with money), and the style packs members make. Ember the dragon itself
+  menu effects, two node styles (**Dragon scales** and **Constellation**) and
+  style packs for the credits members earn (never bought with money), and the
+  style packs members make. Every theme and node style Studio comes with
+  stays free: the Shop sells new things only. Ember the dragon itself
   comes free with every Studio: its card has no price, Try or Buy, only a
   **Show Ember** switch (`MefiPets.set({ on })`). The page has the balance,
   **How to earn credits** (Friends › Events) and four views: **Studio**
@@ -581,11 +583,14 @@ settings and per-model work-kind summaries for the shared controls.
   and **Make a style**. Every card shows its item live: scales on a flying
   Ember (`MefiPets.paintPreview`, drawn only while the card is on screen, one
   still frame with motion off), an effect played on a little menu on hover,
-  focus or Try (`MefiEffects.demo`), a pack as a tiny app window painted from
-  its own colours. **Try for 2 minutes** previews one item at a time
-  (`MefiPets.preview`, `MefiEffects.preview`, `MefiMusic.previewPack`) under a
-  banner with the time left, Buy and Stop; Stop, the clock and leaving the
-  Shop end it. **Buy for N** asks first, naming the item, the price and the
+  focus or Try (`MefiEffects.demo`), a node style as a little board of four
+  of its nodes on their wires with a pulse running one (`MefiNodeStyles`, in
+  the theme's own sky, on screen only, its still pose with motion off), a pack
+  as a tiny app window painted from its own colours. **Try for 2 minutes**
+  previews one item at a time (`MefiPets.preview`, `MefiEffects.preview`,
+  `MefiMusic.previewNodeStyle` on the real tree, `MefiMusic.previewPack`)
+  under a banner with the time left, Buy and Stop; Stop, the clock and leaving
+  the Shop end it. **Buy for N** asks first, naming the item, the price and the
   balance after. A member's pack can carry a tip for its maker (No tip, 5, 10,
   25 or any amount up to 100; never on Studio's own items) and the question
   shows the total; a member's free pack reads "Free · tips welcome" and its
@@ -593,9 +598,14 @@ settings and per-model work-kind summaries for the shared controls.
   credits are needed and how to earn them, a changed price asked again, the
   Project hub's words for a hold, an item no longer in the Shop. **Use** puts
   what you own on (`MefiPets.set({ skin })`, `MefiEffects.use`,
-  `MefiMusic.applyPack(pack, true)`). **Make a style** has five colours with
-  hex fields, a node style, material and font, a big live preview and the
-  WCAG contrast of text on the background and on panels and of the accent;
+  `MefiMusic.applyNodeStyle(key)`, `MefiMusic.applyPack(pack, true)`).
+  Settings › Appearance lists the Shop's node styles under **From the Shop**,
+  "(in the Shop)" and not choosable until you own one, with **Open the Shop**
+  beside them; a saved one this PC no longer owns falls back to Classic orbs
+  at launch. **Make a style** has five colours with hex fields, a node style,
+  material and font, a big live preview and the WCAG contrast of text on the
+  background and on panels and of the accent (4.5:1 each: Studio sets text in
+  the accent too);
   `MefiShop.checkPack` is the relay's own check and says what stops a pack
   from publishing. **Use it myself** puts it on this PC only; **Publish**
   lists it free or for 10 to 250 credits; **Your packs** has Edit, Unlist and
@@ -1703,11 +1713,13 @@ failed process stays an error and cannot produce briefing requests.
   workers. High CPU alone never limits builds.
 - **Follow** frames the active task; **Fit** repairs the layout. Pick node style
   (**Classic orbs**, **Soft glass**, **Minimal**, **Halo**, **Crystal**, plus
-  the Void collection's **Singularity**, **Prism** and **Sigil**) and
+  the Void collection's **Singularity**, **Prism** and **Sigil**, and once
+  bought in the Shop **Dragon scales** and **Constellation**) and
   arrangement (**Constellation**, **Branches**, **Rings**,
   **Helix**, **Terraces**) per project, in 2D or real 3D. Every node style
   moves all the time and faster while its node works (a Sigil's hex cells
-  assemble, a Singularity's disc spins up, a Prism's shards orbit); a stale
+  assemble, a Singularity's disc spins up, a Prism's shards orbit, a
+  Dragon's seams glow with fire, a star's spikes reach further); a stale
   session's rim is dashed and it moves at a slower pace; reduced motion holds
   each in a still pose. Wires stop at each node's edge.
 - The sky follows the colour theme — Aurora ribbons, Deep space, Nebula,
@@ -2839,8 +2851,9 @@ handled here or anywhere else in the app (a status dot is colour plus words).
 
 The **Void Engine Discord** is where people share what they build with
 Studio, swap model setups and listen together. Nothing in Studio is locked
-behind it: every theme and node style, the two-tone Void collection included,
-is free for everyone. **Community** at the foot of the menu opens Settings ›
+behind it: every theme and node style Studio comes with, the two-tone Void
+collection included, is free for everyone (the Shop's two extra node styles
+are for credits members earn, never for money). **Community** at the foot of the menu opens Settings ›
 Community, the card that holds the link. The full flow is in
 [community.md](community.md).
 

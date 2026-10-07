@@ -238,7 +238,7 @@ The [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is where people share p
 
 - **Rooms** (Friends › Rooms) lists your rooms and the listed ones you can join. Ask to join with a short note, accept or decline invites, and for rooms you own, let people in, invite by name, lock or close the room, and make new ones (hangout or cowork, open or invite-only, listed or not). Each room has a plain-text chat with @names; links are never clickable. Rooms need the room service's address in the build and a linked Discord account; until then the panel says what is missing.
 - **Listen together** and companion playdates are built and switch on once the community's rooms hub is online. The personal media player is available now.
-- **Every theme and node style is free**, the Void collection included.
+- **Every theme and node style Studio comes with is free**, the Void collection included. The Shop's extras, two node styles among them, cost credits you earn by making and playing things, never money.
 
 The [community guide](https://nateecho32-stack.github.io/mefi-studio/wiki/#/community) explains what's available. [Public site and voice direction](docs/public-site.md) records the website's location, public naming and proposed voice integration.
 
