@@ -39,6 +39,29 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
+
+Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
+22.14 here, so the suites ran under Electron 44.4.1's Node 24.21 with ELECTRON_RUN_AS_NODE=1). Asked: fix Studio's
+GitHub and Discord linking. GitHub: `gh` was signed out on this PC (Git Credential Manager and GitHub Desktop were
+signed in, which Studio does not read), and Sign in to GitHub could never finish. pc-setup.cjs and cli-setup.cjs spawned
+PowerShell with stdio "ignore"; from Studio, which has no console, the window opened with NUL input and output, stayed
+blank, Read-Host returned in 17 ms, and gh 2.100.0 ran `auth login --web` non-interactively: its code and "Open this
+URL" went to NUL and no browser opened. Probed from a no-console Electron parent: before, PowerShell and a child saw
+input, output and error redirected (true x3); through scripts/setup-window.cjs (`cmd /d /s /c start "<title>" /wait
+powershell.exe`, detached cmd, verbatim arguments) none were (false x3), the title, cwd and environment arrived, and
+close fired (code 0, 7.3 s). Discord: checked, unchanged: linked 18:08 (member, 2 roles, refresh token encrypted in
+community-auth.json), and the relay session came back after each 1006 close (18:26, 20:19, 22:02, 22:08); the screen
+tool could not reach the portable build, so Check now was not pressed. resolveGithubToken's re-ask after a miss landed
+upstream in 71c45d6; release_channel_host now pins it. Here: setup_window 4/4 (a real minimized window; the old launch
+fails it), the 24 suites around the change 447 tests, 442 pass, 0 fail, 5 skipped; check ok; lint 47 warnings (as
+main); audit 0 findings; Python contracts 248, 1 failure that clean HEAD shares here (the analyzer's idea check reads
+`scanned: 0`). Not run here: the full `npm test`, since Electron's Node 24.21 rmSync cannot remove git's read-only
+objects on this PC (EPERM in the git suites' cleanup; Node 22 removes them) and Node 22 cancels git_actions.
+Hosted CI on the branch, green: Studio checks (Windows) run 37566212840, 9.5 min; the committed renderer
+current, check, lint, the behavioral and isolated desktop checks (setup_window's real window included), the
+application audit and the portable package all passed. Its logs need a GitHub sign-in, so no counts here.
+
 ## 2026-10-06 Make it yours, Ember, menu effects and the Shop; the Map's state rings and fill; Shop node styles
 
 Branch `feat/style-shop` (C:\wt\style; feat/shop-relay, feat/shop-ui, feat/light-look and feat/node-styles-shop merged
@@ -496,22 +519,6 @@ test:one`.
 
 After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
 
-## 2026-10-06 The social review's fixes land with the polish: say what helps, why a play earned nothing, one vocabulary
-
-Branch `wip/social-polish-2` in `C:\wt\polish2`: wip/social-polish (a676b05, Windows CI green) + 67e5898, the fixes from
-the "Engine optimization and social features" session's review of the social side (string ids in hub-client; one
-hubState() so Connect shows only when it can help; a play's why from the relay to the Project hub; private first
-rooms; The Lobby's own nudges, focus kept across reads, calendar days, this week's events row; one vocabulary; 12 px
-bubble labels; Play/Star labels; arrow keys in the tab rows; Search words), with main 0661f8c merged (119bc83:
-CHANGELOG keeps both sides, TESTRUNS rows from both and main's archived row, rotated; booklet.html regenerated).
-
-Run through `npm run test:one` (the machine-wide test lease) on 119bc83: companion_hub_render, friends_render and
-friends_two_render (the two Studios meeting end to end) 1/1 each, rooms_ui, friends_front_ui (13, new: the connection
-sentences, the nudges, the events row), project_hub_ui (play reasons), hub_client (17, new: missing ids refused),
-hub_host, relay_credits (the play's why), relay_connect, relay_e2e, booklet_build and module_purity: 165 tests, 165
-pass. Also pc_remote_ui, pc_sync_ui, together_ui, friends_mod_ui, friends_navigation, relay_core, app_rail,
-onboarding and palette_layout_v2 on 67e5898. `npm run check` ok. Windows CI runs the full gate on the landing commit
-before the fast-forward; the relay is redeployed with it (front().you.projects and hold, the play's why).
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.

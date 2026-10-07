@@ -6,6 +6,23 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 The social review's fixes land with the polish: say what helps, why a play earned nothing, one vocabulary
+
+Branch `wip/social-polish-2` in `C:\wt\polish2`: wip/social-polish (a676b05, Windows CI green) + 67e5898, the fixes from
+the "Engine optimization and social features" session's review of the social side (string ids in hub-client; one
+hubState() so Connect shows only when it can help; a play's why from the relay to the Project hub; private first
+rooms; The Lobby's own nudges, focus kept across reads, calendar days, this week's events row; one vocabulary; 12 px
+bubble labels; Play/Star labels; arrow keys in the tab rows; Search words), with main 0661f8c merged (119bc83:
+CHANGELOG keeps both sides, TESTRUNS rows from both and main's archived row, rotated; booklet.html regenerated).
+
+Run through `npm run test:one` (the machine-wide test lease) on 119bc83: companion_hub_render, friends_render and
+friends_two_render (the two Studios meeting end to end) 1/1 each, rooms_ui, friends_front_ui (13, new: the connection
+sentences, the nudges, the events row), project_hub_ui (play reasons), hub_client (17, new: missing ids refused),
+hub_host, relay_credits (the play's why), relay_connect, relay_e2e, booklet_build and module_purity: 165 tests, 165
+pass. Also pc_remote_ui, pc_sync_ui, together_ui, friends_mod_ui, friends_navigation, relay_core, app_rail,
+onboarding and palette_layout_v2 on 67e5898. `npm run check` ok. Windows CI runs the full gate on the landing commit
+before the fast-forward; the relay is redeployed with it (front().you.projects and hold, the play's why).
+
 ## 2026-10-06 The Social/Studio names, the scroll fix, the social polish and the models page land while the PCs are offline
 
 Landed by the planning chat (cloud, Linux, Node 24.21.0) after the owner's PC became unreachable at 02:35 UTC. Each
