@@ -493,3 +493,18 @@ test("Activity has every row; finished work past the day's six is one press from
   await home.click();
   assert.deepEqual(t.nav.gone.at(-1), ["activity", null]);
 });
+
+test("on Social's Home a Decided line never pushes something that still needs you behind N more", async () => {
+  const t = await up();
+  // Needs you holds four (a question, an approval, a stopped task, a result to review); Home shows three.
+  assert.deepEqual(keysOf(t, "needs"), ["need:question:q1", "need:approval:t5", "need:blocked:t6"]);
+  await cardsOf(t, "needs")[0].querySelector('[data-option="yes"]').click(); await t.settle();
+  await cardsOf(t, "needs").find((node) => node.dataset.key === "need:approval:t5").querySelector('[data-action="approve"]').click(); await t.settle();
+  // Two Decided lines and two that still wait: both of those show, and each Decided line keeps its place while it shows.
+  const keys = keysOf(t, "needs");
+  assert.ok(keys.includes("need:blocked:t6") && keys.includes("need:review:t7"), `what still needs you is on Home: ${JSON.stringify(keys)}`);
+  assert.deepEqual(keys, ["need:question:q1", "need:approval:t5", "need:blocked:t6", "need:review:t7"], "the answers read where they were given");
+  assert.equal(cardsOf(t, "needs")[0].className.includes("is-decided"), true);
+  assert.deepEqual(group(t, "needs").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["2"]);
+  assert.equal(group(t, "needs").querySelector(".today-more")?.hidden ?? true, true, "nothing that waits is left behind a link");
+});

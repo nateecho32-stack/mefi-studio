@@ -22,7 +22,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   a laptop), a key tip no longer covers a control (one covered Resume), a
   briefing about high CPU no longer files a "Fix:" task, a GitHub CLI
   sign-in made while Studio is open counts for the updater within a minute,
-  and the in-memory relay tests wait up to ten seconds on a slow PC.
+  the in-memory relay tests wait up to ten seconds on a slow PC, and a card
+  on Today that is redrawn while you tab through it (its "4 min" turning "5
+  min") keeps the keyboard on the same button.
 
 - **Friends › Your PCs starts with Connect another PC.** Three plain
   steps (open Studio on the other PC, sign in to Friends with the same

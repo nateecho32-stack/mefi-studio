@@ -1031,8 +1031,11 @@ app.whenReady().then(async () => {
     assert.ok(tab && tab.active, `the session has a tab of its own, and it is the one showing: ${JSON.stringify(tab)}`);
     assert.equal(await run("return window.MefiTabs.list().some((item) => item.route.id === 'tasks');"), false, "and no tab for the Task board, which could not say which task it was asked for");
   }
-  assert.equal(await run("return document.getElementById('vibe-layer').hasAttribute('inert');"), true, "Today is covered while the thread shows");
-  assert.equal(await run("const r = document.getElementById('sessions-thread').getBoundingClientRect(); const node = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return Boolean(node && node.closest('#sessions-thread'));"), true, "and the thread, not Today, is what a press lands on");
+  // A task opened from Social opens in Studio (renderer/social.js): the mode switches under the page.
+  assert.equal(await run("return document.documentElement.dataset.uiMode;"), "build", "Social hands the task to Studio");
+  assert.equal(await run("return document.getElementById('vibe-layer').hasAttribute('inert') || document.getElementById('vibe-layer').hidden;"), true, "Today is covered while the thread shows");
+  // Toasts float over everything (the steps above left a few up); under them, the thread is what a press lands on.
+  assert.equal(await run("const r = document.getElementById('sessions-thread').getBoundingClientRect(); const node = document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2).find((item) => !item.closest('#toast-host')); return Boolean(node && node.closest('#sessions-thread'));"), true, "and the thread, not Today, is what a press lands on");
   await capture("sessions-from-today-1440.png");
   // Home again puts the thread away and uncovers Today.
   await run("window.MefiNav.go('workspace', { view: 'home' });");

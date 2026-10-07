@@ -97224,6 +97224,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // scroll stay where they were) and rebuilding only what moved on. A rebuilt card that held the focus hands it
   // to its successor (the answer box keeps its caret, anything else lands on the card), and a card that left
   // hands it to the list, so the keyboard never falls out to the page.
+  // What Tab can reach inside a card, in order: a rebuilt card gives the focus back to the control at the same place in it.
+  const FOCUSABLE = "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])";
+  const controlsOf = (node) => { try { return [...(node.querySelectorAll?.(FOCUSABLE) ?? [])]; } catch { return []; } };
   function reconcile(host, entries) {
     const cache = state.painted.get(host) || new Map();
     state.painted.set(host, cache);
@@ -97235,7 +97238,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (hit && hit.sig === entry.sig) { wanted.push(hit.node); continue; }
       const node = entry.build();
       if (hit?.node?.parentNode === host) {
-        if (held && hit.node.contains?.(held)) successor = { node, field: /^input$/i.test(held.tagName || "") };
+        if (held && hit.node.contains?.(held)) successor = { node, field: /^input$/i.test(held.tagName || ""), index: controlsOf(hit.node).indexOf(held) };
         host.insertBefore(node, hit.node); hit.node.remove();
       }
       cache.set(entry.key, { node, sig: entry.sig });
@@ -97246,8 +97249,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const now = host.children;
     if (now.length !== wanted.length || wanted.some((node, index) => now[index] !== node)) host.replaceChildren(...wanted);
     if (held && successor && !host.contains?.(held)) {
+      // The answer box keeps its caret; any other control hands the focus to the one at its place in the rebuilt card (a
+      // card's "4 min" turning "5 min" rebuilds it, and the keyboard used to fall out to the page), else the card.
       const field = successor.field ? successor.node.querySelector?.("input") : null;
-      const target = field || successor.node;
+      const controls = field ? [] : controlsOf(successor.node);
+      const target = field || (successor.index >= 0 ? controls[successor.index] : null) || controls[0] || successor.node;
       try { target.focus?.({ preventScroll: true }); if (field) field.setSelectionRange?.(field.value.length, field.value.length); } catch { /* not focusable */ }
     }
   }
@@ -97657,7 +97663,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (count && count.textContent !== String(head.count)) count.textContent = String(head.count);
       const cards = groupCards(current.board, key, style);
       const cap = caps && Number.isFinite(caps[key]) ? caps[key] : Infinity;
-      const kept = cards.slice(0, cap);
+      // A cap counts what still waits. A Decided line is not counted: it keeps its place for the few seconds it shows, so an
+      // answer reads where it was given, and it never pushes a card that needs you behind "N more" (three answers in a row
+      // used to hide the fourth question until their lines went).
+      const live = cards.filter((card) => !card.decided);
+      const shownLive = new Set(live.slice(0, cap));
+      const kept = cards.filter((card) => card.decided || shownLive.has(card));
       const list = group.querySelector(".today-cards");
       reconcile(list, kept.map((card) => ({ key: card.key, sig: cardSignature(card, detail), build: () => renderCard(card, detail) })));
       const empty = group.querySelector(".today-col-empty");
@@ -97665,7 +97676,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (style === "list") { if (group.hidden !== (cards.length === 0)) group.hidden = cards.length === 0; if (empty) empty.hidden = true; }
       else if (empty && empty.hidden !== (cards.length > 0)) empty.hidden = cards.length > 0;
       // "N more": rows Home leaves for Activity, and finished work past the day's six, which is the task board's.
-      const capped = cards.length - kept.length;
+      const capped = live.length - shownLive.size;
       const extra = (style === "list" ? capped : 0) + (key === "done" ? current.board.doneMore : 0);
       let more = group.querySelector(".today-more");
       if (extra > 0 && !more) {
