@@ -76,6 +76,9 @@
       ],
       action: "Walk me to Team › Providers", route: "agents", params: { place: "providers" },
       station: "This is Team › Providers. At the top, one subscription can do everything. Lower down, the highlighted Providers card takes API keys and LM Studio. Nothing is sent to an AI until you choose to test it.",
+      // Team is Studio's; in Social the walk stays in Social, on the setup guide's own page for connecting an AI.
+      vibeAction: "Walk me to Connect an AI", vibeRoute: "setup-helper", vibeParams: { section: "providers" }, vibeTarget: "#setup-helper-sheet",
+      vibeStation: "This is the setup guide, on Connect an AI: what is connected, and where to sign in to another tool or paste a key. Studio's Team › Providers has the same and more. Nothing is sent to an AI until you choose to test it.",
       note: "Tests and AI requests use your plan's allowance, and only when you run them.",
       target: "#settings-assistant-heading", done: "Accounts checked",
     },
@@ -92,7 +95,7 @@
       action: "Walk me to the box", route: "task", secondary: "Plan it first", secondaryRoute: "plans",
       station: "This is the box on Today, in Studio. Type what you want and how you will check it. Build it makes a task; Talk it over chats about it first. I don't send anything from here.",
       // In Social, Home is Social's own Today with its own box (reachWorkspace).
-      vibeStation: "This is the box on Today, in Social. Type what you want and how you will check it. Build it makes a task; Talk it over chats about it first. I don't send anything from here.",
+      vibeStation: "This is the box on Home, in Social. Type what you want and how you will check it. Send talks it over with Mefi, who offers to build it; Ctrl+Enter builds it right away. I don't send anything from here.",
       note: "These buttons only take you to the box or to Plans. They never send a task or start a plan.",
       target: "#workspace-input", vibeTarget: "#vibe-input", done: "Box found",
     },
@@ -108,6 +111,9 @@
       // rail: "work" puts Live work in front: the rail remembers its last tab, and a selected task would show its own panel.
       action: "Walk me to the Map", route: "command", params: { rail: "work" }, secondary: "Open the task board", secondaryRoute: "tasks",
       station: "This is the Map. Live work, on the right, lists what is running and the step it is on. Press Ready, Waiting or Attention to see those tasks and why. Click anything on the Map to see more.",
+      // The Map is Studio's; Social's own picture of the work is Activity.
+      vibeAction: "Walk me to Activity", vibeRoute: "activity", vibeTarget: "#activity-board", vibeSecondary: null,
+      vibeStation: "This is Activity: what needs you, what is running and what waits its turn, for the open project. Studio's Map shows the same work live, with every step.",
       note: "Looking around the Map changes nothing in your project.",
       target: "#idle-feed", done: "Map found",
     },
@@ -115,7 +121,7 @@
       title: "Check what your AI made", short: "Check", glyph: "g-eyes",
       copy: "When your AI says it is done, take a look before you trust it. Open the finished task, see what changed, and try it yourself.",
       points: [
-        "Finished work waits under Review: a column on Today in Social, a group in the session list in Studio, and a filter on the task board.",
+        "Finished work waits for your check: under Needs you on Home in Social, in a group in the session list in Studio, and in a filter on the task board.",
         "Open a task to see what changed, which checks passed and what your AI said. In Studio, the Changes and Checks tabs show this.",
         "Something went wrong? Read the reason first. Fix what it names, such as a sign-in or an unclear description, then try again.",
         "Keep failed work for now: it shows what went wrong. Task history can bring back an earlier description, but it does not undo changes to your files.",
@@ -123,9 +129,9 @@
       // Studio's Today has no Review column, so Studio's walk opens the task board on Review (reachWorkspace).
       action: "Walk me to Review", route: "review",
       station: "This is the task board, on Review: finished work that waits for you to check, and tasks that need help. Open one to see what changed and run its checks.",
-      vibeStation: "This is Today. The Review column holds finished work that waits for you. Press a card to open it and see what changed. Anything stuck waits under Needs you, with its reason.",
+      vibeStation: "This is Your work, on Home. Finished work that waits for your check is under Needs you, marked Ready to review. Press it to see what changed, in Studio. Anything stuck waits there too, with its reason.",
       note: "You can take this tour again any time from Help › Start here. Finishing the tour does not mark any task done.",
-      target: "#task-filter-review", vibeTarget: '#today-board [data-group="review"]', done: "Review found",
+      target: "#task-filter-review", vibeTarget: "#today-work", done: "Review found",
     },
   ];
   const blankDone = () => lessons.map(() => false);
@@ -223,6 +229,11 @@
   // point at Social's own controls there (vibeTarget, vibeStation).
   const vibeMode = () => { try { return window.MefiVibe?.mode?.() === "vibe"; } catch { return false; } };
   const targetOf = (lesson) => (vibeMode() && lesson.vibeTarget) || lesson.target;
+  // Social keeps to its own pages (renderer/social.js): a stop whose place is Studio's has a Social way of its own.
+  const routeOf = (lesson) => (vibeMode() && lesson.vibeRoute) || lesson.route;
+  const paramsOf = (lesson) => (vibeMode() && lesson.vibeRoute ? lesson.vibeParams : lesson.params);
+  const actionOf = (lesson) => (vibeMode() && lesson.vibeAction) || lesson.action;
+  const secondaryOf = (lesson) => (vibeMode() && lesson.vibeRoute && "vibeSecondary" in lesson ? lesson.vibeSecondary : lesson.secondary);
   const stationOf = (lesson) => (vibeMode() && lesson.vibeStation) || lesson.station || lesson.copy;
   function isDone(index) {
     if (state.done[index]) return true;
@@ -284,10 +295,10 @@
     if ($("build-mode")) $("build-mode").hidden = !BUILD_MODE_STEPS.includes(state.step);
     renderBuildMode();
     $("note").textContent = lesson.note;
-    $("action").hidden = !lesson.action;
-    $("action").textContent = lesson.action || "";
-    $("secondary").hidden = !lesson.secondary;
-    $("secondary").textContent = lesson.secondary || "";
+    $("action").hidden = !actionOf(lesson);
+    $("action").textContent = actionOf(lesson) || "";
+    $("secondary").hidden = !secondaryOf(lesson);
+    $("secondary").textContent = secondaryOf(lesson) || "";
     $("back").disabled = state.step === 0;
     $("next").textContent = state.step === lessons.length - 1 ? "Finish guide" : "Next step";
     const steps = lessons.map((item, index) => {
@@ -749,10 +760,10 @@
   // Today's Review column in Social and the task board in Studio (targetOf /
   // reachWorkspace).
   function routeTo(lesson) {
-    const route = lesson.route;
+    const route = routeOf(lesson);
     let focused = null;
     if (["project", "task", "review"].includes(route)) focused = reachWorkspace(route);
-    else window.MefiNav?.go?.(route, lesson.params);
+    else window.MefiNav?.go?.(route, paramsOf(lesson));
     if (lesson.menu) window.MefiSidebar?.open?.();
     highlight(targetOf(lesson));
     if (route === "project") { focused = document.getElementById("workspace-add-project") ?? null; focused?.focus?.(); }

@@ -891,6 +891,9 @@
   const isWorkspacePage = (dest) => WORKSPACE_PAGES.has(dest?.id);
   // Settings' Size and density page (renderer/size.js, registered only in layout v2) is a page of the workspace too.
   WORKSPACE_PAGES.add("size");
+  // So are Social's own Activity (renderer/today.js) and Projects (renderer/social.js).
+  WORKSPACE_PAGES.add("activity");
+  WORKSPACE_PAGES.add("projects");
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
     for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #vibe-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
@@ -1195,6 +1198,10 @@
     const sessionRoute = window.MefiSessions?.redirect?.(id, params);
     if (sessionRoute) return go(sessionRoute.id, sessionRoute.params, options);
     // ---- end of sessions ----
+    // Social keeps to its own places (renderer/social.js): a page of Studio's (the Map, the boards, Team, Fleet, Trace,
+    // Worktrees, a session) asked for while Social is the mode opens in Studio. The mode switches first, then the page opens
+    // with what it was asked for, so nothing of the way in is lost.
+    if (window.MefiSocial?.studioOnly?.(id, params)) window.MefiSocial.toStudio?.();
     // In Vibe mode, Home is Vibe: every Home button, H and Esc out of Command land there.
     if (id === "workspace" && window.MefiVibe?.mode?.() === "vibe") id = "vibe";
     closeHelpMenu();

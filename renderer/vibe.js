@@ -338,7 +338,11 @@
     if (!gate) return;
     box.dataset.tone = gate.tone;
     $("gate-title").textContent = gate.title;
-    $("gate-text").textContent = gate.text;
+    // The line says what holds the work and the button what frees it; a failed start's own error is Studio's to show (the
+    // whole line stays in the tooltip).
+    const said = gate.key === "parked" ? String(gate.text || "").replace(/\s*Last error: [\s\S]*$/, "") : gate.text;
+    $("gate-text").textContent = said;
+    box.title = said !== gate.text ? `${gate.title} ${gate.text}` : "";
     const button = $("gate-action");
     button.hidden = !gate.action;
     if (gate.action) {
@@ -987,7 +991,18 @@
     finally { suggestion.saving = false; if (id === projectId() && epoch === draftEpoch) renderEvolution(); }
   }
   function grow() { const input = $("input"); input.style.height = "auto"; input.style.height = `${Math.min(220, input.scrollHeight)}px`; }
-  function feedback(text, tone = "") { const node = $("feedback"); node.textContent = text; node.dataset.tone = tone; }
+  // The line under the box says what just happened. It is news for a while, then it would be stale (a QA pass on 2026-10-06
+  // still read "its first build is queued" after that build was verified): good news leaves after FEEDBACK_GOOD_MS and a
+  // warning after FEEDBACK_WARN_MS, unless something newer took its place. An error, or a note about work in flight
+  // ("Sizing it up…"), stays until the next thing you do.
+  const FEEDBACK_GOOD_MS = 20000, FEEDBACK_WARN_MS = 60000;
+  let feedbackTimer = 0;
+  function feedback(text, tone = "") {
+    const node = $("feedback"); node.textContent = text; node.dataset.tone = tone;
+    clearTimeout(feedbackTimer); feedbackTimer = 0;
+    const keep = tone === "good" ? FEEDBACK_GOOD_MS : tone === "warn" ? FEEDBACK_WARN_MS : 0;
+    if (text && keep) feedbackTimer = setTimeout(() => { feedbackTimer = 0; if (node.textContent === text) { node.textContent = ""; node.dataset.tone = ""; } }, keep);
+  }
   // ---- the sizing strip -------------------------------------------------------
   // Build it's wait, live under the box (renderer/vibe-flow.js): the quick
   // look, the lead planning the steps, then the board. It shows only when the

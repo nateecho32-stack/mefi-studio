@@ -735,7 +735,7 @@
       const chat = window.MefiToday?.homeView?.() === "chat" && rootEl().dataset.uiMode !== "vibe";
       if (session || built?.title) parts.push(String(session || built.title));
       // Vibe's Today is the board: the prototype's breadcrumb says so.
-      else parts.push(window.MefiToday ? (chat ? "Chat" : rootEl().dataset.uiMode === "vibe" ? "Today, the board" : "Today") : String(dest?.label || dest?.short || "Home"));
+      else parts.push(window.MefiToday ? (chat ? "Chat" : rootEl().dataset.uiMode === "vibe" ? "Home" : "Today") : String(dest?.label || dest?.short || "Home"));
       return parts;
     }
     const place = placeTrail(n, id, dest);
@@ -840,6 +840,8 @@
   }
   // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
   function placeTrail(n, id, dest) {
+    // Social's own pages (renderer/social.js, renderer/today.js) are places of their own: the project, then the page.
+    if (id === "activity" || id === "projects") return [String(dest?.label || id)];
     const place = placeOfRoute(n, id);
     if (place === "settings") {
       if (id === "size") return ["Settings", "Appearance", String(dest?.label || "Size and density")];
@@ -1196,6 +1198,7 @@
   }
 
   // ---- the status bar -----------------------------------------------------------------------------
+  const socialActivity = () => currentMode() === "vibe" && Boolean(nav()?.get?.("activity"));
   function buildStatus(bar) {
     const items = {};
     const item = (key, className, run, label) => {
@@ -1209,7 +1212,8 @@
     items.layout.setAttribute("aria-expanded", "false");
     items.layout.setAttribute("title", "Layout: list, inspector, tab strip and sizes");
     items.layout.append(icon("panelL"), text("span", "shell-status-word", "Layout"));
-    const working = item("working", "shell-working", () => nav()?.go?.("command"), "Nothing running");
+    // What is running opens the Map in Studio, and Activity in Social (renderer/social.js keeps Social to its own pages).
+    const working = item("working", "shell-working", () => nav()?.go?.(socialActivity() ? "activity" : "command"), "Nothing running");
     working.append(el("i", "shell-dot", { "aria-hidden": "true" }), text("span", "", ""));
     const waiting = item("waiting", "shell-waiting", () => openInbox(waiting), "Waiting on you");
     waiting.append(icon("bell"), text("span", "", ""));
@@ -1315,7 +1319,7 @@
       working.dataset.tone = run;
       working.children[1].textContent = word;
       working.setAttribute("aria-label", word);
-      working.setAttribute("title", "What is running. Open the Map.");
+      working.setAttribute("title", socialActivity() ? "What is running. Open Activity." : "What is running. Open the Map.");
     }
     const needs = live.needs || 0;
     waiting.hidden = needs <= 0;

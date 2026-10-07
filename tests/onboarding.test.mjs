@@ -831,7 +831,7 @@ test("Use for the whole studio with no folder open waits at the workspace stop",
   assert.ok(!calls.some((call) => call[0] === "map"));
 });
 
-test("in Social the box and review walks use Today's own box and Review column, not Studio's hidden controls", async () => {
+test("in Social the box, watch and review walks stay in Social: its own box, Activity and Your work, not Studio's hidden controls", async () => {
   const panels = [];
   const { host } = bridge();
   host.firstAssist = async () => ({ ok: true, via: "assistant", advice: { summary: "Next.", stops: {}, firstTask: { title: "Add a README run section", brief: "Check: README names the command." } }, warnings: [] });
@@ -845,16 +845,21 @@ test("in Social the box and review walks use Today's own box and Review column, 
   assert.equal(env.document.activeElement, env.get("vibe-input"));
   assert.equal(env.query("#vibe-input").classList.contains("walkthrough-focus"), true);
   assert.equal(env.query("#workspace-input").classList.contains("walkthrough-focus"), false);
-  assert.match(env.el("coach-copy").textContent, /box on Today, in Social.*Build it/);
-  env.el("coach-next").click(); // Watch
+  assert.match(env.el("coach-copy").textContent, /box on Home, in Social.*Send/);
+  env.el("coach-next").click(); // Watch: the Map is Studio's, so Social's walk shows Activity
+  assert.deepEqual(env.routes, ["workspace", "activity"]);
+  assert.equal(env.query("#activity-board").classList.contains("walkthrough-focus"), true);
+  assert.equal(env.query("#idle-feed").classList.contains("walkthrough-focus"), false);
+  assert.match(env.el("coach-copy").textContent, /^This is Activity/);
   env.el("coach-next").click(); // Check
-  // Today (go("workspace") lands on Social's own) shows the Review column: no panel opens and Studio's board stays shut.
-  assert.deepEqual(env.routes, ["workspace", "command", "workspace"]);
+  // Home (go("workspace") lands on Social's own) shows Your work, where a result to review waits under Needs you: no panel
+  // opens and Studio's board stays shut.
+  assert.deepEqual(env.routes, ["workspace", "activity", "workspace"]);
   assert.deepEqual(panels, [], "no Social panel is opened for review");
   assert.equal(env.get("workspace-review").clicks, 0);
-  assert.equal(env.query('#today-board [data-group="review"]').classList.contains("walkthrough-focus"), true);
+  assert.equal(env.query("#today-work").classList.contains("walkthrough-focus"), true);
   assert.equal(env.query("#task-filter-review").classList.contains("walkthrough-focus"), false);
-  assert.match(env.el("coach-copy").textContent, /Review column/);
+  assert.match(env.el("coach-copy").textContent, /Your work.*Needs you/);
   // The suggested first task lands in the box the user actually sees.
   env.get("workspace-project-name").textContent = "My project";
   env.guide.open();

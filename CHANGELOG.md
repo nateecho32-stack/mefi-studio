@@ -7,6 +7,23 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Social is about people, rooms and a simple talk with Mefi.** Social's
+  rail (Home, Friends, Projects, Activity) is on its Home too. Home has one
+  box with one action, Send: Mefi offers to build what you describe, and
+  Ctrl Enter still builds right away. Under it, your work is a short list
+  beside who is online, the rooms open now and what friends shared this
+  week. Studio's pages (the Map, the boards, Team, Fleet, Trace, Worktrees)
+  and sessions open in Studio from Social, keeping where you were going, and
+  Social's status bar leaves usage, cost, the machine's load and the
+  permission mode to Studio. A task's state reads the same everywhere (needs
+  you, running, up next or paused, in review, done), so a column never says
+  Running 0 over queued work, and the line under the box clears once its
+  news is old. Fixed: the tab picker finds Friends' places (Friends, Lobby,
+  a laptop), a key tip no longer covers a control (one covered Resume), a
+  briefing about high CPU no longer files a "Fix:" task, a GitHub CLI
+  sign-in made while Studio is open counts for the updater within a minute,
+  and the in-memory relay tests wait up to ten seconds on a slow PC.
+
 - **A more compact Studio: less empty space, more of your work on screen.**
   Today puts its board about 130 px higher. The line of keys under the box
   is gone (Talk it over shows Enter, Build it shows Ctrl Enter), the scope

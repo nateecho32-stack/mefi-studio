@@ -40,6 +40,10 @@
   const vibe = () => window.MefiVibe;
   const page = () => document.documentElement;
   const v2 = () => page()?.dataset?.layout === "v2";
+  // Social (MefiVibe's "vibe" mode) keeps to people, rooms and a light eye on the work: details open in Studio (renderer/social.js).
+  const social = () => vibe()?.mode?.() === "vibe";
+  // A question's detail as Social says it: what is asked, without the run's last output or the check's command (Studio shows those).
+  const plainWords = (text) => String(text ?? "").replace(/\s+(?:Check: |Last output: )[\s\S]*$/, "").trim();
   const byId = (id) => document.getElementById(id);
 
   // ---- words and small helpers -----------------------------------------------------------------
@@ -288,7 +292,8 @@
       meta: `${task.verification?.state === "verified" ? "Verified" : "Done"} · ${ago(finishedAt(task), now)}`, more: [clip(task.verification?.reason, 140)].filter(Boolean) }));
     const notices = (Array.isArray(d.assistant?.messages) ? d.assistant.messages : []).filter((message) => message?.kind === "notice" && message.text && !String(message.taskId || "").startsWith("__")).slice(-4).reverse()
       .map((message) => ({ key: `note:${message.id || message.at}`, text: clip(message.text, 160), at: time(message.at) }));
-    return { needs, running, review, done, doneMore: Math.max(0, finished.length - done.length), latest: notices, total: needs.filter((card) => !card.decided).length + running.length + review.filter((card) => !card.decided).length + done.length };
+    // `hold` is what keeps queued work from starting (the gate under the box), for the heading over it.
+    return { needs, running, review, done, doneMore: Math.max(0, finished.length - done.length), latest: notices, hold: stopped ? gate : null, total: needs.filter((card) => !card.decided).length + running.length + review.filter((card) => !card.decided).length + done.length };
   }
 
   // ---- state ---------------------------------------------------------------------------------------
@@ -428,10 +433,12 @@
     else node.addEventListener("click", onClick);
     return node;
   }
-  function openTask(taskId, { projectId = null, from = null } = {}) {
+  function openTask(taskId, { projectId = null, from = null, tab = null } = {}) {
     if (!taskId) return false;
     closeInbox({ restore: false });
     if (from && typeof from.focus === "function") state.anchor = state.anchor || from;
+    // In Social a task's details are Studio's: its session opens there (renderer/social.js switches the mode first).
+    if (social() && window.MefiSocial?.openTask) return window.MefiSocial.openTask(String(taskId), { projectId: projectId || (state.data || {}).projectId || null, tab });
     // The one place that knows which route a session is: the session panels (layout v2) show a task as a thread, in a tab of
     // its own (the preview tab until you use it). Without them the task's own page is asked of the router, with the task: a
     // tab cannot say which task a board page shows (only a session is a place of its own), so the strip follows the route.
@@ -446,6 +453,7 @@
   function openChanges(taskId) {
     if (!taskId) return false;
     closeInbox({ restore: false });
+    if (social() && window.MefiSocial?.openTask) return window.MefiSocial.openTask(String(taskId), { tab: "changes" });
     const sessions = window.MefiSessions;
     if (sessions?.active?.() && sessions.open?.(String(taskId), { preview: true, tab: "changes" })) return true;
     return openTask(taskId);
@@ -503,9 +511,11 @@
     node.append(head, title);
     const under = item.from && item.from !== item.title ? item.from : item.facts;
     if (under) node.append(el("p", "today-need-from", under));
-    if (item.detail && !(ctx.compact && item.kind !== "question" && item.detail.length > 140)) node.append(el("p", "today-need-detail", ctx.compact ? clip(item.detail, 160) : item.detail));
+    // Social says what is asked and leaves the run's own lines (its last output, the check's command) to Studio.
+    const detail = social() ? plainWords(item.detail) : item.detail;
+    if (detail && !(ctx.compact && item.kind !== "question" && detail.length > 140)) node.append(el("p", "today-need-detail", ctx.compact ? clip(detail, 160) : detail));
     if (item.hint) node.append(el("p", "today-need-hint", item.hint));
-    if (!ctx.compact && item.evidence.length) node.append(el("pre", "today-need-evidence", item.evidence.join("\n")));
+    if (!ctx.compact && !social() && item.evidence.length) node.append(el("pre", "today-need-evidence", item.evidence.join("\n")));
     if (!ctx.compact && item.steps.length) { const list = el("ol", "today-need-steps"); for (const step of item.steps) list.append(el("li", "", step)); node.append(list); }
     // What can be done.
     const choices = el("div", "today-need-options");
@@ -565,7 +575,9 @@
       if (choices.children.length) node.append(choices);
     }
     const foot = el("div", "today-need-foot");
-    if (item.taskId) foot.append(button("Open task", "today-link", () => openTask(item.taskId, { from: ctx.anchor }), { title: "Open this task in a tab" }));
+    if (item.taskId) foot.append(social()
+      ? button("Open in Studio", "today-link", () => openTask(item.taskId, { from: ctx.anchor }), { title: "See the whole task, its changes and its checks in Studio" })
+      : button("Open task", "today-link", () => openTask(item.taskId, { from: ctx.anchor }), { title: "Open this task in a tab" }));
     foot.append(button(postponed ? "Decide now" : "Decide later", "today-link", () => later(item.key, !postponed), { title: postponed ? "Put it back where it was" : "Put it last for now; it still needs you" }));
     node.append(foot);
     if (state.errors.has(item.key)) { const note = el("p", "today-need-note", state.errors.get(item.key)); note.setAttribute("role", "alert"); node.append(note); }
@@ -820,6 +832,29 @@
     pageWired = true;
     byId("inbox-close")?.addEventListener("click", () => window.MefiNav?.close?.("inbox") ?? closeInboxPage());
     byId("today-close")?.addEventListener("click", () => window.MefiNav?.close?.("today") ?? closeTodayPage());
+    byId("activity-close")?.addEventListener("click", () => window.MefiNav?.close?.("activity") ?? closeActivityPage());
+    byId("activity-studio")?.addEventListener("click", () => { closeActivityPage(); window.MefiSocial?.openInStudio?.("workspace"); });
+  }
+  // Social's Activity: the open project's work in one list (the Home's rows, all of them), a page in Social's rail.
+  function openActivityPage(params = {}) {
+    if (!state.on || !byId("activity-overlay")) return false;
+    wirePages();
+    window.MefiNav?.claim?.("activity");
+    byId("activity-overlay").hidden = false;
+    state.pageOpen = "activity";
+    startClock();
+    paint();
+    if (params?.focus !== false) requestAnimationFrame?.(() => byId("activity-close")?.focus?.({ preventScroll: true }));
+    return true;
+  }
+  function closeActivityPage() {
+    const overlay = byId("activity-overlay");
+    if (!overlay || overlay.hidden) return false;
+    overlay.hidden = true;
+    if (state.pageOpen === "activity") state.pageOpen = null;
+    window.MefiNav?.release?.("activity");
+    stopClockIfIdle();
+    return true;
   }
   function openInboxPage(params = {}) {
     if (!state.on || !byId("inbox-overlay")) return false;
@@ -920,47 +955,92 @@
   // The prototype's four columns (Done holds what finished today), each with its own words when it is empty.
   const GROUPS = [["needs", "Needs you"], ["running", "Running"], ["review", "Review"], ["done", "Done"]];
   const GROUP_EMPTY = { needs: "Nothing is waiting on you.", running: "Nothing is running.", review: "Nothing to review.", done: "Nothing finished yet today." };
+  // Social's list (its Home and Activity, data-style="list"): what waits its turn has a heading of its own, and a group with
+  // nothing in it takes no room. One set of words for where a task stands, everywhere: needs you, running, up next (or what
+  // holds it: paused, agents off, no AI), ready to review, done.
+  const LIST_GROUPS = [["needs", "Needs you"], ["running", "Running"], ["queued", "Up next"], ["review", "In review"], ["done", "Done today"]];
+  const QUEUE_HEAD = { paused: "Paused", held: "Agents off", key: "No AI connected" };
+  // A card waiting its turn is "next" in the model (boardOf), filed with Running there; the list gives it its own group. The list
+  // also files a result waiting for your review under Needs you, so its heading counts what the "N need you" pill and the Inbox
+  // count; In review keeps what is being checked and plans.
+  function groupCards(board, key, style) {
+    const running = Array.isArray(board.running) ? board.running : [];
+    const review = Array.isArray(board.review) ? board.review : [];
+    if (key === "queued") return running.filter((card) => card.tone === "next");
+    if (style === "list") {
+      if (key === "running") return running.filter((card) => card.tone !== "next");
+      if (key === "needs") return [...(Array.isArray(board.needs) ? board.needs : []), ...review.filter((card) => card.item)];
+      if (key === "review") return review.filter((card) => !card.item);
+    }
+    return Array.isArray(board[key]) ? board[key] : [];
+  }
+  // What a heading says and counts. Running counts what runs, never what waits: a column with nothing running and only
+  // queued work is named for the queue ("Up next", or "Paused" while new work is paused), not "Running 0" over queued cards.
+  function groupHead(board, key, label, style) {
+    const cards = groupCards(board, key, style);
+    if (key === "running" && style !== "list") {
+      const live = cards.filter((card) => card.tone !== "next");
+      if (live.length || !cards.length) return { label, count: live.length };
+      return { label: QUEUE_HEAD[board.hold] || "Up next", count: cards.length };
+    }
+    if (key === "queued") return { label: QUEUE_HEAD[board.hold] || label, count: cards.length };
+    return { label, count: cards.filter((card) => !card.decided && !card.stopped).length };
+  }
   // What a card says, time included (its meta carries "4 min"), so it is rebuilt exactly when something it shows has changed.
   const cardSignature = (card, detail) => JSON.stringify([card.key, card.title, card.meta, card.q ?? null, card.acts ?? null, card.progress ?? null, card.worktree ?? false, card.quick?.map((option) => option.id) ?? null, card.item ? state.busy.has(card.item.key) : 0,
     card.item ? state.errors.get(card.item.key) ?? null : null, card.decided ? [card.item.handled.label, Boolean(card.item.handled.undo)] : 0, detail, card.more]);
   // The four groups stay put as nodes (all four while a project is open, each saying so when it is empty, as the prototype's board);
   // their cards are kept or rebuilt one by one, so a push that changes one card leaves the others, and any answer being typed, alone.
-  function paintBoard(holder, current, detail) {
+  // Social's list (style "list") shows a group only while it holds something; `caps` keeps each to a few rows (Social's Home) with
+  // the rest one press away on Activity.
+  function paintBoard(holder, current, detail, { style = "board", caps = null } = {}) {
     const now = Date.now();
     const groups = holder.querySelector?.(".today-groups") || holder;
-    const shown = current.projectId ? GROUPS : [];
+    const shown = current.projectId ? (style === "list" ? LIST_GROUPS : GROUPS) : [];
     holder.dataset.groups = String(shown.length);
-    reconcile(groups, shown.map(([key, label]) => ({
-      key, sig: `${key}|${label}`,
+    reconcile(groups, shown.map(([key]) => ({
+      key, sig: `${key}|${style}`,
       build: () => {
         const group = el("section", "today-group");
-        group.dataset.group = key; group.setAttribute("aria-label", label);
-        const heading = el("h3", "", label); heading.append(el("span", "today-count", ""));
-        const empty = el("p", "today-col-empty", GROUP_EMPTY[key]); empty.hidden = true;
+        group.dataset.group = key;
+        const heading = el("h3", "");
+        heading.append(el("span", "today-group-name", ""), el("span", "today-count", ""));
+        const empty = el("p", "today-col-empty", GROUP_EMPTY[key] || ""); empty.hidden = true;
         group.append(heading, el("div", "today-cards"), empty);
         return group;
       },
     })));
     for (const group of [...groups.children]) {
       const key = group.dataset?.group;
-      if (!key || !current.board[key]) continue;
-      const cards = current.board[key];
+      const entry = shown.find(([id]) => id === key);
+      if (!entry) continue;
+      const head = groupHead(current.board, key, entry[1], style);
+      const name = group.querySelector(".today-group-name");
+      if (name && name.textContent !== head.label) { name.textContent = head.label; group.setAttribute("aria-label", head.label); }
       const count = group.querySelector(".today-count");
-      const open = cards.filter((card) => !card.decided && !card.stopped).length;
-      if (count && count.textContent !== String(open)) count.textContent = String(open);
+      if (count && count.textContent !== String(head.count)) count.textContent = String(head.count);
+      const cards = groupCards(current.board, key, style);
+      const cap = caps && Number.isFinite(caps[key]) ? caps[key] : Infinity;
+      const kept = cards.slice(0, cap);
       const list = group.querySelector(".today-cards");
-      reconcile(list, cards.map((card) => ({ key: card.key, sig: cardSignature(card, detail), build: () => renderCard(card, detail) })));
+      reconcile(list, kept.map((card) => ({ key: card.key, sig: cardSignature(card, detail), build: () => renderCard(card, detail) })));
       const empty = group.querySelector(".today-col-empty");
-      if (empty && empty.hidden !== (cards.length > 0)) empty.hidden = cards.length > 0;
-      if (key === "done") {
-        let more = group.querySelector(".today-more");
-        if (current.board.doneMore && !more) { more = button("", "today-link today-more", () => window.MefiNav?.go?.("tasks", { filter: "done" }), { title: "All finished work" }); group.append(more); }
-        if (more) { more.hidden = !current.board.doneMore; more.textContent = `${current.board.doneMore} more`; }
+      // A list hides a group with nothing in it; the board's columns stay and say they are empty.
+      if (style === "list") { if (group.hidden !== (cards.length === 0)) group.hidden = cards.length === 0; if (empty) empty.hidden = true; }
+      else if (empty && empty.hidden !== (cards.length > 0)) empty.hidden = cards.length > 0;
+      const extra = style === "list" ? cards.length - kept.length : key === "done" ? current.board.doneMore : 0;
+      let more = group.querySelector(".today-more");
+      if (extra > 0 && !more) {
+        more = style === "list"
+          ? button("", "today-link today-more", () => window.MefiNav?.go?.("activity"), { title: "Everything in Activity" })
+          : button("", "today-link today-more", () => window.MefiNav?.go?.("tasks", { filter: "done" }), { title: "All finished work" });
+        group.append(more);
       }
+      if (more) { more.hidden = !(extra > 0); more.textContent = `${extra} more`; }
     }
     const feed = holder.querySelector?.(".today-latest");
     if (feed) {
-      const notes = detail === "titles" ? [] : current.board.latest;
+      const notes = detail === "titles" || style === "list" ? [] : current.board.latest;
       feed.hidden = notes.length === 0;
       reconcile(feed.querySelector(".today-latest-rows") || feed, notes.map((note) => ({ key: note.key, sig: `${note.text}|${Math.floor(now / 60000)}`, build: () => { const row = el("li", "today-latest-row"); row.append(el("i", "today-dot"), el("span", "", note.text), el("time", "", ago(note.at, now))); return row; } })));
     }
@@ -978,8 +1058,11 @@
     holder.append(node);
     return node;
   }
-  function paintSummary(holder, current) {
-    const needs = current.count, running = current.board.running.filter((card) => card.tone === "live").length, review = current.board.review.filter((card) => !card.decided).length;
+  // In Social's list a result waiting for your review is under Needs you (and in "N need you"), so its chip counts what the list
+  // calls In review: what is being checked, and plans.
+  function paintSummary(holder, current, style = "board") {
+    const needs = current.count, running = current.board.running.filter((card) => card.tone === "live").length;
+    const review = current.board.review.filter((card) => !card.decided && !(style === "list" && card.item)).length;
     const set = (key, tag, words, on) => {
       const node = chip(holder, key, tag);
       node.hidden = !on;
@@ -989,13 +1072,18 @@
     set("need", "button", `${needs} ${needs === 1 ? "needs" : "need"} you`, needs > 0);
     set("clear", "span", "All clear", needs === 0);
     set("run", "span", `${running} running`, running > 0);
-    set("rev", "span", `${review} to review`, review > 0);
+    set("rev", "span", style === "list" ? `${review} in review` : `${review} to review`, review > 0);
   }
 
-  // Everything Today shows, on whichever host is up: the front door's own page, and the Today page Build opens.
+  // Everything Today shows, on whichever host is up: Social's Home (the front door's own page) and its Activity page draw
+  // the list (style "list": a group only while it holds something), Social's Home a few rows of each; the Today page Studio
+  // opens draws the prototype's four columns.
+  const HOME_CAPS = Object.freeze({ needs: 3, running: 3, queued: 2, review: 2, done: 3 });
+  const QUIET_LIST = "All quiet: nothing needs you and nothing is running. Ask Mefi above to start something.";
   const HOSTS = [
-    { id: "vibe", summary: "today-summary", quiet: "today-quiet", board: "today-board", up: () => state.host === "vibe", none: "Pick a project to begin: choose one from the project name above." },
-    { id: "page", summary: "today-overlay-summary", quiet: "today-overlay-quiet", board: "today-overlay-board", up: () => byId("today-overlay")?.hidden === false, none: "Pick a project to begin: choose one from the project menu." },
+    { id: "vibe", summary: "today-summary", quiet: "today-quiet", board: "today-board", style: "list", caps: HOME_CAPS, up: () => state.host === "vibe", none: "Pick a project to begin: open Projects, or choose one from the project name above." },
+    { id: "page", summary: "today-overlay-summary", quiet: "today-overlay-quiet", board: "today-overlay-board", style: "board", caps: null, up: () => byId("today-overlay")?.hidden === false, none: "Pick a project to begin: choose one from the project menu." },
+    { id: "activity", summary: "activity-summary", quiet: "activity-quiet", board: "activity-board", style: "list", caps: null, up: () => byId("activity-overlay")?.hidden === false, none: "Pick a project to begin: open Projects and choose one." },
   ];
   function paintToday() {
     const current = model();
@@ -1005,16 +1093,26 @@
       const board = byId(host.board);
       if (!board) continue;
       const summary = byId(host.summary), quiet = byId(host.quiet);
-      if (summary) paintSummary(summary, current);
-      // With a project open the four columns say what is empty; without one, this line says what to do.
+      if (summary) paintSummary(summary, current, host.style);
+      // With a project open the four columns say what is empty, and the list says it once, here; without one, this line says what to do.
       if (quiet) {
-        const hasProject = Boolean(current.projectId);
-        quiet.hidden = hasProject;
-        quiet.textContent = hasProject ? "" : host.none;
+        const words = !current.projectId ? host.none : host.style === "list" && !current.board.total ? QUIET_LIST : "";
+        quiet.hidden = !words;
+        if (quiet.textContent !== words) quiet.textContent = words;
       }
-      paintBoard(board, current, detail);
+      paintBoard(board, current, detail, { style: host.style, caps: host.caps });
     }
     if (homeShowing()) paintHome(current);
+  }
+  // Social's rail carries what waits on you on Activity's stop (renderer/booklet.template.html #vibe-rail-needs).
+  function paintRailCount(total) {
+    const badge = byId("vibe-rail-needs");
+    if (!badge) return;
+    const words = total > 0 ? String(total) : "";
+    if (badge.textContent !== words) badge.textContent = words;
+    if (badge.hidden !== !words) badge.hidden = !words;
+    const stop = byId("vibe-rail-activity");
+    if (stop) stop.setAttribute("aria-label", total > 0 ? `Activity, ${total} need${total === 1 ? "s" : ""} you` : "Activity");
   }
 
   // ---- hosts ------------------------------------------------------------------------------------------------
@@ -1032,13 +1130,28 @@
     const summary = el("div", "today-summary"); summary.id = "today-summary"; summary.setAttribute("role", "group"); summary.setAttribute("aria-label", "What is happening");
     const slot = el("div", "today-box");
     const quiet = el("p", "today-quiet"); quiet.id = "today-quiet"; quiet.hidden = true; quiet.setAttribute("role", "status");
-    const board = el("div", "today-board"); board.id = "today-board";
+    const board = el("div", "today-board"); board.id = "today-board"; board.dataset.style = "list";
     const groups = el("div", "today-groups");
     const latest = el("section", "today-latest"); latest.hidden = true; latest.setAttribute("aria-label", "Latest");
     const latestRows = el("ul", "today-latest-rows");
     latest.append(el("h3", "", "Latest"), latestRows);
     board.append(groups, latest);
-    column.append(row, slot, quiet, board);
+    // Under the box, Social's Home is your work in short beside your friends (a QA pass on 2026-10-06 found it read as an agent
+    // dashboard): a few rows of what needs you, runs, waits, wants a look and finished, with Activity for the rest and Studio for
+    // the details, and the Friends card (renderer/social.js) with who is online, the rooms open now and what friends shared.
+    const grid = el("div", "today-social");
+    const work = el("section", "social-card social-work"); work.id = "today-work"; work.setAttribute("aria-labelledby", "today-work-title");
+    const workHead = el("header", "social-card-head");
+    const workTitle = el("h2", "social-card-title", "Your work"); workTitle.id = "today-work-title";
+    const links = el("span", "social-card-links");
+    links.append(button("See all", "social-link", () => window.MefiNav?.go?.("activity"), { title: "Everything that needs you, runs, waits and finished, in Activity" }),
+      button("Open in Studio", "social-link", () => window.MefiSocial?.openInStudio?.("workspace"), { title: "Sessions, changes, checks and logs, in Studio" }));
+    workHead.append(workTitle, links);
+    work.append(workHead, quiet, board);
+    grid.append(work);
+    const people = window.MefiSocial?.peopleCard?.();
+    if (people) grid.append(people);
+    column.append(row, slot, grid);
     scroll.append(column); today.append(scroll);
     // Under the front door's own top bar, which stays (the project, New app, the conversation, Settings, an update waiting), so Tab reads the page
     // top to bottom; its stage and dock step aside (today.css). The sky is out of flow behind everything.
@@ -1067,6 +1180,24 @@
       button.append(key); button.setAttribute("aria-keyshortcuts", shortcut);
       (state.added ||= []).push(() => { key.remove?.(); button.removeAttribute?.("aria-keyshortcuts"); });
     }
+    // Social's box is one conversation with one action: Send talks with Mefi, who offers to build what it hears (main.cjs turns a
+    // card the model would file into an offer while you talk), and Ctrl Enter still builds at once. Build it, the permission mode,
+    // the answer styles and the starting points step aside here (social.css); Studio's own box keeps every one of them.
+    const talk = byId("vibe-talk");
+    const said = talk ? [...(talk.childNodes ?? [])].find((child) => child.nodeType === 3 && child.textContent.trim()) : null;
+    if (talk && said) {
+      const was = { text: said.textContent, title: talk.title || "", quiet: Boolean(talk.classList?.contains?.("quiet")) };
+      said.textContent = "Send";
+      talk.title = "Send to Mefi (Enter). Mefi offers to build what you describe; Ctrl Enter builds it right away.";
+      talk.classList?.remove?.("quiet"); talk.classList?.add?.("primary");
+      (state.added ||= []).push(() => { said.textContent = was.text; talk.title = was.title; talk.classList?.remove?.("primary"); if (was.quiet) talk.classList?.add?.("quiet"); });
+    }
+    const input = byId("vibe-input");
+    if (input) {
+      const was = input.placeholder;
+      input.placeholder = "Ask Mefi anything, or describe something to make…";
+      (state.added ||= []).push(() => { input.placeholder = was; });
+    }
     return today;
   }
   function show() {
@@ -1091,6 +1222,8 @@
     for (const { node, parent, next } of [...(state.parts || [])].reverse()) { if (parent) parent.insertBefore(node, next && next.parentNode === parent ? next : null); }
     state.parts = null;
     for (const undo of (state.added || []).splice(0)) { try { undo(); } catch { /* already gone */ } }
+    const people = byId("social-people");
+    people?.dispose?.();
     byId("today-page")?.remove();
     if (layer?.dataset) delete layer.dataset.today;
     state.host = null;
@@ -1543,11 +1676,12 @@
     if (!state.on) return;
     sweepHandled();
     announce();
-    if (state.host === "vibe" || byId("today-overlay")?.hidden === false || homeShowing()) paintToday();
+    paintRailCount(model().count);
+    if (state.host === "vibe" || byId("today-overlay")?.hidden === false || byId("activity-overlay")?.hidden === false || homeShowing()) paintToday();
     if (state.inbox.open) paintInbox();
     if (byId("inbox-overlay")?.hidden === false) paintInboxPage();
   }
-  const visible = () => state.host === "vibe" || state.inbox.open || homeShowing() || byId("today-overlay")?.hidden === false || byId("inbox-overlay")?.hidden === false;
+  const visible = () => state.host === "vibe" || state.inbox.open || homeShowing() || byId("today-overlay")?.hidden === false || byId("inbox-overlay")?.hidden === false || byId("activity-overlay")?.hidden === false;
   // One slow clock while something is showing, so "4 min" and the decided lines stay true without a timer per card.
   function startClock() {
     if (state.clock || !visible()) return;
@@ -1640,6 +1774,14 @@
       open: (params) => openInboxPage(params), close: () => closeInboxPage(), isOpen: () => overlayOpen("inbox-overlay"),
     });
     nav.register({
+      id: "activity", label: "Activity", short: "Activity", kind: "overlay", layer: "sheet", section: "home", group: "surfaces", key: null, glyph: "g-activity", badge: null,
+      desc: "What needs you, what's running, what's next and what finished today, in one list",
+      searchTerms: "activity work tasks progress running queued up next paused done today needs you social list",
+      showIn: showIn({ palette: true }), hidden: () => vibe()?.mode?.() !== "vibe",
+      element: "activity-overlay", focus: "#activity-close",
+      open: (params) => openActivityPage(params), close: () => closeActivityPage(), isOpen: () => overlayOpen("activity-overlay"),
+    });
+    nav.register({
       id: "home-chat", label: "Open the conversation", short: "Conversation", kind: "action", layer: null, section: "home", group: "surfaces", key: null, glyph: "g-chat", badge: null,
       paletteGroup: "Actions", desc: "Studio's Home as it was: the conversation with Mefi, the queue, Activity and the app preview",
       searchTerms: "conversation chat talk message assistant mefi classic home queue activity preview",
@@ -1678,7 +1820,7 @@
   }
   function stop() {
     if (!state.on) return false;
-    closeInbox({ restore: false }); closeInboxPage(); closeTodayPage();
+    closeInbox({ restore: false }); closeInboxPage(); closeTodayPage(); closeActivityPage();
     restore();
     unmountHome();
     state.home.node?.remove?.(); state.home.tools?.remove?.();
@@ -1699,7 +1841,7 @@
   window.MefiToday = {
     start, stop, show, hide, isOn: () => state.on, takesNeeds: () => state.on,
     count, items, needTasks, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
-    openNeed, openFromAlert, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
+    openNeed, openFromAlert, openActivity: openActivityPage, closeActivity: closeActivityPage, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
     // Build's Home (layout v2): workspace.js asks when Home comes and goes and when its box sends; the router's view "chat" is the classic Home.
     syncHome, hostsComposer: () => state.home.on, composerChanged: () => { if (state.home.on) paintHomeTools(); }, homeView: () => state.homeView, openChat, suggest: () => homeSuggest(),
     // For tests and anything driving Studio: the pure model, and what is in flight.

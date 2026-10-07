@@ -426,7 +426,11 @@ test("Decide later puts a thing last for now, it still needs you, and Decide now
 test("a thing opens its task in its thread when the session panels are there, else through the route", async () => {
   const sessions = [], tabs = [];
   const panels = { active: () => true, open: (...args) => { sessions.push(plain(args)); return true; } };
-  const t = await loadToday({ data: board({ needs: [needBlocked()] }), extras: { MefiSessions: panels, MefiTabs: { open: (...args) => tabs.push(plain(args)) } } });
+  // In Social the task's details are Studio's, and the button says so (renderer/social.js switches the mode first).
+  const social = await loadToday({ data: board({ needs: [needBlocked()] }) });
+  await open(social);
+  assert.ok(buttonNamed(cardOf(social, "blocked:t6"), "Open in Studio"), "Social names where the task opens");
+  const t = await loadToday({ mode: "build", data: board({ needs: [needBlocked()] }), extras: { MefiSessions: panels, MefiTabs: { open: (...args) => tabs.push(plain(args)) } } });
   await open(t);
   await press(t, buttonNamed(cardOf(t, "blocked:t6"), "Open task"));
   assert.deepEqual(sessions, [["t6", { preview: true }]], "a session, in a preview tab like every page you look at");
@@ -435,20 +439,21 @@ test("a thing opens its task in its thread when the session panels are there, el
   assert.equal(inboxOf(t).hidden, true, "and the popover gets out of the way");
   // Panels that are not drawn, or that cannot show this task (another project's), leave it to the route.
   for (const extras of [{ MefiSessions: { active: () => false, open: () => { throw new Error("not drawn"); } } }, { MefiSessions: { active: () => true, open: () => false } }, { MefiTabs: { open: (...args) => tabs.push(plain(args)) } }]) {
-    const v = await loadToday({ data: board({ needs: [needBlocked()] }), extras });
+    const v = await loadToday({ mode: "build", data: board({ needs: [needBlocked()] }), extras });
     await open(v);
     await press(v, buttonNamed(cardOf(v, "blocked:t6"), "Open task"));
     assert.deepEqual(v.nav.gone, [["tasks", { taskId: "t6", projectId: "p1", filter: "all" }]]);
   }
   assert.deepEqual(tabs, [], "a strip with no session panels is followed, never asked for a tasks tab with no task in it");
-  const u = await loadToday({ data: board({ needs: [needBlocked()] }) });
+  const u = await loadToday({ mode: "build", data: board({ needs: [needBlocked()] }) });
   await open(u);
   await press(u, buttonNamed(cardOf(u, "blocked:t6"), "Open task"));
   assert.deepEqual(u.nav.gone, [["tasks", { taskId: "t6", projectId: "p1", filter: "all" }]]);
-  // A question about no task has nothing to open.
+  // A question about no task has nothing to open, in either mode.
   const w = await loadToday({ data: board({ needs: [needQuestion({ context: {} })] }) });
   await open(w);
   assert.equal(buttonNamed(cardOf(w, "question:q1"), "Open task"), null);
+  assert.equal(buttonNamed(cardOf(w, "question:q1"), "Open in Studio"), null);
 });
 
 test("J and K move, a number picks an option, Enter opens the task, Esc closes and gives the keyboard back", async () => {

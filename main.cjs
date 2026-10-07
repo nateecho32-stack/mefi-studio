@@ -1247,6 +1247,10 @@ let releaseCheckInFlight = null;
 let releaseApplyInFlight = false;
 let releaseWatch = null;
 let ghTokenCache;
+// When the GitHub CLI last had no login: a miss is asked again after a while,
+// so a `gh auth login` made with Studio open counts at the next check.
+let ghTokenMissAt = 0;
+const GH_TOKEN_RETRY_MS = 60_000;
 let releaseChannel = "stable";
 let releaseChannelEpoch = 0;
 let releaseChannelSetting = false;
@@ -1313,14 +1317,16 @@ function publishRelease(patch = {}, { force = false } = {}) {
 
 // A private repository needs credentials. Order: a token the user saved in
 // Studio (DPAPI-encrypted like the other keys), the usual environment
-// variables, then the GitHub CLI's own login — cached for this boot.
+// variables, then the GitHub CLI's own login — cached for this boot once found
+// (a miss only for GH_TOKEN_RETRY_MS).
 async function resolveGithubToken(settings) {
   const stored = decryptKey(settings, "githubTokenEncrypted");
   if (stored) return stored;
   for (const name of ["MEFI_STUDIO_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]) {
     if (process.env[name]) return process.env[name];
   }
-  if (ghTokenCache !== undefined) return ghTokenCache;
+  if (ghTokenCache) return ghTokenCache;
+  if (ghTokenCache === null && Date.now() - ghTokenMissAt < GH_TOKEN_RETRY_MS) return null;
   ghTokenCache = await new Promise((resolve) => {
     let settled = false;
     // Declared before finish: a synchronous spawn throw calls finish while a
@@ -1350,6 +1356,7 @@ async function resolveGithubToken(settings) {
     child.on("error", () => finish(null));
     child.on("close", (code) => finish(code === 0 && output.trim() ? output.trim() : null));
   });
+  if (!ghTokenCache) ghTokenMissAt = Date.now();
   return ghTokenCache;
 }
 

@@ -24,8 +24,11 @@
   // Each tip: where it applies, the control it points at (the first visible
   // match), which side it sits on, and its keys with what they do.
   const TIPS = [
-    // Under Build it, not beside the box: the box runs the page's width, so beside it the tip landed on Build it itself.
-    { id: "vibe-box", when: onVibe, target: "#vibe-build", side: "bottom", parts: [["/", "jump into the box"], ["Enter", "talk it over"], ["Ctrl+Enter", "build it"]] },
+    // Beside Send, Social's one action (Build it is a key there, not a button). Under the box it covered the Resume of the line
+    // below it (QA, 2026-10-06), so a tip now takes whichever side leaves every control clear (clearSide).
+    { id: "vibe-box", when: onVibe, target: "#vibe-talk", side: "right", parts: [["/", "jump into the box"], ["Enter", "send to Mefi"], ["Ctrl+Enter", "build it right away"]] },
+    // Social's rail: the keys for what it holds (its own pulse and Search buttons are the frame's top bar's now).
+    { id: "vibe-rail", when: onVibe, target: "#vibe-rail .vibe-rail-items", side: "right", parts: [["N", "what needs you"], ["C", "the conversation"], ["Ctrl+K", "find anything"]] },
     { id: "vibe-dock", when: onVibe, target: "#vibe-dock", side: "right", parts: [["D", "watch the tree"], ["T", "tasks"], ["M", "team"]] },
     { id: "vibe-pulse", when: onVibe, target: "#vibe-pulse", side: "bottom", parts: [["N", "what needs you"], ["C", "the conversation"]] },
     { id: "vibe-search", when: onVibe, target: "#vibe-layer .vibe-top-actions [data-nav='palette']", side: "bottom", parts: [["Ctrl+K", "find anything"], ["?", "every shortcut"]] },
@@ -132,6 +135,31 @@
     return { left: clampedLeft, top: clampedTop, right: clampedLeft + width, bottom: clampedTop + height };
   }
   const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  // Whether a tip at `rect` would cover something you use: what is under a few points of it, other than the tip itself and the
+  // control it points at. A tip may sit over text and empty glass, never over a button, a link or a field.
+  const CONTROL = "button, a[href], input, textarea, select, [role='button'], [role='switch'], [role='tab'], [contenteditable='true']";
+  function coversControl(rect, box, target) {
+    if (typeof document.elementsFromPoint !== "function") return false;
+    const xs = [rect.left + 4, (rect.left + rect.right) / 2, rect.right - 4], ys = [rect.top + 4, (rect.top + rect.bottom) / 2, rect.bottom - 4];
+    for (const x of xs) for (const y of ys) {
+      for (const node of document.elementsFromPoint(x, y) ?? []) {
+        if (box.contains?.(node) || node.closest?.(".key-tip")) continue;
+        const control = node.closest?.(CONTROL);
+        if (control && control !== target && !control.contains?.(target)) return true;
+      }
+    }
+    return false;
+  }
+  // The side a tip asks for, else the first other side that leaves every control and every other tip clear; null when none does.
+  const SIDES = ["right", "bottom", "top", "left"];
+  function clearSide(box, target, wanted, others) {
+    for (const side of [wanted, ...SIDES.filter((one) => one !== wanted)]) {
+      const rect = place(box, target, side);
+      if (others.some((other) => overlaps(other, rect)) || coversControl(rect, box, target)) continue;
+      return rect;
+    }
+    return null;
+  }
 
   function hide(id, { seen = false } = {}) {
     const entry = state.shown.get(id);
@@ -159,8 +187,10 @@
     const rects = [];
     for (const [id, entry] of [...state.shown]) {
       const target = entry.tip.when() ? targetOf(entry.tip) : null;
-      if (!target) { hide(id); continue; }
-      rects.push(place(entry.box, target, entry.tip.side));
+      // A tip whose place is gone, or that something you use has moved under, steps aside until the next pass.
+      const rect = target ? clearSide(entry.box, target, entry.tip.side, rects) : null;
+      if (!rect) { hide(id); continue; }
+      rects.push(rect);
     }
     for (const tip of remaining()) {
       if (state.shown.size >= MAX_SHOWN) break;
@@ -170,8 +200,8 @@
       const box = build(tip);
       if (state.shown.size) box.style.setProperty?.("--tip-delay", "420ms");
       document.body.append(box);
-      const rect = place(box, target, tip.side);
-      if (rects.some((other) => overlaps(other, rect))) { box.remove(); continue; }
+      const rect = clearSide(box, target, tip.side, rects);
+      if (!rect) { box.remove(); continue; }
       rects.push(rect);
       state.shown.set(tip.id, { tip, box });
     }
