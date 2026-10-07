@@ -10,7 +10,7 @@
 // What is kept, and why, is listed in relay/README.md. Chat text, files, IP
 // addresses and Discord tokens are never written here.
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 // One statement per entry: Cloudflare's exec runs a single statement when it has bindings.
 const V1 = [
@@ -247,6 +247,25 @@ const V6 = [
   `CREATE INDEX IF NOT EXISTS shop_owned_item ON shop_owned (item_id)`,
 ];
 
+// v7: credits on hold (credits.mjs). What a newcomer wave would have paid one
+// member waits here for a moderator's look: each row is a credit_events row kept
+// at 0 until a moderator pays it (released) or drops it, and it goes after 30
+// days if nobody does. `counted` is what of it the day's earning cap counts.
+const V7 = [
+  `CREATE TABLE IF NOT EXISTS credit_held (
+     event_id INTEGER PRIMARY KEY,
+     actor_id TEXT NOT NULL,
+     target_id TEXT NOT NULL,
+     kind TEXT NOT NULL,
+     day INTEGER NOT NULL,
+     amount INTEGER NOT NULL,
+     counted INTEGER NOT NULL,
+     at INTEGER NOT NULL
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS credit_held_target ON credit_held (target_id, at)`,
+  `CREATE INDEX IF NOT EXISTS credit_held_pair ON credit_held (actor_id, target_id, at)`,
+];
+
 export const MIGRATIONS = Object.freeze([
   { version: 1, statements: V1 },
   { version: 2, statements: V2 },
@@ -254,6 +273,7 @@ export const MIGRATIONS = Object.freeze([
   { version: 4, statements: V4 },
   { version: 5, statements: V5 },
   { version: 6, statements: V6 },
+  { version: 7, statements: V7 },
 ]);
 
 const bindValue = (value) => (value === undefined ? null : value === true ? 1 : value === false ? 0 : value);

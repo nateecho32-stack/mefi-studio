@@ -175,7 +175,7 @@
       fill.style.width = `${Math.round((me.rank?.progress ?? 1) * 100)}%`;
       meter.append(fill);
       const line = node("p", "muted project-hub-me-line",
-        `${next ? `${next.at - me.credits.lifetime} more to ${next.name}` : "Top rank"} · today ${me.credits.today}/${me.credits.todayCap}${me.streak.days > 1 ? ` · ${me.streak.days}-day streak` : ""}`);
+        `${next ? `${next.at - me.credits.lifetime} more to ${next.name}` : "Top rank"} · today ${me.credits.today}/${me.credits.todayCap}${me.streak.days > 1 ? ` · ${me.streak.days}-day streak` : ""}${me.credits.held > 0 ? ` · ${plural(me.credits.held, "credit")} waiting for a quick check` : ""}`);
       mine.append(head, meter, line);
       if (me.specialRanks.length) {
         const chips = node("div", "project-hub-chips");

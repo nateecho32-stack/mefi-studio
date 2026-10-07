@@ -6,6 +6,37 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Resources: the resource manager for other apps, manual and auto, gated in C:\wt\resmgr
+
+Branch `feat/resource-manager` (C:\wt\resmgr) off 4b150b3, main merged in up to 86cfa93 (one CHANGELOG conflict,
+both sides kept; the booklet regenerated after each merge, identical to the auto-merge). New:
+`scripts/resource-rules.cjs`, `resource-host.cjs`, `resource-helper.cs` (C#, built once with Windows' csc.exe),
+`renderer/resources.js` + `.css`, `docs/resource-manager.md`; `main.cjs` loads the host on first use.
+
+Proof: `npm run check` ok (300 targets, 614 specs); `npm run audit` 0 findings; eslint on the changed files: no new
+warnings (the 6 it prints are old lines in main.cjs and nav.js). New suites: `resource_rules` 17/17,
+`resource_host` 15/15 (a scripted helper over fake pipes), `resources_ui` 11/11, `resource_helper_win` 1/1 (builds
+the real helper and slows, pauses, refuses, adopts after a kill, restores on stdin close and ends a throwaway
+process; 10 s). On the merged tree, 25 files through `npm run test:one`: 428/428 (the four above plus alerts_wiring,
+report_wiring, shell_frame_bars, shell_frame_wiring, app_rail, module_purity, log_core, booklet_build,
+booklet_inputs, machine_kill_host, executor_resume, nav_startup, nav_focus_claim, palette_keyboard, settings_nav,
+preload_fanout, auditor_dom, explorer_ui, layout_contract_nav, tabs_host, type_into_menu). Python contracts 248 OK
+(1 skipped). `npm run test:fast` before the merge: 7416/7437; the alerts_wiring miss was this change (its quit hook
+sat between two lines that suite pins together; moved below `outsideWorkQuit`), the rest were git_actions, sync and
+rust_parity_git/_repo/_snapshots cases running 1-10 minutes each on a PC with about 400 MB free; none touches a file
+of this change, and hosted CI runs them. `shell_render` (walks every destination, the new page included):
+1/1 pass in a real window (161 s). Hosted CI on the branch: Studio checks green in 9m11s on f8d3f0e (run 37482793905: build-booklet diff, check, lint, the full Node stage with the git and Rust parity suites, the Python contracts, audit, packaging); main merged again up to 86cfa93 after it (docs, release workflow and TESTRUNS only).
+
+Measured on the 16 GB laptop (506 processes, 46 apps): helper start 52 ms, first snapshot 0.77 s (file details,
+cached after), then 15.8 ms per snapshot round trip and 2.6 ms of rules; about 16 KB per page push, every 2 s and
+only while the page is on screen (held while the window is hidden); the helper holds about 18 MB.
+
+Seen in a fake-bridge preview at 1440x900 and 640x800 (no horizontal overflow). Fixed there: an option or switch now
+carries its `selected`/`checked` attribute (MefiPatch keeps choices by markup, so the settings showed their first
+option), and the search box no longer stretches across the tools row.
+
+Not run: the full `npm test` (the Electron lane apart from shell_render).
+
 ## 2026-10-06 Your PCs and Friends reconnect by themselves; only a Studio that is really behind must update
 
 Branch `wip/auto-reconnect` (C:\wt\reconnect), landed on main as 7718e36 (rebased three times as main moved; the

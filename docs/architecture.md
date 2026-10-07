@@ -702,7 +702,14 @@ settings and per-model work-kind summaries for the shared controls.
   jam's prizes are held, not lost; the jam's day of review and its
   one-vote-per-batch rule can be switched off too, should either misfire. The relay can also post a one-line heads-up
   to a private moderators' Discord channel (`relay/src/alerts.mjs`, the
-  optional `MOD_ALERT_WEBHOOK` secret).
+  optional `MOD_ALERT_WEBHOOK` secret, and `MOD_ALERT_BOT_TOKEN` for a direct
+  message from the Studio bot to the `OWNER_IDS` accounts). **Credits on hold**
+  lists what a newcomer wave would have paid a member (more than 3 members in
+  their first 30 days in the server paying the same member in a week: the
+  first 3 are paid, the rest wait), by member and by newcomer with account
+  ages, with **Pay** and **Drop** for all of it or one newcomer's
+  (`credits.mjs` `credit_held`, schema v7); the member's Project hub line says
+  how many credits wait for a quick check.
 - **Ember and friends' pets** (`renderer/pets.js`, `window.MefiPets`; main's
   `hub:pet`; the relay's `relay/src/pets.mjs`). Ember, the dragon every Studio
   comes with, flies on its own small canvas above the page and never takes

@@ -28,7 +28,13 @@
 // and stars that count toward "Top" come from members in good standing only,
 // and a member's plays count once a week per project there, however often
 // they play it (a few second accounts playing every day cannot outrun many
-// different players). Moderators can read where a member's credits came
+// different players). A wave of newcomers (members in their first 30 days
+// in the server) paying one member is held, not paid: in any 7 days the
+// first 3 newcomers to pay a member are paid as anyone else, and from the
+// 4th on, what they would pay that member waits for a moderator's look
+// (Credits on hold), so a few new second accounts cannot farm for a main;
+// members who have been around longer, and newcomers' own credits, are
+// untouched. Moderators can read where a member's credits came
 // from, take back the ones that came from farming (also what a member who
 // later used Forget me gave, kept under an id that names nobody), and switch
 // off any kind of reward, the jam's prizes or featuring while they look into
@@ -95,7 +101,17 @@ export const GUARD = Object.freeze({
   // (events.mjs). Narrow on purpose: two friends who signed up the same week and joined on different days are no batch.
   batchMadeMs: 3 * DAY_MS,
   batchJoinedMs: 12 * 60 * MINUTE_MS,
+  // A newcomer wave (WAVE_KINDS): members in their first 30 days in the server who pay one member. In any 7 days the
+  // first 3 newcomers to pay a member are paid; from the 4th on, what they would pay that member is held for a
+  // moderator, who pays it or drops it; a hold nobody decides on drops after 30 days.
+  newcomerMs: 30 * DAY_MS,
+  waveGivers: 3,
+  waveWindowMs: 7 * DAY_MS,
+  heldKeepMs: 30 * DAY_MS,
 });
+
+/** The kinds a newcomer wave's credits are held for: a member paying another by playing, starring or buying a pack. */
+export const WAVE_KINDS = Object.freeze(['played', 'starred', 'sale']);
 
 /**
  * What a moderator can switch off while they look into a new trick (POST /v1/admin/credits/switches), without pausing
@@ -179,7 +195,7 @@ export function projectLink(url) {
  *   key: an HMAC key for play tokens; sendToUser(uid, type, fields); member(uid) -> describeMember()
  * -> { routes(route), forget(uid, fingerprint), fingerprint(uid), upkeep(), me(uid), card(uid), account(uid), front(uid), standing(uid, heldUntil),
  *      spend(uid, amount), sale({ buyer, maker, itemId, amount, buyerHeld, makerHeld }), tell(uid, delta, reason),
- *      farmingFlags(), isOff(switchKey), facts(uid) -> { accountCreatedAt, joinedAt } }
+ *      farmingFlags(), isOff(switchKey), facts(uid) -> { accountCreatedAt, joinedAt }, heldList() }
  */
 export function createCredits({ store, now, key, sendToUser, member, economy = null }) {
   const accountRow = (uid) => store.get('SELECT * FROM accounts WHERE user_id = ?', uid);
@@ -200,6 +216,30 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
 
   /** What the jam's batch rule reads about a member: when their Discord account was made and when they joined the server. */
   const facts = (uid) => ({ accountCreatedAt: accountCreatedAt(uid), joinedAt: member(uid)?.joinedAt ?? null });
+
+  /** A member in their first 30 days in the server (GUARD.newcomerMs). */
+  function isNewcomer(uid, at = now()) {
+    const joined = member(uid)?.joinedAt;
+    return Number.isFinite(joined) && at - joined < GUARD.newcomerMs;
+  }
+
+  /**
+   * Whether what `actor` would pay `target` now waits for a moderator (a newcomer wave): the actor is a newcomer, and
+   * either what they gave this member lately is held already, or 3 other newcomers paid this member in the last 7 days
+   * and the actor was not one of them.
+   */
+  function waveHolds(actor, target, at) {
+    if (!isNewcomer(actor, at)) return false;
+    const since = at - GUARD.waveWindowMs;
+    if (store.get('SELECT 1 AS yes FROM credit_held WHERE actor_id = ? AND target_id = ? AND at > ?', actor, target, since)) return true;
+    const kinds = WAVE_KINDS.map(() => '?').join(', ');
+    const paid = store.all(`SELECT DISTINCT actor_id FROM credit_events WHERE target_id = ? AND at > ? AND amount > 0 AND kind IN (${kinds})`, target, since, ...WAVE_KINDS)
+      .map((row) => row.actor_id).filter((uid) => isSnowflake(uid) && isNewcomer(uid, at));
+    return !paid.includes(actor) && paid.length >= GUARD.waveGivers;
+  }
+
+  /** What is held for a member now, waiting for a moderator. */
+  const heldFor = (uid) => Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_held WHERE target_id = ?', uid)?.n ?? 0);
 
   /** Forget me's fingerprint of an account: keyed, so it names nobody without the relay's key. */
   async function fingerprint(uid) {
@@ -260,15 +300,25 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     // A kind a moderator switched off pays nothing, and its row stays at 0 like a revoked one, so what happened while
     // it was off never pays later. The jam's prizes are held by events.mjs instead, before anything is paid.
     if (kind !== 'jam' && isOff(SWITCH_OF[kind])) return 0;
-    const kindToday = Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE target_id = ? AND kind = ? AND day = ?', target, kind, today)?.n ?? 0);
+    const sum = (sql, ...args) => Number(store.get(sql, ...args)?.n ?? 0);
+    // What is held for the earner (a newcomer wave, below) counts toward every cap as if it were paid, so a held giver
+    // can never pile up more than a paid one could.
+    const kindToday = sum('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE target_id = ? AND kind = ? AND day = ?', target, kind, today)
+      + sum('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_held WHERE target_id = ? AND kind = ? AND day = ?', target, kind, today);
     // What this member already made the other earn in the last 7 days, every kind together.
-    const pairWeek = Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE actor_id = ? AND target_id = ? AND at > ?', actor, target, at - 7 * DAY_MS)?.n ?? 0);
+    const pairWeek = sum('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE actor_id = ? AND target_id = ? AND at > ?', actor, target, at - 7 * DAY_MS)
+      + sum('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_held WHERE actor_id = ? AND target_id = ? AND at > ?', actor, target, at - 7 * DAY_MS);
     const row = accountRow(target);
-    const earnedToday = row && row.day === today ? row.earned_today : 0;
+    const earnedToday = (row && row.day === today ? row.earned_today : 0) + sum('SELECT COALESCE(SUM(counted), 0) AS n FROM credit_held WHERE target_id = ? AND day = ?', target, today);
     const base = asked === null ? rule.amount : Math.max(0, Math.min(Math.floor(Number(asked) || 0), rule.max ?? rule.amount));
     const capped = Math.max(0, Math.min(base, rule.perDay - kindToday, prize ? Infinity : EARN.dayCap - earnedToday, prize ? Infinity : GUARD.pairWeek - pairWeek));
     const amount = economy ? economy.cap(kind, capped, today) : capped;
     if (amount === 0) return 0;
+    // A newcomer wave: what a 4th newcomer in a week would pay this member waits for a moderator (Credits on hold).
+    if (WAVE_KINDS.includes(kind) && waveHolds(actor, target, at)) {
+      store.run('INSERT INTO credit_held (event_id, actor_id, target_id, kind, day, amount, counted, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', inserted.id, actor, target, kind, today, amount, prize ? 0 : amount, at);
+      return 0;
+    }
     store.run('UPDATE credit_events SET amount = ? WHERE id = ?', amount, inserted.id);
     const streakDay = row?.streak_day ?? 0;
     const streak = streakDay === today ? row.streak : streakDay === today - 1 ? row.streak + 1 : 1;
@@ -375,7 +425,8 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     const stand = standing(uid, held);
     return {
       user: { id: uid, name: who?.name ?? 'member' },
-      credits: { balance: money.balance, lifetime: money.lifetime, today: money.today, todayCap: money.todayCap },
+      // held: what a newcomer wave would have paid this member, waiting for a moderator's look.
+      credits: { balance: money.balance, lifetime: money.lifetime, today: money.today, todayCap: money.todayCap, held: heldFor(uid) },
       rank: rankFor(money.lifetime),
       specialRanks: specialRanks(who?.roleKeys, who?.isMod),
       streak: { days: money.streak, best: money.best },
@@ -495,6 +546,46 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     }
     flags.sort((x, y) => y.total - x.total);
     return flags.slice(0, 50);
+  }
+
+  /**
+   * Credits on hold, by the member they are for: the newcomers who would have paid them, how much each, how old each
+   * Discord account is and when each joined, and when the oldest hold drops. Oldest first.
+   */
+  function heldList() {
+    const rows = store.all('SELECT target_id, actor_id, SUM(amount) AS amount, COUNT(*) AS events, MIN(at) AS since FROM credit_held GROUP BY target_id, actor_id ORDER BY since');
+    const byTarget = new Map();
+    for (const row of rows) {
+      const entry = byTarget.get(row.target_id) ?? { member: { id: row.target_id, name: giverName(row.target_id) }, total: 0, since: row.since, givers: [] };
+      entry.total += Number(row.amount);
+      entry.since = Math.min(entry.since, row.since);
+      entry.givers.push({ id: row.actor_id, name: giverName(row.actor_id), amount: Number(row.amount), events: Number(row.events), ...facts(row.actor_id) });
+      byTarget.set(row.target_id, entry);
+    }
+    return [...byTarget.values()].sort((x, y) => x.since - y.since).map((entry) => ({ ...entry, dropsAt: entry.since + GUARD.heldKeepMs }));
+  }
+
+  /**
+   * A moderator decides on what is held for a member (all of it, or what one giver would have paid): "release" pays it
+   * (balance and lifetime, as any credit), "drop" lets it go. Audited. -> the amount it came to.
+   */
+  function decideHeld(target, action, from, modId) {
+    const where = from ? 'target_id = ? AND actor_id = ?' : 'target_id = ?';
+    const args = from ? [target, from] : [target];
+    const done = store.transaction(() => {
+      const rows = store.all(`SELECT * FROM credit_held WHERE ${where}`, ...args);
+      const total = rows.reduce((all, row) => all + Number(row.amount), 0);
+      if (!rows.length) return { total: 0, kind: null };
+      if (action === 'release') {
+        for (const row of rows) store.run('UPDATE credit_events SET amount = ? WHERE id = ?', row.amount, row.event_id);
+        store.run('INSERT INTO accounts (user_id, balance, lifetime) VALUES (?1, ?2, ?2) ON CONFLICT (user_id) DO UPDATE SET balance = balance + ?2, lifetime = lifetime + ?2', target, total);
+      }
+      store.run(`DELETE FROM credit_held WHERE ${where}`, ...args);
+      store.run('INSERT INTO audit (kind, actor_id, target_id, detail, at) VALUES (?, ?, ?, ?, ?)', action === 'release' ? 'credits-release' : 'credits-drop', modId, target, JSON.stringify({ from, total }), now());
+      return { total, kind: rows[0].kind };
+    });
+    if (action === 'release') tell(target, done.total, done.kind);
+    return done.total;
   }
 
   function routes(route) {
@@ -712,6 +803,22 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     // from one member, and pairs who each made the other earn a lot.
     route('GET', '/v1/admin/credits/flags', () => reply(200, { ok: true, days: GUARD.reviewDays, flags: farmingFlags() }), { mod: true });
 
+    // Credits on hold (a newcomer wave): the list, and paying or dropping what is held for a member, all of it or one
+    // giver's (`from`). Not write routes, so they work while the relay is paused. Registered before
+    // /v1/admin/credits/:uid, which would match "held".
+    route('GET', '/v1/admin/credits/held', () => reply(200, { ok: true, holds: heldList(), keepDays: GUARD.heldKeepMs / DAY_MS }), { mod: true });
+    route(
+      'POST',
+      '/v1/admin/credits/held/:uid',
+      ({ actor, params, body }) => {
+        const from = body?.from === undefined || body?.from === null ? null : String(body.from);
+        if (!isSnowflake(params.uid) || !['release', 'drop'].includes(body?.action) || (from !== null && !isSnowflake(from))) return fail(400, 'bad-request');
+        const total = decideHeld(params.uid, body.action, from, actor.uid);
+        return reply(200, { ok: true, action: body.action, total, holds: heldList() });
+      },
+      { mod: true },
+    );
+
     // The switches (SWITCHES): what a moderator turned off, and turning one off or back on (audited). Never a write
     // route, so they work while the relay is paused too. Registered before /v1/admin/credits/:uid, which would match.
     route('GET', '/v1/admin/credits/switches', () => reply(200, { ok: true, off: [...switchedOff()].sort(), switches: Object.keys(SWITCHES) }), { mod: true });
@@ -772,7 +879,7 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
         return reply(200, {
           ok: true,
           member: { id: params.uid, name: who.name, accountCreatedAt: accountCreatedAt(params.uid), joinedAt: who.joinedAt, standing: standing(params.uid, await heldUntil(params.uid)) },
-          credits: { balance: money.balance, lifetime: money.lifetime, rank: rankFor(money.lifetime).key },
+          credits: { balance: money.balance, lifetime: money.lifetime, rank: rankFor(money.lifetime).key, held: heldFor(params.uid) },
           days: GUARD.reviewDays,
           total,
           givers,
@@ -800,6 +907,8 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
           const where = from ? 'target_id = ? AND actor_id = ? AND at > ? AND amount > 0' : 'target_id = ? AND at > ? AND amount > 0';
           const args = from ? [params.uid, from, since] : [params.uid, since];
           const sum = Number(store.get(`SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE ${where}`, ...args)?.n ?? 0);
+          // What the same givers would have paid them and is still held goes too, never paid.
+          store.run(`DELETE FROM credit_held WHERE ${from ? 'target_id = ? AND actor_id = ? AND at > ?' : 'target_id = ? AND at > ?'}`, ...args);
           if (!sum) return 0;
           store.run(`UPDATE credit_events SET amount = 0 WHERE ${where}`, ...args);
           store.run('UPDATE accounts SET balance = MAX(0, balance - ?1), lifetime = MAX(0, lifetime - ?1) WHERE user_id = ?2', sum, params.uid);
@@ -863,6 +972,8 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     for (const row of store.all('SELECT project_id FROM stars WHERE user_id = ? AND counted = 1', uid)) store.run('UPDATE projects SET stars = MAX(0, stars - 1) WHERE id = ?', row.project_id);
     store.run('DELETE FROM stars WHERE user_id = ?', uid);
     store.run('DELETE FROM play_log WHERE player_id = ?', uid);
+    // What is held for them, or from them for someone else, goes: it was never paid.
+    store.run('DELETE FROM credit_held WHERE actor_id = ? OR target_id = ?', uid, uid);
     if (print) {
       store.run('UPDATE OR IGNORE credit_events SET actor_id = ?, ref = NULL WHERE actor_id = ? AND target_id <> ?', `gone:${b64url(randomBytes(12))}`, uid, uid);
       store.run('INSERT INTO credit_holds (fingerprint, until) VALUES (?, ?) ON CONFLICT (fingerprint) DO UPDATE SET until = excluded.until', print, now() + GUARD.forgetHoldMs);
@@ -881,9 +992,11 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     }
     store.run('DELETE FROM credit_events WHERE at < ?', at - PROJECT_LIMITS.eventKeepMs);
     store.run('DELETE FROM credit_holds WHERE until < ?', at);
+    // Credits held for a newcomer wave that no moderator paid within 30 days drop.
+    store.run('DELETE FROM credit_held WHERE at < ?', at - GUARD.heldKeepMs);
     store.run('DELETE FROM play_log WHERE day < ?', dayOf(at) - 8);
     store.run('DELETE FROM features WHERE ends_at < ?', at - PROJECT_LIMITS.eventKeepMs);
   }
 
-  return Object.freeze({ routes, forget, fingerprint, upkeep, me, card, account, front, standing, heldUntil, award, spend, sale, tell, farmingFlags, isOff, facts });
+  return Object.freeze({ routes, forget, fingerprint, upkeep, me, card, account, front, standing, heldUntil, award, spend, sale, tell, farmingFlags, isOff, facts, heldList });
 }

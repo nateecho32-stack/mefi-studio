@@ -7,6 +7,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **A wave of new accounts can't farm credits for someone.** When more than
+  three members in their first 30 days in the server pay the same member in a
+  week (by playing their project, starring it or buying their pack), the
+  first three are paid as usual and what the rest would pay waits for a
+  moderator: the member sees "N credits waiting for a quick check" in the
+  Project hub, and **Friends › Moderation › Credits on hold** shows who it
+  came from, with each account's age and join date, and **Pay** or **Drop**
+  it (all of it, or one newcomer's). Held credits drop by themselves after 30
+  days. Members who have been around longer, and newcomers' own credits, work
+  as before. The room service can also tell you in Discord: in a private
+  channel through a webhook, and now as a direct message from the Studio bot.
+
 - **The Shop is a page of its own, with a new drop every month.** Friends ›
   Shop (and Settings › Appearance's **Open the Shop**) now open a roomy,
   storefront-like page: the month's drop as a banner with its pieces moving

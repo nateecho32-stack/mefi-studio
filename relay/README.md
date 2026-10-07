@@ -33,6 +33,7 @@ that comes back has to match what was actually said.
 | Credits: balance, rank, streak, and who credited whom (ids, kind, amount) | earning, the anti-farming limits, a moderator's credit review | 180 days for each credit |
 | After Forget me: what the member gave others (kind, amount, day), under a random id that names nobody and with no project | the receivers' limits, and a moderator can still take back what second accounts paid someone | 180 days, as every credit |
 | What a moderator switched off for now (reward kinds, the jam's prizes, featuring) | the switches in Friends › Moderation | until switched back on |
+| Credits on hold: what a newcomer wave would have paid a member (giver and earner ids, kind, amount, day) | a moderator pays or drops them | until decided, at most 30 days |
 | Which member played which project on which day | a play counts once per player and day | 8 days |
 | After Forget me: a keyed fingerprint of the account (not its id) | forgetting cannot reset the credit limits | 30 days |
 | Community events: each week's Build Jam (theme, entries as member and project ids, votes as voter and entrant ids, the results) and each co-work hour (its room, and how many of its three looks saw each member) | the events run by themselves | 180 days |
@@ -106,6 +107,18 @@ alt accounts, trading and replays:
   180 days every credit row is kept: second accounts cannot hide what they
   paid someone by forgetting themselves, since a moderator can still see it
   and take it back.
+- A newcomer wave is held, not paid. A newcomer is a member in their first
+  30 days in the server. In any 7 days the first 3 newcomers to pay one member
+  (playing their project, starring it or buying their pack) are paid as
+  anyone else; from the 4th on, what they would pay that member waits in
+  "Credits on hold" (`GET /v1/admin/credits/held`), and a moderator pays it
+  or drops it (`POST /v1/admin/credits/held/:id`, `{ "action": "release" }`
+  or `"drop"`, and `"from"` for one newcomer's). A hold counts toward every
+  cap as if it were paid, drops by itself after 30 days if nobody decides,
+  and goes with a revoke or Forget me. The member sees how much waits
+  (`/v1/me` `credits.held`). Members who have been around longer, and
+  newcomers' own credits, are untouched, so a few new second accounts
+  cannot farm for a main while real newcomers still earn.
 - "Top" (the hub's Top list and the Lobby's project of the week) counts each
   member once a week per project, however often they play it, so a few
   second accounts playing every day cannot outrun many different players. A
@@ -135,9 +148,13 @@ alt accounts, trading and replays:
   The jam's day of review and its one-vote-per-batch rule can be switched
   off the same way, should either misfire.
 - Alerts (`src/alerts.mjs`): with the optional `MOD_ALERT_WEBHOOK` secret
-  (a Discord webhook in a private moderators' channel), the relay posts one
-  line a day when members newly look like farming, and one when a Build
-  Jam's voting closes. A line names nobody; the details stay in Studio. `POST /v1/projects/:id/report` (anyone, not their own, once
+  (a Discord webhook in a private moderators' channel), and/or
+  `MOD_ALERT_BOT_TOKEN` (the Studio bot's token, so the bot messages each
+  `OWNER_IDS` account directly; it has to share a server with them), the
+  relay posts one line a day when members newly look like farming, one when
+  credits go on hold for a newcomer wave, and one when a Build Jam's voting
+  closes. A line names nobody; the details stay in Studio. No IP address is
+  used or kept for any of this. `POST /v1/projects/:id/report` (anyone, not their own, once
   each, 10 an hour) puts a project in `GET /v1/admin/reports` with its card.
 
 ## Community events and the community budget
@@ -300,9 +317,12 @@ node scripts/smoke.mjs http://127.0.0.1:8787 --fake-discord 8799
    extra badges).
 3. Optional: `npx wrangler secret put MOD_ALERT_WEBHOOK` and paste a Discord
    webhook made in a private moderators' channel (Channel settings ›
-   Integrations › Webhooks). The relay then tells that channel when members
-   newly look like farming and when a Build Jam waits for its look. Without
-   it, nothing is ever posted.
+   Integrations › Webhooks), and/or `npx wrangler secret put
+   MOD_ALERT_BOT_TOKEN` and paste the Studio bot's token (Discord Developer
+   Portal › the bot's application › Bot › Reset Token) so the bot messages the
+   `OWNER_IDS` accounts directly. The relay then says when members newly look
+   like farming, when credits go on hold and when a Build Jam waits for its
+   look. Without either, nothing is ever posted.
 4. `npx wrangler deploy` prints `https://mefi-relay.<account>.workers.dev`.
 5. `node scripts/smoke.mjs https://mefi-relay.<account>.workers.dev`.
 

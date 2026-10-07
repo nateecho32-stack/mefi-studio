@@ -569,17 +569,17 @@ test("schema v6: a v5 database gains the Shop's tables and keeps every row it ha
   const tables = () => sql.exec(`SELECT name FROM sqlite_master WHERE type = 'table'`).map((row) => row.name);
   assert.ok(!tables().includes("shop_packs"));
   const store = createStore(sql);
-  assert.equal(store.migrate(), 6);
-  assert.equal(SCHEMA_VERSION, 6);
+  assert.equal(store.migrate(), SCHEMA_VERSION);
+  assert.ok(SCHEMA_VERSION >= 6);
   assert.ok(tables().includes("shop_packs") && tables().includes("shop_owned"));
   assert.deepEqual(sql.exec("PRAGMA table_info(shop_packs)").map((row) => row.name), ["id", "maker_id", "name", "blurb", "price", "data", "status", "sales", "created_at", "updated_at"]);
   assert.deepEqual(sql.exec("PRAGMA table_info(shop_owned)").map((row) => row.name), ["user_id", "item_id", "price", "at"]);
   assert.deepEqual(sql.exec(`SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'shop_%' ORDER BY name`).map((row) => row.name), ["shop_owned_item", "shop_packs_listed", "shop_packs_maker"]);
   assert.deepEqual({ ...sql.exec("SELECT balance, lifetime FROM accounts WHERE user_id = ?", ALICE.id)[0] }, { balance: 120, lifetime: 300 });
   assert.equal(sql.exec("SELECT COUNT(*) AS n FROM credit_events")[0].n, 1);
-  assert.equal(store.migrate(), 6, "running it again changes nothing");
-  assert.equal(MIGRATIONS.at(-1).version, 6);
-  assert.ok(MIGRATIONS.at(-1).statements.every((statement) => !/;\s*\S/.test(statement)), "one statement per entry");
+  assert.equal(store.migrate(), SCHEMA_VERSION, "running it again changes nothing");
+  assert.ok(MIGRATIONS.some((step) => step.version === 6));
+  assert.ok(MIGRATIONS.every((step) => step.statements.every((statement) => !/;\s*\S/.test(statement))), "one statement per entry");
   db.close();
 });
 

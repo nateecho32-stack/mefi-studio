@@ -484,6 +484,21 @@ function coworkOf(value) {
     attendees: count(value.attendees, 1e4) ?? 0, amount: count(value.amount, 1e4) ?? 0,
   };
 }
+// Credits on hold for a newcomer wave (relay credits.mjs heldList): by the member they are for, with each newcomer who
+// would have paid them, how much, how old their Discord account is and when they joined the server.
+function heldOf(value) {
+  if (!object(value) || !object(value.member) || !SNOWFLAKE.test(String(value.member.id ?? ""))) return null;
+  const when = (time) => (Number.isFinite(time) ? time : null);
+  return {
+    member: { id: String(value.member.id), name: text(value.member.name, 100) || "member" },
+    total: count(value.total, 1e12) ?? 0, since: when(value.since), dropsAt: when(value.dropsAt),
+    givers: Array.isArray(value.givers) ? value.givers.map((item) => (object(item) && SNOWFLAKE.test(String(item.id ?? "")) ? {
+      id: String(item.id), name: text(item.name, 100) || "member", amount: count(item.amount, 1e12) ?? 0, events: count(item.events, 1e9) ?? 0,
+      accountCreatedAt: when(item.accountCreatedAt), joinedAt: when(item.joinedAt),
+    } : null)).filter(Boolean).slice(0, 100) : [],
+  };
+}
+const holdsOf = (value) => (Array.isArray(value) ? value.map(heldOf).filter(Boolean).slice(0, 100) : []);
 // The switches a moderator turned off (relay credits.mjs SWITCHES), known keys only.
 const switchesOff = (value) => (Array.isArray(value) ? value.filter((key) => CREDIT_SWITCHES.includes(key)) : []);
 // A moderator's view of a Build Jam (GET /v1/admin/jam): each entry in its place now with its voters, whether each vote
@@ -1375,7 +1390,7 @@ function createHubClient(options = {}) {
       return {
         ok: true,
         member: { ...who, accountCreatedAt: when(data.member.accountCreatedAt), joinedAt: when(data.member.joinedAt), standing },
-        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, rank: RANK_KEY.test(String(data.credits?.rank ?? "")) ? data.credits.rank : "spark" },
+        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, rank: RANK_KEY.test(String(data.credits?.rank ?? "")) ? data.credits.rank : "spark", held: count(data.credits?.held, 1e12) ?? 0 },
         days: count(data.days, 365) ?? 30,
         total: count(data.total, 1e12) ?? 0,
         givers: Array.isArray(data.givers) ? data.givers.map((item) => ({
@@ -1417,6 +1432,17 @@ function createHubClient(options = {}) {
     modSuspend(userId, minutes) {
       if (!SNOWFLAKE.test(String(userId ?? "")) || !Number.isSafeInteger(minutes) || minutes < 0 || minutes > 60 * 24 * 365) return bad();
       return simple("POST", `/v1/admin/members/${userId}/suspend`, { minutes });
+    },
+    // Credits on hold (relay credits.mjs): what newcomer waves would have paid members, waiting for a moderator.
+    async modHeld() {
+      const answer = await authed("GET", "/v1/admin/credits/held");
+      return answer.ok ? { ok: true, holds: holdsOf(answer.data.holds), keepDays: count(answer.data.keepDays, 365) ?? 30 } : refused(answer);
+    },
+    // Pay ("release") or drop what is held for a member: all of it, or only what one newcomer would have paid.
+    async modHeldDecide(userId, action, from = null) {
+      if (!SNOWFLAKE.test(String(userId ?? "")) || !["release", "drop"].includes(action) || (from != null && !SNOWFLAKE.test(String(from)))) return bad();
+      const answer = await authed("POST", `/v1/admin/credits/held/${userId}`, { action, ...(from != null ? { from: String(from) } : {}) });
+      return answer.ok ? { ok: true, total: count(answer.data.total, 1e12) ?? 0, holds: holdsOf(answer.data.holds) } : refused(answer);
     },
     // The switches (relay credits.mjs SWITCHES): which kinds of reward, the jam's prizes or featuring a moderator
     // turned off for now, and turning one off or back on. -> { ok, off: [key...] }
@@ -1492,7 +1518,8 @@ function createHubClient(options = {}) {
       const data = answer.data;
       return {
         ok: true, user: user(data.user),
-        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, today: count(data.credits?.today, 1e6) ?? 0, todayCap: count(data.credits?.todayCap, 1e6) ?? 0 },
+        // held: what a newcomer wave would have paid this member, waiting for a moderator's quick check.
+        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, today: count(data.credits?.today, 1e6) ?? 0, todayCap: count(data.credits?.todayCap, 1e6) ?? 0, held: count(data.credits?.held, 1e12) ?? 0 },
         rank: rankOf(data.rank), specialRanks: specialOf(data.specialRanks), streak: { days: count(data.streak?.days, 1e6) ?? 0, best: count(data.streak?.best, 1e6) ?? 0 },
         featureCost: count(data.featureCost, 1e6) ?? 0, canEarn: data.canEarn === true,
         // Why this member cannot give or earn credits yet, and until when (relay/src/credits.mjs GUARD).

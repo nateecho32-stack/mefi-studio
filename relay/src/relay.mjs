@@ -194,7 +194,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     credits = createCredits({ store, now, key: keys.play, sendToUser, member: (uid) => sessions.member(uid), economy });
     credits.routes(route);
     // A line to the moderators' private Discord channel when something needs a look (alerts.mjs; off without the secret).
-    alerts = createAlerts({ store, fetch: fetchImpl, webhook: env?.MOD_ALERT_WEBHOOK });
+    alerts = createAlerts({ store, fetch: fetchImpl, webhook: env?.MOD_ALERT_WEBHOOK, botToken: env?.MOD_ALERT_BOT_TOKEN, owners: config.ownerIds });
     // Community events the relay runs by itself (events.mjs): the weekly Build Jam, co-work hours, building together.
     events = createEvents({ store, now, credits, economy, paused, review: (info) => alerts.jam(info), rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
     events.routes(route);
@@ -497,6 +497,12 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       } catch {
         // the next day's upkeep tells them
       }
+    }
+    // Every alarm: members whose credits newly went on hold for a newcomer wave (credits.mjs), each told once.
+    try {
+      await alerts.holds(credits.heldList());
+    } catch {
+      // the next alarm tells them
     }
     // The community events never stop the rest of the alarm: a fault there waits for the next one.
     if (!paused()) {

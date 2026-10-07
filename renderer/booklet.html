@@ -10218,7 +10218,7 @@ button.front-item:hover b { text-decoration: underline; text-decoration-color: v
 .friends-mod-section { display: grid; gap: 6px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); }
 .friends-mod-heading { margin: 0 0 4px; font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ivory); }
 .friends-mod-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
-/* A jam vote under its entry (Build Jam review): set in, a quieter rule, the name in the body's weight. */
+/* A row under another (a jam vote under its entry, a newcomer under credits on hold): set in, a quieter rule, the name in the body's weight. */
 .friends-mod-voter { margin-left: 18px; padding: 5px 0; border-top-style: dashed; }
 .friends-mod-voter .friends-mod-words strong { font-weight: 500; }
 .friends-mod-words { display: grid; gap: 2px; min-width: 0; flex: 1 1 280px; }
@@ -83707,7 +83707,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       fill.style.width = `${Math.round((me.rank?.progress ?? 1) * 100)}%`;
       meter.append(fill);
       const line = node("p", "muted project-hub-me-line",
-        `${next ? `${next.at - me.credits.lifetime} more to ${next.name}` : "Top rank"} · today ${me.credits.today}/${me.credits.todayCap}${me.streak.days > 1 ? ` · ${me.streak.days}-day streak` : ""}`);
+        `${next ? `${next.at - me.credits.lifetime} more to ${next.name}` : "Top rank"} · today ${me.credits.today}/${me.credits.todayCap}${me.streak.days > 1 ? ` · ${me.streak.days}-day streak` : ""}${me.credits.held > 0 ? ` · ${plural(me.credits.held, "credit")} waiting for a quick check` : ""}`);
       mine.append(head, meter, line);
       if (me.specialRanks.length) {
         const chips = node("div", "project-hub-chips");
@@ -84651,11 +84651,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // shown only to moderators (the relay says who is one in hub-client me();
 // every admin route checks again, so the page being shown grants nothing).
 //
-// One card, six parts:
+// One card, seven parts:
 //   - Looks like farming: members whose last 30 days of credits came mostly
 //     from one person, or two people trading credits (relay GET
 //     /v1/admin/credits/flags), each with Review. A member who used Forget me
 //     since still shows as the giver they were, under no name.
+//   - Credits on hold: when more than 3 newcomers (their first 30 days in the
+//     server) pay one member in a week, what the rest would pay waits here,
+//     by member and by newcomer, with how old each account is; Pay or Drop
+//     (relay /v1/admin/credits/held).
 //   - Build Jam: the jam waiting for its day of review (else this week's),
 //     each entry in its place now with every vote, whether it counts and why
 //     not, and each voter's account age, join date and batch (accounts made
@@ -84716,6 +84720,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   };
   const PLACE = ["", "1st", "2nd", "3rd"];
   const moment = (ms) => new Date(ms).toLocaleString([], { weekday: "long", hour: "numeric", minute: "2-digit" });
+  const dateOf = (ms) => new Date(ms).toLocaleDateString([], { day: "numeric", month: "long" });
   // A reported Shop style pack: hub-client hands it over as kind "shop" with its packId (the relay keeps it as room
   // "shop" with the pack's id as its message). Its name is the report's own, or the one the Shop last read
   // (friends-shop.js packName).
@@ -84760,7 +84765,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     root.append(title, status, body);
     const api = bridge();
     if (typeof api?.hubRoom !== "function") { status.textContent = "Moderation works in the desktop app."; root.dataset.state = "unavailable"; return root; }
-    let flags = [], reports = [], found = [], review = null, query = "", busy = false, gone = false, switches = null, jam = null;
+    let flags = [], reports = [], found = [], review = null, query = "", busy = false, gone = false, switches = null, jam = null, held = null;
     const call = async (method, ...args) => { try { return await api.hubRoom(method, ...args); } catch { return { ok: false, error: "failed" }; } };
     const guard = async (label, work) => {
       if (busy) return;
@@ -84781,13 +84786,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         body.replaceChildren();
         return;
       }
-      const [flagged, reported, switched, jammed] = await Promise.all([call("modFlags"), call("modReports"), call("modSwitches"), call("modJam")]);
+      const [flagged, reported, switched, jammed, holding] = await Promise.all([call("modFlags"), call("modReports"), call("modSwitches"), call("modJam"), call("modHeld")]);
       if (gone) return;
       flags = flagged?.ok ? flagged.flags : [];
       reports = reported?.ok ? reported.reports : [];
-      // A relay from before the switches and the jam's review answers neither: those parts stay away.
+      // A relay from before the switches, the jam's review or holds answers none of them: those parts stay away.
       switches = switched?.ok ? switched.off : null;
       jam = jammed?.ok ? jammed.jam : null;
+      held = holding?.ok ? holding.holds : null;
       root.dataset.state = "ready";
       status.textContent = flagged?.ok || reported?.ok ? "" : "The relay did not answer. Try again in a moment.";
       paint();
@@ -84920,6 +84926,39 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       return section(`Review: ${who.name}`, "friends-mod-review", parts, "");
     }
 
+    // Credits on hold: what a wave of newcomers would have paid a member, by member and by newcomer. Pay it if it looks
+    // real, drop it if it looks like one person's accounts; nobody deciding, it drops after 30 days.
+    async function decideHeld(member, action, giver) {
+      await guard(action === "release" ? "Paying…" : "Dropping…", async () => {
+        const answer = await call("modHeldDecide", member.id, action, giver?.id ?? null);
+        await load();
+        status.textContent = answer?.ok
+          ? action === "release" ? `Paid ${member.name} ${answer.total} credits.` : `Dropped ${answer.total} credits held for ${member.name}.`
+          : why(answer, "That did not go through.");
+      });
+    }
+    function heldPanel() {
+      if (!held) return null;
+      const parts = [node("p", "muted", "When more than 3 members in their first 30 days in the server pay the same member in a week, what the rest would pay waits here. Pay it if it looks real; drop it if it looks like one person's accounts. Nobody deciding, it drops after 30 days.")];
+      for (const hold of held) {
+        const who = hold.member;
+        parts.push(row(`${who.name}: ${hold.total} credits on hold`, `from ${hold.givers.length} newcomer${hold.givers.length === 1 ? "" : "s"}${Number.isFinite(hold.dropsAt) ? ` · drops on ${dateOf(hold.dropsAt)}` : ""}`, [
+          confirmed(`Pay ${hold.total}`, "Pay them?", `Pay ${who.name} the ${hold.total} credits on hold?`, () => decideHeld(who, "release", null), `friends-mod-held-pay-${who.id}`),
+          confirmed("Drop them", "Drop them?", `Drop the ${hold.total} credits on hold for ${who.name}? They never pay.`, () => decideHeld(who, "drop", null), `friends-mod-held-drop-${who.id}`),
+          button("Review", () => { void open(who.id); }),
+        ]));
+        for (const giver of hold.givers) {
+          const item = row(`From ${giver.name}: ${giver.amount}`, `Discord account ${age(giver.accountCreatedAt)} old · in the server ${age(giver.joinedAt)} · ${giver.events} play${giver.events === 1 ? "" : "s"}, stars or sales`, [
+            confirmed(`Pay ${giver.amount}`, "Pay these?", `Pay ${who.name} the ${giver.amount} credits ${giver.name} would have paid?`, () => decideHeld(who, "release", giver), `friends-mod-held-pay-${who.id}-${giver.id}`),
+            confirmed("Drop", "Drop these?", `Drop the ${giver.amount} credits ${giver.name} would have paid ${who.name}?`, () => decideHeld(who, "drop", giver), `friends-mod-held-drop-${who.id}-${giver.id}`),
+          ]);
+          item.className += " friends-mod-voter";
+          parts.push(item);
+        }
+      }
+      return section("Credits on hold", "friends-mod-held", held.length ? parts : [], "Nothing is on hold.");
+    }
+
     // The Build Jam to look at: while voting runs, and above all in the day after it closes, before the prizes pay.
     function jamPanel() {
       if (!jam) return null;
@@ -84995,7 +85034,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
 
     function paint() {
-      body.replaceChildren(...[reviewPanel(), farming(), jamPanel(), reportList(), lookup(), rewardSwitches()].filter(Boolean));
+      body.replaceChildren(...[reviewPanel(), farming(), heldPanel(), jamPanel(), reportList(), lookup(), rewardSwitches()].filter(Boolean));
     }
     root.dispose = () => { gone = true; };
     void load();

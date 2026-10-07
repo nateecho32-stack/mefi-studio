@@ -36,6 +36,17 @@ export function fakeDiscord(accounts, { calls = [], now = () => Date.now() } = {
       calls[calls.length - 1].webhook = JSON.parse(String(init.body ?? '{}'));
       return new Response(null, { status: 204 });
     }
+    // The Studio bot messaging an owner (alerts.mjs): open the conversation, then send the line, kept with the call.
+    const bot = /^Bot (.+)$/.exec(String(init.headers?.authorization ?? ''))?.[1] ?? '';
+    if (bot && init.method === 'POST' && url.pathname === '/api/v10/users/@me/channels') {
+      const recipient = String(JSON.parse(String(init.body ?? '{}')).recipient_id ?? '');
+      return /^\d{17,20}$/.test(recipient) ? json(200, { id: `9${recipient.slice(1)}`, type: 1 }) : json(400, {});
+    }
+    const posted = /^\/api\/v10\/channels\/(\d{17,20})\/messages$/.exec(url.pathname);
+    if (bot && init.method === 'POST' && posted) {
+      calls[calls.length - 1].dm = { channel: posted[1], bot, ...JSON.parse(String(init.body ?? '{}')) };
+      return json(200, { id: '1', channel_id: posted[1] });
+    }
     if (!account) return json(401, { message: '401: Unauthorized', code: 0 });
     if (account.down) return json(503, {});
     if (url.pathname === '/api/v10/oauth2/@me') {

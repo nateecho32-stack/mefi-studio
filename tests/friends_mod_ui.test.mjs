@@ -41,7 +41,7 @@ const review = {
   givers: [{ ...BOB, amount: 30, events: 9, share: 75, accountCreatedAt: Date.now() - 40 * DAY, joinedAt: Date.now() - 8 * DAY }, { id: null, name: "a member who used Forget me", amount: 10, events: 2, share: 25, accountCreatedAt: null, joinedAt: null }],
 };
 
-function environment({ moderator = true, confirm = true, extraReports = [], packNames = {}, switches = null, jam = null, flags = null, reviewed = review } = {}) {
+function environment({ moderator = true, confirm = true, extraReports = [], packNames = {}, switches = null, jam = null, flags = null, reviewed = review, holds = null } = {}) {
   const calls = [];
   // The switches a moderator turned off, as the relay keeps them (null: a relay from before the switches).
   let off = switches;
@@ -57,6 +57,8 @@ function environment({ moderator = true, confirm = true, extraReports = [], pack
         return { ok: true, off: [...off] };
       }
       if (method === "modJam") return jam ? { ok: true, jam } : { ok: false, error: "not-found" };
+      if (method === "modHeld") return holds ? { ok: true, holds, keepDays: 30 } : { ok: false, error: "not-found" };
+      if (method === "modHeldDecide") return { ok: true, total: args[2] ? 5 : 10, holds: [] };
       if (method === "modReports") return { ok: true, reports: [
         { id: "rep_a", kind: "project", projectId: "proj_a", roomId: null, messageId: null, author: ALICE, reporter: BOB, reason: "Spam or a broken link", text: "One · https://alice.itch.io/one", verified: true, createdAt: 1 },
         { id: "rep_b", kind: "message", projectId: null, roomId: "room_a", messageId: "300000000000000001", author: BOB, reporter: ALICE, reason: "rude", text: "go away", verified: true, createdAt: 2 },
@@ -269,9 +271,39 @@ test("a relay from before the switches and the jam's review shows neither part",
   await flush();
   assert.equal(card.find("friends-mod-switches"), null);
   assert.equal(card.find("friends-mod-jam"), null);
+  assert.equal(card.find("friends-mod-held"), null, "nor credits on hold");
   assert.equal(card.dataset.state, "ready");
 });
 
 test("main lets the renderer call the new moderator methods, and nothing else new", () => {
-  assert.match(main, /modSwitches: 0, modSwitch: 2, modJam: 0, modJamVoid: 2, modJamRelease: 1,/);
+  assert.match(main, /modSwitches: 0, modSwitch: 2, modJam: 0, modJamVoid: 2, modJamRelease: 1, modHeld: 0, modHeldDecide: 3,/);
+});
+
+test("credits on hold: by member and by newcomer, with account ages, Pay or Drop all of it or one newcomer's", async () => {
+  const N3 = { id: "200000000000000203", name: "N3" }, N4 = { id: "200000000000000204", name: "N4" };
+  const since = Date.now() - 3_600_000;
+  const holds = [{ member: ALICE, total: 10, since, dropsAt: since + 30 * DAY, givers: [
+    { ...N3, amount: 5, events: 1, accountCreatedAt: Date.now() - 900 * DAY, joinedAt: Date.now() - 10 * DAY },
+    { ...N4, amount: 5, events: 1, accountCreatedAt: Date.now() - 900 * DAY, joinedAt: Date.now() - 10 * DAY },
+  ] }];
+  const env = environment({ holds });
+  const card = env.mod.card();
+  await flush();
+  const panel = card.find("friends-mod-held");
+  assert.match(panel.textContent, /When more than 3 members in their first 30 days in the server pay the same member in a week, what the rest would pay waits here\./);
+  assert.match(panel.textContent, /Alice: 10 credits on holdfrom 2 newcomers · drops on /);
+  assert.match(panel.textContent, /From N3: 5Discord account 2 years old · in the server 10 days · 1 play, stars or sales/);
+  assert.equal(card.byClass("friends-mod-voter").length, 2, "each newcomer under the member");
+  card.find(`friends-mod-held-pay-${ALICE.id}-${N3.id}`).click();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "modHeldDecide"), ["modHeldDecide", ALICE.id, "release", N3.id]);
+  assert.equal(card.find("friends-mod-status").textContent, "Paid Alice 5 credits.");
+  card.find(`friends-mod-held-drop-${ALICE.id}`).click();
+  await flush();
+  assert.deepEqual(env.calls.filter((call) => call[0] === "modHeldDecide").at(-1), ["modHeldDecide", ALICE.id, "drop", null]);
+  assert.equal(card.find("friends-mod-status").textContent, "Dropped 10 credits held for Alice.");
+  const empty = environment({ holds: [] });
+  const emptyCard = empty.mod.card();
+  await flush();
+  assert.match(emptyCard.find("friends-mod-held").textContent, /Nothing is on hold\./);
 });
