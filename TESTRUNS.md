@@ -39,6 +39,40 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-07 Shop node styles Lanterns and Neon; eight style packs for October's drop and the classic shelf
+
+Branch `feat/styles-more` (C:\wt\s-styles, from main c513838): dc3c06a (the painters), 3c55da2 (Settings gating and
+thumbnails), 068527c (the packs fixture and Shop tests), 59a7146 (cheaper lantern ribs), 2802afd (docs), 007e4c7 (test tweaks). Asked: new node
+styles and themes for the Shop's monthly drops ("Haunted Hollow", drop "2026-10") and its classic shelf, at Dragon scales'
+quality and within its paint cost. The catalog files (relay/src/shop.mjs CATALOG, main.cjs SHOP_STUDIO_ITEMS) were left
+alone (another helper restructures them); the eight packs live in tests/fixtures/shop-themes-2026-10.json as catalog
+entries and the two node style entries (studio:style-lantern, drop "2026-10"; studio:style-neon, classic) join at merge.
+
+Measured. Lab paint (offscreen Electron page, 20 nodes and 19 wires, software raster forced every frame, median of 5
+interleaved rounds, ms a frame), quiet machine: orbs 0.79, Star chart 0.66, Prism 0.90, Neon 0.97, Lanterns 1.07, Dragon
+scales 1.50; on the final code under load: orbs 1.28, Star chart 1.13, Prism 1.44, Neon 1.52, Lanterns 1.61, Dragon
+scales 2.20. The whole Command view, 150 tasks in 3D (tools/profile_studio.mjs, three runs with the style order rotated,
+medians, frame JS mean / p95, ms): orbs 7.49 / 10.30, Dragon scales 7.34 / 11.70, Lanterns 7.70 / 10.30 (+0.21 over orbs,
+inside the 1.5 ms gate), Neon 7.15 / 9.30; the machine was loaded (orbs had read 4.53 in the 10-06 row), so the node
+span is the steadier read: orbs 1.65, Dragon scales 2.04, Lanterns 2.31, Neon 1.57 ms, before the lantern ribs became
+quadratic curves (59a7146; JS-only lab node time after it: Lanterns 1.74, Dragon scales 2.37). tools/capture_node_styles.mjs
+(aurora, void, light, with strips): both animated, still pose identical, reach 1.47 / 1.27, Extra glow 2.14, arrival 1.87 /
+1.96, no gradient on a steady frame, no blur or filter, no state leaks. Each pack was painted in the real app look (an
+offscreen booklet with a seeded board: Social's Home and the Map at 1440x900) and tuned there: Haunted and Forest Glade
+first had green accents, which made a working node read like a done one; Haunted now leads with violet, Forest Glade's
+fern leans to a sunlit yellow. Every pack's text and accent hold 4.5:1 on its page and its panels (lowest: Candlelight's
+accent 4.81:1 on its page) and Studio's own contrast pass keeps each text colour as chosen. The same harness with a fake
+hub:shop selling all four node styles and the eight packs showed Friends › Shop: a live board in each new style, and
+each pack's card painted in its own colours, face and node style. Settings' new thumbnails were checked in dark, Aurora
+and light tokens, moving and with reduced motion.
+
+Tests, one suite at a time through `npm run test:one` (the Electron ones alone in the lane): node_styles_shop 21/21,
+node_styles 30/30, music 137/137, shop_pack 5/5, friends_shop_ui 29/29, command_visuals, node_styles_free,
+node_styles_overlays and node_styles_wires pass; node_paint_cache 1/1, node_views_render 1/1 (92 s) and settings_render
+1/1 (53 s) pass. check ok, lint 47 warnings (as main), audit 0 findings, Python contracts 248 OK (1 skipped). A
+settings_render run sat in the lane behind another helper's hung window test until it was killed; the rerun passed. Not
+run here: the full `npm test`, friends_render (the Shop's window fixture: its catalog has no new items until the merge).
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -485,39 +519,6 @@ Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tes
 fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
 `layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
 forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
-
-## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
-
-Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
-hand with both sides kept; d1344bc puts the Playlists entry back to once after an earlier merge took 0e9f37f, not
-d55269f as its message says). Relay: `relay/src/economy.mjs` (a daily community budget, 200 + 25 per member seen this
-week who is old enough to earn) and `relay/src/events.mjs` (the weekly Build Jam, co-work hours at 02:00, 10:00 and
-18:00 UTC, building together), run on the relay's alarm; schema v5; credits.mjs gains together, cowork and jam kinds
-paid through award(). Studio: hub-client events calls, main.cjs HUB_EVENT_METHODS, preload hubEvents,
-renderer/friends-events.js + .css as Friends › Events.
-
-A read-only review of the social side found, in this branch, an alarm that would have woken the relay every second
-before each co-work hour and through a pause, a listed co-work room nobody could approve requests for, prizes two
-votes could win, and Forget me leaving names in results; all fixed in 113ca61 with tests. Its findings in other
-files went to the social session, which landed them on main (711ceb5).
-
-Gate on 132132d (main f1934aa merged): the parallel stage at 4 suites at a time, 7227 tests, 7210 pass, 3 fail, all a
-git time limit hit under load (29 to 780 MB free while other sessions ran): git_actions "a listener that throws does
-not stop a publish half-way", rust_parity_git "the actions answer like the JavaScript" and rust_parity_snapshots
-"the same attempt on two identical repositories". Python contracts 248 OK (1 skipped), normalized-path lock OK,
-`npm run audit` 0 findings. The Electron lane did not finish: media_window_render and layout_contract_render each
-kept an Electron window alive all night (their kill timers never landed at that memory) and held the machine-wide
-lane about nine hours until killed at 06:11 (a stage limit for exactly this is on wip/test-speed). The Electron
-suites were then run one at a time on the merged tree 0d82a1a through the lease with a 12-minute guard each:
-42 of 47 pass on the first pass (layout_contract_render left out: it fails on clean main here and retires with
-ui/v2-only). Of the five: shell_render is the known display-scaling failure on clean main; agent_setup_render and
-unified_studio_render fail on main's own renderer too (a control run in C:\wt\speed, at other assertions:
-load-sensitive); today_render and tree_dynamics_render, which had run 10 and 15 minutes under load, pass alone
-(101 s and 14 s). friends_render, companion_hub_render and friends_two_render pass. The three git time-limit
-suites pass alone: git_actions, rust_parity_git and rust_parity_snapshots, 72/72 in 2 min 41 s through `npm run
-test:one`.
-
-After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
 
 ## Read Before Any Tests
 
