@@ -7,7 +7,9 @@
 // confirmation. A friend share is one scrubbed item in a file the owner saves
 // where they like; an opened one is reviewed before it can be kept. Text only:
 // nothing here is set as HTML, and key values never reach this page.
-// renderer/pc-sync.js mounts both sections in the Your PCs card.
+// group() puts both sections under one heading, Share projects, which
+// renderer/pc-sync.js mounts at the foot of the Your PCs card, after the PC
+// sections; both stay folded until opened.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
@@ -64,7 +66,7 @@
 
   function section() {
     const api = bridge();
-    const box = node("details", "pc-vault");
+    const box = node("details", "pc-vault pc-group");
     box.id = "pc-vault";
     const status = node("p", "muted pc-vault-status", "Keeps what you choose in step across your PCs.");
     status.id = "pc-vault-status";
@@ -384,7 +386,7 @@
   // Share with friends: one scrubbed item in a file, or a file to review.
   function shareSection() {
     const api = bridge();
-    const box = node("details", "pc-vault pc-share");
+    const box = node("details", "pc-vault pc-group pc-share");
     box.id = "pc-share";
     const status = node("p", "muted pc-vault-status", "Show friends what works for you without showing them your PC.");
     status.id = "pc-share-status";
@@ -464,5 +466,17 @@
     return box;
   }
 
-  window.MefiPcVault = { section, shareSection };
+  // Share projects: both sections under a heading of their own, set apart from
+  // the PC sections above them. Each stays folded, and reads nothing, until opened.
+  function group() {
+    const box = node("section", "pc-share-group");
+    box.id = "pc-share-group";
+    box.setAttribute("aria-labelledby", "pc-share-group-title");
+    const title = node("h5", "pc-share-group-title", "Share projects");
+    title.id = "pc-share-group-title";
+    box.append(title, node("p", "muted pc-share-group-about", "Send a project's brains, recipes, team setups, tasks and notes to your other PCs, sealed in your own private vault, or one item to a friend as a file. The code itself moves through GitHub."), section(), shareSection());
+    return box;
+  }
+
+  window.MefiPcVault = { section, shareSection, group };
 })();

@@ -3,8 +3,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-// renderer/pc-vault.js (Friends › Your PCs › Share between my PCs, and Share
-// with friends) in a vm with a tiny DOM and a fake bridge: making and pairing
+// renderer/pc-vault.js (Friends › Your PCs › Share projects: Share between my
+// PCs, and Share with friends) in a vm with a tiny DOM and a fake bridge: the
+// group under its own heading, both folded and read only once opened; making and pairing
 // the vault, the pairing code only on request, stopped items that cannot be
 // ticked, received items used by name, the library, keys behind the exact
 // typed phrase, and friend shares previewed before saving and reviewed
@@ -78,6 +79,20 @@ function environment({ status = { ok: true, linked: false, account: "owner", enc
 const linkedStatus = { ok: true, linked: true, repo: "owner/mefi-studio-vault", keyMatches: true, encryption: true, confirmation: PHRASE,
   pcs: [{ name: "DESK", self: true, at: Date.UTC(2026, 8, 27, 20), projects: [{ repo: "owner/app", risk: 2, behind: 0 }] }, { name: "LAPTOP", self: false, at: Date.UTC(2026, 8, 27, 19), projects: [] }],
   shelves: [{ id: "brains", label: "Agent brains" }, { id: "insights", label: "How models did, by kind of task" }] };
+
+test("Share projects holds both sections under its own heading, each folded and read only once opened", async () => {
+  const env = environment();
+  const group = env.vault.group();
+  assert.equal(group.id, "pc-share-group");
+  assert.equal(group.getAttribute("aria-labelledby"), "pc-share-group-title");
+  assert.equal(group.find("pc-share-group-title").textContent, "Share projects");
+  const [vault, share] = [group.find("pc-vault"), group.find("pc-share")];
+  assert.deepEqual([vault.tagName, vault.open, share.tagName, share.open], ["DETAILS", false, "DETAILS", false]);
+  assert.deepEqual([vault.children[0].textContent, share.children[0].textContent], ["Share between my PCs", "Share with friends"]);
+  assert.equal(env.calls.length, 0, "nothing is read while both are folded");
+  vault.toggle(); await flush();
+  assert.deepEqual(env.calls.map((call) => call[0]), ["vaultStatus", "vaultLibrary"]);
+});
 
 test("without the desktop bridge both sections say where they work", () => {
   const env = environment({ bridge: false });

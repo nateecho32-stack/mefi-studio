@@ -1,15 +1,21 @@
-// Friends › Your PCs: whether the open project on this PC matches its default
-// branch on GitHub, what has not reached GitHub yet, and Sync this PC. The
-// words come from scripts/sync.mjs through main's sync:status, sync:run and
-// sync:event; this file only lays them out. Opening the card looks (a fetch
-// that moves no branch). Only the buttons pull and push: Sync this PC, and Put
-// my commits on top of GitHub's when both sides moved and nothing is
-// uncommitted. A push waits for the project's own check. badge() is what the
+// Friends › Your PCs: the card, top to bottom. renderer/pc-fleet.js's Connect
+// another PC walkthrough and My PCs come first; then folded groups, each a
+// row that opens in place: Keep this PC in step with GitHub (this file),
+// pc-fleet.js's Power and battery and Lend this PC to a friend, then Set up
+// this PC, Paired workers and Reach this PC from Discord (this file); last,
+// renderer/pc-vault.js's Share projects group. The GitHub group says whether
+// the open project on this PC matches its default branch on GitHub, what has
+// not reached GitHub yet, and offers Sync this PC. The words come from
+// scripts/sync.mjs through main's sync:status, sync:run and sync:event; this
+// file only lays them out. Opening the card looks (a fetch that moves no
+// branch). Only the buttons pull and push: Sync this PC, and Put my commits on
+// top of GitHub's when both sides moved and nothing is uncommitted. A push
+// waits for the project's own check. While the group is folded, its status
+// line and buttons show only when something needs the owner (what badge()
+// counts, or a sync that stopped) or after a press there. badge() is what the
 // Friends bubble shows: work only this PC holds, plus commits waiting on
 // GitHub, plus a GitHub that could not be checked. renderer/companion-hub.js
-// mounts the card in the Friends section and draws the badge; the card holds
-// renderer/pc-fleet.js's My PCs, Set up this PC and renderer/pc-vault.js's two
-// sharing sections.
+// mounts the card on the Friends page and draws the badge.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
@@ -35,6 +41,14 @@
     const risk = Number.isFinite(result.risk) ? result.risk : 0;
     const unchecked = kinds(result).some((kind) => kind === "fetch-failed" || kind === "error") ? 1 : 0;
     return risk + (result.state?.behind ? 1 : 0) + unchecked;
+  }
+
+  // Whether the GitHub group speaks while folded: what the badge counts, or a
+  // sync that stopped. A project with no GitHub link yet stays quiet.
+  function needsYou(result) {
+    if (!result) return false;
+    if (badge(result) > 0) return true;
+    return result.ok === false && result.state?.repo !== false && result.state?.remote !== false;
   }
 
   function remember(result) {
@@ -63,7 +77,7 @@
   // project from GitHub, which clones from the account's own list into a
   // folder main's dialog asks for. Nothing runs until the section is opened.
   function setupSection(api) {
-    const box = node("details", "pc-setup");
+    const box = node("details", "pc-setup pc-group");
     box.id = "pc-setup";
     const status = node("p", "muted pc-setup-status", "Checks Git, your GitHub sign-in and this project.");
     status.id = "pc-setup-status";
@@ -196,7 +210,7 @@
   // and is never shown again. Nothing runs until the section is opened.
   const HOURS = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}:00`);
   function remoteSection(api) {
-    const box = node("details", "pc-setup pc-remote");
+    const box = node("details", "pc-setup pc-group pc-remote");
     box.id = "pc-remote";
     const status = node("p", "muted pc-setup-status", "Check on this PC and talk to Mefi from a Discord DM.");
     status.id = "pc-remote-status";
@@ -338,7 +352,7 @@
   }
 
   function pairedSection(api) {
-    const box = node("details", "pc-setup"); box.id = "pc-paired-workers";
+    const box = node("details", "pc-setup pc-group"); box.id = "pc-paired-workers";
     const status = node("p", "muted pc-setup-status", "Off until you start the coordinator or worker."); status.id = "paired-status"; status.setAttribute("role", "status");
     const controls = new Set(), jobRows = new Map(), workers = node("ul", "pc-sync-list"), jobs = node("div"), recovery = node("ul", "pc-sync-list");
     let busy = false, latest = null, timer = null, cursor = null;
@@ -374,7 +388,7 @@
     const refreshButton = button("paired-refresh", "Refresh", async () => { cursor = null; return api.pairedStatus(); });
     const older = button("paired-older", "Older jobs", async () => { cursor = latest?.coordinator?.nextCursor ?? null; return api.pairedStatus({ before: cursor }); });
     const actions = (...buttons) => { const row = node("div", "pc-sync-actions"); row.append(...buttons); return row; };
-    box.append(node("summary", "", "Paired repository checks"), status,
+    box.append(node("summary", "", "Paired workers"), status,
       node("p", "muted", "Make this PC the coordinator, or pair it as a worker. The first profile checks Studio at an exact saved commit in a fresh checkout. Your current changes stay here. What you start comes back by itself after Studio restarts or updates, and a worker reconnects by itself after a lost connection. PCs on different Studio versions keep working together; only one that is far behind is asked to update."),
       node("h5", "", "Coordinator"), port.wrapper, mode, address.wrapper, actions(startCoordinator, stopCoordinator, invite, enqueue), coordinatorAuto.wrapper, invitation.wrapper, actions(copy),
       node("h5", "", "This PC as a worker"), code.wrapper, actions(pair, startWorker, stopWorker, forget), workerAuto.wrapper, recovery,
@@ -480,6 +494,30 @@
     root.setAttribute("aria-labelledby", "pc-sync-title");
     const title = node("h4", "pc-sync-title", "Your PCs");
     title.id = "pc-sync-title";
+    // Keep this PC in step with GitHub: a folded group with a button of its
+    // own, not a <details>, because its status line and buttons sit between
+    // the button and the folded rest and can show while it is folded: when
+    // something needs the owner, and after a press there, so the answer stays
+    // in sight.
+    const group = node("div", "pc-group pc-sync-group");
+    group.id = "pc-sync-group";
+    const groupTitle = node("h5", "pc-group-title");
+    const fold = node("button", "pc-group-toggle", "Keep this PC in step with GitHub");
+    fold.type = "button";
+    fold.id = "pc-sync-group-toggle";
+    fold.setAttribute("aria-controls", "pc-sync-body");
+    groupTitle.append(fold);
+    const head = node("div", "pc-sync-head");
+    head.id = "pc-sync-head";
+    const body = node("div", "pc-sync-body");
+    body.id = "pc-sync-body";
+    let open = false, acted = false, attention = false;
+    const paintFold = () => {
+      fold.setAttribute("aria-expanded", open ? "true" : "false");
+      body.hidden = !open;
+      head.hidden = !(open || attention || acted);
+    };
+    fold.addEventListener("click", () => { open = !open; if (!open) acted = false; paintFold(); });
     const status = node("p", "pc-sync-status", "Checking GitHub…");
     status.id = "pc-sync-status";
     status.setAttribute("role", "status");
@@ -504,7 +542,10 @@
     const meta = node("p", "muted pc-sync-meta");
     meta.hidden = true;
     const note = node("p", "muted", "Sync pulls what your other PCs pushed and pushes this PC's commits after the project's check passes. It never overwrites uncommitted work or force-pushes.");
-    root.append(title, status, summary, list, toggle, actions, meta, note);
+    head.append(status, actions);
+    body.append(summary, list, toggle, meta, note);
+    group.append(groupTitle, head, body);
+    paintFold();
     const api = bridge();
     // Keep this PC up to date: main checks GitHub every minute and, when this
     // PC has nothing of its own in the way, pulls what the other PCs pushed.
@@ -517,16 +558,23 @@
       follow.append(tick, node("span", "", "Keep this PC up to date: bring in other PCs' pushes within a minute, when nothing here is in the way"));
       tick.addEventListener("change", () => { void Promise.resolve(api.syncFollow(tick.checked)).then((answer) => { if (answer?.ok) tick.checked = answer.on !== false; }).catch(() => {}); });
       void Promise.resolve(api.syncFollow()).then((answer) => { if (answer?.ok) tick.checked = answer.on !== false; }).catch(() => {});
-      root.append(follow);
+      body.append(follow);
     }
-    // My PCs (renderer/pc-fleet.js): the owner's PCs live, open by default.
-    if (window.MefiPcFleet && typeof api?.pcsStatus === "function") root.append(window.MefiPcFleet.section(api));
+    root.append(title);
+    // Connect another PC and My PCs (renderer/pc-fleet.js) at the top; its
+    // Power and battery and Lend this PC to a friend come after this group.
+    const fleet = window.MefiPcFleet && typeof api?.pcsStatus === "function" ? window.MefiPcFleet.section(api) : null;
+    if (fleet) root.append(fleet);
+    root.append(group);
+    if (fleet?.parts) root.append(...[fleet.parts.power, fleet.parts.lend].filter(Boolean));
     if (typeof api?.pcSetupStatus === "function") root.append(setupSection(api));
     if (typeof api?.pairedStatus === "function") root.append(pairedSection(api));
     // Reach this PC from Discord (the remote section above).
     if (typeof api?.remoteStatus === "function") root.append(remoteSection(api));
-    // Share between my PCs and Share with friends (renderer/pc-vault.js).
-    if (window.MefiPcVault) root.append(window.MefiPcVault.section(), window.MefiPcVault.shareSection());
+    // Share projects (renderer/pc-vault.js): Share between my PCs and Share
+    // with friends, a group of their own after the PC sections.
+    const vault = window.MefiPcVault;
+    if (vault) root.append(...(typeof vault.group === "function" ? [vault.group()] : [vault.section(), vault.shareSection()]));
     if (typeof api?.syncStatus !== "function" || typeof api?.syncRun !== "function") {
       status.textContent = "Syncing your PCs works in the desktop app.";
       actions.hidden = true;
@@ -538,6 +586,8 @@
     const show = (result) => {
       if (!result) return;
       root.dataset.state = stateOf(result);
+      attention = needsYou(result);
+      paintFold();
       status.textContent = result.headline || "Sync did not answer. Try again.";
       const details = Array.isArray(result.lines) ? result.lines.slice(1) : [];
       list.replaceChildren(...details.map((line) => node("li", "", line)));
@@ -558,6 +608,8 @@
     const ask = async (mode) => {
       if (busy) return;
       busy = true;
+      // A press here keeps the line and its buttons in sight for the answer.
+      if (mode !== "look") { acted = true; paintFold(); }
       run.disabled = rebase.disabled = true;
       if (mode === "sync") run.textContent = "Syncing…";
       if (mode === "rebase") rebase.textContent = "Putting your commits on top…";
