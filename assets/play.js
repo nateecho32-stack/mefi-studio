@@ -33,7 +33,7 @@
       replies: [["Maxwell", "Wait, it's done already? That's actually useful."], ["Tess", "RSVP'd. See you Friday!"], ["Juno", "Can it list snacks too?"]]
     },
     arcade: {
-      name: "Tiny arcade game", blurb: "Catch the falling stars", project: "Star Catch", lead: "your star" + NBH + "catching game",
+      name: "Tiny arcade game", blurb: "Catch the falling stars", project: "Star Catch", lead: "your arcade game",
       text: "A tiny game where you catch falling stars with a paddle and keep score",
       talk: "Stars fall, a paddle catches them and the score counts up. I split it into three tasks, and three builders are on it.",
       peek: "Is that a game? I'm in.",

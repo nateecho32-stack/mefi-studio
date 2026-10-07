@@ -187,19 +187,15 @@
     });
   }
 
-  // The last call names what the visitor built in the demo.
+  // The last call puts what the visitor built in the demo first in its rolling words.
   function personalise() {
     var saved = null;
     try { saved = JSON.parse(store.get(IDEA) || "null"); } catch (e) { saved = null; }
     if (!saved || !saved.lead) return;
+    var rot = $("#final-rot");
+    if (rot) rotLead(rot, saved.lead);
     var title = $("#final-title");
-    if (!title) return;
-    title.textContent = "";
-    title.appendChild(document.createTextNode("Ready to build "));
-    var g = document.createElement("span"); g.className = "grad"; g.textContent = saved.lead + " for real?";
-    title.appendChild(g);
-    title.classList.remove("split-done", "in");
-    if (window.MefiFx) { window.MefiFx.split(title.parentNode); window.MefiFx.reveal(title.parentNode); }
+    if (title) title.setAttribute("aria-label", "Ready to build " + saved.lead + " for real?");
     var lede = $("#final-lede");
     if (lede) lede.textContent = "Download Studio, open a folder and say what you want. This time real builders do the work, and your friends are right there with you.";
   }
@@ -396,81 +392,60 @@
   }
 
   // =========================================================================
-  // Social | Studio
+  // Words that roll over to the next one: "Keep using [Claude Code]", "Ready to build [a study timer]".
+  // Each .rot holds one .rot-w; the next word rolls in from below while the box eases to its width.
+  // They roll only while on screen; with reduced motion the first word stays.
   // =========================================================================
-  function modes() {
-    var sec = $("#modes");
-    if (!sec) return;
-    var tabs = $$(".mode-switch [role='tab']", sec), panel = $("#mode-panel");
-    var mode = "social", auto = !still(), timer = null, onScreen = false;
-    function set(m, focus) {
-      mode = m;
-      sec.dataset.mode = m;
-      if (panel) panel.dataset.mode = m;
-      tabs.forEach(function (t) { var on = t.dataset.mode === m; t.setAttribute("aria-selected", String(on)); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
-    }
-    function loop() {
-      clearTimeout(timer);
-      if (!auto || !onScreen || document.hidden) return;
-      timer = setTimeout(function () { set(mode === "social" ? "studio" : "social"); loop(); }, 5200);
-    }
-    tabs.forEach(function (t) { t.addEventListener("click", function () { auto = false; clearTimeout(timer); set(t.dataset.mode); }); });
-    $(".mode-switch", sec).addEventListener("keydown", function (e) {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      e.preventDefault(); auto = false; clearTimeout(timer);
-      set(mode === "social" ? "studio" : "social", true);
+  var rots = [];
+  // The box takes the word's width in em, so it stays right when the headline's size follows the window.
+  function fit(rot, w) { rot.style.width = (w.offsetWidth / (parseFloat(getComputedStyle(rot).fontSize) || 16)).toFixed(3) + "em"; }
+  function rotators() {
+    $$(".rot[data-rot]").forEach(function (rot, n) {
+      var r = { el: rot, words: rot.dataset.rot.split("|"), i: 0, timer: 0, on: false, offset: n * 900 };
+      rots.push(r);
+      if (still() || r.words.length < 2) return;
+      rot.classList.add("rot-live");
+      fit(rot, $(".rot-w", rot));
+      function loop() { clearTimeout(r.timer); if (!r.on || document.hidden) return; r.timer = setTimeout(function () { roll(r); loop(); }, 2600); }
+      visible(rot, function (v) { r.on = v; if (v) { clearTimeout(r.timer); r.timer = setTimeout(function () { roll(r); loop(); }, 1400 + r.offset); } else clearTimeout(r.timer); });
+      document.addEventListener("visibilitychange", loop);
     });
-    visible(sec, function (on) { onScreen = on; loop(); }, "-15% 0px");
-    document.addEventListener("visibilitychange", loop);
-    set("social");
+    // The first measure may be in a fallback font: measure again once the page's fonts are in.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () {
+      rots.forEach(function (r) { var w = $(".rot-w:not(.leave)", r.el); if (w && r.el.classList.contains("rot-live")) fit(r.el, w); });
+    });
+  }
+  function roll(r, word) {
+    var rot = r.el, cur = $(".rot-w:not(.leave)", rot);
+    if (word == null) { r.i = (r.i + 1) % r.words.length; word = r.words[r.i]; }
+    var w = document.createElement("span");
+    w.className = "rot-w enter"; w.textContent = word;
+    rot.appendChild(w);
+    fit(rot, w);
+    void w.offsetWidth;
+    w.classList.remove("enter");
+    if (cur) { cur.classList.add("leave"); setTimeout(function () { cur.remove(); }, 700); }
+  }
+  // Puts a word first (the project the visitor built in the demo), and shows it now.
+  function rotLead(rot, word) {
+    var r = rots.filter(function (x) { return x.el === rot; })[0];
+    var norm = function (s) { return s.replace(/[‐‑]/g, "-").toLowerCase(); };
+    var words = [word].concat((r ? r.words : rot.dataset.rot.split("|")).filter(function (x) { return norm(x) !== norm(word); }));
+    rot.dataset.rot = words.join("|");
+    if (!r) { var w0 = $(".rot-w", rot); if (w0) w0.textContent = word; return; }
+    r.words = words; r.i = 0;
+    if (rot.classList.contains("rot-live")) roll(r, word); else $(".rot-w", rot).textContent = word;
   }
 
   // =========================================================================
-  // The permission dial in Studio's cards
-  // =========================================================================
-  function dial() {
-    var d = $("#perm-dial");
-    if (!d || still()) return;
-    var stop = 2, timer = null, on = false;
-    function step() {
-      clearTimeout(timer);
-      if (!on || document.hidden) return;
-      timer = setTimeout(function () { stop = (stop + 1) % 4; d.dataset.stop = String(stop); step(); }, 2600);
-    }
-    visible(d, function (v) { on = v; step(); });
-    document.addEventListener("visibilitychange", step);
-  }
-
-  // =========================================================================
-  // Twelve looks
+  // Twelve looks: the swatches in Studio's cards dress this whole page
   // =========================================================================
   function themes() {
-    var T = window.MefiTheme, Fx = window.MefiFx, screens = $("#theme-screens");
-    if (!T || !Fx || !screens) return;
-    var plain = T.order.filter(function (id) { return !T.themes[id].collection; });
-    var duo = T.order.filter(function (id) { return T.themes[id].collection === "void"; });
-    $("#theme-plain").appendChild(Fx.buildSwatches(plain));
-    $("#theme-void").appendChild(Fx.buildSwatches(duo));
-    var shots = { chrome: $(".theme-shot", screens) };
-    function img(id) {
-      if (shots[id]) return shots[id];
-      var n = new Image();
-      n.className = "theme-shot"; n.decoding = "async"; n.width = 1440; n.height = 810;
-      n.alt = "Studio's Today in the " + T.themes[id].name + " theme.";
-      n.src = "assets/shots/site/theme-" + id + ".webp";
-      screens.appendChild(n);
-      shots[id] = n;
-      return n;
-    }
-    function show(id) {
-      var n = img(id), name = T.themes[id].name;
-      var on = function () { Object.keys(shots).forEach(function (k) { shots[k].classList.toggle("is-on", shots[k] === n); }); };
-      if (n.complete && n.naturalWidth) on(); else n.addEventListener("load", on, { once: true });
-      $("#theme-name").textContent = name;
-      $("#theme-win-name").textContent = name;
-    }
-    $$(".theme-picker .swatch").forEach(function (b) { b.addEventListener("pointerenter", function () { img(b.dataset.themeId); }, { passive: true }); });
-    T.onChange(function (id) { show(id); });
+    var T = window.MefiTheme, Fx = window.MefiFx, host = $("#look-swatches");
+    if (!T || !Fx || !host) return;
+    host.appendChild(Fx.buildSwatches(T.order.slice()));
+    function show(id) { var n = $("#theme-name"); if (n) n.textContent = T.themes[id].name; }
+    T.onChange(show);
     show(T.current());
   }
 
@@ -543,8 +518,10 @@
   // Links to the old Home's sections (the roadmap's "See the screens", posts on Discord) land on the closest new one.
   var OLD_ANCHORS = {
     "first-look": "look", "pillars-title": "look", "flow": "how", "flow-title": "how",
-    "community-title": "friends", "tour-title": "studio", "skin-title": "themes", "install-title": "get",
-    "rust": "roadmap.html#now", "rust-title": "roadmap.html#now", "roadmap-title": "roadmap.html"
+    "community-title": "room", "tour-title": "studio", "skin-title": "studio", "install-title": "get",
+    "rust": "roadmap.html#now", "rust-title": "roadmap.html#now", "roadmap-title": "roadmap.html",
+    // sections folded into others in the condensed page
+    "friends": "room", "modes": "look", "themes": "studio"
   };
   function oldAnchors() {
     var id = decodeURIComponent(location.hash.slice(1));
@@ -567,12 +544,11 @@
     safely("gate", function () { if (root.classList.contains("gate-on")) gated = startGate(); });
     if (!gated) { root.classList.remove("gate-on"); if (gate) gate.classList.add("gone"); setTimeout(heroGo, 60); }
     $$("[data-play-demo]").forEach(function (b) { b.addEventListener("click", function () { playDemo(b, false); }); });
+    safely("rolling words", rotators);
     safely("personalise", personalise);
     safely("room", room);
     safely("showcase", showcase);
     safely("walkthrough", journey);
-    safely("modes", modes);
-    safely("dial", dial);
     safely("themes", themes);
     safely("jam", jam);
     safely("last call", finalCall);
