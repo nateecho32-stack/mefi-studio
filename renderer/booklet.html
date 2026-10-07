@@ -10314,6 +10314,8 @@ html[data-shell="rail"] .friends-shop-page.workspace-page > .friends-shop-sheet 
 .friends-shop-notice-words { flex: 1 1 320px; margin: 0; color: var(--ivory); font-size: 14px; line-height: 1.5; }
 .friends-shop-body > .friends-gate { width: 100%; margin: 4px auto 0; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: color-mix(in srgb, var(--panel-solid) 72%, transparent); transition: border-color var(--motion-base) var(--ease-out), box-shadow var(--motion-base) var(--ease-out); }
 .friends-shop-body > .friends-gate.is-called { border-color: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 32%, transparent); }
+/* The showroom's sign-in card waits out of sight until a Sign in calls it (friends-shop.js callGate). */
+.friends-shop-body > .friends-gate.friends-shop-gate-tucked { display: none; }
 
 /* ---- the try banner: at the top of the page while an item is tried ---- */
 .friends-shop-try { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--gold) 50%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--gold) 12%, var(--panel-solid)); box-shadow: var(--shadow-2); font-size: 13.5px; transition: opacity var(--motion-base) var(--ease-out), translate var(--motion-base) var(--ease-out); }
@@ -86029,6 +86031,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     let stateWords = ""; // what the room service's state means, as explain() said it
     let way = null; // the showroom's one thing that helps: { label, run } (Sign in, Connect or Join to get it)
     let gateEl = null; // Friends' sign-in card, while signing in is what helps
+    // In the showroom the card waits out of sight at the page's foot (the line at the top has Sign in) until a
+    // Sign in or a "Sign in to get it" calls it; then it shows with each step of signing in.
+    let gateCalled = false;
     let confirm = null; // { id, price, tip, where: "card" | "banner", changed, short }: a purchase waiting for a yes
     let reporting = null; // the pack whose report form is open
     let tried = null; // { item, endsAt, timer, clock, words, scope }: the one item being tried
@@ -86839,6 +86844,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       closeDetail({ focus: false });
       const card_ = gateEl;
       if (!card_) return;
+      gateCalled = true;
+      card_.classList?.remove("friends-shop-gate-tucked");
       try { card_.scrollIntoView?.({ block: "center", behavior: motionOff() ? "auto" : "smooth" }); } catch { /* it is on the page */ }
       card_.classList?.add("is-called");
       setTimeout(() => card_.classList?.remove("is-called"), 1600);
@@ -86850,6 +86857,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (!ready && !showroom()) return cataloguing ? [] : notReady();
       const lead = noticePart();
       const foot = showroom() && gateEl ? [gateEl] : [];
+      if (foot.length && !gateCalled) gateEl.classList?.add("friends-shop-gate-tucked");
       if (loading && ready && (view === "packs" || view === "owned") && !items.length) return [lead];
       if (view === "make") return [lead, ...makeView(), ...foot];
       if (view === "packs") return [lead, ...communityView(), ...foot];
@@ -87236,6 +87244,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       ready = false;
       way = null;
       gateEl = null;
+      gateCalled = false;
       notReady = () => yours();
       if (!hub?.configured) { root.dataset.state = "not-configured"; stateWords = "The Shop needs the room service, which this copy of Studio has no address for."; setStatus(stateWords); paint(); return false; }
       if (!hub.linked) {

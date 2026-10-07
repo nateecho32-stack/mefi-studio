@@ -731,6 +731,9 @@
     let stateWords = ""; // what the room service's state means, as explain() said it
     let way = null; // the showroom's one thing that helps: { label, run } (Sign in, Connect or Join to get it)
     let gateEl = null; // Friends' sign-in card, while signing in is what helps
+    // In the showroom the card waits out of sight at the page's foot (the line at the top has Sign in) until a
+    // Sign in or a "Sign in to get it" calls it; then it shows with each step of signing in.
+    let gateCalled = false;
     let confirm = null; // { id, price, tip, where: "card" | "banner", changed, short }: a purchase waiting for a yes
     let reporting = null; // the pack whose report form is open
     let tried = null; // { item, endsAt, timer, clock, words, scope }: the one item being tried
@@ -1541,6 +1544,8 @@
       closeDetail({ focus: false });
       const card_ = gateEl;
       if (!card_) return;
+      gateCalled = true;
+      card_.classList?.remove("friends-shop-gate-tucked");
       try { card_.scrollIntoView?.({ block: "center", behavior: motionOff() ? "auto" : "smooth" }); } catch { /* it is on the page */ }
       card_.classList?.add("is-called");
       setTimeout(() => card_.classList?.remove("is-called"), 1600);
@@ -1552,6 +1557,7 @@
       if (!ready && !showroom()) return cataloguing ? [] : notReady();
       const lead = noticePart();
       const foot = showroom() && gateEl ? [gateEl] : [];
+      if (foot.length && !gateCalled) gateEl.classList?.add("friends-shop-gate-tucked");
       if (loading && ready && (view === "packs" || view === "owned") && !items.length) return [lead];
       if (view === "make") return [lead, ...makeView(), ...foot];
       if (view === "packs") return [lead, ...communityView(), ...foot];
@@ -1938,6 +1944,7 @@
       ready = false;
       way = null;
       gateEl = null;
+      gateCalled = false;
       notReady = () => yours();
       if (!hub?.configured) { root.dataset.state = "not-configured"; stateWords = "The Shop needs the room service, which this copy of Studio has no address for."; setStatus(stateWords); paint(); return false; }
       if (!hub.linked) {

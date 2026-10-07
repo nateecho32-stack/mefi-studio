@@ -840,6 +840,7 @@ test("signed out, the same page is a showroom: Studio's items from this PC's cop
   const gate = card.querySelector("#friends-gate");
   assert.ok(gate, "Friends' one sign-in card, at the foot");
   assert.equal(card.querySelector("#friends-shop-body").children.at(-1), gate);
+  assert.ok(gate.classList.contains("friends-shop-gate-tucked"), "out of sight until a Sign in calls it (the line at the top has one)");
   // Prices from the copy, Try as signed in, and in place of Buy the one thing that helps.
   assert.match(item(card, "studio:skin-frost", "home").textContent, /^Frost scales40 credits$/);
   const frost = await detail(card, "studio:skin-frost", "home");
@@ -854,6 +855,7 @@ test("signed out, the same page is a showroom: Studio's items from this PC's cop
   assert.deepEqual(env.signIns, ["signin"], "one press starts Friends' own sign-in");
   assert.equal(gate.querySelector("#friends-gate-signin").focused, true, "its card takes the keyboard");
   assert.ok(gate.classList.contains("is-called"), "and says it is the one");
+  assert.equal(gate.classList.contains("friends-shop-gate-tucked"), false, "called, it shows with each step of signing in");
   gate.querySelector("#friends-gate-signin").disabled = true;
   await one(card.querySelector("#friends-shop-notice"), "Sign in").click();
   assert.deepEqual(env.signIns, ["signin"], "a sign-in already on its way is only brought into view");
