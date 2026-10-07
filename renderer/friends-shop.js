@@ -1,15 +1,15 @@
-// Friends › Shop (window.MefiShop): scales for Ember, menu effects and style
-// packs for the credits members earn by making and playing things (credits
-// are never bought with money), and the style packs members make and sell
-// each other. Ember the dragon itself comes free with every Studio: it is not
-// sold, and its card is an On/Off switch (MefiPets.set({ on })). The relay
-// keeps the catalog, the packs and who owns what (relay/src/shop.mjs); this
-// page shows them, lets you try anything for two minutes, asks before a
-// single credit is spent, and puts what you own to use.
+// Friends › Shop (window.MefiShop): scales for Ember, menu effects, node
+// styles and style packs for the credits members earn by making and playing
+// things (credits are never bought with money), and the style packs members
+// make and sell each other. Ember the dragon itself comes free with every
+// Studio: it is not sold, and its card is an On/Off switch (MefiPets.set({
+// on })). The relay keeps the catalog, the packs and who owns what
+// (relay/src/shop.mjs); this page shows them, lets you try anything for two
+// minutes, asks before a single credit is spent, and puts what you own to use.
 //
 // Four views, one segmented control:
-//   - Studio: Ember (free), its scales, menu effects and Studio's own style
-//     packs.
+//   - Studio: Ember (free), its scales, menu effects, node styles and
+//     Studio's own style packs.
 //   - Community: members' style packs, New or Top, each with Report (and
 //     Remove for a moderator, as renderer/friends-mod.js knows one). Buying or
 //     getting one can carry a tip for its maker (0 to 100 credits, members'
@@ -24,12 +24,15 @@
 //     with Edit, Unlist or List again, sales and credits earned.
 //
 // Every card shows its item live: a pet flies on a little canvas
-// (MefiPets.paintPreview, drawn only while the card is on screen and motion
-// is on; one still frame when motion is off), an effect plays on a little
-// menu on hover, focus or Try (MefiEffects.demo), and a pack paints a tiny
-// app window from its own colours. Try lasts two minutes, one item at a time,
-// under a banner at the top of the page (time left, Buy, Stop); leaving the
-// Shop ends it.
+// (MefiPets.paintPreview), a node style paints a little board of its own
+// nodes, wires and a pulse in the theme's sky (MefiNodeStyles), both drawn
+// only while the card is on screen and motion is on (one still frame when
+// motion is off); an effect plays on a little menu on hover, focus or Try
+// (MefiEffects.demo), and a pack paints a tiny app window from its own
+// colours. Try lasts two minutes, one item at a time, under a banner at the
+// top of the page (time left, Buy, Stop); leaving the Shop ends it. A node
+// style's Try puts it on the real tree (MefiMusic.previewNodeStyle), and Use
+// wears it (MefiMusic.applyNodeStyle).
 //
 // What you own is kept in localStorage mefiStudio.shop.v1 ({ owned: { [id]:
 // { kind, name, data, updatedAt } }, at }), so it keeps working signed out or
@@ -65,10 +68,10 @@
   const TRY_MS = 120_000;
   const SOON = "Comes with the next Studio update.";
   const OPENING = "Opening the Shop…";
-  const KINDS = ["pet", "skin", "effect", "pack"];
+  const KINDS = ["pet", "skin", "effect", "nodestyle", "pack"];
   const VIEWS = [["studio", "Studio"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"]];
   // Studio's pets and their scales share a heading.
-  const GROUPS = [["pet", "Pets"], ["effect", "Menu effects"], ["pack", "Style packs"]];
+  const GROUPS = [["pet", "Pets"], ["effect", "Menu effects"], ["nodestyle", "Node styles"], ["pack", "Style packs"]];
   const groupOf = (kind) => (kind === "skin" ? "pet" : kind);
   const REPORT_REASONS = ["Hard to read", "Copies someone else's work", "A rude or hurtful name", "Something else"];
   // Ember the dragon comes free with every Studio: never a Shop item, so it has a card of its own (a switch, no price).
@@ -302,19 +305,22 @@
   const petOf = (id) => safe(() => window.MefiPets.kinds().find((kind) => kind.item === id)?.id) ?? (slug(id).startsWith("pet-") ? slug(id).slice(4) : null);
   const skinOf = (id) => safe(() => window.MefiPets.skins().find((skin) => skin.item === id)?.id) ?? (slug(id).startsWith("skin-") ? slug(id).slice(5) : null);
   const effectOf = (id) => safe(() => window.MefiEffects.list().find((effect) => effect.item === id)?.id) ?? (slug(id).startsWith("fx-") ? slug(id).slice(3) : null);
+  const styleOf = (id) => safe(() => window.MefiMusic.shopStyles().find((style) => style.item === id)?.key) ?? (slug(id).startsWith("style-") ? slug(id).slice(6) : null);
   // Scales dress the pet they name, Ember when they name none.
   const petOfItem = (item) => petOf(item.kind === "skin" ? item.requires || EMBER : item.id);
   const petState = () => safe(() => window.MefiPets.state(), {});
   // The module that shows each kind, and whether it is in this build.
-  const showerOf = (kind) => (kind === "effect" ? window.MefiEffects : kind === "pack" ? window.MefiMusic : window.MefiPets);
+  const showerOf = (kind) => (kind === "effect" ? window.MefiEffects : kind === "pack" || kind === "nodestyle" ? window.MefiMusic : window.MefiPets);
   function usable(item) {
     if (item.kind === "pet" || item.kind === "skin") return typeof window.MefiPets?.set === "function";
     if (item.kind === "effect") return typeof window.MefiEffects?.use === "function";
+    if (item.kind === "nodestyle") return typeof window.MefiMusic?.applyNodeStyle === "function" && Boolean(styleOf(item.id));
     return typeof window.MefiMusic?.applyPack === "function";
   }
   function tryable(item) {
     if (item.kind === "pet" || item.kind === "skin") return typeof window.MefiPets?.preview === "function";
     if (item.kind === "effect") return typeof window.MefiEffects?.preview === "function";
+    if (item.kind === "nodestyle") return typeof window.MefiMusic?.previewNodeStyle === "function";
     return typeof window.MefiMusic?.previewPack === "function";
   }
   // A pack's data, from the relay's item or from what you own; null when it cannot be read.
@@ -326,6 +332,7 @@
     if (item.kind === "pet") { const now = petState(); return Boolean(now.on) && now.kind === petOf(item.id); }
     if (item.kind === "skin") return petState().skin === skinOf(item.id);
     if (item.kind === "effect") return safe(() => window.MefiEffects.current()) === effectOf(item.id);
+    if (item.kind === "nodestyle") return safe(() => window.MefiMusic.nodeStyle()) === styleOf(item.id);
     return safe(() => window.MefiMusic.packInfo()?.id) === item.id;
   }
 
@@ -337,47 +344,144 @@
     use.setAttribute("href", "#g-shop"); svg.append(use);
     return svg;
   }
-  // Pets fly only on screen: one loop for every pet canvas a card shows, about 30 frames a second, paused while the
-  // window is hidden, a single still frame when motion is off.
-  const pets = { all: new Set(), seen: new Set(), frame: 0, last: 0, watch: null };
-  function drawPet(canvas, time) {
-    try { window.MefiPets?.paintPreview?.(canvas, { kind: canvas.dataset.kind, skin: canvas.dataset.skin, time }); } catch { /* the next frame tries again */ }
+  // Pets fly and node styles move only on screen: one loop for every live canvas a card shows (a pet's, or a node
+  // style's board, which carries its style in data-node-style), about 30 frames a second, paused while the window
+  // is hidden, a single still frame when motion is off.
+  const live = { all: new Set(), seen: new Set(), frame: 0, last: 0, watch: null };
+  function drawLive(canvas, time) {
+    try {
+      if (canvas.dataset.nodeStyle) paintBoard(canvas, time);
+      else window.MefiPets?.paintPreview?.(canvas, { kind: canvas.dataset.kind, skin: canvas.dataset.skin, time });
+    } catch { /* the next frame tries again */ }
+  }
+  function watchLive(canvas) {
+    live.all.add(canvas);
+    drawLive(canvas, 0);
+    if (typeof IntersectionObserver === "function") {
+      live.watch ??= new IntersectionObserver((entries) => {
+        for (const entry of entries) { if (entry.isIntersecting) live.seen.add(entry.target); else live.seen.delete(entry.target); }
+        spin();
+      });
+      live.watch.observe(canvas);
+    }
+    return canvas;
   }
   function petCanvas(kind, skin, label) {
     const canvas = node("canvas", "friends-shop-pet");
     canvas.width = 360; canvas.height = 180;
     canvas.dataset.kind = kind || "dragon"; canvas.dataset.skin = skin || "theme";
     canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", label);
-    pets.all.add(canvas);
-    drawPet(canvas, 0);
-    if (typeof IntersectionObserver === "function") {
-      pets.watch ??= new IntersectionObserver((entries) => {
-        for (const entry of entries) { if (entry.isIntersecting) pets.seen.add(entry.target); else pets.seen.delete(entry.target); }
-        spin();
-      });
-      pets.watch.observe(canvas);
-    }
-    return canvas;
+    return watchLive(canvas);
   }
   function spin() {
-    if (pets.frame || !pets.seen.size || typeof requestAnimationFrame !== "function") return;
-    pets.frame = requestAnimationFrame(petFrame);
+    if (live.frame || !live.seen.size || typeof requestAnimationFrame !== "function") return;
+    live.frame = requestAnimationFrame(liveFrame);
   }
-  function petFrame(now) {
-    pets.frame = 0;
-    for (const canvas of [...pets.seen]) if (canvas.isConnected === false) { pets.seen.delete(canvas); pets.all.delete(canvas); pets.watch?.unobserve(canvas); }
-    if (!pets.seen.size || document.hidden) return;
-    if (motionOff()) { for (const canvas of pets.seen) drawPet(canvas, 0); return; }
-    if (now - pets.last >= 33) { pets.last = now; for (const canvas of pets.seen) drawPet(canvas, now); }
-    pets.frame = requestAnimationFrame(petFrame);
+  function liveFrame(now) {
+    live.frame = 0;
+    for (const canvas of [...live.seen]) if (canvas.isConnected === false) { live.seen.delete(canvas); live.all.delete(canvas); live.watch?.unobserve(canvas); }
+    if (!live.seen.size || document.hidden) return;
+    if (motionOff()) { for (const canvas of live.seen) drawLive(canvas, 0); return; }
+    if (now - live.last >= 33) { live.last = now; for (const canvas of live.seen) drawLive(canvas, now); }
+    live.frame = requestAnimationFrame(liveFrame);
   }
-  function releasePets() {
-    for (const canvas of pets.all) pets.watch?.unobserve(canvas);
-    pets.all.clear(); pets.seen.clear();
-    if (pets.frame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(pets.frame);
-    pets.frame = 0;
+  function releaseLive() {
+    for (const canvas of live.all) live.watch?.unobserve(canvas);
+    live.all.clear(); live.seen.clear();
+    if (live.frame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(live.frame);
+    live.frame = 0;
   }
   try { document.addEventListener?.("visibilitychange", () => { if (!document.hidden) spin(); }); } catch { /* no document events here */ }
+
+  // A node style's board: four nodes on their wires, painted by MefiNodeStyles in the theme's own sky (its canvas
+  // palette and node tints, as the Map's are): a task at work on a wire that carries work (a pulse runs it every
+  // 2.4 s and lands, kicking it), an idle task, a finished session that is chosen (so its selection mark shows) on
+  // a quiet wire, and a todo. The board is 360 by 180 and fills the canvas (a card shows it at about 0.6, so its
+  // nodes are a size up from the Map's: the card is a close look); each canvas keeps its own motion records.
+  // Motion off: the style's still pose.
+  const BOARD = Object.freeze([
+    Object.freeze({ id: "idle", x: 66, y: 114, r: 16, kind: "task", tint: "task" }),
+    Object.freeze({ id: "work", x: 180, y: 70, r: 23, kind: "task", tint: "warm", active: true }),
+    Object.freeze({ id: "done", x: 292, y: 112, r: 16, kind: "session", tint: "done", chosen: true }),
+    Object.freeze({ id: "todo", x: 134, y: 152, r: 8, kind: "todo", tint: "pending" }),
+  ]);
+  const BOARD_WIRES = Object.freeze([
+    Object.freeze({ a: 0, b: 1, kind: "task", tint: "warm", alpha: 0.55, width: 1.4, active: true, flow: true, march: true, dash: Object.freeze([2, 4]) }),
+    Object.freeze({ a: 1, b: 2, kind: "session", tint: "task", alpha: 0.32, width: 1.1, inspected: true }),
+    Object.freeze({ a: 0, b: 3, kind: "todo", tint: "task", alpha: 0.2, width: 0.9 }),
+  ]);
+  const BOARD_PULSE_MS = 2400, BOARD_TRAVEL_MS = 900, BOARD_LAND_MS = 380;
+  const boards = new WeakMap(); // canvas -> { motion, last, landed, pulse }
+  // The Map's node tints from a canvas palette (renderer/idle.js syncGraphTheme does the same), kept per palette.
+  let boardTints = { palette: undefined, tints: null };
+  const hexTriple = (value, fallback) => (typeof value === "string" && HEX.test(value) ? Object.freeze([parseInt(value.slice(1, 3), 16), parseInt(value.slice(3, 5), 16), parseInt(value.slice(5, 7), 16)]) : fallback);
+  function tintsOf(palette) {
+    if (boardTints.palette === palette && boardTints.tints) return boardTints.tints;
+    const background = hexTriple(palette?.background, [5, 5, 7]);
+    const light = background[0] * 0.2126 + background[1] * 0.7152 + background[2] * 0.0722 > 145;
+    const pending = hexTriple(palette?.muted, [138, 128, 108]), verify = light ? [59, 86, 160] : [151, 179, 244];
+    const tints = {
+      warm: hexTriple(palette?.bright, [230, 201, 141]), pending, done: Object.freeze([104, 236, 164]),
+      task: Object.freeze(pending.map((value, index) => Math.round(value * 0.6 + verify[index] * 0.4))),
+    };
+    boardTints = { palette, tints };
+    return tints;
+  }
+  function paintBoard(canvas, time) {
+    const styles = window.MefiNodeStyles, key = canvas.dataset.nodeStyle, ctx = canvas.getContext?.("2d");
+    if (!styles || !ctx || !key) return;
+    const width = canvas.clientWidth || canvas.width || 360, height = canvas.clientHeight || canvas.height || 180;
+    const dpr = Math.min(2, Math.max(1, Number(window.devicePixelRatio) || 1));
+    if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) { canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); }
+    const palette = safe(() => window.MefiMusic.themePalette().canvas);
+    const theme = styles.theme(palette), tints = tintsOf(palette), still = motionOff() || !(time > 0);
+    let board = boards.get(canvas);
+    if (!board) {
+      // (the pulse's colour as one stable triple, so the style's paints for it are built once)
+      board = { motion: new Map(), last: 0, landed: -1, pulse: { color: "#f1dcae", glow: "#e6c98d", duration: BOARD_TRAVEL_MS, start: 0 }, rgb: hexTriple("#f1dcae", null), look: { time: 0, still: false, theme: null } };
+      boards.set(canvas, board);
+    }
+    const dt = still || !board.last ? 0 : Math.min(0.1, Math.max(0, (time - board.last) / 1000));
+    board.last = still ? 0 : time;
+    const at = still ? 0 : time;
+    // The pulse's turn: travelling, then landing, then resting until the next one.
+    const turn = Math.floor(at / BOARD_PULSE_MS), since = at - turn * BOARD_PULSE_MS;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = palette?.background ?? "#050507";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const scale = Math.min(canvas.width / 360, canvas.height / 180);
+    ctx.setTransform(scale, 0, 0, scale, (canvas.width - 360 * scale) / 2, (canvas.height - 180 * scale) / 2);
+    const motions = BOARD.map((spot) => {
+      const record = styles.motionRecord(board.motion, spot.id);
+      if (spot.id === "work" && !still && since >= BOARD_TRAVEL_MS && board.landed !== turn) { board.landed = turn; record.kick = 1; }
+      styles.stepMotion(record, { style: key, active: spot.active === true, selected: spot.chosen === true, progress: null, orbit: 0, status: null, stale: false, time: at, frame: 0 }, dt, still);
+      return record;
+    });
+    for (const wire of BOARD_WIRES) {
+      const a = BOARD[wire.a], b = BOARD[wire.b];
+      styles.wire(ctx, key, a, b, { kind: wire.kind, tint: tints[wire.tint], alpha: wire.alpha, width: wire.width, dash: wire.dash ?? null, march: wire.march === true && !still, flow: wire.flow === true, double: false, active: wire.active === true, inspected: wire.inspected === true, curved: false, cp: null, far: false, time: at, still, seed: motions[wire.b].seed, rA: a.r, rB: b.r, detail: 3, lifetime: 1, theme });
+    }
+    if (!still) {
+      const from = BOARD[0], to = BOARD[1], look = board.look;
+      Object.assign(look, { kind: "dot", time: at, still: false, rTo: to.r, detail: 3, pulse: board.pulse, motion: motions[1], cp: null, theme });
+      if (since < BOARD_TRAVEL_MS) styles.surge(ctx, key, from, to, since / BOARD_TRAVEL_MS, board.pulse, look);
+      else if (since < BOARD_TRAVEL_MS + BOARD_LAND_MS) styles.land(ctx, key, to, to.r, board.rgb, (since - BOARD_TRAVEL_MS) / BOARD_LAND_MS, look);
+    }
+    BOARD.forEach((spot, index) => {
+      const motion = motions[index], tint = tints[spot.tint], chosen = spot.chosen === true;
+      const options = { kind: spot.kind, selected: chosen, chosen, active: spot.active === true, alpha: spot.active || chosen ? 1 : theme.light ? 0.85 : 0.65, motion, time: at, still, detail: styles.tier(spot.r, 4), theme };
+      styles.paint(ctx, key, spot, spot.r, tint, options);
+      if (chosen) styles.select(ctx, key, spot, spot.r, tint, options);
+    });
+  }
+  function boardCanvas(key, label) {
+    const canvas = node("canvas", "friends-shop-pet friends-shop-board");
+    canvas.width = 360; canvas.height = 180;
+    canvas.dataset.nodeStyle = key;
+    canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", label);
+    return watchLive(canvas);
+  }
 
   // A tiny app window painted from a pack's own colours (inline custom properties): a sidebar, a title, two node orbs
   // on a wire, two lines of text and a button. The node style, material and font each change how it looks.
@@ -592,7 +696,11 @@
         if (typeof window.MefiPets?.paintPreview === "function") box.append(petCanvas(petOfItem(item), item.kind === "skin" ? skinOf(item.id) : "theme", `${item.name}, flying`));
         else { const still = node("span", "friends-shop-placeholder"); still.setAttribute("aria-hidden", "true"); still.append(gem("friends-shop-placeholder-gem")); box.append(still); }
       } else if (item.kind === "effect") box.append(effectStage(item));
-      else box.append(packMock(dataOf(item), { title: item.name }));
+      else if (item.kind === "nodestyle") {
+        const key = styleOf(item.id);
+        if (key && window.MefiNodeStyles?.STYLES?.includes?.(key)) box.append(boardCanvas(key, `${item.name}: nodes and wires in this style`));
+        else { const still = node("span", "friends-shop-placeholder"); still.setAttribute("aria-hidden", "true"); still.append(gem("friends-shop-placeholder-gem")); box.append(still); }
+      } else box.append(packMock(dataOf(item), { title: item.name }));
       return box;
     }
     // A little menu that plays the effect's exit (MefiEffects.demo), then comes back fresh for the next look.
@@ -918,6 +1026,7 @@
       try {
         if (item.kind === "pet" || item.kind === "skin") window.MefiPets.preview({ kind: petOfItem(item), skin: item.kind === "skin" ? skinOf(item.id) : petState().skin || "theme" }, TRY_MS);
         else if (item.kind === "effect") window.MefiEffects.preview(effectOf(item.id), TRY_MS);
+        else if (item.kind === "nodestyle") { if (window.MefiMusic.previewNodeStyle(styleOf(item.id)) !== true) throw new Error("no style"); }
         else {
           const data = dataOf(item);
           if (!data) throw new Error("no pack");
@@ -963,7 +1072,12 @@
         if (item.kind === "pet") { window.MefiPets.set({ on: true, kind: petOf(item.id) }); done = true; }
         else if (item.kind === "skin") { window.MefiPets.set({ skin: skinOf(item.id) }); done = true; }
         else if (item.kind === "effect") { window.MefiEffects.use(effectOf(item.id)); done = true; }
-        else {
+        else if (item.kind === "nodestyle") {
+          // music.js wears a Shop style only once this list says it is owned: one the relay just said is yours goes on it first.
+          if (item.owned === true && !owns(item.id)) markOwned(item);
+          const key = styleOf(item.id);
+          done = Boolean(key) && window.MefiMusic.applyNodeStyle(key, true) === key;
+        } else {
           const data = dataOf(item);
           if (data) { window.MefiMusic.applyPack({ id: item.id, name: item.name, ...data }, true); done = true; }
         }
@@ -1329,7 +1443,7 @@
       // The control that had the keyboard keeps it: every control has an id that survives the repaint.
       const active = document.activeElement;
       const focusedId = active && active !== root && root.contains?.(active) ? active.id : "";
-      releasePets();
+      releaseLive();
       stages.clear();
       for (const key of Object.keys(make)) delete make[key];
       paintChrome();
@@ -1337,7 +1451,7 @@
       if (!ready) parts = notReady();
       // A view being read for the first time says so in the status line, not with an empty list.
       else if (loading && !items.length && view !== "make") parts = [];
-      else if (view === "studio") parts = [node("p", "friends-shop-lead", "Ember the dragon comes free with every Studio. Here are scales for Ember, menu effects and Studio's own style packs; every theme and node style in Settings stays free."), ...grouped(items, "The Shop is empty right now.", { ember: true })];
+      else if (view === "studio") parts = [node("p", "friends-shop-lead", "Ember the dragon comes free with every Studio. Here are scales for Ember, menu effects, two node styles and Studio's own style packs; every theme and node style Studio already had stays free."), ...grouped(items, "The Shop is empty right now.", { ember: true })];
       else if (view === "packs") parts = communityView();
       else if (view === "owned") parts = grouped(items, "Nothing here yet. What you get in the Shop shows up here.", { ember: true });
       else parts = makeView();
@@ -1467,12 +1581,12 @@
       gone = true;
       seq += 1;
       endTry();
-      releasePets();
+      releaseLive();
       motionWatch?.disconnect();
       if (current === handle) current = null;
     }
-    // Motion switched back on: the pets on screen fly again; switched off, they hold still.
-    const motionWatch = typeof MutationObserver === "function" ? new MutationObserver(() => { if (motionOff()) { for (const canvas of pets.seen) drawPet(canvas, 0); } else spin(); }) : null;
+    // Motion switched back on: the pets and boards on screen move again; switched off, they hold still.
+    const motionWatch = typeof MutationObserver === "function" ? new MutationObserver(() => { if (motionOff()) { for (const canvas of live.seen) drawLive(canvas, 0); } else spin(); }) : null;
     motionWatch?.observe(document.documentElement, { attributes: true, attributeFilter: ["data-motion"] });
     // Whether this member moderates arrives after the card (friends-mod.js learn()): their Remove buttons follow.
     if (!watchingMods && typeof window.MefiFriendsMod?.subscribe === "function") { watchingMods = true; window.MefiFriendsMod.subscribe(() => { if (current?.ready()) current.paint(); }); }
@@ -1507,7 +1621,7 @@
     box.setAttribute("aria-labelledby", "friends-shop-settings-title");
     const heading = node("h3", "friends-shop-settings-title", "Pets, menu effects and style packs");
     heading.id = "friends-shop-settings-title";
-    const line = node("p", "friends-shop-settings-line", "Ember the dragon comes free with every Studio. The Shop has scales for Ember, menus that crumble away and style packs from Studio and members, for the credits you earn; or make a style of your own.");
+    const line = node("p", "friends-shop-settings-line", "Ember the dragon comes free with every Studio. The Shop has scales for Ember, menus that crumble away, node styles and style packs from Studio and members, for the credits you earn; or make a style of your own.");
     const go = button("Open the Shop", () => open("studio"), "friends-shop-settings-open", PRIMARY);
     go.prepend(gem());
     box.append(heading, line, go);

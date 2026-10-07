@@ -131,6 +131,8 @@ app.whenReady().then(async () => {
       shopItem("studio:skin-void", "skin", "Void scales", 60, "Ember in black with a violet glow."),
       shopItem("studio:fx-dissolve", "effect", "Dissolve", 60, "Menus crumble into pixels when they close."),
       shopItem("studio:fx-embers", "effect", "Burn away", 90, "Menus burn away from the edges with glowing embers."),
+      shopItem("studio:style-dragonscale", "nodestyle", "Dragon scales", 80, "Nodes covered in shimmering dragon scales, with ember sparks along the wires."),
+      shopItem("studio:style-constellation", "nodestyle", "Constellation", 80, "Nodes as bright stars joined by star-chart lines, with shooting stars."),
       shopItem("studio:pack-synthwave", "pack", "Synthwave", 50, "Hot pink and violet on midnight blue.", { data: { v: 1, palette: { accent: "#ff4fa3", accent2: "#8b5cff", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } }),
       shopItem("studio:pack-sakura", "pack", "Sakura (light)", 50, "Soft pink on warm white, a light look.", { data: { v: 1, palette: { accent: "#b8325f", accent2: "#8a6bd1", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24" }, nodeStyle: "minimal", material: "focus", font: "studio" } }),
     ] },
@@ -366,6 +368,27 @@ app.whenReady().then(async () => {
     await run("document.getElementById('friends-shop-view-studio').click();");
   }
   report.steps.push("the Shop's editor and tips fit");
+  // The Shop's node styles: their own section, each card a little board its own style paints (renderer/node-styles.js)
+  // in the theme's sky. A board is painted when much of it differs from its sky's corner.
+  const boards = async (what) => {
+    await go("friends-page", { place: "shop" });
+    await until(placeIs("shop") + " && document.getElementById('friends-shop-group-nodestyle')", `the Shop's node styles (${what})`);
+    await run("document.getElementById('friends-shop-group-nodestyle').scrollIntoView({ block: 'center' });");
+    await sleep(700);
+    const painted = await run(`return [...document.querySelectorAll('#friends-shop canvas[data-node-style]')].map((canvas) => {
+      const { width, height } = canvas, data = canvas.getContext('2d').getImageData(0, 0, width, height).data;
+      let lit = 0;
+      for (let i = 0; i < data.length; i += 16) if (Math.abs(data[i] - data[0]) + Math.abs(data[i + 1] - data[1]) + Math.abs(data[i + 2] - data[2]) > 60) lit += 1;
+      return { style: canvas.dataset.nodeStyle, width, height, lit };
+    });`);
+    assert.deepEqual(painted.map((board) => board.style), ["dragonscale", "constellation"], `${what}: a board per node style`);
+    assert.ok(painted.every((board) => board.width >= 200 && board.lit > 40), `${what}: each board is painted: ${JSON.stringify(painted)}`);
+    return painted;
+  };
+  await resize(1440, 900);
+  report.boards = await boards("dark");
+  await capture("friends-shop-nodestyles-1440x900.png");
+  report.steps.push("the Shop's node styles paint their boards");
   // A light palette (the app's own custom colours): every place, and an open room, still fit with no text under 12 px.
   await resize(1440, 900);
   assert.equal(await run("return window.MefiMusic.applyCustomColors({ accent: '#8A5A00', background: '#F4F0E6', surface: '#FFFFFF', text: '#1D1B17' });"), true);
@@ -383,6 +406,8 @@ app.whenReady().then(async () => {
   await sleep(400);
   found.push(...problems(await run(measure), "an open room in a light palette"));
   await capture("friends-light-room-1440x900.png");
+  report.lightBoards = await boards("a light palette");
+  await capture("friends-light-shop-nodestyles-1440x900.png");
   report.steps.push("a light palette");
   assert.deepEqual(found, [], "every Friends place fits at every size, with no text under 12 px");
   await resize(1920, 1080);

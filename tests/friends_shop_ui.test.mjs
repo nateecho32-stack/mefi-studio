@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { createDom } from "./fixtures/renderer-dom.mjs";
+import { NODE_STYLES_SOURCE, recordingContext } from "./fixtures/node-styles-harness.mjs";
 
 // renderer/friends-shop.js (Friends › Shop) in a vm with the shared fake DOM, a
 // fake bridge (hubShop as main's hub:shop hands answers over) and recorders
@@ -37,6 +38,8 @@ const CATALOG = [
   studioItem("studio:skin-void", "skin", "Void scales", 60, { blurb: "Ember in black with a violet glow." }),
   studioItem("studio:fx-dissolve", "effect", "Dissolve", 60, { blurb: "Menus crumble into pixels when they close." }),
   studioItem("studio:fx-embers", "effect", "Burn away", 90, { blurb: "Menus burn away from the edges with glowing embers." }),
+  studioItem("studio:style-dragonscale", "nodestyle", "Dragon scales", 80, { blurb: "Nodes covered in shimmering dragon scales, with ember sparks along the wires." }),
+  studioItem("studio:style-constellation", "nodestyle", "Constellation", 80, { blurb: "Nodes as bright stars joined by star-chart lines, with shooting stars." }),
   studioItem("studio:pack-synthwave", "pack", "Synthwave", 50, { blurb: "Hot pink and violet on midnight blue.", data: SYNTHWAVE }),
 ];
 const EMBER = "studio:pet-dragon";
@@ -49,7 +52,10 @@ const MINE = [
   studioItem("pack_mine0000000002", "pack", "Old paper", 0, { maker: { id: ME, name: "Mefi" }, data: PAPER, sales: 1, status: "unlisted", owned: true }),
 ];
 
-function environment({ hub = { configured: true, linked: true, state: "ready", user: { id: ME } }, views = {}, answers = {}, storage = new Map(), throwing = false, modules = { pets: true, effects: true, music: true }, moderator = false, motion = "on", hubShop = true, owned = [], before = null } = {}) {
+// painters: renderer/node-styles.js loads into the page and every canvas records what it is asked to draw
+// (canvas._ctx); frames: requestAnimationFrame and an IntersectionObserver that sees every canvas, with env.frame(ms)
+// running the frame that is due.
+function environment({ hub = { configured: true, linked: true, state: "ready", user: { id: ME } }, views = {}, answers = {}, storage = new Map(), throwing = false, modules = { pets: true, effects: true, music: true }, moderator = false, motion = "on", hubShop = true, owned = [], before = null, painters = false, frames = false } = {}) {
   const dom = createDom();
   const { document } = dom;
   const create = document.createElement;
@@ -57,6 +63,7 @@ function environment({ hub = { configured: true, linked: true, state: "ready", u
     const el = create(tag);
     el.style.setProperty = (key, value) => { el.style[key] = String(value); };
     el.style.removeProperty = (key) => { delete el.style[key]; };
+    if (painters && tag === "canvas") el.getContext = () => (el._ctx ??= recordingContext({ center: { x: 180, y: 90 } }));
     return el;
   };
   document.createElementNS = (_namespace, tag) => document.createElement(tag);
@@ -123,27 +130,50 @@ function environment({ hub = { configured: true, linked: true, state: "ready", u
     endPreview: () => shown.push(["effects.endPreview"]),
     demo: (element, id) => shown.push(["effects.demo", id, element?.className ?? null]),
   };
+  // music.js wears a Shop node style only once MefiShop owns it (as renderer/music.js applyNodeStyle does).
+  let wornStyle = "orbs";
+  const SHOP_STYLES = [["dragonscale", "studio:style-dragonscale", "Dragon scales"], ["constellation", "studio:style-constellation", "Constellation"]];
   if (modules.music) window.MefiMusic = {
     applyPack: (data, save) => { shown.push(["music.applyPack", clone(data), save]); applied = clone(data); },
     previewPack: (data) => shown.push(["music.previewPack", clone(data)]),
     endPreview: () => shown.push(["music.endPreview"]),
     packInfo: () => applied,
     nodeStyles: () => [{ key: "halo", name: "Halo" }],
+    shopStyles: () => SHOP_STYLES.map(([key, item, name]) => ({ key, item, name, detail: "", owned: window.MefiShop.owns(item) })),
+    previewNodeStyle: (key) => { shown.push(["music.previewNodeStyle", key]); return SHOP_STYLES.some(([style]) => style === key); },
+    applyNodeStyle: (key, save) => {
+      shown.push(["music.applyNodeStyle", key, save]);
+      const entry = SHOP_STYLES.find(([style]) => style === key);
+      if (!entry || window.MefiShop.owns(entry[1])) wornStyle = key;
+      return wornStyle;
+    },
+    nodeStyle: () => wornStyle,
+    themePalette: () => ({ canvas: { background: "#050507", text: "#ece5d8", muted: "#a4a9b2", bright: "#eef1f5", accent2: "#36d1ff" } }),
   };
   const localStorage = throwing
     ? { getItem() { throw new Error("storage refused"); }, setItem() { throw new Error("storage refused"); } }
     : { getItem: (key) => (storage.has(key) ? storage.get(key) : null), setItem: (key, value) => { storage.set(key, String(value)); } };
   const timer = (fn, ms) => { timers.push({ fn, ms, live: true }); return timers.length; };
   const stop = (id) => { if (timers[id - 1]) timers[id - 1].live = false; };
+  const rafs = new Map();
+  let rafId = 0;
   const context = vm.createContext({
     window, document, localStorage, console,
     setTimeout: timer, clearTimeout: stop, setInterval: timer, clearInterval: stop,
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
+    ...(frames ? {
+      requestAnimationFrame: (fn) => { rafs.set(++rafId, fn); return rafId; },
+      cancelAnimationFrame: (id) => { rafs.delete(id); },
+      IntersectionObserver: class { constructor(callback) { this.callback = callback; } observe(target) { this.callback([{ target, isIntersecting: true }]); } unobserve() {} },
+    } : {}),
   });
+  if (painters) vm.runInContext(NODE_STYLES_SOURCE, context);
   vm.runInContext(source, context);
   return {
     window, document, shop: window.MefiShop, calls, shown, went, fired, storage, relay, pet,
     hear: (event) => hear?.(event),
+    // Runs the animation frame that is due, at `ms`.
+    frame: (ms) => { const due = [...rafs.values()]; rafs.clear(); for (const fn of due) fn(ms); },
     // Runs the live timers of one length (a try's two minutes, its one-second clock).
     elapse: (ms) => { for (const entry of timers.filter((item) => item.live && item.ms === ms)) { entry.live = ms === 1000; entry.fn(); } },
     // The try's two minutes and its one-second clock (an effect's little menu waits on its own timer).
@@ -178,7 +208,7 @@ test("the Studio view: Ember free with every Studio, then a card per item with i
   await one(card, "How to earn credits").click();
   assert.deepEqual(env.went.at(-1), ["friends-page", { place: "events" }], "how to earn credits is Friends › Events");
   assert.deepEqual(card.querySelectorAll('[role="tab"]').map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]), [["Studio", "true"], ["Community", "false"], ["Owned", "false"], ["Make a style", "false"]]);
-  assert.deepEqual(card.querySelectorAll(".friends-shop-group-title").map((heading) => heading.textContent), ["Pets", "Menu effects", "Style packs"]);
+  assert.deepEqual(card.querySelectorAll(".friends-shop-group-title").map((heading) => heading.textContent), ["Pets", "Menu effects", "Node styles", "Style packs"]);
   assert.equal(card.querySelectorAll("article")[0].dataset.item, EMBER, "Ember comes first");
 
   const frost = item(card, "studio:skin-frost");
@@ -462,6 +492,92 @@ test("Use per kind: Ember's switch, scales dress it, an effect and a pack are pu
   await one(item(card, "studio:fx-dissolve"), "Turn off").click();
   assert.deepEqual(acted(env), ["effects.use", "none"]);
   assert.equal(buttons(item(card, "studio:fx-dissolve"), "Use").length, 1);
+});
+
+test("Node styles: their own section, a live board per card, Try puts one on the real tree for two minutes, Buy asks first, then Use wears it", async () => {
+  const env = environment({ painters: true });
+  const card = await open(env);
+  const dragon = () => item(card, "studio:style-dragonscale");
+  const section = card.querySelector("#friends-shop-group-nodestyle").parentNode;
+  assert.deepEqual(section.querySelectorAll("article").map((el) => el.dataset.item), ["studio:style-dragonscale", "studio:style-constellation"], "both node styles, under Node styles");
+  assert.match(dragon().textContent, /Dragon scalesby Mefi StudioNodes covered in shimmering dragon scales, with ember sparks along the wires\.80 credits/);
+  const board = dragon().querySelector("canvas");
+  assert.equal(board.dataset.nodeStyle, "dragonscale", "the card paints its own style");
+  assert.equal(board.getAttribute("role"), "img");
+  assert.match(board.getAttribute("aria-label"), /^Dragon scales: /);
+  assert.equal(item(card, "studio:style-constellation").querySelector("canvas").dataset.nodeStyle, "constellation");
+  // Try: the real tree wears it, nothing is saved, and Stop (or the clock) takes it off.
+  await one(dragon(), "Try for 2 minutes").click();
+  assert.deepEqual(acted(env), ["music.previewNodeStyle", "dragonscale"]);
+  assert.equal(card.querySelector("#friends-shop-try-words").textContent, "Trying Dragon scales · 2:00 left");
+  await one(banner(card), "Stop").click();
+  assert.deepEqual(acted(env), ["music.endPreview"]);
+  await one(item(card, "studio:style-constellation"), "Try for 2 minutes").click();
+  env.elapse(120000);
+  assert.deepEqual(acted(env), ["music.endPreview"], "the two minutes end it");
+  // Buy asks first; a Studio item never takes a tip; then Use wears it.
+  await one(dragon(), "Buy for 80").click();
+  assert.equal(dragon().querySelector(".friends-shop-ask").textContent, "Buy Dragon scales for 80 credits? You will have 160 credits left.");
+  assert.equal(dragon().querySelector(".friends-shop-tips"), null);
+  await one(dragon(), "Yes, buy it").click();
+  await flush();
+  assert.deepEqual(shopCalls(env, "shopBuy"), [["shopBuy", "studio:style-dragonscale", 80]]);
+  assert.equal(env.shop.owns("studio:style-dragonscale"), true);
+  assert.deepEqual(clone(env.shop.owned("nodestyle")).map((entry) => [entry.id, entry.kind, entry.name]), [["studio:style-dragonscale", "nodestyle", "Dragon scales"]]);
+  await one(dragon(), "Use").click();
+  assert.deepEqual(acted(env), ["music.applyNodeStyle", "dragonscale", true]);
+  assert.equal(status(card), "Dragon scales is in use.");
+  assert.match(dragon().textContent, /In use/);
+  assert.equal(buttons(dragon(), "Turn off").length, 0, "another style is chosen in Settings, so no Turn off");
+});
+
+test("buying a node style while trying it keeps it on, and an owned one in the Owned view puts it on", async () => {
+  const env = environment();
+  const card = await open(env);
+  const constellation = () => item(card, "studio:style-constellation");
+  await one(constellation(), "Try for 2 minutes").click();
+  await one(banner(card), "Buy").click();
+  await one(banner(card), "Yes, buy it").click();
+  await flush();
+  assert.ok(env.shown.some(([what]) => what === "music.endPreview"), "the try ends first");
+  assert.deepEqual(acted(env), ["music.applyNodeStyle", "constellation", true]);
+  assert.equal(status(card), "Constellation is yours, and in use.");
+  // The relay says a style is owned before this PC's list does (another PC bought it): Use still wears it.
+  const other = environment({ views: { owned: { ok: true, items: [{ ...CATALOG.find((entry) => entry.id === "studio:style-dragonscale"), owned: true }], next: null, balance: 240, canEarn: true, hold: null } }, answers: { shopOwned: { ok: true, items: [] } } });
+  const ownedCard = await open(other, "owned");
+  assert.equal(other.shop.owns("studio:style-dragonscale"), false, "not on this PC's list yet");
+  await one(item(ownedCard, "studio:style-dragonscale"), "Use").click();
+  assert.deepEqual(acted(other), ["music.applyNodeStyle", "dragonscale", true]);
+  assert.equal(other.shop.owns("studio:style-dragonscale"), true, "the relay's word goes on the list first");
+  assert.equal(status(ownedCard), "Dragon scales is in use.");
+});
+
+test("a node style's board paints through MefiNodeStyles in the theme's sky, moves only while on screen with motion on, and holds one still frame with motion off", async () => {
+  for (const motion of ["on", "off"]) {
+    const env = environment({ painters: true, frames: true, motion });
+    const card = await open(env);
+    const board = item(card, "studio:style-constellation").querySelector("canvas");
+    const ctx = board._ctx;
+    assert.ok(ctx, "the board has a canvas to paint on");
+    // What a frame draws (the paints the first one builds, cached for the rest, left out).
+    const drawn = (list) => JSON.stringify(list.filter(([name]) => !name.startsWith("create:") && name !== "addColorStop"));
+    const frame = (ms) => { const from = ctx.calls.log.length; env.frame(ms); return drawn(ctx.calls.log.slice(from)); };
+    // The frame painted as the card was made is the style's still pose.
+    const made = drawn(ctx.calls.log);
+    assert.ok(made.includes('"fillRect"') && made.includes('"set:fillStyle","#050507"'), "the theme's own sky behind the nodes");
+    assert.ok(ctx.calls.fill + ctx.calls.stroke > 12, "nodes and wires were painted");
+    const first = frame(1000);
+    assert.equal(ctx.calls.saves, ctx.calls.restores, "the canvas comes back as it was");
+    if (motion === "on") {
+      assert.notEqual(first, made, "on screen with motion on, it moves");
+      assert.notEqual(frame(1400), first, "and keeps moving");
+    } else {
+      assert.equal(first, made, "with motion off it is the one still frame");
+      assert.equal(frame(1400), "[]", "and no other frame is asked for");
+    }
+    const dragon = item(card, "studio:style-dragonscale").querySelector("canvas")._ctx;
+    assert.notEqual(JSON.stringify(dragon.calls.log.slice(-40)), JSON.stringify(ctx.calls.log.slice(-40)), "each card paints its own style");
+  }
 });
 
 test("a part not in this build says so on its card instead of failing", async () => {
