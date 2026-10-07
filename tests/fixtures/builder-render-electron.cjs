@@ -193,7 +193,8 @@ app.whenReady().then(async () => {
     assert.equal(m.pageOverflow, false, `the page overflows at ${label}`);
     assert.equal(m.scrollbarWidth, "none", `native bars stay hidden at ${label}`);
     assert.deepEqual(m.small, [], `no text under 12 px at ${label}: ${JSON.stringify(m.small)}`);
-    assert.ok(m.home && m.home.w > 200 && m.home.h > 100, `the greeting has a size at ${label}: ${JSON.stringify(m.home)}`);
+    // Since the compact pass the greeting sits beside a smaller orb on one row, about 50 px tall.
+    assert.ok(m.home && m.home.w > 200 && m.home.h > 40, `the greeting has a size at ${label}: ${JSON.stringify(m.home)}`);
     assert.equal(m.greeting, "What's next for Builder fixture?", `the greeting asks about this project at ${label}`);
     assert.ok(m.insideToday, `Home's own box is the one in Today at ${label}`);
     assert.deepEqual(m.classic, [], `Home's classic row of controls is not laid out inside Today's box at ${label}`);
