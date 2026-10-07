@@ -14,7 +14,7 @@ const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const executable = path.join(studio, "node_modules", "electron", "dist", process.platform === "win32" ? "electron.exe" : process.platform === "darwin" ? "Electron.app/Contents/MacOS/Electron" : "electron");
 const canRun = existsSync(executable) && (process.platform !== "linux" || Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY));
 
-test("the Map in the 0.5 layout: the session list stays in the column, its bar (Map | Fleet | Pipelines, Running only, View ▾ with four groups) and the state colours over the tree, the switch on Fleet and Pipelines moves between the three by real pointer, nothing reads under 12 px", { skip: !canRun, timeout: 360000 }, async (t) => {
+test("the Map in the 0.5 layout: the session list stays in the column, its bar (Map | Fleet | Pipelines, Running only, View ▾ with four groups) and the state colours over the tree, the switch on Fleet and Pipelines moves between the three by real pointer, nothing reads under 12 px; the legend's pills count, light up and hold their states, a work orb's hover card, the four states apart in Daylight at 1920x1080 and 1440x900", { skip: !canRun, timeout: 360000 }, async (t) => {
   const fixture = await mkdtemp(path.join(tmpdir(), "mefi-map-render-"));
   try {
     await mkdir(path.join(fixture, "renderer")); await mkdir(path.join(fixture, "data"));

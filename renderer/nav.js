@@ -2321,6 +2321,8 @@
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (typeInto(event)) return;
     if (event.key === "Escape") {
+      // A state the Map's legend holds lit lets go before Escape opens the companion (renderer/idle.js pinLegend).
+      if (!state.transient && state.sheet === null && idleActive() && window.MefiIdle?.releaseLegendPin?.()) { event.preventDefault(); return; }
       if (!state.transient && window.MefiCompanionHub?.open()) { event.preventDefault(); return; }
       closeTop();
       return;

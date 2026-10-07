@@ -50,6 +50,20 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   Layout card). A closing menu is out of the keyboard's and screen readers'
   way at once, a menu you open again mid-effect is back at once, and motion
   Off or **It fades out** still close every menu at once.
+- **The Map reads at a glance.** When a job changes state (it starts
+  running, needs you, goes to review or finishes), its ring sends out one
+  soft ripple in the new state's colour; with motion Off there is none. The
+  legend's four states are now buttons that count their jobs on the Map:
+  point at one and its jobs light up while everything else dims, click it
+  to keep them lit, and click it again or press Esc to show everything
+  (screen readers hear both). Hovering a job shows a small card with its
+  name, its state and how long it has been in it ("Running · for 12 min").
+  The four states keep clearly different colours in every theme: when a
+  theme's own colour comes close to one, that state turns within its family
+  (Review toward violet on Daylight and Midnight, Done toward lime on Forest
+  and Aurora, Needs you toward rose on Studio gold and Eclipse and toward
+  yellow on Ember and Paper), and on Daylight and Paper the rings, legend
+  dots and coloured card text hold 4.5:1.
 
 - **Sign in to GitHub can finish.** Its setup window opened blank: the
   GitHub CLI never showed its one-time code or opened the browser, so the
