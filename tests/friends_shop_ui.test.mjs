@@ -132,7 +132,7 @@ function environment({ hub = { configured: true, linked: true, state: "ready", u
   };
   // music.js wears a Shop node style only once MefiShop owns it (as renderer/music.js applyNodeStyle does).
   let wornStyle = "orbs";
-  const SHOP_STYLES = [["dragonscale", "studio:style-dragonscale", "Dragon scales"], ["constellation", "studio:style-constellation", "Star chart"]];
+  const SHOP_STYLES = [["dragonscale", "studio:style-dragonscale", "Dragon scales"], ["constellation", "studio:style-constellation", "Star chart"], ["lantern", "studio:style-lantern", "Lanterns"], ["neon", "studio:style-neon", "Neon"]];
   if (modules.music) window.MefiMusic = {
     applyPack: (data, save) => { shown.push(["music.applyPack", clone(data), save]); applied = clone(data); },
     previewPack: (data) => shown.push(["music.previewPack", clone(data)]),
@@ -577,6 +577,60 @@ test("a node style's board paints through MefiNodeStyles in the theme's sky, mov
     }
     const dragon = item(card, "studio:style-dragonscale").querySelector("canvas")._ctx;
     assert.notEqual(JSON.stringify(dragon.calls.log.slice(-40)), JSON.stringify(ctx.calls.log.slice(-40)), "each card paints its own style");
+  }
+});
+
+// The catalog's two new node styles (added at merge to relay/src/shop.mjs, October's drop and a classic): the Shop
+// shows any node style it is sold, so each is a card with its own live board, Try, Buy and Use.
+test("Lanterns (October's drop) and Neon are node style cards once the catalog sells them: a live board in each style, Try, Buy and Use", async () => {
+  const LANTERN = studioItem("studio:style-lantern", "nodestyle", "Lanterns", 80, { blurb: "Glowing paper lanterns that sway on their cords, with a warm light that flickers while they work.", drop: "2026-10" });
+  const NEON = studioItem("studio:style-neon", "nodestyle", "Neon", 80, { blurb: "Bright neon tubes with a soft glow that buzz on when work starts.", drop: null });
+  let relayOwned = null;
+  const env = environment({
+    painters: true,
+    views: { studio: { ok: true, items: [...CATALOG, LANTERN, NEON], next: null, balance: 240, canEarn: true, hold: null } },
+    answers: { shopBuy: (id, price) => { relayOwned.push({ id, kind: "nodestyle", name: "Lanterns", data: null, updatedAt: 5 }); return { ok: true, item: { ...LANTERN, owned: true }, paid: price, balance: 240 - price }; } },
+  });
+  relayOwned = env.relay.owned;
+  const card = await open(env);
+  const section = card.querySelector("#friends-shop-group-nodestyle").parentNode;
+  assert.deepEqual(section.querySelectorAll("article").map((el) => el.dataset.item), ["studio:style-dragonscale", "studio:style-constellation", "studio:style-lantern", "studio:style-neon"]);
+  for (const [id, key, name] of [["studio:style-lantern", "lantern", "Lanterns"], ["studio:style-neon", "neon", "Neon"]]) {
+    const board = item(card, id).querySelector("canvas");
+    assert.equal(board.dataset.nodeStyle, key, `${key}: the card paints its own style`);
+    assert.ok(board._ctx.calls.fill + board._ctx.calls.stroke > 12, `${key}: nodes and wires were painted`);
+    assert.equal(board._ctx.calls.saves, board._ctx.calls.restores);
+    assert.match(board.getAttribute("aria-label"), new RegExp(`^${name}: `));
+    await one(item(card, id), "Try for 2 minutes").click();
+    assert.deepEqual(acted(env), ["music.previewNodeStyle", key]);
+    assert.equal(card.querySelector("#friends-shop-try-words").textContent, `Trying ${name} · 2:00 left`);
+    await one(banner(card), "Stop").click();
+  }
+  const lantern = () => item(card, "studio:style-lantern");
+  await one(lantern(), "Buy for 80").click();
+  assert.equal(lantern().querySelector(".friends-shop-ask").textContent, "Buy Lanterns for 80 credits? You will have 160 credits left.");
+  await one(lantern(), "Yes, buy it").click();
+  await flush();
+  assert.deepEqual(shopCalls(env, "shopBuy").at(-1), ["shopBuy", "studio:style-lantern", 80]);
+  assert.equal(env.shop.owns("studio:style-lantern"), true);
+  await one(lantern(), "Use").click();
+  assert.deepEqual(acted(env), ["music.applyNodeStyle", "lantern", true]);
+  assert.equal(status(card), "Lanterns is in use.");
+});
+
+// The style packs for October's drop and the classic shelf (tests/fixtures/shop-themes-2026-10.json, added to the
+// catalog at merge): the editor's check and the relay's both pass every one and keep the same pack.
+test("the new style packs pass the editor's check and the relay's alike, and both keep the same pack", async () => {
+  const { checkPack: relayCheck } = await import("../relay/src/shop-pack.mjs");
+  const themes = JSON.parse(await readFile(new URL("./fixtures/shop-themes-2026-10.json", import.meta.url), "utf8"));
+  const { shop } = environment({ hubShop: false });
+  assert.equal(themes.length, 8);
+  for (const theme of themes) {
+    const relay = relayCheck(theme.data), studio = shop.checkPack(theme.data);
+    assert.deepEqual([relay.ok, studio.ok], [true, true], `${theme.name}: ${studio.why ?? relay.error ?? ""}`);
+    assert.deepEqual(clone(studio.data), relay.pack, `${theme.name}: the same pack from both`);
+    // Each paints as a tiny app window from its own colours, as a pack's card does.
+    assert.equal(typeof shop.contrast(theme.data.palette.accent, theme.data.palette.surface), "number");
   }
 });
 
