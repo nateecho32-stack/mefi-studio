@@ -10,7 +10,8 @@
 // transport, a volume and quick tree switches, that unfolds into sections.
 // It also owns the light themes, the three looks the first run offers (Light,
 // Dark, Stylized) with their heading faces, and the Shop's style packs: see
-// "Looks and style packs" below for the calls.
+// "Looks and style packs" below for the calls. The two node styles the Shop
+// sells go on once they are owned ("Node styles from the Shop").
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -58,12 +59,17 @@
     singularity: { name: "Singularity", detail: "A black hole with a turning disc", collection: "void" },
     prism: { name: "Prism", detail: "A turning crystal that splits light", collection: "void" },
     sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", collection: "void" },
+    // The two the Shop sells (`shop` is the item: relay/src/shop.mjs CATALOG).
+    dragonscale: { name: "Dragon scales", detail: "Scaled gems with ember sparks", shop: "studio:style-dragonscale" },
+    constellation: { name: "Constellation", detail: "Stars on star-chart lines", shop: "studio:style-constellation" },
   };
-  // Every theme and node style is free; `collection` only groups the pickers.
+  // Every theme and node style is free but the two the Shop sells; `collection`
+  // only groups the pickers. A Shop style is worn once MefiShop says it is owned.
   const isTheme = (key) => key === "custom" || typeof key === "string" && Object.hasOwn(THEMES, key);
   const isVoidTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].collection === "void";
   const isNodeStyle = (key) => typeof key === "string" && Object.hasOwn(NODE_STYLES, key);
   const isVoidNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].collection === "void";
+  const isShopNodeStyle = (key) => isNodeStyle(key) && typeof NODE_STYLES[key].shop === "string";
   const isLightTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].tone === "light";
   const NODE_LAYOUTS = {
     constellation: { name: "Constellation", detail: "An open arrangement" },
@@ -116,7 +122,8 @@
     const id = typeof value.id === "string" && /^[\w:.-]{1,80}$/.test(value.id) ? value.id : null;
     const name = typeof value.name === "string" && value.name.trim() ? value.name.replace(/\s+/g, " ").trim().slice(0, 60) : "Style pack";
     const pack = { id, name, palette };
-    for (const [key, valid] of [["nodeStyle", isNodeStyle], ["material", (material) => MATERIALS.includes(material)], ["font", isFont]]) {
+    // (a pack's node style is one of the free ones, as the relay's pack check allows)
+    for (const [key, valid] of [["nodeStyle", (style) => isNodeStyle(style) && !isShopNodeStyle(style)], ["material", (material) => MATERIALS.includes(material)], ["font", isFont]]) {
       if (value[key] == null) continue;
       if (!valid(value[key])) return null;
       pack[key] = value[key];
@@ -449,6 +456,16 @@
       localStorage.removeItem(LEGACY_VOID_KEY);
     }
   } catch {}
+  // The node style the tree wears: the chosen one, or Classic orbs while it
+  // is a Shop style this PC does not own (or does not know it owns yet:
+  // friends-shop.js loads after this file, so init() asks again). The choice
+  // itself stays saved, so a style bought on another PC comes back once the
+  // Shop has read what you own (mefi-shop-owned). Worked out when the choice
+  // or what you own changes, never per frame: the tree reads it every frame.
+  const wearable = (key) => isNodeStyle(key) && (!isShopNodeStyle(key) || window.MefiShop?.owns?.(NODE_STYLES[key].shop) === true);
+  let worn = "orbs";
+  const wear = () => { worn = wearable(prefs.nodeStyle) ? prefs.nodeStyle : "orbs"; return worn; };
+  wear();
   // Search may expose configuration without changing the active look or audio.
   const settingsReveal = { custom: false, source: null };
   // link: what the Links tab plays; handoff: the last link only its own app can
@@ -583,7 +600,9 @@
   }
   // ---- Looks and style packs ---------------------------------------------------
   // What the first run's "choose your look" and the Shop call (owner checks
-  // stay with the Shop: it decides what may be applied, this paints it):
+  // stay with the Shop: it decides what may be applied, this paints it; the
+  // one exception is a Shop node style, which goes on only once MefiShop
+  // says it is owned, see "Node styles from the Shop" below):
   //
   //   looks() -> [{ id, name, themes, material, font }]: Light, Dark and
   //     Stylized, each with its theme keys (its default first) and the extras
@@ -658,17 +677,20 @@
     applyFont(pack.font || "studio", save);
     return true;
   }
-  // The pack the Shop is trying, and what it changed beyond prefs (which a
-  // try never touches): the MefiAppearance store as it was, and the material
-  // the try left on, if any.
+  // What the Shop is trying, and what it changed beyond prefs (which a try
+  // never touches): a pack (with the MefiAppearance store as it was, and the
+  // material the try left on, if any), or a node style alone (pack null).
+  // One try at a time: trying a pack ends a node style's try, and the other
+  // way round.
   let trying = null;
   function previewPack(value) {
     const pack = safePack(value);
     if (!pack) return false;
+    if (trying && !trying.pack) trying = null;
     const appearance = window.MefiAppearance;
     trying ||= { before: appearance?.get?.() ?? null, material: "" };
     trying.pack = pack;
-    trying.nodeStyle = pack.nodeStyle || prefs.nodeStyle;
+    trying.nodeStyle = pack.nodeStyle || worn;
     event("mefi-theme-change", { ...paintTheme("pack", pack), preview: true });
     syncTreePreferences(false);
     paintFont(pack.font || "studio");
@@ -679,11 +701,11 @@
   // paint false: the caller paints a theme of its own right after.
   function endPreview(paint = true) {
     if (!trying) return false;
-    const { before, material, nodeStyle } = trying;
+    const { before, material, nodeStyle, pack } = trying;
     trying = null;
-    if (paint) event("mefi-theme-change", paintTheme(prefs.theme));
-    if (nodeStyle !== prefs.nodeStyle) syncTreePreferences(false);
-    paintFont(prefs.font);
+    if (paint && pack) event("mefi-theme-change", paintTheme(prefs.theme));
+    if (nodeStyle !== worn) syncTreePreferences(false);
+    if (pack) paintFont(prefs.font);
     // The material goes back only while the try's is still on: one chosen in
     // Settings meanwhile stays.
     const appearance = window.MefiAppearance;
@@ -697,8 +719,8 @@
   // reader shares one frozen copy. A pack the Shop is trying is on screen too.
   let paletteKey = null, paletteMemo = null;
   function themePalette() {
-    const theme = trying ? "pack" : prefs.theme;
-    const pack = trying ? trying.pack : prefs.pack;
+    const theme = trying?.pack ? "pack" : prefs.theme;
+    const pack = trying?.pack ? trying.pack : prefs.pack;
     const custom = prefs.customColors;
     const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme === "pack" ? `pack|${PACK_COLORS.map((name) => pack?.palette?.[name] ?? "").join("|")}` : theme;
     if (key !== paletteKey || !paletteMemo) {
@@ -709,11 +731,11 @@
     return paletteMemo;
   }
   // Read per node per frame by the tree rail: plain fields, no storage reads.
-  function graphPreferences() { return { nodeStyle: trying ? trying.nodeStyle : prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
+  function graphPreferences() { return { nodeStyle: trying ? trying.nodeStyle : worn, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
   function syncTreePreferences(save) {
     const value = graphPreferences();
     Object.assign(document.documentElement.dataset, value);
-    for (const choice of [...els.nodeStyles?.children || [], ...els.voidStyles?.children || []]) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
+    for (const choice of [...els.nodeStyles?.children || [], ...els.voidStyles?.children || [], ...els.shopStyles?.children || []]) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
     for (const choice of els.nodeLayouts?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.nodeLayout === value.nodeLayout));
     if (els.orbitTrails) els.orbitTrails.checked = value.orbitTrails;
     if (els.extraGlow) els.extraGlow.checked = value.extraGlow;
@@ -721,11 +743,39 @@
     if (save) persist();
     event("mefi-tree-preferences", value);
   }
+  // ---- Node styles from the Shop ----
+  //   applyNodeStyle(key, save = true) -> the style the tree wears after it.
+  //     A Shop style this PC does not own is refused: nothing changes (a try
+  //     on screen included) and the answer is the style still worn.
+  //   previewNodeStyle(key) -> true or false; shows any known style on the
+  //     tree for the Shop's Try, saving nothing, until endPreview() (the same
+  //     one packs use) or a real choice ends it. One try at a time.
+  //   nodeStyle() -> the style worn (a try aside); nodeStyles() -> the styles
+  //     this PC can wear, each with its Shop item or null; shopStyles() -> the
+  //     Shop's, owned or not ({ key, item, name, detail, owned }).
   function applyNodeStyle(style, save = true) {
+    if (isShopNodeStyle(style) && !wearable(style)) return worn;
     endPreview();
     prefs.nodeStyle = isNodeStyle(style) ? style : "orbs";
+    wear();
     syncTreePreferences(save);
-    return prefs.nodeStyle;
+    return worn;
+  }
+  function previewNodeStyle(style) {
+    if (!isNodeStyle(style)) return false;
+    if (trying?.pack) endPreview();
+    trying = { before: null, material: "", pack: null, nodeStyle: style };
+    syncTreePreferences(false);
+    return true;
+  }
+  // What you own changed (friends-shop.js fires mefi-shop-owned): a Shop
+  // style just bought or restored on this PC goes on if it was the choice,
+  // one no longer owned gives way to Classic orbs, and the pickers follow.
+  function ownedChanged() {
+    const was = worn;
+    wear();
+    paintShopStyles();
+    if (worn !== was && !trying) syncTreePreferences(false);
   }
   function applyNodeLayout(layout, save = true) {
     prefs.nodeLayout = Object.hasOwn(NODE_LAYOUTS, layout) ? layout : "constellation";
@@ -765,6 +815,21 @@
     glyph(name, node);
     node.setAttribute("aria-label", label); node.title = label;
     return node;
+  }
+  // The Shop's styles in Settings: one this PC owns is an ordinary choice; one
+  // it does not own says so and stays off (the Shop's Try shows it on the
+  // tree for two minutes), and the line under them offers the Shop while any
+  // is still there to get.
+  function paintShopStyles() {
+    let missing = false;
+    for (const choice of els.shopStyles?.children || []) {
+      const key = choice.dataset.nodeStyle, owned = wearable(key);
+      missing ||= !owned;
+      choice.disabled = !owned;
+      const name = choice.children?.[1];
+      if (name) name.textContent = owned ? NODE_STYLES[key].name : `${NODE_STYLES[key].name} (in the Shop)`;
+    }
+    if (els.shopLine) els.shopLine.hidden = !missing;
   }
   // `set` names a second group of the same kind (the Void collection's styles,
   // under their own small heading); its ids are literal at the call site.
@@ -2288,8 +2353,13 @@
     nodeSection.setAttribute("aria-labelledby", "music-node-heading");
     const nodeHeading = element("h3", null, "Node tree", nodeSection); nodeHeading.id = "music-node-heading";
     element("p", "music-node-intro", "Give your work a different shape. Changes appear on the live tree.", nodeSection);
-    els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => !isVoidNodeStyle(key))), prefs.nodeStyle, applyNodeStyle);
-    els.voidStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isVoidNodeStyle(key))), prefs.nodeStyle, applyNodeStyle, { label: "Void collection", id: "music-void-style" });
+    els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => !isVoidNodeStyle(key) && !isShopNodeStyle(key))), worn, applyNodeStyle);
+    els.voidStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isVoidNodeStyle(key))), worn, applyNodeStyle, { label: "Void collection", id: "music-void-style" });
+    els.shopStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isShopNodeStyle(key))), worn, applyNodeStyle, { label: "From the Shop", id: "music-shop-style" });
+    els.shopLine = element("p", "music-fineprint music-shop-line", "Get these in the Shop for credits you earn. Try shows one on this tree for two minutes first.", nodeSection);
+    els.shopLine.id = "music-shop-line";
+    button("Open the Shop", "ghost music-shop-open", els.shopLine, () => { if (typeof window.MefiShop?.open === "function") window.MefiShop.open("studio"); else window.MefiNav?.go?.("friends-page", { place: "shop" }); }, "music-shop-open");
+    paintShopStyles();
     const layoutSection = element("section", "music-section", null, settings);
     layoutSection.dataset.appearancePanel = "layout";
     element("h3", null, "Arrange the tree", layoutSection);
@@ -2928,6 +2998,10 @@
   function init() {
     if (initialized) return;
     initialized = true;
+    // Every script has loaded by now: a Shop style the Shop says this PC owns
+    // goes on, and what you own changing later is followed.
+    wear();
+    window.addEventListener("mefi-shop-owned", ownedChanged);
     let recentLink;
     try { recentLink = JSON.parse(localStorage.getItem(LINK_RESUME_KEY) || "null"); localStorage.removeItem(LINK_RESUME_KEY); } catch {}
     audio = document.createElement("audio"); audio.preload = "metadata"; audio.volume = prefs.volume;
@@ -3244,8 +3318,12 @@
     looks: () => LOOKS.map((look) => ({ ...look, themes: [...look.themes] })), applyLook, look: () => lookOf(prefs.theme),
     fonts: () => Object.entries(FONTS).map(([key, font]) => ({ key, name: font.name, detail: font.detail, stack: font.stack })), applyFont, font: () => prefs.font,
     applyPack, previewPack, endPreview: () => endPreview(), packInfo: () => copyPack(prefs.theme === "pack" ? prefs.pack : null),
-    // Every node style and layout, for the setup helper's Look section.
-    nodeStyles: () => Object.entries(NODE_STYLES).map(([key, style]) => ({ key, name: style.name, detail: style.detail })),
+    // Node styles from the Shop (see "Node styles from the Shop" above).
+    previewNodeStyle, nodeStyle: () => worn,
+    shopStyles: () => Object.entries(NODE_STYLES).filter(([key]) => isShopNodeStyle(key)).map(([key, style]) => ({ key, item: style.shop, name: style.name, detail: style.detail, owned: wearable(key) })),
+    // The node styles this PC can wear (a Shop style once it is owned), and
+    // every layout, for the setup helper's Look section.
+    nodeStyles: () => Object.entries(NODE_STYLES).filter(([key]) => wearable(key)).map(([key, style]) => ({ key, name: style.name, detail: style.detail, item: style.shop ?? null })),
     nodeLayouts: () => Object.entries(NODE_LAYOUTS).map(([key, layout]) => ({ key, name: layout.name, detail: layout.detail })), theme: () => prefs.theme,
     // Links from anywhere in Studio (a chat, a mirrored Discord room): linkInfo
     // says whether and how a link plays, without touching the player.

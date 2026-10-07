@@ -15,7 +15,8 @@ const flush = async () => { for (let index = 0; index < 15; index += 1) await Pr
 // appearance: true (or a stored appearance) gives the window a MefiAppearance
 // that merges presets the way renderer/studio-ui.js does; env.appearance
 // holds what it shows and what it last saved.
-function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = null, resume = null, saved = null, recommend, preview = false, previewRegistered = false, workspaceActive = false, audioLink = null, search = "", premiumSaved = null, hint = null, community = null, bridge = null, mediaWindow = false, intersection = false, appearance = null } = {}) {
+// shop: a Set of the Shop item ids this PC owns (window.MefiShop.owns, as renderer/friends-shop.js answers it).
+function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = null, resume = null, saved = null, recommend, preview = false, previewRegistered = false, workspaceActive = false, audioLink = null, search = "", premiumSaved = null, hint = null, community = null, bridge = null, mediaWindow = false, intersection = false, appearance = null, shop = null } = {}) {
   const ids = new Map();
   const events = [];
   const revoked = [];
@@ -129,6 +130,7 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
       MefiToast: (text, kind) => toasts.push([text, kind]),
       ...(community ? { MefiCommunity: community } : {}),
       ...(appearance ? { MefiAppearance: appearanceApi } : {}),
+      ...(shop ? { MefiShop: { owns: (id) => shop.has(id), open: (view) => opened.push(`shop:${view}`) } } : {}),
     },
   });
   context.window.MefiMediaBrowser = { create: () => ({
@@ -1734,6 +1736,136 @@ test("MefiMusic exports what other modules read: isNodeStyle for the tree painte
   assert.deepEqual([...catalog.nodeStyles.map((style) => style.key)], VOID_STYLES);
   assert.ok(catalog.themes.every((theme) => /^#[0-9a-f]{6}$/i.test(theme.accent) && /^#[0-9a-f]{6}$/i.test(theme.accent2)), "both hues of every two-tone swatch");
   assert.match(source.slice(0, 400), /^\/\/ Style & sound: Studio's color themes, node styles and layouts \(the two-tone\r?\n\/\/ Void collection among them, free like the rest\)/);
+});
+
+// The two node styles the Shop sells (renderer/node-styles.js paints them; relay/src/shop.mjs sells them).
+const SHOP_STYLES = { dragonscale: "studio:style-dragonscale", constellation: "studio:style-constellation" };
+const treeEvents = (env) => env.events.filter((event) => event.type === "mefi-tree-preferences");
+
+test("the Shop's node styles are listed in Settings, said to be in the Shop and off until owned; every other style stays free", () => {
+  const env = environment({ shop: new Set() });
+  const group = env.ids.get("music-shop-styles");
+  assert.equal(env.ids.get("music-shop-style-label").text, "From the Shop");
+  assert.deepEqual(group.children.map((choice) => choice.dataset.nodeStyle), ["dragonscale", "constellation"]);
+  assert.deepEqual(group.children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [true, "Constellation (in the Shop)"]]);
+  assert.deepEqual(env.ids.get("music-node-styles").children.map((choice) => choice.dataset.nodeStyle), ["orbs", "glass", "minimal", "halo", "crystal"], "the free styles keep their own group");
+  assert.ok([...env.ids.get("music-node-styles").children, ...env.ids.get("music-void-styles").children].every((choice) => !choice.disabled), "every other style stays free to choose");
+  assert.equal(env.ids.get("music-shop-line").hidden, false, "a way to the Shop while one is still there to get");
+  env.ids.get("music-shop-open").click();
+  assert.deepEqual(env.opened.at(-1), "shop:studio");
+  // A disabled choice does nothing; asked for in code, an unowned style is refused and nothing changes.
+  env.ids.get("music-node-style-dragonscale").click();
+  const before = treeEvents(env).length, saves = musicWrites(env).length;
+  assert.equal(env.music.applyNodeStyle("dragonscale"), "orbs", "refused: the style still worn comes back");
+  assert.equal(env.music.graphPreferences().nodeStyle, "orbs");
+  assert.equal(treeEvents(env).length, before, "the tree is not told anything");
+  assert.equal(musicWrites(env).length, saves, "nothing is saved");
+  assert.deepEqual([...env.music.nodeStyles().map((style) => style.key)], ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"], "the setup helper is offered only what this PC can wear");
+  assert.deepEqual(JSON.parse(JSON.stringify(env.music.shopStyles())), [
+    { key: "dragonscale", item: "studio:style-dragonscale", name: "Dragon scales", detail: "Scaled gems with ember sparks", owned: false },
+    { key: "constellation", item: "studio:style-constellation", name: "Constellation", detail: "Stars on star-chart lines", owned: false },
+  ]);
+  assert.equal(env.music.isNodeStyle("dragonscale"), true, "the tree painters know both");
+  // A style pack never carries a Shop style (the relay's pack check allows the free ones only).
+  assert.equal(helpers.safePack({ palette: SYNTHWAVE.palette, nodeStyle: "dragonscale" }), null);
+  assert.equal(helpers.safePack({ palette: SYNTHWAVE.palette, nodeStyle: "sigil" }).nodeStyle, "sigil");
+});
+
+test("an owned Shop style is chosen and saved like any other, and the Shop hearing of one later puts it on", () => {
+  const owned = new Set([SHOP_STYLES.constellation]);
+  const env = environment({ shop: owned });
+  assert.deepEqual(env.ids.get("music-shop-styles").children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [false, "Constellation"]]);
+  env.ids.get("music-node-style-constellation").click();
+  assert.equal(env.music.graphPreferences().nodeStyle, "constellation");
+  assert.equal(env.music.nodeStyle(), "constellation");
+  assert.equal(env.ids.get("music-node-style-constellation").attrs["aria-pressed"], "true");
+  assert.equal(musicWrites(env).at(-1).nodeStyle, "constellation");
+  assert.equal(treeEvents(env).at(-1).detail.nodeStyle, "constellation");
+  assert.deepEqual([...env.music.nodeStyles().map((style) => style.key).slice(-1)], ["constellation"], "an owned one is offered everywhere");
+  // Bought later (friends-shop.js fires mefi-shop-owned): the pickers follow at once.
+  owned.add(SHOP_STYLES.dragonscale);
+  env.emit("mefi-shop-owned", { ids: [...owned] });
+  assert.equal(env.ids.get("music-node-style-dragonscale").disabled, false);
+  assert.equal(env.ids.get("music-node-style-dragonscale").children[1].text, "Dragon scales");
+  assert.equal(env.ids.get("music-shop-line").hidden, true, "nothing left to get");
+  assert.equal(env.music.applyNodeStyle("dragonscale"), "dragonscale");
+  // No longer owned (the Shop says so): Classic orbs, quietly, and the choice stays saved for when it comes back.
+  owned.clear();
+  env.emit("mefi-shop-owned", { ids: [] });
+  assert.equal(env.music.graphPreferences().nodeStyle, "orbs");
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.music.v1")).nodeStyle, "dragonscale");
+  owned.add(SHOP_STYLES.dragonscale);
+  env.emit("mefi-shop-owned", { ids: [...owned] });
+  assert.equal(env.music.graphPreferences().nodeStyle, "dragonscale");
+});
+
+test("a saved Shop style this PC does not own falls back to Classic orbs at boot, quietly, and comes back once it is owned", () => {
+  const saved = { theme: "forest", nodeStyle: "dragonscale" };
+  const lost = environment({ saved, shop: new Set() });
+  assert.equal(lost.music.graphPreferences().nodeStyle, "orbs");
+  assert.equal(lost.document.documentElement.dataset.nodeStyle, "orbs");
+  assert.equal(lost.ids.get("music-node-style-orbs").attrs["aria-pressed"], "true");
+  assert.equal(lost.toasts.length, 0, "quietly");
+  assert.equal(treeEvents(lost).length, 1, "the tree hears orbs once, at boot");
+  assert.equal(treeEvents(lost)[0].detail.nodeStyle, "orbs");
+  assert.equal(lost.storage.get("mefiStudio.music.v1"), JSON.stringify(saved), "the choice stays as it was saved");
+  // No Shop in this build at all: the same.
+  assert.equal(environment({ saved }).music.graphPreferences().nodeStyle, "orbs");
+  const kept = environment({ saved, shop: new Set([SHOP_STYLES.dragonscale]) });
+  assert.equal(kept.music.graphPreferences().nodeStyle, "dragonscale", "an owned style comes back with the rest");
+  const restored = environment({ saved, shop: new Set() });
+  restored.emit("mefi-shop-owned", { ids: [] });
+  assert.equal(restored.music.graphPreferences().nodeStyle, "orbs");
+});
+
+test("previewNodeStyle shows a Shop style on the tree for the Shop's Try, saves nothing, and endPreview or a real choice ends it", () => {
+  const env = environment({ saved: { theme: "midnight", nodeStyle: "glass" }, shop: new Set() });
+  const stored = env.storage.get("mefiStudio.music.v1");
+  const palette = env.music.themePalette();
+  assert.equal(env.music.previewNodeStyle("nope"), false);
+  assert.equal(env.music.previewNodeStyle("dragonscale"), true, "a style not owned may be tried");
+  assert.equal(env.music.graphPreferences().nodeStyle, "dragonscale");
+  assert.equal(treeEvents(env).at(-1).detail.nodeStyle, "dragonscale", "the tree shows it");
+  assert.equal(env.document.documentElement.dataset.nodeStyle, "dragonscale");
+  assert.equal(env.music.nodeStyle(), "glass", "the style worn is still Glass");
+  assert.equal(env.music.themePalette(), palette, "a style's try leaves the colours alone");
+  assert.equal(env.music.status().theme, "midnight");
+  assert.equal(env.music.previewNodeStyle("constellation"), true, "one try at a time: the next replaces it");
+  assert.equal(env.music.graphPreferences().nodeStyle, "constellation");
+  assert.equal(env.music.endPreview(), true);
+  assert.equal(env.music.graphPreferences().nodeStyle, "glass");
+  assert.equal(treeEvents(env).at(-1).detail.nodeStyle, "glass");
+  assert.equal(env.music.endPreview(), false, "nothing left to end");
+  assert.equal(env.storage.get("mefiStudio.music.v1"), stored, "a try writes nothing");
+  // A pack's try and a style's try take turns.
+  env.music.previewNodeStyle("constellation");
+  assert.equal(env.music.previewPack(SYNTHWAVE), true);
+  assert.equal(env.music.graphPreferences().nodeStyle, "halo", "the pack's own style");
+  assert.equal(env.music.themePalette().theme, "pack");
+  assert.equal(env.music.previewNodeStyle("dragonscale"), true);
+  assert.equal(env.music.themePalette().theme, "midnight", "the pack's try ended first");
+  assert.equal(env.music.graphPreferences().nodeStyle, "dragonscale");
+  // Choosing for real ends the try (a refused choice does not).
+  assert.equal(env.music.applyNodeStyle("constellation"), "glass");
+  assert.equal(env.music.graphPreferences().nodeStyle, "dragonscale", "a refused choice leaves the try on");
+  env.music.applyNodeStyle("minimal");
+  assert.equal(env.music.graphPreferences().nodeStyle, "minimal");
+  assert.equal(env.music.endPreview(), false);
+});
+
+test("Settings shows the Shop's styles with their own thumbnails, which move only when motion is allowed", async () => {
+  const css = await readFile(new URL("../renderer/music.css", import.meta.url), "utf8");
+  for (const key of Object.keys(SHOP_STYLES)) {
+    assert.ok(css.includes(`/* node style: ${key} */`), `${key}: a carved block of its own`);
+    assert.ok(css.includes(`.music-preview-${key} i:first-child`), `${key}: its own gem`);
+  }
+  // The Constellation layout's tile carries the same class as the style's: every rule for it names its tile.
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "").match(/[^{}]*\.music-preview-constellation[^{}]*(?=\{)/g) ?? [];
+  assert.ok(rules.length >= 10, "the style's and the layout's rules");
+  for (const part of rules.flatMap((selector) => selector.split(",")).filter((part) => part.includes(".music-preview-constellation"))) {
+    assert.match(part.trim(), /^\.music-node-(style|layout)[[ ]/, `${part.trim()} names the tile it is for`);
+  }
+  assert.match(css, /\.music-node-choice:disabled \{[^}]*cursor: default/, "a style still in the Shop looks off");
 });
 
 test("Settings mounts appearance controls while the players stay in the dropdown", () => {

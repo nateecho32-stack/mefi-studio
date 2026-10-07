@@ -5503,6 +5503,12 @@ html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .mu
 .music-node-choice:hover { color: var(--ivory); background: var(--tint-gold-1); border-color: var(--hairline-strong); transform: none; box-shadow: none; }
 .music-node-choice[aria-pressed="true"] { color: var(--gold-bright); border-color: var(--gold); background: var(--tint-gold-2); box-shadow: inset 0 -2px var(--gold); }
 .music-node-choice strong { font: 600 11px/1.4 var(--font-ui); color: inherit; white-space: nowrap; overflow-wrap: normal; }
+/* A node style from the Shop this PC does not own yet: shown, its name says
+   so (it wraps: "(in the Shop)" is long), and it stays off. */
+.music-node-choice:disabled { cursor: default; opacity: .62; }
+.music-node-choice:disabled:hover { color: var(--muted); background: var(--bg-deep); border-color: var(--hairline); }
+.music-node-choice:disabled strong { white-space: normal; }
+.music-shop-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
 .music-node-choice small { display: none; }
 .music-effects { display: grid; gap: 7px; }
 .music-effect { display: flex; align-items: center; gap: 11px; padding: 10px 11px; border: 1px solid var(--hairline); border-radius: 9px; background: var(--bg-deep); cursor: pointer; }
@@ -5703,6 +5709,54 @@ html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .mu
   .music-preview-sigil::after { animation: music-node-pulse calc(3.2s * var(--node-tempo)) ease-in-out infinite; }
 }
 
+/* node style: dragonscale */
+/* Ember's hide (a Shop style): a domed gem lit from the upper left and
+   warming toward its lower right, covered in interlocking scales (two
+   offset layers of arcs, each a light edge over a dark seam), with a
+   shimmer band sweeping across it; two small gems beside it. The chosen
+   tile works: its seams glow with fire and two embers rise off it. i:1 is
+   the gem, i:2 and i:3 the small ones; ::after on each is the shimmer, the
+   preview's ::before the embers. */
+.music-preview-dragonscale { --scale-edge: color-mix(in srgb, currentColor 30%, #fff); --scale-seam: color-mix(in srgb, currentColor 25%, #0b0a0c); }
+.music-node-choice[aria-pressed="true"] .music-preview-dragonscale { --scale-seam: #ff9442; }
+.music-preview-dragonscale i { overflow: hidden; border-color: color-mix(in srgb, currentColor 70%, transparent); background: radial-gradient(circle at 50% 0, transparent 2.4px, var(--scale-edge) 2.6px 3px, var(--scale-seam) 3.1px 3.5px, transparent 3.6px) 0 0 / 7px 6px, radial-gradient(circle at 50% 0, transparent 2.4px, var(--scale-edge) 2.6px 3px, var(--scale-seam) 3.1px 3.5px, transparent 3.6px) 3.5px 3px / 7px 6px, radial-gradient(circle at 34% 30%, color-mix(in srgb, currentColor 50%, #fff), currentColor 42%, color-mix(in srgb, currentColor 62%, #ff8a3d) 72%, color-mix(in srgb, currentColor 40%, var(--bg-deep))); }
+.music-preview-dragonscale i:first-child { width: 23px; height: 23px; top: 10px; left: calc(50% - 11.5px); }
+.music-preview-dragonscale i:nth-child(2) { width: 11px; height: 11px; top: 4px; left: calc(50% - 32px); }
+.music-preview-dragonscale i:nth-child(3) { width: 11px; height: 11px; top: 27px; left: calc(50% + 21px); }
+.music-preview-dragonscale i::after { content: ""; position: absolute; inset: -40%; background: linear-gradient(115deg, transparent 40%, color-mix(in srgb, #fff 60%, transparent) 50%, transparent 60%); translate: -75% 0; }
+.music-preview-dragonscale::before { content: ""; position: absolute; width: 2.5px; height: 2.5px; top: 8px; left: calc(50% - 3px); border-radius: 50%; background: #ffb066; box-shadow: 5px 2px 0 -.4px #ff8a3d; opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-preview-dragonscale i::after { animation: music-node-sheen calc(5.2s * var(--node-tempo)) ease-in-out infinite; }
+  .music-preview-dragonscale i:nth-child(2)::after { animation-delay: -1.7s; }
+  .music-preview-dragonscale i:nth-child(3)::after { animation-delay: -3.4s; }
+  .music-node-choice[aria-pressed="true"] .music-preview-dragonscale::before { animation: music-node-ember calc(1.9s * var(--node-tempo)) ease-out infinite; }
+}
+
+/* node style: constellation */
+/* A star chart (a Shop style): a bright star crossed by four thin spikes in
+   a soft glow, two smaller stars beside it and the faint dotted lines that
+   join them. The spikes breathe and the small stars twinkle; the chosen
+   tile works: a shooting star runs above the line. i:1 is the bright star
+   (its spikes ::before, the shooting star ::after), i:2 and i:3 the small
+   ones; the preview's ::before and ::after are the two dotted lines. The
+   Constellation layout's tile has the same class, so these rules name the
+   node-style tile (.music-node-style) and the layout's name its own. */
+.music-node-style .music-preview-constellation i:nth-child(n) { border: 0; opacity: 1; background: radial-gradient(circle, color-mix(in srgb, currentColor 18%, #fff) 0 10%, currentColor 24%, color-mix(in srgb, currentColor 32%, transparent) 40%, transparent 70%); }
+.music-node-style .music-preview-constellation i:first-child { width: 28px; height: 28px; top: 6.5px; left: calc(50% - 14px); }
+.music-node-style .music-preview-constellation i:first-child::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, currentColor 55%, #fff) 50%, transparent) 50% 50% / 100% 1.2px no-repeat, linear-gradient(transparent, color-mix(in srgb, currentColor 55%, #fff) 50%, transparent) 50% 50% / 1.2px 100% no-repeat; scale: .9; }
+.music-node-style .music-preview-constellation i:nth-child(2) { width: 11px; height: 11px; top: 3.5px; left: calc(50% - 32px); }
+.music-node-style .music-preview-constellation i:nth-child(3) { width: 11px; height: 11px; top: 26.5px; left: calc(50% + 21px); }
+.music-node-style .music-preview-constellation::before, .music-node-style .music-preview-constellation::after { content: ""; position: absolute; width: 17px; height: 1.4px; background: radial-gradient(circle, currentColor 0 .55px, transparent .8px) 0 50% / 3.4px 1.4px repeat-x; opacity: .6; }
+.music-node-style .music-preview-constellation::before { top: 13.5px; left: calc(50% - 22px); rotate: 23deg; }
+.music-node-style .music-preview-constellation::after { top: 26.5px; left: calc(50% + 5px); rotate: 25deg; }
+.music-node-style[aria-pressed="true"] .music-preview-constellation i:first-child::after { content: ""; position: absolute; width: 9px; height: 1.4px; top: -1px; left: -12px; rotate: 23deg; background: linear-gradient(90deg, transparent, #fff); opacity: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .music-node-style .music-preview-constellation i:first-child::before { animation: music-node-spikes calc(6.5s * var(--node-tempo)) ease-in-out infinite; }
+  .music-node-style .music-preview-constellation i:nth-child(2), .music-node-style .music-preview-constellation i:nth-child(3) { animation: music-node-shimmer calc(2.9s * var(--node-tempo)) ease-in-out infinite; }
+  .music-node-style .music-preview-constellation i:nth-child(3) { animation-delay: -1.3s; }
+  .music-node-style[aria-pressed="true"] .music-preview-constellation i:first-child::after { animation: music-node-meteor calc(2.6s * var(--node-tempo)) ease-in infinite; }
+}
+
 /* The thumbnails' loops (only the carves' motion blocks above run them). */
 @keyframes music-node-turn { from { rotate: 0deg; } to { rotate: 1turn; } }
 @keyframes music-node-breathe { 0%, 100% { opacity: .55; scale: .9; } 50% { opacity: 1; scale: 1.05; } }
@@ -5722,15 +5776,18 @@ html[data-motion="off"] .media-window, html[data-motion="off"] .media-window .mu
 @keyframes music-node-flare { 0%, 100% { opacity: .5; } 30% { opacity: 1; } }
 @keyframes music-node-shard { 0%, 100% { translate: 18.3px -6.7px; scale: .78 .88; opacity: .68; } 6.25% { translate: 17.7px -4px; scale: .93 .96; opacity: .8; } 12.5% { translate: 14.4px -.7px; scale: 1.02 1.02; opacity: .9; } 18.75% { translate: 8.9px 2.7px; scale: 1.03 1.06; opacity: .98; } 25% { translate: 2.1px 5.6px; scale: .95 1.08; opacity: 1; } 31.25% { translate: -5.1px 7.8px; scale: .8 1.06; opacity: .98; } 37.5% { translate: -11.5px 8.7px; scale: .61 1.02; opacity: .9; } 43.75% { translate: -16.1px 8.3px; scale: .72 .96; opacity: .8; } 50% { translate: -18.3px 6.7px; scale: .78 .88; opacity: .68; } 56.25% { translate: -17.7px 4px; scale: .78 .8; opacity: .55; } 62.5% { translate: -14.4px .7px; scale: .74 .74; opacity: .45; } 68.75% { translate: -8.9px -2.7px; scale: .67 .7; opacity: .37; } 75% { translate: -2.1px -5.6px; scale: .6 .68; opacity: .35; } 81.25% { translate: 5.1px -7.8px; scale: .52 .7; opacity: .37; } 87.5% { translate: 11.5px -8.7px; scale: .44 .74; opacity: .45; } 93.75% { translate: 16.1px -8.3px; scale: .61 .8; opacity: .55; } }
 @keyframes music-node-scan { 0% { scale: 1.04; opacity: 0; } 15% { opacity: .95; } 100% { scale: 1.5; opacity: 0; } }
+@keyframes music-node-ember { 0% { translate: 0 0; opacity: 0; } 20% { opacity: 1; } 100% { translate: 1px -8px; opacity: 0; } }
+@keyframes music-node-spikes { 0%, 100% { scale: .8; opacity: .8; } 50% { scale: 1.08; opacity: 1; } }
+@keyframes music-node-meteor { 0% { translate: 0 0; opacity: 0; } 15% { opacity: 1; } 55%, 100% { translate: 24px 10px; opacity: 0; } }
 
 .music-node-layout .music-node-preview { width: 80px; max-width: 100%; align-self: center; }
 .music-node-layout .music-node-preview i { width: 6px; height: 6px; opacity: .8; }
 .music-node-layout .music-node-preview i:first-child { width: 8px; height: 8px; opacity: 1; }
-.music-preview-constellation { background: linear-gradient(28deg, transparent 49%, var(--gold-dim) 50%, transparent 52%) 9px 9px / 61px 24px no-repeat, linear-gradient(145deg, transparent 48%, var(--gold-dim) 49%, var(--gold-dim) 51%, transparent 52%) 16px 7px / 48px 28px no-repeat; }
-.music-preview-constellation i:nth-child(2) { top: 5px; left: 12px; }
-.music-preview-constellation i:nth-child(3) { top: 31px; left: 24px; }
-.music-preview-constellation i:nth-child(4) { top: 29px; left: 65px; }
-.music-preview-constellation i:nth-child(5) { top: 5px; left: 61px; }
+.music-node-layout .music-preview-constellation { background: linear-gradient(28deg, transparent 49%, var(--gold-dim) 50%, transparent 52%) 9px 9px / 61px 24px no-repeat, linear-gradient(145deg, transparent 48%, var(--gold-dim) 49%, var(--gold-dim) 51%, transparent 52%) 16px 7px / 48px 28px no-repeat; }
+.music-node-layout .music-preview-constellation i:nth-child(2) { top: 5px; left: 12px; }
+.music-node-layout .music-preview-constellation i:nth-child(3) { top: 31px; left: 24px; }
+.music-node-layout .music-preview-constellation i:nth-child(4) { top: 29px; left: 65px; }
+.music-node-layout .music-preview-constellation i:nth-child(5) { top: 5px; left: 61px; }
 .music-preview-tree::before { content: ""; position: absolute; width: 49px; height: 19px; left: 15px; top: 16px; border: 1px solid var(--gold-dim); border-bottom: 0; }
 .music-preview-tree::after { content: ""; position: absolute; height: 25px; width: 1px; left: 39px; top: 9px; background: var(--gold-dim); }
 .music-preview-tree i:first-child { top: 3px; left: 35px; z-index: 1; }
@@ -72825,7 +72882,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // transport, a volume and quick tree switches, that unfolds into sections.
 // It also owns the light themes, the three looks the first run offers (Light,
 // Dark, Stylized) with their heading faces, and the Shop's style packs: see
-// "Looks and style packs" below for the calls.
+// "Looks and style packs" below for the calls. The two node styles the Shop
+// sells go on once they are owned ("Node styles from the Shop").
 (() => {
   "use strict";
   const STORAGE_KEY = "mefiStudio.music.v1";
@@ -72873,12 +72931,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     singularity: { name: "Singularity", detail: "A black hole with a turning disc", collection: "void" },
     prism: { name: "Prism", detail: "A turning crystal that splits light", collection: "void" },
     sigil: { name: "Sigil", detail: "Hex runes that assemble as it works", collection: "void" },
+    // The two the Shop sells (`shop` is the item: relay/src/shop.mjs CATALOG).
+    dragonscale: { name: "Dragon scales", detail: "Scaled gems with ember sparks", shop: "studio:style-dragonscale" },
+    constellation: { name: "Constellation", detail: "Stars on star-chart lines", shop: "studio:style-constellation" },
   };
-  // Every theme and node style is free; `collection` only groups the pickers.
+  // Every theme and node style is free but the two the Shop sells; `collection`
+  // only groups the pickers. A Shop style is worn once MefiShop says it is owned.
   const isTheme = (key) => key === "custom" || typeof key === "string" && Object.hasOwn(THEMES, key);
   const isVoidTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].collection === "void";
   const isNodeStyle = (key) => typeof key === "string" && Object.hasOwn(NODE_STYLES, key);
   const isVoidNodeStyle = (key) => isNodeStyle(key) && NODE_STYLES[key].collection === "void";
+  const isShopNodeStyle = (key) => isNodeStyle(key) && typeof NODE_STYLES[key].shop === "string";
   const isLightTheme = (key) => typeof key === "string" && Object.hasOwn(THEMES, key) && THEMES[key].tone === "light";
   const NODE_LAYOUTS = {
     constellation: { name: "Constellation", detail: "An open arrangement" },
@@ -72931,7 +72994,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const id = typeof value.id === "string" && /^[\w:.-]{1,80}$/.test(value.id) ? value.id : null;
     const name = typeof value.name === "string" && value.name.trim() ? value.name.replace(/\s+/g, " ").trim().slice(0, 60) : "Style pack";
     const pack = { id, name, palette };
-    for (const [key, valid] of [["nodeStyle", isNodeStyle], ["material", (material) => MATERIALS.includes(material)], ["font", isFont]]) {
+    // (a pack's node style is one of the free ones, as the relay's pack check allows)
+    for (const [key, valid] of [["nodeStyle", (style) => isNodeStyle(style) && !isShopNodeStyle(style)], ["material", (material) => MATERIALS.includes(material)], ["font", isFont]]) {
       if (value[key] == null) continue;
       if (!valid(value[key])) return null;
       pack[key] = value[key];
@@ -73264,6 +73328,16 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       localStorage.removeItem(LEGACY_VOID_KEY);
     }
   } catch {}
+  // The node style the tree wears: the chosen one, or Classic orbs while it
+  // is a Shop style this PC does not own (or does not know it owns yet:
+  // friends-shop.js loads after this file, so init() asks again). The choice
+  // itself stays saved, so a style bought on another PC comes back once the
+  // Shop has read what you own (mefi-shop-owned). Worked out when the choice
+  // or what you own changes, never per frame: the tree reads it every frame.
+  const wearable = (key) => isNodeStyle(key) && (!isShopNodeStyle(key) || window.MefiShop?.owns?.(NODE_STYLES[key].shop) === true);
+  let worn = "orbs";
+  const wear = () => { worn = wearable(prefs.nodeStyle) ? prefs.nodeStyle : "orbs"; return worn; };
+  wear();
   // Search may expose configuration without changing the active look or audio.
   const settingsReveal = { custom: false, source: null };
   // link: what the Links tab plays; handoff: the last link only its own app can
@@ -73398,7 +73472,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   // ---- Looks and style packs ---------------------------------------------------
   // What the first run's "choose your look" and the Shop call (owner checks
-  // stay with the Shop: it decides what may be applied, this paints it):
+  // stay with the Shop: it decides what may be applied, this paints it; the
+  // one exception is a Shop node style, which goes on only once MefiShop
+  // says it is owned, see "Node styles from the Shop" below):
   //
   //   looks() -> [{ id, name, themes, material, font }]: Light, Dark and
   //     Stylized, each with its theme keys (its default first) and the extras
@@ -73473,17 +73549,20 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     applyFont(pack.font || "studio", save);
     return true;
   }
-  // The pack the Shop is trying, and what it changed beyond prefs (which a
-  // try never touches): the MefiAppearance store as it was, and the material
-  // the try left on, if any.
+  // What the Shop is trying, and what it changed beyond prefs (which a try
+  // never touches): a pack (with the MefiAppearance store as it was, and the
+  // material the try left on, if any), or a node style alone (pack null).
+  // One try at a time: trying a pack ends a node style's try, and the other
+  // way round.
   let trying = null;
   function previewPack(value) {
     const pack = safePack(value);
     if (!pack) return false;
+    if (trying && !trying.pack) trying = null;
     const appearance = window.MefiAppearance;
     trying ||= { before: appearance?.get?.() ?? null, material: "" };
     trying.pack = pack;
-    trying.nodeStyle = pack.nodeStyle || prefs.nodeStyle;
+    trying.nodeStyle = pack.nodeStyle || worn;
     event("mefi-theme-change", { ...paintTheme("pack", pack), preview: true });
     syncTreePreferences(false);
     paintFont(pack.font || "studio");
@@ -73494,11 +73573,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // paint false: the caller paints a theme of its own right after.
   function endPreview(paint = true) {
     if (!trying) return false;
-    const { before, material, nodeStyle } = trying;
+    const { before, material, nodeStyle, pack } = trying;
     trying = null;
-    if (paint) event("mefi-theme-change", paintTheme(prefs.theme));
-    if (nodeStyle !== prefs.nodeStyle) syncTreePreferences(false);
-    paintFont(prefs.font);
+    if (paint && pack) event("mefi-theme-change", paintTheme(prefs.theme));
+    if (nodeStyle !== worn) syncTreePreferences(false);
+    if (pack) paintFont(prefs.font);
     // The material goes back only while the try's is still on: one chosen in
     // Settings meanwhile stays.
     const appearance = window.MefiAppearance;
@@ -73512,8 +73591,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // reader shares one frozen copy. A pack the Shop is trying is on screen too.
   let paletteKey = null, paletteMemo = null;
   function themePalette() {
-    const theme = trying ? "pack" : prefs.theme;
-    const pack = trying ? trying.pack : prefs.pack;
+    const theme = trying?.pack ? "pack" : prefs.theme;
+    const pack = trying?.pack ? trying.pack : prefs.pack;
     const custom = prefs.customColors;
     const key = theme === "custom" ? `custom|${custom.accent}|${custom.background}|${custom.surface}|${custom.text}` : theme === "pack" ? `pack|${PACK_COLORS.map((name) => pack?.palette?.[name] ?? "").join("|")}` : theme;
     if (key !== paletteKey || !paletteMemo) {
@@ -73524,11 +73603,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return paletteMemo;
   }
   // Read per node per frame by the tree rail: plain fields, no storage reads.
-  function graphPreferences() { return { nodeStyle: trying ? trying.nodeStyle : prefs.nodeStyle, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
+  function graphPreferences() { return { nodeStyle: trying ? trying.nodeStyle : worn, nodeLayout: prefs.nodeLayout, orbitTrails: prefs.orbitTrails, extraGlow: prefs.extraGlow }; }
   function syncTreePreferences(save) {
     const value = graphPreferences();
     Object.assign(document.documentElement.dataset, value);
-    for (const choice of [...els.nodeStyles?.children || [], ...els.voidStyles?.children || []]) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
+    for (const choice of [...els.nodeStyles?.children || [], ...els.voidStyles?.children || [], ...els.shopStyles?.children || []]) choice.setAttribute("aria-pressed", String(choice.dataset.nodeStyle === value.nodeStyle));
     for (const choice of els.nodeLayouts?.children || []) choice.setAttribute("aria-pressed", String(choice.dataset.nodeLayout === value.nodeLayout));
     if (els.orbitTrails) els.orbitTrails.checked = value.orbitTrails;
     if (els.extraGlow) els.extraGlow.checked = value.extraGlow;
@@ -73536,11 +73615,39 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (save) persist();
     event("mefi-tree-preferences", value);
   }
+  // ---- Node styles from the Shop ----
+  //   applyNodeStyle(key, save = true) -> the style the tree wears after it.
+  //     A Shop style this PC does not own is refused: nothing changes (a try
+  //     on screen included) and the answer is the style still worn.
+  //   previewNodeStyle(key) -> true or false; shows any known style on the
+  //     tree for the Shop's Try, saving nothing, until endPreview() (the same
+  //     one packs use) or a real choice ends it. One try at a time.
+  //   nodeStyle() -> the style worn (a try aside); nodeStyles() -> the styles
+  //     this PC can wear, each with its Shop item or null; shopStyles() -> the
+  //     Shop's, owned or not ({ key, item, name, detail, owned }).
   function applyNodeStyle(style, save = true) {
+    if (isShopNodeStyle(style) && !wearable(style)) return worn;
     endPreview();
     prefs.nodeStyle = isNodeStyle(style) ? style : "orbs";
+    wear();
     syncTreePreferences(save);
-    return prefs.nodeStyle;
+    return worn;
+  }
+  function previewNodeStyle(style) {
+    if (!isNodeStyle(style)) return false;
+    if (trying?.pack) endPreview();
+    trying = { before: null, material: "", pack: null, nodeStyle: style };
+    syncTreePreferences(false);
+    return true;
+  }
+  // What you own changed (friends-shop.js fires mefi-shop-owned): a Shop
+  // style just bought or restored on this PC goes on if it was the choice,
+  // one no longer owned gives way to Classic orbs, and the pickers follow.
+  function ownedChanged() {
+    const was = worn;
+    wear();
+    paintShopStyles();
+    if (worn !== was && !trying) syncTreePreferences(false);
   }
   function applyNodeLayout(layout, save = true) {
     prefs.nodeLayout = Object.hasOwn(NODE_LAYOUTS, layout) ? layout : "constellation";
@@ -73580,6 +73687,21 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     glyph(name, node);
     node.setAttribute("aria-label", label); node.title = label;
     return node;
+  }
+  // The Shop's styles in Settings: one this PC owns is an ordinary choice; one
+  // it does not own says so and stays off (the Shop's Try shows it on the
+  // tree for two minutes), and the line under them offers the Shop while any
+  // is still there to get.
+  function paintShopStyles() {
+    let missing = false;
+    for (const choice of els.shopStyles?.children || []) {
+      const key = choice.dataset.nodeStyle, owned = wearable(key);
+      missing ||= !owned;
+      choice.disabled = !owned;
+      const name = choice.children?.[1];
+      if (name) name.textContent = owned ? NODE_STYLES[key].name : `${NODE_STYLES[key].name} (in the Shop)`;
+    }
+    if (els.shopLine) els.shopLine.hidden = !missing;
   }
   // `set` names a second group of the same kind (the Void collection's styles,
   // under their own small heading); its ids are literal at the call site.
@@ -75103,8 +75225,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     nodeSection.setAttribute("aria-labelledby", "music-node-heading");
     const nodeHeading = element("h3", null, "Node tree", nodeSection); nodeHeading.id = "music-node-heading";
     element("p", "music-node-intro", "Give your work a different shape. Changes appear on the live tree.", nodeSection);
-    els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => !isVoidNodeStyle(key))), prefs.nodeStyle, applyNodeStyle);
-    els.voidStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isVoidNodeStyle(key))), prefs.nodeStyle, applyNodeStyle, { label: "Void collection", id: "music-void-style" });
+    els.nodeStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => !isVoidNodeStyle(key) && !isShopNodeStyle(key))), worn, applyNodeStyle);
+    els.voidStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isVoidNodeStyle(key))), worn, applyNodeStyle, { label: "Void collection", id: "music-void-style" });
+    els.shopStyles = graphChoices(nodeSection, "style", Object.fromEntries(Object.entries(NODE_STYLES).filter(([key]) => isShopNodeStyle(key))), worn, applyNodeStyle, { label: "From the Shop", id: "music-shop-style" });
+    els.shopLine = element("p", "music-fineprint music-shop-line", "Get these in the Shop for credits you earn. Try shows one on this tree for two minutes first.", nodeSection);
+    els.shopLine.id = "music-shop-line";
+    button("Open the Shop", "ghost music-shop-open", els.shopLine, () => { if (typeof window.MefiShop?.open === "function") window.MefiShop.open("studio"); else window.MefiNav?.go?.("friends-page", { place: "shop" }); }, "music-shop-open");
+    paintShopStyles();
     const layoutSection = element("section", "music-section", null, settings);
     layoutSection.dataset.appearancePanel = "layout";
     element("h3", null, "Arrange the tree", layoutSection);
@@ -75743,6 +75870,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function init() {
     if (initialized) return;
     initialized = true;
+    // Every script has loaded by now: a Shop style the Shop says this PC owns
+    // goes on, and what you own changing later is followed.
+    wear();
+    window.addEventListener("mefi-shop-owned", ownedChanged);
     let recentLink;
     try { recentLink = JSON.parse(localStorage.getItem(LINK_RESUME_KEY) || "null"); localStorage.removeItem(LINK_RESUME_KEY); } catch {}
     audio = document.createElement("audio"); audio.preload = "metadata"; audio.volume = prefs.volume;
@@ -76059,8 +76190,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     looks: () => LOOKS.map((look) => ({ ...look, themes: [...look.themes] })), applyLook, look: () => lookOf(prefs.theme),
     fonts: () => Object.entries(FONTS).map(([key, font]) => ({ key, name: font.name, detail: font.detail, stack: font.stack })), applyFont, font: () => prefs.font,
     applyPack, previewPack, endPreview: () => endPreview(), packInfo: () => copyPack(prefs.theme === "pack" ? prefs.pack : null),
-    // Every node style and layout, for the setup helper's Look section.
-    nodeStyles: () => Object.entries(NODE_STYLES).map(([key, style]) => ({ key, name: style.name, detail: style.detail })),
+    // Node styles from the Shop (see "Node styles from the Shop" above).
+    previewNodeStyle, nodeStyle: () => worn,
+    shopStyles: () => Object.entries(NODE_STYLES).filter(([key]) => isShopNodeStyle(key)).map(([key, style]) => ({ key, item: style.shop, name: style.name, detail: style.detail, owned: wearable(key) })),
+    // The node styles this PC can wear (a Shop style once it is owned), and
+    // every layout, for the setup helper's Look section.
+    nodeStyles: () => Object.entries(NODE_STYLES).filter(([key]) => wearable(key)).map(([key, style]) => ({ key, name: style.name, detail: style.detail, item: style.shop ?? null })),
     nodeLayouts: () => Object.entries(NODE_LAYOUTS).map(([key, layout]) => ({ key, name: layout.name, detail: layout.detail })), theme: () => prefs.theme,
     // Links from anywhere in Studio (a chat, a mirrored Discord room): linkInfo
     // says whether and how a link plays, without touching the player.
