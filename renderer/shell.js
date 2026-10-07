@@ -830,12 +830,13 @@
     }
     return { section: "team", title: "Team", rows };
   }
-  // Friends lists its three places (renderer/companion-hub.js friendsPlaces), the one that shows current.
+  // Friends lists its three places (renderer/companion-hub.js friendsPlaces), the one that shows current: the Shop's
+  // row while the Shop's own page (route "shop") shows.
   function friendsModel(n, id) {
     let places = null;
     try { places = window.MefiCompanionHub?.friendsPlaces?.() ?? null; } catch { places = null; }
     if (!Array.isArray(places) || !places.length) return null;
-    const rows = places.map((place) => ({ kind: "row", key: `friends:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: id === "friends-page" && Boolean(place.current), run: place.run }));
+    const rows = places.map((place) => ({ kind: "row", key: `friends:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: (id === "friends-page" || (id === "shop" && place.id === "shop")) && Boolean(place.current), run: place.run }));
     return { section: "friends", title: "Friends", rows };
   }
   // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
@@ -858,6 +859,7 @@
       const page = MAP_PAGES.find(([route]) => route === id);
       return page ? (page[0] === "command" ? ["Map"] : ["Map", page[1]]) : null;
     }
+    if (place === "friends" && id === "shop") return ["Friends", "Shop"];
     if (place === "friends" && id === "friends-page") {
       let here = null;
       try { here = window.MefiCompanionHub?.friendsPlace?.() ?? null; } catch { here = null; }

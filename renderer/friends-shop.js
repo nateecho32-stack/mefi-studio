@@ -1,38 +1,55 @@
-// Friends › Shop (window.MefiShop): scales for Ember, menu effects, node
-// styles and style packs for the credits members earn by making and playing
-// things (credits are never bought with money), and the style packs members
-// make and sell each other. Ember the dragon itself comes free with every
-// Studio: it is not sold, and its card is an On/Off switch (MefiPets.set({
-// on })). The relay keeps the catalog, the packs and who owns what
-// (relay/src/shop.mjs); this page shows them, lets you try anything for two
-// minutes, asks before a single credit is spent, and puts what you own to use.
+// The Shop (window.MefiShop): scales for Ember, menu effects, node styles and
+// themes (Studio's own style packs) for the credits members earn by making and
+// playing things (credits are never bought with money), and the style packs
+// members make and sell each other. Ember the dragon itself comes free with
+// every Studio: it is not sold, and its card is an On/Off switch
+// (MefiPets.set({ on })). The relay keeps the catalog, the packs and who owns
+// what (relay/src/shop.mjs); this page shows them, lets you try anything for
+// two minutes, asks before a single credit is spent, and puts what you own to
+// use.
 //
-// Four views, one segmented control:
-//   - Studio: Ember (free), its scales, menu effects, node styles and
-//     Studio's own style packs.
-//   - Community: members' style packs, New or Top, each with Report (and
-//     Remove for a moderator, as renderer/friends-mod.js knows one). Buying or
-//     getting one can carry a tip for its maker (0 to 100 credits, members'
-//     packs only; hubShop "shopBuy" with the tip as its third argument).
-//   - Owned: everything you own, with Use.
+// A page of its own (route "shop", openPage/closePage; Friends' place "Shop",
+// Settings › Appearance and Search open it), clean and roomy: the month's drop
+// as a banner made from the drop's own data (its colours, name, how long it
+// has left and its items shown live inside it, relay/src/shop-drops.mjs), its
+// items, the week's Featured shelf, then the categories. One row of views:
+//   - Home: the drop, the Featured shelf and every category.
+//   - Pets, Menu effects, Node styles, Themes: one category each.
+//   - Community: members' style packs, New or Top. Buying or getting one can
+//     carry a tip for its maker (0 to 100 credits, members' packs only;
+//     hubShop "shopBuy" with the tip as its third argument).
+//   - Owned: everything you own.
 //   - Make a style: five colours, a node style, a material and a font, a big
 //     live preview and how easy its text is to read (WCAG contrast). The
 //     relay's own check runs here first (checkPack, the same rules as
 //     relay/src/shop-pack.mjs) and says in plain words what stops a pack from
 //     publishing. Use it myself puts it on this PC only; Publish lists it,
 //     free or for 10 to 250 credits. Your packs lists what you published,
-//     with Edit, Unlist or List again, sales and credits earned.
+//     with Edit, Unlist or List again, how many times each was got and
+//     credits earned.
+// Cards are a big live preview with the name, the price (or Owned) and badges
+// (New, Leaving soon, In use); a card opens its detail (a modal dialog) with a
+// large live preview, the line about it, Try for 2 minutes and Buy, Get or Use,
+// and Report or Remove for a member's pack.
 //
-// Every card shows its item live: a pet flies on a little canvas
-// (MefiPets.paintPreview), a node style paints a little board of its own
-// nodes, wires and a pulse in the theme's sky (MefiNodeStyles), both drawn
-// only while the card is on screen and motion is on (one still frame when
-// motion is off); an effect plays on a little menu on hover, focus or Try
-// (MefiEffects.demo), and a pack paints a tiny app window from its own
-// colours. Try lasts two minutes, one item at a time, under a banner at the
-// top of the page (time left, Buy, Stop); leaving the Shop ends it. A node
-// style's Try puts it on the real tree (MefiMusic.previewNodeStyle), and Use
-// wears it (MefiMusic.applyNodeStyle).
+// Signed out or out of reach, the same page is a showroom: Studio's own items
+// from this PC's copy of the catalog (main's hub:shop "shopCatalog", no relay
+// asked), each with its preview and Try, and in place of Buy the one thing
+// that helps (Sign in to get it, Connect to get it, Join the Discord to get
+// it); members' packs say they need sign-in; Friends' sign-in card is at the
+// foot. What you own keeps working from this PC's list.
+//
+// Every preview is live: a pet flies on a little canvas (MefiPets.paintPreview),
+// a node style paints a little board of its own nodes, wires and a pulse in
+// the theme's sky (MefiNodeStyles), an effect plays on a little menu on hover,
+// focus or Try (MefiEffects.demo) and by itself in the banner and the detail,
+// and a theme paints a tiny Studio window from its own colours. Only what is on
+// screen moves, only with motion on (one still frame with motion Off; cards
+// hold still with motion Calm), and nothing moves while the window is hidden.
+// Try lasts two minutes, one item at a time, under a banner at the top of the
+// page (time left, Buy, Stop); leaving the Shop ends it. A node style's Try
+// puts it on the real tree (MefiMusic.previewNodeStyle), and Use wears it
+// (MefiMusic.applyNodeStyle).
 //
 // What you own is kept in localStorage mefiStudio.shop.v1 ({ owned: { [id]:
 // { kind, name, data, updatedAt } }, at }), so it keeps working signed out or
@@ -40,9 +57,14 @@
 // Shop opens, after a purchase and when the room service connects, and the
 // window event `mefi-shop-owned` tells the rest of Studio when it changed.
 //
+// Kill switches, per device (localStorage): "mefiStudio.shop.page" = "off"
+// shows the Shop as a Friends place again (the card inside Friends' page);
+// "mefiStudio.shop.showroom" = "off" shows a signed-out Shop only Friends'
+// sign-in and what you own.
+//
 // Everything goes through main's hub:shop channel (window.mefiStudio.hubShop);
 // renderer/pets.js, effects.js and music.js do the showing. A part that is not
-// in this build says so on its card ("Comes with the next Studio update").
+// in this build says so ("Comes with the next Studio update").
 // Text only: names and blurbs go in with textContent.
 (function () {
   "use strict";
@@ -62,17 +84,36 @@
   // An item id inside an element id: "studio:pet-dragon" -> "studio-pet-dragon".
   const domId = (id) => String(id).replace(/[^A-Za-z0-9_-]/g, "-");
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const motionOff = () => document.documentElement?.dataset?.motion === "off";
+  // Motion: Off holds every preview still; Calm lets only the open detail move.
+  const motionLevel = () => document.documentElement?.dataset?.motion ?? "full";
+  const motionOff = () => motionLevel() === "off";
   const focusOn = (id) => { try { document.getElementById?.(id)?.focus?.({ preventScroll: false }); } catch { /* nothing to focus */ } };
+  const readStore = (key) => { try { return globalThis.localStorage?.getItem?.(key) ?? null; } catch { return null; } };
+  // The kill switches (see the top of this file).
+  const pageOn = () => readStore("mefiStudio.shop.page") !== "off";
+  const showroomOn = () => readStore("mefiStudio.shop.showroom") !== "off";
   const STORE = "mefiStudio.shop.v1";
   const TRY_MS = 120_000;
+  const DAY_MS = 86_400_000;
+  // A drop's item has this long left when it says "Leaving soon"; a member's pack is new for this long.
+  const SOON_MS = 7 * DAY_MS;
   const SOON = "Comes with the next Studio update.";
   const OPENING = "Opening the Shop…";
+  const ABOUT = "New looks for Studio, for the credits you earn with friends. Credits are never bought, and everything Studio comes with stays free.";
   const KINDS = ["pet", "skin", "effect", "nodestyle", "pack"];
-  const VIEWS = [["studio", "Studio"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"]];
-  // Studio's pets and their scales share a heading.
-  const GROUPS = [["pet", "Pets"], ["effect", "Menu effects"], ["nodestyle", "Node styles"], ["pack", "Style packs"]];
-  const groupOf = (kind) => (kind === "skin" ? "pet" : kind);
+  // The views, in the row's order. "studio" (Home) and "packs" (Community) keep their old names for every way in.
+  const VIEWS = [["studio", "Home"], ["pets", "Pets"], ["effects", "Menu effects"], ["nodestyles", "Node styles"], ["themes", "Themes"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"]];
+  const STUDIO_VIEWS = ["studio", "pets", "effects", "nodestyles", "themes"];
+  const viewOf = (wanted) => (VIEWS.some(([id]) => id === wanted) ? wanted : { home: "studio", community: "packs", mine: "make" }[wanted] ?? null);
+  // Studio's categories: a heading and a line each. Pets and their scales share one.
+  const CATEGORIES = [
+    ["pets", "Pets", "Ember the dragon comes free with every Studio. Scales dress it in new colours."],
+    ["effects", "Menu effects", "How menus leave the screen when they close."],
+    ["nodestyles", "Node styles", "How the nodes on your Map and tree are drawn. Every style Studio already had stays free."],
+    ["themes", "Themes", "Studio's own style packs: colours, a node style, a material and a font together."],
+  ];
+  const categoryOf = (kind) => (kind === "pet" || kind === "skin" ? "pets" : kind === "effect" ? "effects" : kind === "nodestyle" ? "nodestyles" : "themes");
+  const categoryName = (key) => CATEGORIES.find(([id]) => id === key)?.[1] ?? "Themes";
   const REPORT_REASONS = ["Hard to read", "Copies someone else's work", "A rude or hurtful name", "Something else"];
   // Ember the dragon comes free with every Studio: never a Shop item, so it has a card of its own (a switch, no price).
   const EMBER = "studio:pet-dragon";
@@ -202,6 +243,8 @@
     "bad-request": "Studio could not send that. Try again.",
     "not-found": "That is no longer in the Shop.",
     gone: "That is no longer in the Shop.",
+    // An item of a monthly drop after its month (relay/src/shop-drops.mjs).
+    "not-available": "This one has rotated out. Everyone who got it keeps it.",
     // Publishing or changing a pack.
     "bad-pack": "Studio could not read that style. Check that every colour is #RRGGBB.",
     "too-big": "That style is too big for the Shop: 2 KB at most.",
@@ -231,6 +274,25 @@
     }
     return fallback;
   }
+
+  // ---- the rotation's words: how long a drop's item has left, when the Featured shelf changes ----
+  const msOf = (iso) => { const at = typeof iso === "string" ? Date.parse(iso) : NaN; return Number.isFinite(at) ? at : null; };
+  // "in 24 days", "in a day", "in 5 hours", "within the hour" (rounded down, so it never promises more time than is left).
+  function timeLeft(iso, now = Date.now()) {
+    const at = msOf(iso);
+    if (at == null || at <= now) return null;
+    const left = at - now;
+    if (left < 3_600_000) return "within the hour";
+    if (left < DAY_MS) return `in ${plural(Math.floor(left / 3_600_000), "hour")}`;
+    const days = Math.floor(left / DAY_MS);
+    return days === 1 ? "in a day" : `in ${days} days`;
+  }
+  const leavesWords = (iso) => { const left = timeLeft(iso); return left ? `Leaves ${left}` : ""; };
+  const leavingSoon = (item) => { const at = msOf(item?.leaves); return at != null && at > Date.now() && at - Date.now() <= SOON_MS; };
+  // A drop is a calendar month by its id (UTC); its days are said in this PC's own time, its last day as the last moment
+  // it is on sale (until is the moment it leaves).
+  const monthOf = (iso) => { const at = msOf(iso); return at == null ? "" : new Date(at).toLocaleDateString([], { month: "long", timeZone: "UTC" }); };
+  const dayOf = (iso, before = 0) => { const at = msOf(iso); return at == null ? "" : new Date(at - before).toLocaleDateString([], { day: "numeric", month: "long" }); };
 
   // ---- what you own, kept on this PC ----
   let cache = null;
@@ -344,32 +406,40 @@
     use.setAttribute("href", "#g-shop"); svg.append(use);
     return svg;
   }
-  // Pets fly and node styles move only on screen: one loop for every live canvas a card shows (a pet's, or a node
-  // style's board, which carries its style in data-node-style), about 30 frames a second, paused while the window
-  // is hidden, a single still frame when motion is off.
-  const live = { all: new Set(), seen: new Set(), frame: 0, last: 0, watch: null };
-  function drawLive(canvas, time) {
+  // Pets fly and node styles move only on screen: one loop for every live part a page shows (a pet's canvas, a node
+  // style's board, which carries its style in data-node-style, and an effect's menu that plays by itself), paused while
+  // the window is hidden, a single still frame with motion Off. A card draws about 15 frames a second and holds still
+  // with motion Calm; the banner and an open detail ("big") draw about 30.
+  const live = { all: new Set(), seen: new Set(), frame: 0, drawn: new WeakMap(), watch: null };
+  const isBig = (part) => part.dataset?.size === "big";
+  function drawLive(part, time) {
     try {
-      if (canvas.dataset.nodeStyle) paintBoard(canvas, time);
-      else window.MefiPets?.paintPreview?.(canvas, { kind: canvas.dataset.kind, skin: canvas.dataset.skin, time });
+      if (part.play) { if (time > 0 && !part.playing && time - (live.drawn.get(part) ?? 0) >= 4200) { live.drawn.set(part, time); part.play(); } return; }
+      if (part.dataset.nodeStyle) paintBoard(part, time);
+      else {
+        // A big preview (the banner's, a detail's) shows the pet bigger than a card's (paintPreview stops at 1 by itself).
+        const size = isBig(part) ? Math.max(1, Math.min(2.4, Math.min(part.clientWidth || 0, part.clientHeight || 0) / 160)) : 0;
+        window.MefiPets?.paintPreview?.(part, { kind: part.dataset.kind, skin: part.dataset.skin, time, ...(size ? { size } : {}) });
+      }
     } catch { /* the next frame tries again */ }
   }
-  function watchLive(canvas) {
-    live.all.add(canvas);
-    drawLive(canvas, 0);
+  function watchLive(part) {
+    live.all.add(part);
+    if (!part.play) drawLive(part, 0);
     if (typeof IntersectionObserver === "function") {
       live.watch ??= new IntersectionObserver((entries) => {
         for (const entry of entries) { if (entry.isIntersecting) live.seen.add(entry.target); else live.seen.delete(entry.target); }
         spin();
       });
-      live.watch.observe(canvas);
+      live.watch.observe(part);
     }
-    return canvas;
+    return part;
   }
-  function petCanvas(kind, skin, label) {
+  function petCanvas(kind, skin, label, big = false) {
     const canvas = node("canvas", "friends-shop-pet");
     canvas.width = 360; canvas.height = 180;
     canvas.dataset.kind = kind || "dragon"; canvas.dataset.skin = skin || "theme";
+    if (big) canvas.dataset.size = "big";
     canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", label);
     return watchLive(canvas);
   }
@@ -379,17 +449,28 @@
   }
   function liveFrame(now) {
     live.frame = 0;
-    for (const canvas of [...live.seen]) if (canvas.isConnected === false) { live.seen.delete(canvas); live.all.delete(canvas); live.watch?.unobserve(canvas); }
+    for (const part of [...live.seen]) if (part.isConnected === false) { live.seen.delete(part); live.all.delete(part); live.watch?.unobserve(part); }
     if (!live.seen.size || document.hidden) return;
-    if (motionOff()) { for (const canvas of live.seen) drawLive(canvas, 0); return; }
-    if (now - live.last >= 33) { live.last = now; for (const canvas of live.seen) drawLive(canvas, now); }
-    live.frame = requestAnimationFrame(liveFrame);
+    const level = motionLevel();
+    if (level === "off") { for (const part of live.seen) if (!part.play) drawLive(part, 0); return; }
+    let moving = false;
+    for (const part of live.seen) {
+      // Calm: only the open detail and the banner move; cards hold their still frame.
+      if (level === "calm" && !isBig(part)) continue;
+      moving = true;
+      if (part.play) { drawLive(part, now); continue; }
+      const every = isBig(part) ? 33 : 66;
+      if (now - (live.drawn.get(part) ?? -Infinity) >= every) { live.drawn.set(part, now); drawLive(part, now); }
+    }
+    if (moving) live.frame = requestAnimationFrame(liveFrame);
   }
-  function releaseLive() {
-    for (const canvas of live.all) live.watch?.unobserve(canvas);
-    live.all.clear(); live.seen.clear();
-    if (live.frame && typeof cancelAnimationFrame === "function") cancelAnimationFrame(live.frame);
-    live.frame = 0;
+  function releaseLive(keep = null) {
+    for (const part of [...live.all]) {
+      if (keep?.contains?.(part)) continue;
+      live.watch?.unobserve(part);
+      live.all.delete(part); live.seen.delete(part);
+    }
+    if (live.frame && typeof cancelAnimationFrame === "function" && !live.seen.size) { cancelAnimationFrame(live.frame); live.frame = 0; }
   }
   try { document.addEventListener?.("visibilitychange", () => { if (!document.hidden) spin(); }); } catch { /* no document events here */ }
 
@@ -433,14 +514,16 @@
     const width = canvas.clientWidth || canvas.width || 360, height = canvas.clientHeight || canvas.height || 180;
     const dpr = Math.min(2, Math.max(1, Number(window.devicePixelRatio) || 1));
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) { canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); }
-    const palette = safe(() => window.MefiMusic.themePalette().canvas);
-    const theme = styles.theme(palette), tints = tintsOf(palette), still = motionOff() || !(time > 0);
     let board = boards.get(canvas);
     if (!board) {
-      // (the pulse's colour as one stable triple, so the style's paints for it are built once)
-      board = { motion: new Map(), last: 0, landed: -1, pulse: { color: "#f1dcae", glow: "#e6c98d", duration: BOARD_TRAVEL_MS, start: 0 }, rgb: hexTriple("#f1dcae", null), look: { time: 0, still: false, theme: null } };
+      // (the pulse's colour as one stable triple, so the style's paints for it are built once; a board in a drop's banner
+      // keeps the drop's own sky, data-sky, so it sits in the banner whatever the theme)
+      const sky = HEX.test(canvas.dataset.sky ?? "") ? Object.freeze({ background: canvas.dataset.sky, text: inkOn(canvas.dataset.sky), accent2: HEX.test(canvas.dataset.skyAccent ?? "") ? canvas.dataset.skyAccent : null }) : null;
+      board = { motion: new Map(), last: 0, landed: -1, sky, pulse: { color: "#f1dcae", glow: "#e6c98d", duration: BOARD_TRAVEL_MS, start: 0 }, rgb: hexTriple("#f1dcae", null), look: { time: 0, still: false, theme: null } };
       boards.set(canvas, board);
     }
+    const palette = board.sky ?? safe(() => window.MefiMusic.themePalette().canvas);
+    const theme = styles.theme(palette), tints = tintsOf(palette), still = motionOff() || !(time > 0);
     const dt = still || !board.last ? 0 : Math.min(0.1, Math.max(0, (time - board.last) / 1000));
     board.last = still ? 0 : time;
     const at = still ? 0 : time;
@@ -475,16 +558,18 @@
       if (chosen) styles.select(ctx, key, spot, spot.r, tint, options);
     });
   }
-  function boardCanvas(key, label) {
+  function boardCanvas(key, label, big = false) {
     const canvas = node("canvas", "friends-shop-pet friends-shop-board");
     canvas.width = 360; canvas.height = 180;
     canvas.dataset.nodeStyle = key;
+    if (big) canvas.dataset.size = "big";
     canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", label);
     return watchLive(canvas);
   }
 
-  // A tiny app window painted from a pack's own colours (inline custom properties): a sidebar, a title, two node orbs
-  // on a wire, two lines of text and a button. The node style, material and font each change how it looks.
+  // A tiny Studio window painted from a pack's own colours (inline custom properties): a title bar, the rail, a list
+  // with one row chosen, and the main area with a title, two node orbs on a wire, two lines of text and a button.
+  // The node style, material and font each change how it looks.
   function paintMock(mock, data) {
     const palette = data?.palette ?? {};
     for (const [key, prop] of [["accent", "--pack-accent"], ["accent2", "--pack-accent2"], ["background", "--pack-bg"], ["surface", "--pack-surface"], ["text", "--pack-text"]]) {
@@ -498,15 +583,21 @@
   function packMock(data, { big = false, title = "" } = {}) {
     const mock = node("div", `friends-shop-mock${big ? " is-big" : ""}`);
     mock.setAttribute("aria-hidden", "true");
+    const bar = node("div", "friends-shop-mock-bar");
+    bar.append(node("span", "friends-shop-mock-dot"), node("span", "friends-shop-mock-dot"), node("span", "friends-shop-mock-dot"));
+    const rail = node("div", "friends-shop-mock-rail");
+    rail.append(node("span", "friends-shop-mock-pip is-on"), node("span", "friends-shop-mock-pip"), node("span", "friends-shop-mock-pip"));
     const side = node("div", "friends-shop-mock-side");
-    side.append(node("span", "friends-shop-mock-line"), node("span", "friends-shop-mock-line"), node("span", "friends-shop-mock-line is-short"));
+    side.append(node("span", "friends-shop-mock-line is-chosen"), node("span", "friends-shop-mock-line"), node("span", "friends-shop-mock-line is-short"));
     const main = node("div", "friends-shop-mock-main");
     const tree = node("div", "friends-shop-mock-tree");
     tree.append(node("span", "friends-shop-mock-orb"), node("span", "friends-shop-mock-wire"), node("span", "friends-shop-mock-orb is-second"));
     const lines = node("div", "friends-shop-mock-words");
     lines.append(node("span", "friends-shop-mock-line"), node("span", "friends-shop-mock-line is-short"));
     main.append(node("div", "friends-shop-mock-title", title || "Aa"), tree, lines, node("span", "friends-shop-mock-button", big ? "Build it" : "Go"));
-    mock.append(side, main);
+    const window_ = node("div", "friends-shop-mock-body");
+    window_.append(rail, side, main);
+    mock.append(bar, window_);
     paintMock(mock, data);
     return mock;
   }
@@ -523,11 +614,13 @@
     }
     return strip;
   }
+  // The text colour that reads best on a drop's banner colour (white or near-black, whichever has more contrast).
+  const inkOn = (background) => (HEX.test(background ?? "") && (contrast(background, "#ffffff") ?? 0) < (contrast(background, "#14110f") ?? 0) ? "#14110f" : "#ffffff");
 
-  // ---- the Shop page ----
-  let current = null; // the card on screen: { hear, show, paint, dispose }
+  // ---- the Shop's state that outlives one page ----
+  let current = null; // the page on screen: { hear, show, paint, dispose, ready }
   let hearing = false, watchingMods = false;
-  let asked = null; // the view open(view) asked for, for the next card
+  let asked = null; // the view open(view) asked for, for the next page
   let lastView = "studio";
   let sort = "new"; // members' packs: New or Top
   // The style being made, kept while Studio runs (switching views or places keeps it).
@@ -547,7 +640,7 @@
   }
   const packFromDraft = () => ({ v: 1, palette: { ...draft.palette }, nodeStyle: draft.nodeStyle, material: draft.material, font: draft.font });
 
-  // The hub's events: a connection that comes up reads what you own again; the card on screen hears the rest.
+  // The hub's events: a connection that comes up reads what you own again; the page on screen hears the rest.
   function listen(api) {
     if (hearing || typeof api?.onHubEvent !== "function") return;
     hearing = true;
@@ -577,24 +670,35 @@
     });
   }
 
-  function card() {
-    const root = node("section", "friends-shop");
+  // ---- the page ----
+  // onPage: the Shop's own page (it mounts Friends' places for Social, and is the route "shop"); otherwise a card for
+  // Friends' place (the "mefiStudio.shop.page" kill switch). view: the view to open on.
+  function card({ view: wantedView = null, onPage = false } = {}) {
+    const root = node("section", `friends-shop${onPage ? " is-page" : ""}`);
     root.id = "friends-shop";
     root.setAttribute("aria-labelledby", "friends-shop-title");
-    const title = node("h4", "friends-shop-title", "Shop");
+    // The head: the page's title and what the Shop is, the balance and how to earn more.
+    const head = node("header", "friends-shop-head");
+    const headWords = node("div", "friends-shop-head-words");
+    const title = node("h1", "friends-shop-title", "Shop");
     title.id = "friends-shop-title";
+    title.tabIndex = -1;
+    headWords.append(title, node("p", "friends-shop-about", ABOUT));
+    const headTools = node("div", "friends-shop-head-tools");
+    const balance = node("span", "friends-shop-balance");
+    balance.id = "friends-shop-balance";
+    balance.hidden = true;
+    const earn = button("How to earn credits", () => window.MefiNav?.go?.("friends-page", { place: "events" }), "friends-shop-earn", "friends-shop-link");
+    headTools.append(balance, earn);
+    head.append(headWords, headTools);
+    // Friends' places as a row, for when the list column is not showing them (Social, a small window).
+    if (onPage) window.MefiShell?.placeBar?.(head, "friends");
     // The try banner: the item being tried, its time left, Buy and Stop.
     const banner = node("div", "friends-shop-try");
     banner.id = "friends-shop-try";
     banner.hidden = true;
     banner.setAttribute("role", "region");
     banner.setAttribute("aria-label", "Trying an item");
-    const head = node("div", "friends-shop-head");
-    const balance = node("span", "friends-shop-balance");
-    balance.id = "friends-shop-balance";
-    balance.hidden = true;
-    const earn = button("How to earn credits", () => window.MefiNav?.go?.("friends-page", { place: "events" }), "friends-shop-earn", "friends-shop-link");
-    head.append(balance, earn);
     const tabs = node("div", "friends-shop-views");
     tabs.id = "friends-shop-views";
     tabs.hidden = true;
@@ -605,20 +709,33 @@
     status.setAttribute("role", "status");
     const body = node("div", "friends-shop-body");
     body.id = "friends-shop-body";
-    root.append(title, banner, head, tabs, status, body);
+    // An item's detail: a modal dialog over the page.
+    const detailRoot = node("dialog", "friends-shop-detail");
+    detailRoot.id = "friends-shop-detail";
+    detailRoot.setAttribute("aria-labelledby", "friends-shop-detail-name");
+    root.append(head, banner, tabs, status, body, detailRoot);
 
     current?.dispose();
     const api = bridge();
-    let view = VIEWS.some(([id]) => id === asked) ? asked : lastView;
+    let view = viewOf(wantedView) ?? viewOf(asked) ?? lastView;
     asked = null;
+    lastView = view;
     let ready = false, me = null, balanceNow = null, canEarn = true, hold = null;
+    // Studio's list: the relay's (signed in) or this PC's copy (the showroom), with the drops and the Featured shelf.
+    let catalog = null; // { items, drops, featured, featuredUntil, local, at }
     let items = [], next = null, mine = [], busy = false, gone = false, seq = 0, autoConnected = false, loading = false;
-    let notReady = () => []; // what shows while the Shop cannot be reached (nothing until the room service has answered)
+    let notReady = () => []; // what shows while the Shop cannot be reached and there is no showroom
+    // This PC's copy of the list is on its way (the showroom paints when it lands, so the old page never flashes first).
+    let cataloguing = showroomOn() && typeof api?.hubShop === "function";
+    let stateWords = ""; // what the room service's state means, as explain() said it
+    let way = null; // the showroom's one thing that helps: { label, run } (Sign in, Connect or Join to get it)
+    let gateEl = null; // Friends' sign-in card, while signing in is what helps
     let confirm = null; // { id, price, tip, where: "card" | "banner", changed, short }: a purchase waiting for a yes
     let reporting = null; // the pack whose report form is open
-    let tried = null; // { item, endsAt, timer, clock, words }: the one item being tried
-    const stages = new Map(); // effect item id -> its little menu, for Try
+    let tried = null; // { item, endsAt, timer, clock, words, scope }: the one item being tried
+    const stages = new Map(); // `${scope}:${item id}` -> its little menu, for a demo
     const make = {}; // the editor's live parts
+    const detail = { item: null, scope: null, said: "" }; // the item whose detail is open, where it was opened from
 
     for (const [id, label] of VIEWS) {
       const tab = button(label, () => show(id), `friends-shop-view-${id}`, "friends-shop-tab");
@@ -630,32 +747,42 @@
     arrowKeys(tabs);
 
     const call = async (method, ...args) => { try { return await api.hubShop(method, ...args); } catch { return { ok: false, error: "failed" }; } };
+    // A message for the page's status line, and the open detail's too (the page is behind the dialog).
+    const setStatus = (text) => {
+      status.textContent = text;
+      if (detail.item) { detail.said = text; const line = detailRoot.querySelector?.("#friends-shop-detail-status"); if (line) line.textContent = text; }
+    };
     const guard = async (label, work) => {
       if (busy) return;
       busy = true;
       root.setAttribute("aria-busy", "true");
-      if (label) status.textContent = label;
-      try { await work(); } catch { status.textContent = "The Shop could not do that. Try again."; }
+      if (label) setStatus(label);
+      try { await work(); } catch { setStatus("The Shop could not do that. Try again."); }
       busy = false;
       root.removeAttribute("aria-busy");
     };
-    const isOwned = (item) => item.owned === true || owns(item.id) || mineItem(item);
+    const showroom = () => !ready && showroomOn() && Boolean(catalog?.local);
+    const isOwned = (item) => item.id === EMBER || item.owned === true || owns(item.id) || mineItem(item);
     const mineItem = (item) => Boolean(me) && item.maker?.id === me;
     const memberPack = (item) => item.kind === "pack" && !String(item.id).startsWith("studio:");
     const nameOf = (id) => names.get(id) ?? "the item it needs";
+    const isNew = (item) => (item.drop ? item.drop === catalog?.drops?.current?.id : memberPack(item) && Number.isFinite(item.createdAt) && Date.now() - item.createdAt <= SOON_MS);
+    const openId = (item, scope) => `friends-shop-open-${scope}-${domId(item.id)}`;
 
     // ---- the parts around the view ----
     function paintChrome() {
       const known = Number.isFinite(balanceNow);
       balance.hidden = !known;
       if (known) balance.replaceChildren(gem(), node("span", "", credits(balanceNow)));
-      tabs.hidden = !ready;
+      const shown = ready || showroom();
+      tabs.hidden = !shown;
+      root.dataset.view = view;
       for (const tab of tabs.children) {
         const on = tab.dataset.view === view;
         tab.setAttribute("aria-selected", String(on));
         tab.tabIndex = on ? 0 : -1;
       }
-      if (ready) { body.setAttribute("role", "tabpanel"); body.setAttribute("aria-labelledby", `friends-shop-view-${view}`); }
+      if (shown) { body.setAttribute("role", "tabpanel"); body.setAttribute("aria-labelledby", `friends-shop-view-${view}`); }
       else { body.removeAttribute("role"); body.removeAttribute("aria-labelledby"); }
     }
     const clock = (ms) => { const seconds = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`; };
@@ -668,43 +795,69 @@
       words.id = "friends-shop-try-words";
       tried.words = words;
       const parts = [words];
-      if (!isOwned(item) && Number.isFinite(item.price) && item.price > 0) parts.push(button("Buy", () => ask(item, "banner"), "friends-shop-try-buy", PRIMARY));
+      if (!isOwned(item) && Number.isFinite(item.price) && item.price > 0) {
+        if (ready) parts.push(button("Buy", () => ask(item, "banner"), "friends-shop-try-buy", PRIMARY));
+        else if (way) parts.push(button(way.label, () => way.run(), "friends-shop-try-way", PRIMARY));
+      }
       parts.push(button("Stop", () => stopTry(), "friends-shop-try-stop"));
       banner.replaceChildren(...parts);
       if (confirm?.where === "banner" && confirm.id === item.id) banner.append(confirmPanel(item));
     }
 
-    // ---- one item ----
-    function meta(item) {
+    // ---- one item: its card ----
+    // The price, or Owned, as one line ("Your pack" for your own; a member's free pack welcomes a tip).
+    function priceLine(item, { sales = true } = {}) {
       const line = node("p", "friends-shop-meta");
-      if (isOwned(item)) line.append(node("span", "friends-shop-owned", mineItem(item) ? "Your pack" : "Yours"));
-      // A member's free pack can still carry a tip for its maker.
+      if (item.id === EMBER) line.append(node("span", "friends-shop-price", "Free"));
+      else if (isOwned(item)) line.append(node("span", "friends-shop-owned", mineItem(item) ? "Your pack" : "Owned"));
       else if (item.price === 0) line.append(node("span", "friends-shop-price", memberPack(item) ? "Free · tips welcome" : "Free"));
       else if (Number.isFinite(item.price)) {
         const price = node("span", "friends-shop-price");
         price.append(gem(), node("span", "", credits(item.price)));
         line.append(price);
       }
-      if (memberPack(item) && count(item.sales) != null) line.append(node("span", "friends-shop-sales", plural(item.sales, "sale")));
+      if (sales && memberPack(item) && count(item.sales) != null) line.append(node("span", "friends-shop-sales", plural(item.sales, "sale")));
       if (item.requires && !isOwned(item) && !owns(item.requires)) line.append(node("span", "friends-shop-needs", `Needs ${nameOf(item.requires)}`));
       if (item.status === "unlisted") line.append(node("span", "friends-shop-note", "No longer listed"));
       return line;
     }
-    function preview(item) {
+    // The badges over a card's preview: In use, then New or Leaving soon.
+    function badges(item) {
+      const list = [];
+      if (item.id === EMBER ? petState().on === true : isOwned(item) && usable(item) && inUse(item)) list.push(["inuse", "In use"]);
+      if (item.available !== false && leavingSoon(item)) list.push(["leaving", "Leaving soon"]);
+      else if (isNew(item)) list.push(["new", "New"]);
+      if (!list.length) return null;
+      const row = node("span", "friends-shop-badges");
+      for (const [kind, words] of list) { const badge = node("span", `friends-shop-badge is-${kind}`, words); row.append(badge); }
+      return row;
+    }
+    // The preview a card, the banner or a detail shows (big: the detail's and the banner's, which move faster).
+    function preview(item, scope, { big = false } = {}) {
       const box = node("div", "friends-shop-preview");
-      if (item.kind === "pet" || item.kind === "skin") {
-        if (typeof window.MefiPets?.paintPreview === "function") box.append(petCanvas(petOfItem(item), item.kind === "skin" ? skinOf(item.id) : "theme", `${item.name}, flying`));
-        else { const still = node("span", "friends-shop-placeholder"); still.setAttribute("aria-hidden", "true"); still.append(gem("friends-shop-placeholder-gem")); box.append(still); }
-      } else if (item.kind === "effect") box.append(effectStage(item));
+      if (item.id === EMBER) {
+        if (typeof window.MefiPets?.paintPreview === "function") box.append(petCanvas(petOf(EMBER) ?? "dragon", petState().skin || "theme", "Ember the dragon, flying", big));
+        else box.append(placeholder());
+      } else if (item.kind === "pet" || item.kind === "skin") {
+        if (typeof window.MefiPets?.paintPreview === "function") box.append(petCanvas(petOfItem(item), item.kind === "skin" ? skinOf(item.id) : "theme", `${item.name}, flying`, big));
+        else box.append(placeholder());
+      } else if (item.kind === "effect") box.append(effectStage(item, scope, big));
       else if (item.kind === "nodestyle") {
         const key = styleOf(item.id);
-        if (key && window.MefiNodeStyles?.STYLES?.includes?.(key)) box.append(boardCanvas(key, `${item.name}: nodes and wires in this style`));
-        else { const still = node("span", "friends-shop-placeholder"); still.setAttribute("aria-hidden", "true"); still.append(gem("friends-shop-placeholder-gem")); box.append(still); }
-      } else box.append(packMock(dataOf(item), { title: item.name }));
+        if (key && window.MefiNodeStyles?.STYLES?.includes?.(key)) box.append(boardCanvas(key, `${item.name}: nodes and wires in this style`, big));
+        else box.append(placeholder());
+      } else box.append(packMock(dataOf(item), { title: item.name, big }));
       return box;
     }
-    // A little menu that plays the effect's exit (MefiEffects.demo), then comes back fresh for the next look.
-    function effectStage(item) {
+    function placeholder() {
+      const still = node("span", "friends-shop-placeholder");
+      still.setAttribute("aria-hidden", "true");
+      still.append(gem("friends-shop-placeholder-gem"));
+      return still;
+    }
+    // A little menu that plays the effect's exit (MefiEffects.demo), then comes back fresh for the next look. A big one
+    // (the banner's, a detail's) plays by itself every few seconds while it is on screen.
+    function effectStage(item, scope, big = false) {
       const stage = node("div", "friends-shop-stage");
       stage.setAttribute("aria-hidden", "true");
       const menu = () => {
@@ -713,131 +866,208 @@
         return box;
       };
       stage.append(menu());
-      let playing = false;
-      stage.play = () => {
+      stage.playing = false;
+      const play = () => {
         const demo = window.MefiEffects?.demo;
-        if (playing || gone || typeof demo !== "function" || motionOff()) return;
-        playing = true;
+        if (stage.playing || gone || typeof demo !== "function" || motionOff()) return;
+        stage.playing = true;
         let done = null;
         try { done = demo.call(window.MefiEffects, stage.querySelector(".friends-shop-menu"), effectOf(item.id)); } catch { done = null; }
         const settled = done && typeof done.then === "function" ? done.then(() => wait(450), () => wait(450)) : wait(1700);
-        void settled.then(() => { stage.replaceChildren(menu()); playing = false; });
+        void settled.then(() => { stage.replaceChildren(menu()); stage.playing = false; });
       };
-      stages.set(item.id, stage);
+      stages.set(`${scope}:${item.id}`, stage);
+      if (big) { stage.dataset.size = "big"; stage.play = play; watchLive(stage); }
+      else stage.demo = play;
       return stage;
     }
+    // A card: a big live preview with its badges, the name (a button that opens the detail; the whole card answers
+    // the pointer) and the price. An effect plays when the card is pointed at or reached with the keyboard.
+    function itemCard(item, scope) {
+      const box = node("article", "friends-shop-item");
+      box.dataset.item = item.id;
+      box.dataset.kind = item.kind;
+      const look = preview(item, scope);
+      const marks = badges(item);
+      if (marks) look.append(marks);
+      const words = node("div", "friends-shop-words");
+      const name = node("h3", "friends-shop-name");
+      const open = button(item.name, () => openDetail(item, scope), openId(item, scope), "friends-shop-open");
+      open.setAttribute("aria-haspopup", "dialog");
+      box.setAttribute("aria-labelledby", open.id);
+      name.append(open);
+      words.append(name);
+      if (memberPack(item) && item.maker?.name) words.append(node("p", "friends-shop-by", `by ${item.maker.name}`));
+      words.append(priceLine(item));
+      box.append(look, words);
+      const stage = stages.get(`${scope}:${item.id}`);
+      if (item.kind === "effect" && stage?.demo) { box.addEventListener("pointerenter", () => stage.demo()); box.addEventListener("focusin", () => stage.demo()); }
+      return box;
+    }
+    // Ember the dragon: free with every Studio, a card like the others; its detail has the switch.
+    const EMBER_ITEM = Object.freeze({ id: EMBER, kind: "pet", name: "Ember the dragon", blurb: EMBER_BLURB, price: 0, requires: null, maker: null, data: null, owned: true, status: "listed", drop: null, available: true, leaves: null });
+    const emberCard = (scope) => itemCard(EMBER_ITEM, scope);
+    function grid(list, scope, first = []) {
+      const box = node("div", "friends-shop-grid");
+      box.append(...first, ...list.map((item) => itemCard(item, scope)));
+      return box;
+    }
+    // A section of the page: a heading, a line under it, its content, and an action at the end of its heading.
+    function section(id, heading, lead, content, action = null) {
+      const box = node("section", "friends-shop-group");
+      box.id = `friends-shop-group-${id}`;
+      box.setAttribute("aria-labelledby", `friends-shop-group-${id}-title`);
+      const top = node("div", "friends-shop-group-head");
+      const words = node("div", "friends-shop-group-words");
+      const title = node("h2", "friends-shop-group-title", heading);
+      title.id = `friends-shop-group-${id}-title`;
+      words.append(title);
+      if (lead) words.append(node("p", "friends-shop-lead", lead));
+      top.append(words);
+      if (action) top.append(action);
+      box.append(top, ...[].concat(content).filter(Boolean));
+      return box;
+    }
+
+    // ---- one item: its detail ----
+    function openDetail(item, scope) {
+      detail.item = item;
+      detail.scope = scope;
+      detail.said = "";
+      confirm = confirm?.where === "banner" ? confirm : null;
+      reporting = null;
+      paintDetail();
+      try {
+        if (typeof detailRoot.showModal === "function") { if (!detailRoot.open) detailRoot.showModal(); }
+        else detailRoot.open = true;
+      } catch { detailRoot.open = true; }
+      if (!detailRoot.open) detailRoot.setAttribute("open", "");
+      focusOn("friends-shop-detail-name");
+    }
+    function closeDetail({ focus = true } = {}) {
+      if (!detail.item) return;
+      const { item, scope } = detail;
+      detail.item = null;
+      if (confirm?.where === "card") confirm = null;
+      reporting = null;
+      try { if (typeof detailRoot.close === "function" && detailRoot.open) detailRoot.close(); } catch { /* closed already */ }
+      detailRoot.open = false;
+      detailRoot.removeAttribute("open");
+      detailRoot.replaceChildren();
+      if (focus) focusOn(openId(item, scope));
+    }
+    // Esc closes the detail (or, first, a question inside it); so does a press on the dimmed page around it.
+    detailRoot.addEventListener("keydown", (event) => { if (event.key === "Escape" && detail.item) { event.preventDefault?.(); event.stopPropagation?.(); closeDetail(); } });
+    detailRoot.addEventListener("cancel", (event) => { event.preventDefault?.(); closeDetail(); });
+    detailRoot.addEventListener("click", (event) => { if (event.target === detailRoot) closeDetail(); });
+    // Pets · Haunted Hollow; Community · by Nova.
+    function kickerOf(item) {
+      if (memberPack(item)) return "Community";
+      const drop = item.drop && catalog?.drops?.current?.id === item.drop ? catalog.drops.current.name : null;
+      return [categoryName(categoryOf(item.kind)), drop].filter(Boolean).join(" · ");
+    }
+    function paintDetail() {
+      if (!detail.item) return;
+      const item = detail.item;
+      const active = document.activeElement;
+      const held = active && detailRoot.contains?.(active) ? active.id : "";
+      // The detail's last previews stop before its new ones start; the page's own keep going.
+      releaseLive(body);
+      const box = node("div", "friends-shop-detail-box");
+      const look = preview(item, "detail", { big: true });
+      look.classList.add("friends-shop-detail-preview");
+      const marks = badges(item);
+      if (marks) look.append(marks);
+      const words = node("div", "friends-shop-detail-words");
+      const kicker = node("p", "friends-shop-detail-kicker", kickerOf(item));
+      const name = node("h2", "friends-shop-detail-name", item.name);
+      name.id = "friends-shop-detail-name";
+      name.tabIndex = -1;
+      words.append(kicker, name);
+      const maker = item.id === EMBER ? "Free with every Studio" : item.maker?.name ? `by ${item.maker.name}` : String(item.id).startsWith("studio:") ? "by Mefi Studio" : "";
+      if (maker) words.append(node("p", "friends-shop-by", maker));
+      if (item.blurb) words.append(node("p", "friends-shop-blurb", item.blurb));
+      const meta = priceLine(item);
+      const leaves = item.available !== false ? leavesWords(item.leaves) : "";
+      if (leaves) meta.append(node("span", "friends-shop-leaves", leaves));
+      if (item.available === false && !isOwned(item)) meta.append(node("span", "friends-shop-note", "Rotated out"));
+      words.append(meta, item.id === EMBER ? emberSwitch() : actions(item));
+      const said = node("p", "friends-shop-detail-status", detail.said);
+      said.id = "friends-shop-detail-status";
+      said.setAttribute("role", "status");
+      words.append(said);
+      if (confirm?.where === "card" && confirm.id === item.id) words.append(confirmPanel(item));
+      if (reporting === item.id) words.append(reportPanel(item));
+      box.append(look, words);
+      const close = button("", () => closeDetail(), "friends-shop-detail-close", "ghost friends-shop-detail-close");
+      close.setAttribute("aria-label", "Close");
+      close.title = "Close (Esc)";
+      close.append(node("span", "friends-shop-detail-x", "×"));
+      close.lastChild.setAttribute("aria-hidden", "true");
+      detailRoot.replaceChildren(box, close);
+      detailRoot.dataset.kind = item.kind;
+      detailRoot.dataset.item = item.id;
+      if (held) focusOn(held);
+    }
+    // What a detail offers: Use or In use (Turn off for a pet or an effect); Try for 2 minutes and Buy or Get; in the
+    // showroom, Try and the one thing that helps; Report, and Remove for a moderator, on a member's pack.
     function actions(item) {
       const row = node("div", "friends-shop-actions");
       const key = domId(item.id);
-      const named = (control) => { control.setAttribute("aria-describedby", `friends-shop-name-${key}`); return control; };
       if (isOwned(item)) {
         if (!usable(item)) row.append(node("span", "friends-shop-soon", SOON));
         else if (inUse(item)) {
           row.append(node("span", "friends-shop-inuse", "In use"));
-          if (item.kind === "pet" || item.kind === "effect") row.append(named(button("Turn off", () => turnOff(item), `friends-shop-off-${key}`)));
-        } else row.append(named(button("Use", () => use(item), `friends-shop-use-${key}`, PRIMARY)));
-      } else if (ready) {
-        if (!usable(item) || !tryable(item)) row.append(node("span", "friends-shop-soon", SOON));
-        else {
-          const trying = tried?.item.id === item.id;
-          row.append(named(button(trying ? "Stop trying" : "Try for 2 minutes", () => tryIt(item), `friends-shop-try-${key}`)));
+          if (item.kind === "pet" || item.kind === "effect") row.append(button("Turn off", () => turnOff(item), `friends-shop-off-${key}`));
+        } else row.append(button("Use", () => use(item), `friends-shop-use-${key}`, PRIMARY));
+      } else if (item.available === false) {
+        row.append(node("span", "friends-shop-soon", REASONS["not-available"]));
+      } else if (!usable(item) || !tryable(item)) {
+        row.append(node("span", "friends-shop-soon", SOON));
+      } else {
+        const trying = tried?.item.id === item.id;
+        row.append(button(trying ? "Stop trying" : "Try for 2 minutes", () => tryIt(item), `friends-shop-try-${key}`));
+        if (ready) {
           // Getting a member's free pack asks first too: a tip for its maker may go with it.
-          if (item.price === 0) row.append(named(button("Get", () => { if (memberPack(item)) ask(item, "card"); else void get(item); }, `friends-shop-get-${key}`, PRIMARY)));
+          if (item.price === 0) row.append(button("Get", () => { if (memberPack(item)) ask(item, "card"); else void get(item); }, `friends-shop-get-${key}`, PRIMARY));
           else if (Number.isFinite(item.price)) {
             const buyIt = button(`Buy for ${item.price}`, () => ask(item, "card"), `friends-shop-buy-${key}`, PRIMARY);
             buyIt.append(gem());
-            row.append(named(buyIt));
+            row.append(buyIt);
           }
-        }
+        } else if (way) row.append(button(way.label, () => way.run(), `friends-shop-way-${key}`, PRIMARY));
+        else if (stateWords) row.append(node("span", "friends-shop-soon", stateWords));
       }
       // Anyone may report a member's pack; a moderator may also take it out of the Shop.
       if (ready && memberPack(item) && !mineItem(item)) {
-        row.append(named(button(reporting === item.id ? "Cancel report" : "Report", () => { reporting = reporting === item.id ? null : item.id; paint(); focusOn(reporting ? `friends-shop-report-ask-${key}` : `friends-shop-report-${key}`); }, `friends-shop-report-${key}`)));
-        if (window.MefiFriendsMod?.isMod?.() === true) row.append(named(confirmed("Remove", "Remove it?", `Take ${item.name} out of the Shop? Members who got it lose it.`, () => { void remove(item); }, `friends-shop-remove-${key}`)));
+        row.append(button(reporting === item.id ? "Cancel report" : "Report", () => { reporting = reporting === item.id ? null : item.id; paint(); focusOn(reporting ? `friends-shop-report-ask-${key}` : `friends-shop-report-${key}`); }, `friends-shop-report-${key}`));
+        if (window.MefiFriendsMod?.isMod?.() === true) row.append(confirmed("Remove", "Remove it?", `Take ${item.name} out of the Shop? Members who got it lose it.`, () => { void remove(item); }, `friends-shop-remove-${key}`));
       }
       return row;
     }
-    function itemCard(item) {
-      const key = domId(item.id);
-      const box = node("article", "friends-shop-item");
-      box.dataset.item = item.id;
-      box.dataset.kind = item.kind;
-      box.setAttribute("aria-labelledby", `friends-shop-name-${key}`);
-      const words = node("div", "friends-shop-words");
-      const name = node("h3", "friends-shop-name", item.name);
-      name.id = `friends-shop-name-${key}`;
-      words.append(name);
-      const maker = item.maker?.name ? `by ${item.maker.name}` : String(item.id).startsWith("studio:") ? "by Mefi Studio" : "";
-      if (maker) words.append(node("p", "friends-shop-by", maker));
-      if (item.blurb) words.append(node("p", "friends-shop-blurb", item.blurb));
-      words.append(meta(item));
-      box.append(preview(item), words, actions(item));
-      if (confirm?.where === "card" && confirm.id === item.id) box.append(confirmPanel(item));
-      if (reporting === item.id) box.append(reportPanel(item));
-      // An effect plays when the card is pointed at or reached with the keyboard.
-      const stage = stages.get(item.id);
-      if (item.kind === "effect" && stage) { box.addEventListener("pointerenter", () => stage.play()); box.addEventListener("focusin", () => stage.play()); }
-      return box;
-    }
-    function grid(list, first = []) {
-      const box = node("div", "friends-shop-grid");
-      box.append(...first, ...list.map(itemCard));
-      return box;
-    }
-    // Ember the dragon: free with every Studio, so no price, Try or Buy; a switch lets it out or rests it.
-    function emberCard() {
-      const box = node("article", "friends-shop-item friends-shop-ember");
-      box.dataset.item = EMBER;
-      box.dataset.kind = "pet";
-      box.setAttribute("aria-labelledby", "friends-shop-name-ember");
-      const look = node("div", "friends-shop-preview");
-      if (typeof window.MefiPets?.paintPreview === "function") look.append(petCanvas(petOf(EMBER) ?? "dragon", petState().skin || "theme", "Ember the dragon, flying"));
-      else { const still = node("span", "friends-shop-placeholder"); still.setAttribute("aria-hidden", "true"); still.append(gem("friends-shop-placeholder-gem")); look.append(still); }
-      const words = node("div", "friends-shop-words");
-      const name = node("h3", "friends-shop-name", "Ember the dragon");
-      name.id = "friends-shop-name-ember";
-      const line = node("p", "friends-shop-meta");
-      line.append(node("span", "friends-shop-price", "Free"));
-      words.append(name, node("p", "friends-shop-by", "Free with every Studio"), node("p", "friends-shop-blurb", EMBER_BLURB), line);
+    // Ember's switch: it lets Ember out or rests it.
+    function emberSwitch() {
       const row = node("div", "friends-shop-actions");
-      if (typeof window.MefiPets?.set !== "function") row.append(node("span", "friends-shop-soon", SOON));
-      else {
-        const on = petState().on === true;
-        const toggle = button("", () => {
-          const next = petState().on !== true;
-          try { window.MefiPets.set({ on: next }); } catch { /* said below either way */ }
-          status.textContent = next ? "Ember is out. Look for it around your studio." : "Ember is resting.";
-          paint();
-        }, "friends-shop-ember-switch", "friends-shop-switch");
-        toggle.setAttribute("role", "switch");
-        toggle.setAttribute("aria-checked", String(on));
-        toggle.setAttribute("aria-describedby", "friends-shop-name-ember");
-        const track = node("span", "friends-shop-switch-track");
-        track.setAttribute("aria-hidden", "true");
-        track.append(node("span", "friends-shop-switch-thumb"));
-        // The switch's name stays "Show Ember"; On or Off beside it is for the eye (the switch's state is aria-checked).
-        const state = node("span", "friends-shop-switch-state", on ? "On" : "Off");
-        state.setAttribute("aria-hidden", "true");
-        toggle.append(track, node("span", "friends-shop-switch-label", "Show Ember"), state);
-        row.append(toggle);
-      }
-      box.append(look, words, row);
-      return box;
-    }
-    // Items under their headings: Pets (Ember first, when asked for, then scales), Menu effects, Style packs.
-    function grouped(list, empty, { ember = false } = {}) {
-      if (!list.length && !ember) return [node("p", "friends-shop-empty", empty)];
-      return GROUPS.map(([key, label]) => {
-        const members = list.filter((item) => groupOf(item.kind) === key);
-        const first = key === "pet" && ember ? [emberCard()] : [];
-        if (!members.length && !first.length) return null;
-        const box = node("section", "friends-shop-group");
-        box.setAttribute("aria-labelledby", `friends-shop-group-${key}`);
-        const heading = node("h2", "friends-shop-group-title", label);
-        heading.id = `friends-shop-group-${key}`;
-        box.append(heading, grid(members, first));
-        return box;
-      });
+      if (typeof window.MefiPets?.set !== "function") { row.append(node("span", "friends-shop-soon", SOON)); return row; }
+      const on = petState().on === true;
+      const toggle = button("", () => {
+        const next = petState().on !== true;
+        try { window.MefiPets.set({ on: next }); } catch { /* said below either way */ }
+        setStatus(next ? "Ember is out. Look for it around your studio." : "Ember is resting.");
+        paint();
+      }, "friends-shop-ember-switch", "friends-shop-switch");
+      toggle.setAttribute("role", "switch");
+      toggle.setAttribute("aria-checked", String(on));
+      toggle.setAttribute("aria-describedby", "friends-shop-detail-name");
+      const track = node("span", "friends-shop-switch-track");
+      track.setAttribute("aria-hidden", "true");
+      track.append(node("span", "friends-shop-switch-thumb"));
+      // The switch's name stays "Show Ember"; On or Off beside it is for the eye (the switch's state is aria-checked).
+      const state = node("span", "friends-shop-switch-state", on ? "On" : "Off");
+      state.setAttribute("aria-hidden", "true");
+      toggle.append(track, node("span", "friends-shop-switch-label", "Show Ember"), state);
+      row.append(toggle);
+      return row;
     }
 
     // ---- buying, with an explicit yes (and, for a member's pack, a tip for its maker if you like) ----
@@ -938,9 +1168,9 @@
         const keep = tried?.item.id === item.id;
         if (keep) { endTry(); use(item, { quiet: true }); }
         const thanks = tipping && tip > 0 ? ` Thank you for the ${tip} credit tip.` : "";
-        status.textContent = keep ? `${item.name} is yours, and in use.${thanks}` : `${item.name} is yours.${thanks} Use it any time.`;
+        setStatus(keep ? `${item.name} is yours, and in use.${thanks}` : `${item.name} is yours.${thanks} Use it any time.`);
         paint();
-        focusOn(keep ? "friends-shop-status" : `friends-shop-use-${domId(item.id)}`);
+        focusOn(keep ? (detail.item ? "friends-shop-detail-status" : "friends-shop-status") : `friends-shop-use-${domId(item.id)}`);
         void refresh();
       });
     }
@@ -950,7 +1180,7 @@
         if (!answer?.ok) { refusal(item, answer, 0); return; }
         item.owned = true;
         markOwned(plainObject(answer.item) && answer.item.id === item.id ? { ...item, ...answer.item } : item);
-        status.textContent = `${item.name} is yours. Use it any time.`;
+        setStatus(`${item.name} is yours. Use it any time.`);
         paint();
         focusOn(`friends-shop-use-${domId(item.id)}`);
         void refresh();
@@ -958,7 +1188,7 @@
     }
     // Why a purchase did not go through, and what to do about it.
     function refusal(item, answer, price, tip = 0) {
-      const code = [answer?.reason, answer?.error].find((value) => ["short", "needs", "price-changed", "no-tip", "owned", "own", "gone", "not-found", "hold"].includes(value)) ?? answer?.error;
+      const code = [answer?.reason, answer?.error].find((value) => ["short", "needs", "price-changed", "no-tip", "owned", "own", "gone", "not-found", "not-available", "hold"].includes(value)) ?? answer?.error;
       const where = confirm?.where ?? "card";
       switch (code) {
         case "short": {
@@ -968,52 +1198,59 @@
           // Enough for the pack but not for the tip: ask again, with a tip the balance covers.
           if (tip > 0 && Number.isFinite(have) && have >= cost) {
             confirm = { id: item.id, price: cost, tip: 0, where, changed: false, short: false };
-            status.textContent = `You have ${credits(have)}: enough for ${item.name}, not for that tip. Choose a smaller tip, or none.`;
+            setStatus(`You have ${credits(have)}: enough for ${item.name}, not for that tip. Choose a smaller tip, or none.`);
           } else {
             confirm = { id: item.id, price: cost, tip: 0, where, changed: false, short: true };
-            status.textContent = shortWords(item, cost, have);
+            setStatus(shortWords(item, cost, have));
           }
           break;
         }
         case "needs":
           // Nothing in today's Shop needs another item first (Ember's scales are sold on their own); kept for what comes later.
           confirm = null;
-          status.textContent = `Get ${nameOf(answer.needs ?? item.requires)} first.`;
+          setStatus(`Get ${nameOf(answer.needs ?? item.requires)} first.`);
           break;
         case "price-changed":
           if (Number.isFinite(answer.price)) {
             item.price = answer.price;
             confirm = { id: item.id, price: answer.price, tip, where, changed: true, short: false };
-            status.textContent = `The price of ${item.name} changed to ${credits(answer.price)}. Buy it for that?`;
-          } else { confirm = null; status.textContent = `The price of ${item.name} changed. Look again, then buy.`; void loadView(); }
+            setStatus(`The price of ${item.name} changed to ${credits(answer.price)}. Buy it for that?`);
+          } else { confirm = null; setStatus(`The price of ${item.name} changed. Look again, then buy.`); void loadView({ fresh: true }); }
           break;
         case "no-tip":
           confirm = { id: item.id, price, tip: 0, where, changed: false, short: false };
-          status.textContent = `${item.name} cannot take a tip: tips are only for members' style packs. Buy it without one?`;
+          setStatus(`${item.name} cannot take a tip: tips are only for members' style packs. Buy it without one?`);
           break;
         case "owned":
           confirm = null;
           item.owned = true;
           markOwned(item);
-          status.textContent = `You already own ${item.name}.`;
+          setStatus(`You already own ${item.name}.`);
           void refresh();
           break;
         case "own":
           confirm = null;
-          status.textContent = "That's your own pack, so it's already yours to use.";
+          setStatus("That's your own pack, so it's already yours to use.");
           break;
         case "gone":
         case "not-found":
           confirm = null;
-          status.textContent = `${item.name} is no longer in the Shop.`;
-          void loadView();
+          setStatus(`${item.name} is no longer in the Shop.`);
+          void loadView({ fresh: true });
+          break;
+        case "not-available":
+          // Its drop's month is over: it rotated out while the page was open.
+          confirm = null;
+          item.available = false;
+          setStatus(REASONS["not-available"]);
+          void loadView({ fresh: true });
           break;
         case "hold":
           confirm = null;
-          status.textContent = holdWords(holdOf(answer));
+          setStatus(holdWords(holdOf(answer)));
           break;
         default:
-          status.textContent = reasonWords(answer, "That did not go through. Try again.");
+          setStatus(reasonWords(answer, "That did not go through. Try again."));
       }
       paint();
       if (confirm) focusOn(`friends-shop-ask-${domId(item.id)}`);
@@ -1033,18 +1270,22 @@
           window.MefiMusic.previewPack({ id: item.id, name: item.name, ...data });
         }
       } catch {
-        status.textContent = `${item.name} could not be tried just now.`;
+        setStatus(`${item.name} could not be tried just now.`);
         return;
       }
+      // The detail steps aside, so what is tried can be seen; the banner at the top has the time left, Buy and Stop.
+      const scope = detail.item?.id === item.id ? detail.scope : null;
+      closeDetail({ focus: false });
       tried = {
-        item, endsAt: Date.now() + TRY_MS, words: null,
-        timer: setTimeout(() => { const ended = endTry(); if (ended) { status.textContent = `Your two minutes with ${ended.name} are over.`; paint(); } }, TRY_MS),
+        item, scope, endsAt: Date.now() + TRY_MS, words: null,
+        timer: setTimeout(() => { const ended = endTry(); if (ended) { setStatus(`Your two minutes with ${ended.name} are over.`); paint(); } }, TRY_MS),
         clock: setInterval(() => { if (tried?.words) tried.words.textContent = tryWords(); }, 1000),
       };
-      status.textContent = `Trying ${item.name} for two minutes.`;
+      setStatus(`Trying ${item.name} for two minutes.`);
       paint();
+      if (scope) focusOn(openId(item, scope));
       // After the repaint: the card's little menu plays the effect it is trying.
-      stages.get(item.id)?.play();
+      if (scope) stages.get(`${scope}:${item.id}`)?.demo?.();
     }
     // Ends the try that is on, if any (its module's endPreview). -> the item that was being tried
     function endTry() {
@@ -1058,10 +1299,11 @@
       return item;
     }
     function stopTry() {
+      const was = tried;
       const item = endTry();
-      if (item) status.textContent = `Stopped trying ${item.name}.`;
+      if (item) setStatus(`Stopped trying ${item.name}.`);
       paint();
-      if (item) focusOn(`friends-shop-try-${domId(item.id)}`);
+      if (item && was?.scope) focusOn(openId(item, was.scope));
     }
 
     // ---- using what you own ----
@@ -1083,7 +1325,7 @@
         }
       } catch { done = false; }
       if (quiet) return done;
-      status.textContent = done ? `${item.name} is in use.` : `${item.name} could not be put to use just now.`;
+      setStatus(done ? `${item.name} is in use.` : `${item.name} could not be put to use just now.`);
       paint();
       return done;
     }
@@ -1092,7 +1334,7 @@
         if (item.kind === "pet") window.MefiPets.set({ on: false });
         else window.MefiEffects.use("none");
       } catch { /* said below either way */ }
-      status.textContent = item.kind === "pet" ? `${item.name} is resting.` : "Menus close the usual way again.";
+      setStatus(item.kind === "pet" ? `${item.name} is resting.` : "Menus close the usual way again.");
       paint();
     }
 
@@ -1133,12 +1375,12 @@
       form.addEventListener("submit", (event) => {
         event.preventDefault?.();
         const reason = picks.find((radio) => radio.checked)?.value;
-        if (!reason) { status.textContent = "Choose what is wrong with it first."; return; }
+        if (!reason) { setStatus("Choose what is wrong with it first."); return; }
         void guard("Sending the report…", async () => {
           const text = more.value.trim().slice(0, 300);
           const answer = await call("shopReport", item.id, text ? { reason, text } : { reason });
           if (answer?.ok) reporting = null;
-          status.textContent = answer?.ok ? "Thanks. A moderator will look at it." : reasonWords(answer, "The report did not go through.");
+          setStatus(answer?.ok ? "Thanks. A moderator will look at it." : reasonWords(answer, "The report did not go through."));
           paint();
         });
       });
@@ -1147,40 +1389,168 @@
     async function remove(item) {
       await guard("Removing…", async () => {
         const answer = await call("modShopRemove", item.id, {});
-        status.textContent = answer?.ok ? `${item.name} is out of the Shop.` : reasonWords(answer, "It could not be removed.");
-        if (answer?.ok) await loadView();
+        setStatus(answer?.ok ? `${item.name} is out of the Shop.` : reasonWords(answer, "It could not be removed."));
+        if (answer?.ok) { closeDetail({ focus: false }); await loadView({ fresh: true }); }
       });
     }
 
     // ---- the views ----
+    // Studio's items on sale (a relay from before drops says nothing, and everything it lists is).
+    const studioItems = () => (catalog?.items ?? []).filter((item) => item.available !== false);
+    // The month's drop as a banner made from its own data: a gradient and a soft pattern from its colours, its month,
+    // how long it has left, its name and line, and up to three of its items live inside it (a pet flying, a node style
+    // lit, a theme as a little window, an effect playing). Then its items as cards.
+    function dropPart() {
+      const drop = catalog?.drops?.current;
+      if (!drop) return [];
+      const inDrop = (Array.isArray(drop.items) ? drop.items : []).map((id) => studioItems().find((item) => item.id === id)).filter(Boolean);
+      const hero = node("section", "friends-shop-hero");
+      hero.id = "friends-shop-hero";
+      hero.setAttribute("aria-labelledby", "friends-shop-hero-name");
+      const colours = drop.colors ?? {};
+      for (const [key, prop] of [["accent", "--drop-accent"], ["accent2", "--drop-accent2"], ["background", "--drop-bg"]]) if (HEX.test(colours[key] ?? "")) hero.style.setProperty(prop, colours[key]);
+      // Its words in white or near-black, whichever reads better on its background (4.5:1 or more).
+      hero.style.setProperty("--drop-ink", inkOn(colours.background));
+      const words = node("div", "friends-shop-hero-words");
+      const left = timeLeft(drop.until);
+      words.append(node("p", "friends-shop-hero-kicker", [`${monthOf(drop.from)} drop`, left ? `Leaves ${left}` : ""].filter(Boolean).join(" · ")));
+      const name = node("h2", "friends-shop-hero-name", drop.name);
+      name.id = "friends-shop-hero-name";
+      words.append(name);
+      if (drop.blurb) words.append(node("p", "friends-shop-hero-blurb", drop.blurb));
+      words.append(node("p", "friends-shop-hero-note", inDrop.length ? `${plural(inDrop.length, "piece")} for this month only. Everyone who gets one keeps it.` : "Its pieces arrive soon. Everyone who gets one keeps it."));
+      const stage = node("div", "friends-shop-hero-stage");
+      stage.setAttribute("aria-hidden", "true");
+      // One of each kind, in this order, so the banner shows the drop's range: a pet (or scales) flying in the big tile, a
+      // node style lit and a theme as a little window in the two wide ones.
+      const shown = [];
+      for (const kinds of [["pet", "skin"], ["nodestyle"], ["pack"], ["effect"]]) { const found = inDrop.find((item) => kinds.includes(item.kind) && !shown.includes(item)); if (found && shown.length < 3) shown.push(found); }
+      for (const item of shown) {
+        const tile = node("div", "friends-shop-hero-tile");
+        tile.dataset.kind = item.kind;
+        const look = preview(item, "hero", { big: true });
+        // A node style's board in the banner paints on the drop's own colour, not the theme's sky.
+        const board = look.querySelector?.("canvas[data-node-style]");
+        if (board && HEX.test(colours.background ?? "")) { board.dataset.sky = colours.background; if (HEX.test(colours.accent2 ?? "")) board.dataset.skyAccent = colours.accent2; boards.delete(board); drawLive(board, 0); }
+        tile.append(look);
+        stage.append(tile);
+      }
+      hero.dataset.pieces = String(shown.length);
+      hero.append(words, stage);
+      const parts = [hero];
+      if (inDrop.length) parts.push(section("drop", `In ${drop.name}`, `On sale until ${dayOf(drop.until, 1)}.`, grid(inDrop, "drop")));
+      return parts;
+    }
+    // The next drop, as a teaser: its name and when it starts (its items stay hidden until then).
+    function teaserPart() {
+      const drop = catalog?.drops?.next;
+      if (!drop) return null;
+      const box = node("p", "friends-shop-teaser");
+      box.id = "friends-shop-teaser";
+      const swatch = node("span", "friends-shop-teaser-swatch");
+      swatch.setAttribute("aria-hidden", "true");
+      for (const key of ["accent", "accent2", "background"]) if (HEX.test(drop.colors?.[key] ?? "")) { const dot = node("i"); dot.style.setProperty("--swatch", drop.colors[key]); swatch.append(dot); }
+      box.append(swatch, node("span", "", `Next drop: ${drop.name}, from ${dayOf(drop.from)}.`));
+      return box;
+    }
+    function featuredPart() {
+      const ids = Array.isArray(catalog?.featured) ? catalog.featured : [];
+      const list = ids.map((id) => studioItems().find((item) => item.id === id)).filter(Boolean);
+      if (!list.length) return null;
+      const left = timeLeft(catalog.featuredUntil);
+      return section("featured", "Featured this week", left ? `New picks ${left}.` : "", grid(list, "featured"));
+    }
+    function categoryPart(key, scope, { full = false } = {}) {
+      const [, label, lead] = CATEGORIES.find(([id]) => id === key);
+      const list = studioItems().filter((item) => categoryOf(item.kind) === key && !memberPack(item));
+      const first = key === "pets" ? [emberCard(scope)] : [];
+      if (!list.length && !first.length) return full ? section(key, label, lead, node("p", "friends-shop-empty", "Nothing here right now. A new month's drop may bring some.")) : null;
+      const more = full ? null : button(`All ${label.toLowerCase()}`, () => show(key), `friends-shop-more-${key}`, "friends-shop-link");
+      return section(scope === key ? key : `${scope}-${key}`, label, lead, grid(list, scope, first), more);
+    }
+    function homeView() {
+      if (!studioItems().length && !catalog) return [];
+      if (!studioItems().length) return [node("p", "friends-shop-empty", "The Shop is empty right now. Come back soon.")];
+      const community = section("community-teaser", "Community", "Style packs members make, free or for credits.", null, button(ready ? "See members' packs" : "About members' packs", () => show("packs"), "friends-shop-see-packs", "friends-shop-link"));
+      return [...dropPart(), teaserPart(), featuredPart(), ...CATEGORIES.map(([key]) => categoryPart(key, "home")), community];
+    }
     function communityView() {
+      if (!ready) {
+        const box = section("packs", "Community", "Style packs members make and share, free or for credits.", node("p", "friends-shop-empty", "Members' packs need sign-in: they come from the room service."), way ? button(way.label.replace(/ to get it$/, ""), () => way.run(), "friends-shop-packs-way", PRIMARY) : null);
+        return [box];
+      }
       const row = node("div", "friends-shop-sort");
       row.setAttribute("role", "group");
       row.setAttribute("aria-label", "Show members' packs by");
       for (const [key, label] of [["new", "New"], ["top", "Top"]]) {
         // The list on screen stays until the other order arrives.
-        const choice = button(label, () => { if (sort === key) return; sort = key; paint(); void loadView(); }, `friends-shop-sort-${key}`, "friends-shop-chip");
+        const choice = button(label, () => { if (sort === key) return; sort = key; paint(); void loadView({ fresh: true }); }, `friends-shop-sort-${key}`, "friends-shop-chip");
         choice.setAttribute("aria-pressed", String(sort === key));
         row.append(choice);
       }
-      const parts = [row, node("p", "friends-shop-lead", "Style packs members made. Anyone can make one under Make a style.")];
-      parts.push(items.length ? grid(items) : node("p", "friends-shop-empty", sort === "new" ? "No member has published a style pack yet. Be the first: Make a style." : "No pack has sold yet."));
-      if (next) parts.push(button("Show more", () => { void loadView({ more: true }); }, "friends-shop-more"));
-      return parts;
+      const makeOwn = button("Make a style", () => show("make"), "friends-shop-make-own", "friends-shop-link");
+      const empty = sort === "new"
+        ? [node("p", "friends-shop-empty", "No member has published a style pack yet. Be the first:"), button("Make a style", () => show("make"), "friends-shop-empty-make", PRIMARY)]
+        : [node("p", "friends-shop-empty", "No pack has been got yet. See the newest under New."), button("New", () => { sort = "new"; paint(); void loadView({ fresh: true }); }, "friends-shop-empty-new")];
+      const content = [row, ...(items.length ? [grid(items, "packs")] : [node("div", "friends-shop-empty-box", null)])];
+      if (!items.length) content.at(-1).append(...empty);
+      if (next) content.push(button("Show more", () => { void loadView({ more: true }); }, "friends-shop-more"));
+      return [section("packs", "Community", "Style packs members made. Anyone can make one under Make a style.", content, makeOwn)];
     }
-    // What you own, from this PC's own list, while the Shop is out of reach: it all keeps working.
+    function ownedView() {
+      const list = ready ? items : ownedList().map((entry) => ({ id: entry.id, kind: entry.kind, name: entry.name, blurb: "", price: null, requires: null, maker: null, data: entry.data, sales: null, owned: true, status: "listed" }));
+      const content = [grid(list.filter((item) => item.id !== EMBER), "owned", [emberCard("owned")])];
+      if (!list.length) content.push(node("p", "friends-shop-empty", "Nothing else yet. What you get in the Shop shows up here."), button("See what's in the Shop", () => show("studio"), "friends-shop-empty-shop"));
+      return [section("owned", "Owned", ready ? "Everything you have, on every PC you sign in on." : "What this PC knows you own. It keeps working while the Shop is out of reach.", content)];
+    }
+    // What you own, from this PC's own list, while the Shop is out of reach and there is no showroom: it all keeps working.
     function yours() {
       const list = ownedList().filter((entry) => entry.id !== EMBER).map((entry) => ({ id: entry.id, kind: entry.kind, name: entry.name, blurb: "", price: null, requires: null, maker: null, data: entry.data, sales: null, owned: true, status: "listed" }));
       // Ember is everyone's: its switch works here too, when this build has pets.
-      const ember = typeof window.MefiPets?.set === "function" ? [emberCard()] : [];
+      const ember = typeof window.MefiPets?.set === "function" ? [emberCard("yours")] : [];
       if (!list.length && !ember.length) return [];
       const box = node("section", "friends-shop-yours");
       box.id = "friends-shop-yours";
       box.setAttribute("aria-labelledby", "friends-shop-yours-title");
       const heading = node("h2", "friends-shop-group-title", "Your items");
       heading.id = "friends-shop-yours-title";
-      box.append(heading, node("p", "friends-shop-lead", "What you own keeps working while the Shop is out of reach."), grid(list, ember));
+      box.append(heading, node("p", "friends-shop-lead", "What you own keeps working while the Shop is out of reach."), grid(list, "yours", ember));
       return [box];
+    }
+    // The showroom's line at the top: where you stand, and the one thing that helps.
+    function noticePart() {
+      if (!showroom()) return null;
+      const box = node("div", "friends-shop-notice");
+      box.id = "friends-shop-notice";
+      box.setAttribute("role", "note");
+      box.append(gem("friends-shop-notice-gem"), node("p", "friends-shop-notice-words", stateWords || "The Shop is out of reach right now. Look around and try anything for two minutes."));
+      if (gateEl) box.append(button("Sign in", () => callGate(), "friends-shop-notice-signin", PRIMARY));
+      else if (way) box.append(button(way.label.replace(/ to get it$/, ""), () => way.run(), "friends-shop-notice-way", PRIMARY));
+      return box;
+    }
+    // Friends' sign-in card at the foot of the showroom; "Sign in to get it" brings it into view and to the keyboard.
+    function callGate() {
+      closeDetail({ focus: false });
+      const card_ = gateEl;
+      if (!card_) return;
+      try { card_.scrollIntoView?.({ block: "center", behavior: motionOff() ? "auto" : "smooth" }); } catch { /* it is on the page */ }
+      card_.classList?.add("is-called");
+      setTimeout(() => card_.classList?.remove("is-called"), 1600);
+      const signIn = card_.querySelector?.("#friends-gate-signin") ?? card_.querySelector?.("button");
+      (signIn ?? card_).focus?.({ preventScroll: true });
+    }
+    function viewParts() {
+      if (!ready && !showroom()) return cataloguing ? [] : notReady();
+      const lead = noticePart();
+      const foot = showroom() && gateEl ? [gateEl] : [];
+      if (loading && ready && (view === "packs" || view === "owned") && !items.length) return [lead];
+      if (view === "make") return [lead, ...makeView(), ...foot];
+      if (view === "packs") return [lead, ...communityView(), ...foot];
+      if (view === "owned") return [lead, ...ownedView(), ...foot];
+      // A view being read for the first time says so in the status line, not with an empty list.
+      if (loading && !catalog) return [lead];
+      if (view === "studio") return [lead, ...homeView(), ...foot];
+      return [lead, categoryPart(view, view, { full: true }), ...foot];
     }
 
     // ---- Make a style ----
@@ -1312,7 +1682,8 @@
       if (!canEarn) prices.append(node("p", "friends-shop-hold", `Selling for credits: ${holdWords(hold)} You can publish it free now.`));
       const check = node("p", "friends-shop-check");
       check.id = "friends-shop-check";
-      const publish = node("button", PRIMARY, editing ? "Save changes" : "Publish");
+      // Signed out, publishing is what signing in brings: the button says so and leads there.
+      const publish = node("button", PRIMARY, ready ? (editing ? "Save changes" : "Publish") : way ? way.label.replace(/ to get it$/, " to publish") : "Publish");
       publish.type = "submit";
       publish.id = "friends-shop-publish";
       publish.setAttribute("aria-describedby", check.id);
@@ -1322,7 +1693,11 @@
       tools.append(publish, useMine);
       if (editing) tools.append(button("Start a new style", () => { freshDraft(); paint(); focusOn("friends-shop-pack-name"); }, "friends-shop-new"));
       form.append(field("Name", name), field("About it", blurb), colours, looks, prices, check, tools);
-      form.addEventListener("submit", (event) => { event.preventDefault?.(); void publishDraft(); });
+      form.addEventListener("submit", (event) => {
+        event.preventDefault?.();
+        if (ready) { void publishDraft(); return; }
+        if (way) way.run(); else setStatus(stateWords || "Publishing needs the room service.");
+      });
       Object.assign(make, { check, publish, useMine });
       return form;
     }
@@ -1343,39 +1718,41 @@
       const checked = checkPack(data);
       const listing = checkListing(draft);
       const problem = !checked.ok ? checked.why : !listing.ok ? listing.why : null;
-      make.check.textContent = problem ?? (listing.price ? `Ready to publish for ${credits(listing.price)}.` : "Ready to publish, free.");
+      make.check.textContent = problem ?? (!ready ? "It reads well. Use it yourself now; sign in to publish it." : listing.price ? `Ready to publish for ${credits(listing.price)}.` : "Ready to publish, free.");
       make.check.dataset.state = problem ? "blocked" : "ready";
-      make.publish.setAttribute("aria-disabled", String(Boolean(problem)));
+      make.publish.setAttribute("aria-disabled", String(Boolean(problem) && ready));
       make.useMine.setAttribute("aria-disabled", String(!checked.ok || typeof window.MefiMusic?.applyPack !== "function"));
     }
     function useOwnStyle() {
       const checked = checkPack(packFromDraft());
-      if (!checked.ok) { status.textContent = `Not yet: ${checked.why}`; return; }
-      if (typeof window.MefiMusic?.applyPack !== "function") { status.textContent = `Using your own style: ${SOON}`; return; }
+      if (!checked.ok) { setStatus(`Not yet: ${checked.why}`); return; }
+      if (typeof window.MefiMusic?.applyPack !== "function") { setStatus(`Using your own style: ${SOON}`); return; }
       draft.localId ??= `local:${Math.random().toString(36).slice(2, 10)}`;
       try {
         window.MefiMusic.applyPack({ id: draft.localId, name: draft.name.trim() || "My style", ...checked.data }, true);
-        status.textContent = "Your style is on, on this PC only. Change it any time in Settings › Appearance.";
-      } catch { status.textContent = "Your style could not be put on just now."; }
+        setStatus("Your style is on, on this PC only. Change it any time in Settings › Appearance.");
+      } catch { setStatus("Your style could not be put on just now."); }
     }
     async function publishDraft() {
       const checked = checkPack(packFromDraft());
       const listing = checkListing(draft);
-      if (!checked.ok || !listing.ok) { status.textContent = `Not published yet: ${!checked.ok ? checked.why : listing.why}`; return; }
+      if (!checked.ok || !listing.ok) { setStatus(`Not published yet: ${!checked.ok ? checked.why : listing.why}`); return; }
       await guard(editing ? "Saving…" : "Publishing…", async () => {
         const fields = { name: listing.name, blurb: listing.blurb, price: listing.price, data: checked.data };
         const answer = editing ? await call("shopUpdate", editing, fields) : await call("shopPublish", fields);
         if (!answer?.ok) {
           const words = reasonWords(answer, editing ? "Your changes were not saved. Try again." : "It was not published. Try again.");
-          status.textContent = [answer?.error, answer?.reason].includes("hold") ? `${words} You can publish it free now.` : words;
+          setStatus([answer?.error, answer?.reason].includes("hold") ? `${words} You can publish it free now.` : words);
           return;
         }
         const was = editing;
         if (!was && typeof answer.pack?.id === "string") editing = answer.pack.id;
-        status.textContent = was ? `${listing.name} is saved. Members who got it see the new look.` : `${listing.name} is in the Shop, ${listing.price ? `for ${credits(listing.price)}` : "free"}.`;
-        await loadView();
+        setStatus(was ? `${listing.name} is saved. Members who got it see the new look.` : `${listing.name} is in the Shop, ${listing.price ? `for ${credits(listing.price)}` : "free"}.`);
+        await loadView({ fresh: true });
       });
     }
+    // How many times a pack of yours was got (bought or, free, got), as a maker reads it.
+    const gotWords = (n) => (n === 0 ? "No one has got it yet" : n === 1 ? "Got once" : `Got ${n} times`);
     function minePart() {
       const box = node("section", "friends-shop-mine");
       box.id = "friends-shop-mine";
@@ -1383,14 +1760,15 @@
       const heading = node("h2", "friends-shop-group-title", "Your packs");
       heading.id = "friends-shop-mine-title";
       box.append(heading);
-      if (!mine.length) { box.append(node("p", "friends-shop-empty", loading ? "Reading your packs…" : "You have not published a style pack yet.")); return box; }
+      if (!ready) { box.append(node("p", "friends-shop-empty", "Sign in to publish a style and to see the ones you published.")); return box; }
+      if (!mine.length) { box.append(node("p", "friends-shop-empty", loading ? "Reading your packs…" : "You have not published a style pack yet. Make one above, then press Publish.")); return box; }
       const list = node("ul", "friends-shop-mine-list");
       for (const item of mine) {
         const key = domId(item.id);
         const row = node("li", "friends-shop-mine-row");
         row.dataset.item = item.id;
         const words = node("div", "friends-shop-words");
-        const facts = [item.status === "listed" ? "Listed" : item.status === "unlisted" ? "Not listed" : "Removed by a moderator", item.price ? credits(item.price) : "Free", plural(count(item.sales) ?? 0, "sale")];
+        const facts = [item.status === "listed" ? "Listed" : item.status === "unlisted" ? "Not listed" : "Removed by a moderator", item.price ? credits(item.price) : "Free", gotWords(count(item.sales) ?? 0)];
         if (count(item.earned) != null) facts.push(`${credits(item.earned)} earned`);
         words.append(node("strong", "friends-shop-mine-name", item.name), node("span", "friends-shop-meta", facts.join(" · ")));
         const tools = node("div", "friends-shop-actions");
@@ -1418,22 +1796,22 @@
         price: count(item.price) ?? 0, lastPrice: item.price >= 10 ? item.price : draft.lastPrice,
       });
       editing = item.id;
-      status.textContent = `Changing ${item.name}. Save changes when it looks right.`;
+      setStatus(`Changing ${item.name}. Save changes when it looks right.`);
       paint();
       focusOn("friends-shop-pack-name");
     }
     async function unlist(item) {
       await guard("Unlisting…", async () => {
         const answer = await call("shopUnlist", item.id);
-        status.textContent = answer?.ok ? `${item.name} is no longer listed. Members who got it keep it.` : reasonWords(answer, "It could not be unlisted.");
-        if (answer?.ok) await loadView();
+        setStatus(answer?.ok ? `${item.name} is no longer listed. Members who got it keep it.` : reasonWords(answer, "It could not be unlisted."));
+        if (answer?.ok) await loadView({ fresh: true });
       });
     }
     async function relist(item) {
       await guard("Listing it again…", async () => {
         const answer = await call("shopUpdate", item.id, { listed: true });
-        status.textContent = answer?.ok ? `${item.name} is listed again.` : reasonWords(answer, "It could not be listed again.");
-        if (answer?.ok) await loadView();
+        setStatus(answer?.ok ? `${item.name} is listed again.` : reasonWords(answer, "It could not be listed again."));
+        if (answer?.ok) await loadView({ fresh: true });
       });
     }
 
@@ -1442,73 +1820,102 @@
       if (gone) return;
       // The control that had the keyboard keeps it: every control has an id that survives the repaint.
       const active = document.activeElement;
-      const focusedId = active && active !== root && root.contains?.(active) ? active.id : "";
-      releaseLive();
-      stages.clear();
+      const focusedId = active && active !== root && root.contains?.(active) && !detailRoot.contains?.(active) ? active.id : "";
+      releaseLive(detail.item ? detailRoot : null);
+      for (const key of [...stages.keys()]) if (!key.startsWith("detail:")) stages.delete(key);
       for (const key of Object.keys(make)) delete make[key];
       paintChrome();
-      let parts;
-      if (!ready) parts = notReady();
-      // A view being read for the first time says so in the status line, not with an empty list.
-      else if (loading && !items.length && view !== "make") parts = [];
-      else if (view === "studio") parts = [node("p", "friends-shop-lead", "Ember the dragon comes free with every Studio. Here are scales for Ember, menu effects, two node styles and Studio's own style packs; every theme and node style Studio already had stays free."), ...grouped(items, "The Shop is empty right now.", { ember: true })];
-      else if (view === "packs") parts = communityView();
-      else if (view === "owned") parts = grouped(items, "Nothing here yet. What you get in the Shop shows up here.", { ember: true });
-      else parts = makeView();
-      body.replaceChildren(...parts.filter(Boolean));
+      // The showroom's line says where you stand; the status line keeps what just happened.
+      if (showroom() && status.textContent === stateWords) status.textContent = "";
+      body.replaceChildren(...viewParts().filter(Boolean));
       paintTry();
+      paintDetail();
       if (focusedId) focusOn(focusedId);
     }
     function show(id) {
-      if (!VIEWS.some(([key]) => key === id)) return;
-      const moved = view !== id;
-      view = id;
-      lastView = id;
+      const wanted = viewOf(id);
+      if (!wanted) return;
+      const moved = view !== wanted;
+      view = wanted;
+      lastView = wanted;
       confirm = confirm?.where === "banner" ? confirm : null;
       reporting = null;
+      closeDetail({ focus: false });
       if (!ready) { paint(); return; }
-      if (moved) { items = []; next = null; loading = true; }
+      // Studio's categories share one read of the Studio list.
+      if (moved && !(STUDIO_VIEWS.includes(wanted) && catalog && !catalog.local)) { items = []; next = null; loading = true; }
       paint();
       void loadView();
     }
 
     // ---- the room service, and reading the Shop ----
-    async function loadView({ more = false } = {}) {
+    // Studio's list as the relay (or this PC's copy) gives it.
+    function takeCatalog(answer, local) {
+      const list = (Array.isArray(answer?.items) ? answer.items : []).filter((item) => plainObject(item) && typeof item.id === "string" && item.id !== EMBER && KINDS.includes(item.kind) && typeof item.name === "string");
+      for (const item of list) names.set(item.id, item.name);
+      const drops = plainObject(answer?.drops) ? answer.drops : null;
+      catalog = {
+        items: list, local, at: Date.now(),
+        drops: drops ? { current: plainObject(drops.current) ? drops.current : null, next: plainObject(drops.next) ? drops.next : null, last: plainObject(drops.last) ? drops.last : null } : null,
+        featured: Array.isArray(answer?.featured) ? answer.featured.filter((id) => typeof id === "string") : [],
+        featuredUntil: typeof answer?.featuredUntil === "string" ? answer.featuredUntil : null,
+      };
+    }
+    async function loadView({ more = false, fresh = false } = {}) {
+      if (!ready) return;
       const mineSeq = ++seq;
       const wanted = view;
-      const relayView = wanted === "packs" ? sort : wanted === "make" ? "mine" : wanted;
-      if (!more && !busy) status.textContent = OPENING;
+      const studio = STUDIO_VIEWS.includes(wanted);
+      // Studio's list is read once for all its views (again after a minute, or when something changed).
+      if (studio && catalog && !catalog.local && !fresh && Date.now() - catalog.at < 60_000) { loading = false; paint(); return; }
+      const relayView = studio ? "studio" : wanted === "packs" ? sort : wanted === "make" ? "mine" : wanted;
+      if (!more && !busy) setStatus(OPENING);
       loading = !more;
       const answer = await call("shop", relayView, ...(more && next ? [next] : []));
       if (gone || mineSeq !== seq) return;
       loading = false;
-      if (status.textContent === OPENING) status.textContent = "";
+      if (status.textContent === OPENING) setStatus("");
       if (!answer?.ok) {
-        if (answer?.error === "unsupported") { ready = false; root.dataset.state = "unsupported"; status.textContent = REASONS.unsupported; notReady = () => yours(); }
-        else status.textContent = reasonWords(answer, "The Shop could not be read just now. Try again in a moment.");
+        if (answer?.error === "unsupported") { ready = false; root.dataset.state = "unsupported"; stateWords = REASONS.unsupported; setStatus(REASONS.unsupported); notReady = () => yours(); void loadShowroom(); }
+        else setStatus(reasonWords(answer, "The Shop could not be read just now. Try again in a moment."));
         paint();
         return;
       }
-      // Ember is never a Shop item (it has its own card); a relay from before that change may still list it.
-      const list = (Array.isArray(answer.items) ? answer.items : []).filter((item) => plainObject(item) && typeof item.id === "string" && item.id !== EMBER && KINDS.includes(item.kind) && typeof item.name === "string");
-      for (const item of list) names.set(item.id, item.name);
-      if (wanted === "make") mine = list;
-      else { items = more ? [...items, ...list] : list; next = typeof answer.next === "string" && answer.next ? answer.next : null; }
+      if (studio) takeCatalog(answer, false);
+      else {
+        // Ember is never a Shop item (it has its own card); a relay from before that change may still list it.
+        const list = (Array.isArray(answer.items) ? answer.items : []).filter((item) => plainObject(item) && typeof item.id === "string" && item.id !== EMBER && KINDS.includes(item.kind) && typeof item.name === "string");
+        for (const item of list) names.set(item.id, item.name);
+        if (wanted === "make") mine = list;
+        else { items = more ? [...items, ...list] : list; next = typeof answer.next === "string" && answer.next ? answer.next : null; }
+      }
       if (Number.isFinite(answer.balance)) balanceNow = answer.balance;
       canEarn = answer.canEarn !== false;
       hold = answer.hold ? holdOf(answer) : null;
       paint();
     }
+    // The showroom's list: this PC's copy of Studio's (main's hub:shop "shopCatalog"; no relay asked).
+    async function loadShowroom() {
+      if (ready || !showroomOn() || catalog?.local) { cataloguing = false; paint(); return; }
+      cataloguing = true;
+      const answer = await call("shopCatalog");
+      cataloguing = false;
+      if (gone || ready) return;
+      if (answer?.ok && Array.isArray(answer.items) && answer.items.length) takeCatalog(answer, true);
+      paint();
+    }
     const connectNow = () => guard("Connecting…", async () => {
       const answer = await api.hubConnect?.();
-      if (answer?.status?.state === "ready" || answer?.ok) await load(); else explain(answer?.status);
+      if (answer?.status?.state === "ready" || answer?.ok) await load(); else { explain(answer?.status); void loadShowroom(); }
     });
     function gate(note = "") {
       return window.MefiFriendsFront?.gate?.({ onSignedIn: () => { autoConnected = true; void load(); }, ...(note ? { note } : {}) }) ?? null;
     }
     function notMember() {
       root.dataset.state = "not-member";
-      status.textContent = "Your Discord account isn't in the Void Engine server yet. Join it, then check again.";
+      stateWords = "Your Discord account isn't in the Void Engine server yet. Join it, then check again.";
+      setStatus(stateWords);
+      way = { label: "Join the Discord to get it", run: () => { closeDetail({ focus: false }); void window.MefiCommunity?.join?.(); } };
       notReady = () => [button("Join the Discord", () => { void window.MefiCommunity?.join?.(); }, "friends-shop-join"), button("I've joined, check again", () => guard("Checking…", async () => {
         await window.MefiCommunity?.check?.();
         autoConnected = true;
@@ -1520,13 +1927,17 @@
     // What the room service's state means for the Shop, and the one thing to do about it. -> ready or not.
     function explain(hub) {
       ready = false;
+      way = null;
+      gateEl = null;
       notReady = () => yours();
-      if (!hub?.configured) { root.dataset.state = "not-configured"; status.textContent = "The Shop needs the room service, which this copy of Studio has no address for."; paint(); return false; }
+      if (!hub?.configured) { root.dataset.state = "not-configured"; stateWords = "The Shop needs the room service, which this copy of Studio has no address for."; setStatus(stateWords); paint(); return false; }
       if (!hub.linked) {
         root.dataset.state = "not-linked";
-        const signIn = gate();
-        status.textContent = signIn ? "" : "Sign in with Discord in Friends to use the Shop.";
-        notReady = () => [...(signIn ? [signIn] : []), ...yours()];
+        gateEl = gate();
+        stateWords = gateEl ? "You're signed out. Look around and try anything for two minutes; sign in with Discord to get what you like." : "Sign in with Discord in Friends to use the Shop.";
+        setStatus(gateEl ? "" : stateWords);
+        if (gateEl) way = { label: "Sign in to get it", run: () => callGate() };
+        notReady = () => [...(gateEl ? [gateEl] : []), ...yours()];
         paint();
         return false;
       }
@@ -1535,7 +1946,8 @@
       if (hub.state === "off" && !hub.error && !autoConnected) {
         autoConnected = true;
         root.dataset.state = "connecting";
-        status.textContent = "Connecting to the room service…";
+        stateWords = "Connecting to the room service…";
+        setStatus(stateWords);
         paint();
         void connectNow();
         return false;
@@ -1544,15 +1956,21 @@
         root.dataset.state = hub.state || "off";
         // Friends' one way of saying it (renderer/friends-front.js hubState): Connect only when it can help.
         const said = window.MefiFriendsFront?.hubState?.(hub) ?? { action: "connect", text: hub.state === "connecting" ? "Connecting to the room service…" : "Connect to open the Shop." };
-        const signIn = said.action === "signin" ? gate(said.text) : null;
-        status.textContent = signIn ? "" : said.text;
-        notReady = () => [...(signIn ? [signIn] : said.action === "connect" ? [button("Connect", () => { void connectNow(); }, "friends-shop-connect")] : []), ...yours()];
+        gateEl = said.action === "signin" ? gate(said.text) : null;
+        stateWords = said.text;
+        setStatus(gateEl ? "" : said.text);
+        if (gateEl) way = { label: "Sign in to get it", run: () => callGate() };
+        else if (said.action === "connect") way = { label: "Connect to get it", run: () => { closeDetail({ focus: false }); void connectNow(); } };
+        notReady = () => [...(gateEl ? [gateEl] : said.action === "connect" ? [button("Connect", () => { void connectNow(); }, "friends-shop-connect")] : []), ...yours()];
         paint();
         return false;
       }
-      if (hub.shop === false) { root.dataset.state = "unsupported"; status.textContent = REASONS.unsupported; paint(); return false; }
+      if (hub.shop === false) { root.dataset.state = "unsupported"; stateWords = REASONS.unsupported; setStatus(REASONS.unsupported); paint(); return false; }
       root.dataset.state = "ready";
+      stateWords = "";
       ready = true;
+      // Signed in now: the showroom's copy of the list gives way to the relay's.
+      if (catalog?.local) catalog = null;
       return true;
     }
     async function load() {
@@ -1560,12 +1978,12 @@
       try { hub = (await api.hubStatus())?.status; } catch { hub = null; }
       if (gone) return;
       me = hub?.user?.id ?? me;
-      if (!explain(hub)) return;
-      if (status.textContent === "Checking the room service…" || status.textContent === "Connecting…") status.textContent = "";
+      if (!explain(hub)) { await loadShowroom(); return; }
+      if (status.textContent === "Checking the room service…" || status.textContent === "Connecting…") setStatus("");
       void refresh();
       loading = true;
       paint();
-      await loadView();
+      await loadView({ fresh: true });
     }
 
     function hear(event) {
@@ -1573,7 +1991,13 @@
       if (root.isConnected === false) { dispose(); return; }
       if (event?.type === "credits") {
         if (Number.isFinite(event.balance)) { balanceNow = event.balance; paintChrome(); }
-        if (event.reason === "sale" && event.delta > 0) status.textContent = `+${credits(event.delta)}: a member bought one of your packs.`;
+        // A member got one of your packs: Friends' pop-up says so (renderer/friends-front.js); with pop-ups off, this
+        // page's status line does. Your packs read again for their counts.
+        if (event.reason === "sale" && event.delta > 0) {
+          const told = window.MefiFriendsFront?.popups?.on?.() === true && document.visibilityState !== "hidden";
+          if (!told) setStatus(`A member got one of your style packs: +${credits(event.delta)}.`);
+          if (view === "make" && ready) void loadView({ fresh: true });
+        }
       } else if (event?.type === "status") void load();
     }
     function dispose() {
@@ -1581,14 +2005,15 @@
       gone = true;
       seq += 1;
       endTry();
+      closeDetail({ focus: false });
       releaseLive();
       motionWatch?.disconnect();
       if (current === handle) current = null;
     }
     // Motion switched back on: the pets and boards on screen move again; switched off, they hold still.
-    const motionWatch = typeof MutationObserver === "function" ? new MutationObserver(() => { if (motionOff()) { for (const canvas of live.seen) drawLive(canvas, 0); } else spin(); }) : null;
+    const motionWatch = typeof MutationObserver === "function" ? new MutationObserver(() => { if (motionOff()) { for (const part of live.seen) if (!part.play) drawLive(part, 0); } else spin(); }) : null;
     motionWatch?.observe(document.documentElement, { attributes: true, attributeFilter: ["data-motion"] });
-    // Whether this member moderates arrives after the card (friends-mod.js learn()): their Remove buttons follow.
+    // Whether this member moderates arrives after the page (friends-mod.js learn()): their Remove buttons follow.
     if (!watchingMods && typeof window.MefiFriendsMod?.subscribe === "function") { watchingMods = true; window.MefiFriendsMod.subscribe(() => { if (current?.ready()) current.paint(); }); }
     const handle = { hear, dispose, paint, show: (id) => show(id), ready: () => ready };
     current = handle;
@@ -1596,7 +2021,8 @@
 
     if (typeof api?.hubShop !== "function" || typeof api?.hubStatus !== "function") {
       root.dataset.state = "unavailable";
-      status.textContent = typeof api?.hubStatus === "function" ? `The Shop: ${SOON}` : "The Shop works in the desktop app.";
+      cataloguing = false;
+      setStatus(typeof api?.hubStatus === "function" ? `The Shop: ${SOON}` : "The Shop works in the desktop app.");
       notReady = () => yours();
       paint();
       return root;
@@ -1606,6 +2032,61 @@
     void load();
     return root;
   }
+
+  // ---- the page of its own (route "shop", registered with MefiNav below) ----
+  const page = { root: null, sheet: null, card: null };
+  function mountPage() {
+    if (page.root) return page.root;
+    const overlay = node("div", "overlay workspace-page friends-shop-page");
+    overlay.id = "friends-shop-page";
+    overlay.hidden = true;
+    const sheet = node("section", "sheet friends-shop-sheet");
+    sheet.tabIndex = -1;
+    sheet.setAttribute("role", "region");
+    sheet.setAttribute("aria-labelledby", "friends-shop-title");
+    overlay.append(sheet);
+    document.body.append(overlay);
+    Object.assign(page, { root: overlay, sheet });
+    return overlay;
+  }
+  const pageOpen = () => Boolean(page.root && page.root.hidden === false);
+  function openPage(params = {}) {
+    mountPage();
+    const view = viewOf(params?.view) ?? viewOf(asked);
+    asked = null;
+    window.MefiNav?.claim?.("shop");
+    page.root.hidden = false;
+    // The frame measures again now the page shows (the list column lists Friends' places, Shop current).
+    window.MefiShell?.sync?.("shop");
+    if (!page.card || page.card.isConnected === false || !current) {
+      page.card = card({ view, onPage: true });
+      page.sheet.replaceChildren(page.card);
+    } else if (view) current.show(view);
+    window.MefiScroll?.scan?.(page.root);
+    return true;
+  }
+  function closePage() {
+    if (!pageOpen()) return false;
+    page.card?.dispose?.();
+    page.card = null;
+    page.sheet.replaceChildren();
+    page.root.hidden = true;
+    window.MefiNav?.release?.("shop");
+    return true;
+  }
+  function registerPage() {
+    window.MefiNav?.register?.({
+      id: "shop", label: "Shop", short: "Shop", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
+      glyph: "g-shop", badge: null, desc: "Scales for Ember, menu effects, node styles and themes for the credits you earn, and style packs members make",
+      // Search finds the Shop through Friends' own row ("friends-shop" in renderer/nav.js), which opens this page.
+      searchTerms: "shop store buy credits pet dragon effects style pack theme drop featured",
+      showIn: { tabs: false, tools: false, dock: false, palette: false, help: false, footer: false },
+      element: "friends-shop-page", focus: "#friends-shop-title",
+      open: (params) => openPage(params), close: () => closePage(), isOpen: () => pageOpen(),
+    });
+  }
+  if (window.MefiNav?.register) registerPage();
+  else { try { document.addEventListener?.("DOMContentLoaded", registerPage, { once: true }); } catch { /* no document events here */ } }
 
   // ---- the way in from Settings › Appearance (the Theme section) ----
   let settingsCard = null;
@@ -1621,7 +2102,7 @@
     box.setAttribute("aria-labelledby", "friends-shop-settings-title");
     const heading = node("h3", "friends-shop-settings-title", "Pets, menu effects and style packs");
     heading.id = "friends-shop-settings-title";
-    const line = node("p", "friends-shop-settings-line", "Ember the dragon comes free with every Studio. The Shop has scales for Ember, menus that crumble away, node styles and style packs from Studio and members, for the credits you earn; or make a style of your own.");
+    const line = node("p", "friends-shop-settings-line", "Ember the dragon comes free with every Studio. The Shop has scales for Ember, menus that crumble away, node styles and themes, a new drop every month and style packs from members, for the credits you earn; or make a style of your own.");
     const go = button("Open the Shop", () => open("studio"), "friends-shop-settings-open", PRIMARY);
     go.prepend(gem());
     box.append(heading, line, go);
@@ -1630,16 +2111,22 @@
     return true;
   }
 
-  // Friends › Shop at one of its views: studio, packs (members' packs), owned or make.
+  // The Shop at one of its views (studio, pets, effects, nodestyles, themes, packs, owned or make): its own page, or
+  // Friends' place "shop" with the "mefiStudio.shop.page" kill switch.
   function open(view = "studio") {
-    const wanted = VIEWS.some(([id]) => id === view) ? view : "studio";
+    const wanted = viewOf(view) ?? "studio";
     lastView = wanted;
+    if (pageOn()) {
+      asked = wanted;
+      window.MefiNav?.go?.("shop", { view: wanted });
+      return true;
+    }
     if (current) current.show(wanted); else asked = wanted;
     window.MefiNav?.go?.("friends-page", { place: "shop" });
     return true;
   }
 
-  window.MefiShop = { card, owns, owned: ownedList, pack, refresh, open, checkPack, checkListing, contrast, packName: (id) => names.get(id) ?? null, mountSettings };
+  window.MefiShop = { card, owns, owned: ownedList, pack, refresh, open, openPage, closePage, pageOn, checkPack, checkListing, contrast, packName: (id) => names.get(id) ?? null, mountSettings };
   listen(bridge());
   const whenReady = (run) => { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run, { once: true }); else run(); };
   whenReady(() => { mountSettings(); });

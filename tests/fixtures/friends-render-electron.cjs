@@ -8,8 +8,12 @@
 // and no text under 12 px. The rail's Friends, Search's Rooms, Your PCs and Playground, and the companion's Friends
 // bubble land on the page; a tab per place. Your PCs' Connect another PC walks through its states (signed out, waiting,
 // a PC found, paired and folded to its button, which a real press opens again) above My PCs and the folded groups.
-// Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
-// process or live state is loaded; network, permissions and child processes are blocked.
+// The Shop is a page of its own (route "shop", renderer/friends-shop.js): its row opens it beside the list column
+// with its row current, at 1440x900 and 1920x1080 in Studio and in Social, signed out as a showroom, in a light palette and
+// at the small sizes, its cards evenly sized and filling the page (no narrow column with the rest of the page empty), its
+// drop's banner made from the drop's own data, and a card's detail with its tip picks. Screenshots are kept when the test
+// is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main process or live state is loaded; network,
+// permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");
@@ -134,26 +138,40 @@ app.whenReady().then(async () => {
     { id: "500000000000000005", author: { id: "200000000000000002", name: "Jabilee", viaStudio: true }, text: "See you at 8.", createdAt: now - 10 * 60_000, editedAt: null, mentions: [], attachments: [] },
   ];
   const roomReplies = { requests: { ok: true, requests: [] }, invites: { ok: true, invites: [] }, messages: { ok: true, hasMore: true, messages: chat }, front, roomCode: { ok: true, code: "KQ7M-2PXD", link: "https://mefi-relay.mefi-studio.workers.dev/join/KQ7M2PXD" } };
-  // Friends › Shop as main's hub:shop hands it over (the relay's Studio catalog, members' packs): scales for Ember (Ember
-  // itself is free with every Studio and has a card of its own), effects and packs.
-  const shopItem = (id, kind, name, price, blurb, extra = {}) => ({ id, kind, name, blurb, price, requires: null, maker: null, data: null, sales: 0, owned: false, status: "listed", createdAt: now, updatedAt: now, ...extra });
+  // The Shop as main's hub:shop hands it over (the relay's Studio catalog, members' packs, the rotation): scales for Ember
+  // (Ember itself is free with every Studio and has a card of its own), effects, node styles and packs; a test drop of
+  // existing items (the new drop's own items come at merge) with its banner colours, the next drop and the Featured shelf.
+  const shopItem = (id, kind, name, price, blurb, extra = {}) => ({ id, kind, name, blurb, price, requires: null, maker: null, data: null, sales: 0, owned: false, status: "listed", createdAt: now, updatedAt: now, drop: null, available: true, leaves: null, ...extra });
+  const dropLeaves = new Date(now + 24 * 86_400_000 + 3_600_000).toISOString();
+  const inDrop = { drop: "2026-10", leaves: dropLeaves };
+  const studioItems = [
+    shopItem("studio:skin-frost", "skin", "Frost scales", 40, "Ember in icy blue."),
+    shopItem("studio:skin-void", "skin", "Void scales", 60, "Ember in black with a violet glow.", inDrop),
+    shopItem("studio:fx-dissolve", "effect", "Dissolve", 60, "Menus crumble into pixels when they close."),
+    shopItem("studio:fx-embers", "effect", "Burn away", 90, "Menus burn away from the edges with glowing embers.", inDrop),
+    shopItem("studio:style-dragonscale", "nodestyle", "Dragon scales", 80, "Nodes covered in shimmering dragon scales, with ember sparks along the wires."),
+    shopItem("studio:style-constellation", "nodestyle", "Star chart", 80, "Nodes as bright stars joined by star-chart lines, with shooting stars.", inDrop),
+    shopItem("studio:pack-synthwave", "pack", "Synthwave", 50, "Hot pink and violet on midnight blue.", { ...inDrop, data: { v: 1, palette: { accent: "#ff4fa3", accent2: "#8b5cff", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } }),
+    shopItem("studio:pack-sakura", "pack", "Sakura (light)", 50, "Soft pink on warm white, a light look.", { data: { v: 1, palette: { accent: "#b8325f", accent2: "#8a6bd1", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24" }, nodeStyle: "minimal", material: "focus", font: "studio" } }),
+  ];
+  const rotation = {
+    drops: {
+      current: { id: "2026-10", name: "Haunted Hollow", blurb: "Pumpkins, lanterns and friendly spirits for October.", from: "2026-10-01T00:00:00Z", until: dropLeaves, colors: { accent: "#ff8a3d", accent2: "#9b6bff", background: "#140d1c" }, items: ["studio:skin-void", "studio:fx-embers", "studio:style-constellation", "studio:pack-synthwave"] },
+      next: { id: "2026-11", name: "Frost Fair", blurb: "Ice lanterns.", from: "2026-11-01T00:00:00Z", until: "2026-12-01T00:00:00Z", colors: { accent: "#7fd3ff", accent2: "#c3a6ff", background: "#0b1622" } },
+      last: null,
+    },
+    featured: ["studio:skin-frost", "studio:fx-dissolve", "studio:style-dragonscale", "studio:pack-sakura"], featuredUntil: new Date(now + 3 * 86_400_000 + 3_600_000).toISOString(),
+  };
   const shopReplies = {
-    studio: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [
-      shopItem("studio:skin-frost", "skin", "Frost scales", 40, "Ember in icy blue."),
-      shopItem("studio:skin-void", "skin", "Void scales", 60, "Ember in black with a violet glow."),
-      shopItem("studio:fx-dissolve", "effect", "Dissolve", 60, "Menus crumble into pixels when they close."),
-      shopItem("studio:fx-embers", "effect", "Burn away", 90, "Menus burn away from the edges with glowing embers."),
-      shopItem("studio:style-dragonscale", "nodestyle", "Dragon scales", 80, "Nodes covered in shimmering dragon scales, with ember sparks along the wires."),
-      shopItem("studio:style-constellation", "nodestyle", "Star chart", 80, "Nodes as bright stars joined by star-chart lines, with shooting stars."),
-      shopItem("studio:pack-synthwave", "pack", "Synthwave", 50, "Hot pink and violet on midnight blue.", { data: { v: 1, palette: { accent: "#ff4fa3", accent2: "#8b5cff", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } }),
-      shopItem("studio:pack-sakura", "pack", "Sakura (light)", 50, "Soft pink on warm white, a light look.", { data: { v: 1, palette: { accent: "#b8325f", accent2: "#8a6bd1", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24" }, nodeStyle: "minimal", material: "focus", font: "studio" } }),
-    ] },
-    new: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [
+    studio: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: studioItems, ...rotation },
+    // main's own copy of the catalog for the signed-out showroom (main.cjs hubShopCatalog).
+    shopCatalog: { ok: true, local: true, view: "studio", next: null, items: studioItems, ...rotation },
+    new: { ok: true, next: null, balance: 240, canEarn: true, hold: null, ...rotation, items: [
       shopItem("pack_nightmarket0001", "pack", "Night market with a rather long name", 30, "Neon on wet streets.", { maker: { id: "200000000000000001", name: "Maxwell" }, sales: 12, data: { v: 1, palette: { accent: "#ffb347", accent2: "#7f5af0", background: "#101014", surface: "#1b1b22", text: "#f4f1ea" }, nodeStyle: "glass", material: "studio", font: "serif" } }),
       shopItem("pack_paper000000001", "pack", "Paper", 0, "", { maker: { id: "200000000000000004", name: "Tess" }, sales: 3, data: { v: 1, palette: { accent: "#9b3d12", background: "#fbf6ee", surface: "#ffffff", text: "#2b2118" }, nodeStyle: "minimal", material: "focus", font: "serif" } }),
     ] },
-    owned: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [] },
-    mine: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [] },
+    owned: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [], ...rotation },
+    mine: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [], ...rotation },
     shopOwned: { ok: true, items: [] },
   };
   const names = await bridgeNames();
@@ -240,6 +258,52 @@ app.whenReady().then(async () => {
   const found = [];
   const go = (id, params) => run(`window.MefiNav.go(${JSON.stringify(id)}${params ? `, ${JSON.stringify(params)}` : ""});`);
   const placeIs = (place) => `document.getElementById('friends-overlay')?.hidden === false && document.getElementById('friends-overlay').dataset.place === ${JSON.stringify(place)} && window.MefiNav.current() === 'friends-page'`;
+  // The Shop's own page: open, read (or the showroom) and painted.
+  const shopIs = (state = "ready") => `document.getElementById('friends-shop-page')?.hidden === false && window.MefiNav.current() === 'shop' && document.getElementById('friends-shop')?.dataset.state === ${JSON.stringify(state)} && document.querySelector('#friends-shop-body .friends-shop-item')`;
+  // The Shop's page measured as a page: beside the list column (or Social's rail), the sheet filling it up to its own
+  // width, its cards in at least `columns` even columns, nothing past its right edge, no text under 12 px.
+  const shopMeasure = `
+    const page = document.getElementById('friends-shop-page'), sheet = page?.querySelector('.friends-shop-sheet');
+    const box = (node) => { if (!node) return null; const r = node.getBoundingClientRect(); return { x: Math.round(r.left), r: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height) }; };
+    const shown = (node) => { if (!node || !node.getClientRects().length) return false; for (let n = node; n && n !== document.documentElement; n = n.parentElement) { const s = getComputedStyle(n); if (s.display === 'none' || s.visibility === 'hidden') return false; } return true; };
+    const all = [...(page?.querySelectorAll('*') ?? [])].filter(shown);
+    const own = (node) => [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.trim());
+    const small = all.filter((node) => own(node) && !node.closest('[aria-hidden="true"]') && parseFloat(getComputedStyle(node).fontSize) > 0 && parseFloat(getComputedStyle(node).fontSize) < 11.95).map((node) => (node.id || String(node.className).slice(0, 40)) + ':' + getComputedStyle(node).fontSize);
+    const edge = page ? page.getBoundingClientRect().left + page.clientLeft + page.clientWidth : innerWidth;
+    const wide = all.filter((node) => !node.closest('dialog') && node.getBoundingClientRect().right > edge + 1.5).slice(0, 6).map((node) => (node.id || String(node.className).slice(0, 40)) + ' ' + Math.round(node.getBoundingClientRect().right) + '>' + Math.round(edge));
+    const grids = [...(page?.querySelectorAll('.friends-shop-grid') ?? [])].filter(shown).map((grid) => ({ columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length, widths: [...grid.children].map((child) => Math.round(child.getBoundingClientRect().width)) }));
+    const pages = document.getElementById('shell-pages');
+    return {
+      route: window.MefiNav?.current?.() ?? null, mode: window.MefiVibe?.mode?.() ?? null, state: document.getElementById('friends-shop')?.dataset.state ?? null,
+      page: box(page), sheet: box(sheet), list: pages && pages.hidden === false ? box(pages) : null, grids,
+      current: [...document.querySelectorAll('#shell-pages-list [aria-current]')].map((node) => node.textContent.trim()),
+      crumbs: [...document.querySelectorAll('.shell-trail .shell-crumb')].map((node) => node.textContent.trim()),
+      hero: Boolean(document.getElementById('friends-shop-hero')), detail: document.getElementById('friends-shop-detail')?.open === true,
+      pageOverflow: document.documentElement.scrollWidth > innerWidth + 1, sideways: page ? page.scrollWidth > page.clientWidth + 1 : false, small, wide,
+    };`;
+  const shopProblems = (m, tag, columns = 1) => [
+    ...(m.route !== "shop" ? [`${tag}: the route is ${m.route}, not shop`] : []),
+    ...(m.pageOverflow ? [`${tag}: the page overflows the window`] : []),
+    ...(m.sideways ? [`${tag}: the Shop's page scrolls sideways ${JSON.stringify(m.wide)}`] : []),
+    ...m.small.map((line) => `${tag}: text under 12 px: ${line}`),
+    ...m.wide.map((line) => `${tag}: past the page's right edge: ${line}`),
+    ...(m.page && m.sheet && m.sheet.w < Math.min(m.page.w, 1320) - 4 ? [`${tag}: the Shop's column is ${m.sheet.w} px of a ${m.page.w} px page`] : []),
+    ...m.grids.filter((grid) => grid.columns < columns).map((grid) => `${tag}: a grid of ${grid.columns} columns (wanted ${columns})`),
+    ...m.grids.filter((grid) => grid.widths.length && Math.max(...grid.widths) - Math.min(...grid.widths) > 2).map((grid) => `${tag}: cards of uneven widths ${JSON.stringify(grid.widths)}`),
+  ];
+  // The Shop at one size and mode: its page, measured, and a screenshot.
+  const shopShot = async (tag, name, columns = 1) => {
+    await go("shop");
+    await until(shopIs(), `the Shop (${tag})`);
+    await sleep(600);
+    const m = await run(shopMeasure);
+    m.tag = tag;
+    report.shopPages.push(m);
+    found.push(...shopProblems(m, tag, columns));
+    await capture(name);
+    return m;
+  };
+  report.shopPages = [];
 
   // ---- v2 ------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
@@ -262,6 +326,20 @@ app.whenReady().then(async () => {
   assert.deepEqual(first.list, ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub", "Events", "Shop"], "the list column holds The Lobby, the prototype's three places, the Project hub, Events and the Shop, The Lobby current");
   for (const [id, title, card] of PLACES) {
     await click(`#shell-pages-list [data-page="friends:${id}"]`);
+    // The Shop's row opens the Shop's own page (route "shop"), beside the same list with its row current.
+    if (id === "shop") {
+      await until(shopIs(), "the Shop's row opens the Shop's own page");
+      await sleep(600);
+      const m = await run(shopMeasure);
+      m.id = id; report.places.push(m);
+      assert.deepEqual(m.current, ["Shop"], "shop: its row is the current one");
+      assert.deepEqual(m.crumbs.slice(-2), ["Friends", "Shop"], "shop: the breadcrumb says Friends / Shop");
+      assert.ok(m.list && m.page.x >= m.list.r - 1, `shop: the page is beside the list ${JSON.stringify({ page: m.page, list: m.list })}`);
+      assert.ok(m.hero, "shop: the month's drop as a banner");
+      found.push(...shopProblems(m, "Shop at 1920x1080", 5));
+      await capture("friends-shop-1920x1080.png");
+      continue;
+    }
     await until(placeIs(id), `${title} is the place`);
     await sleep(600);
     const m = await run(measure);
@@ -348,6 +426,8 @@ app.whenReady().then(async () => {
   for (const [width, height, zoom] of [[1440, 900, 1], [1100, 720, 1], [600, 560, 1.5]]) {
     await resize(width, height, zoom);
     for (const [id] of PLACES) {
+      // The Shop's own page: at 1440 its column fills the page beside the list in four even columns.
+      if (id === "shop") { await shopShot(`the Shop at ${width}x${height}@${zoom}`, `friends-shop-${width}x${height}@${zoom}.png`, width === 1440 ? 4 : 1); continue; }
       await go("friends-page", { place: id });
       await until(placeIs(id), `${id} at ${width}x${height}@${zoom}`);
       await sleep(400);
@@ -358,36 +438,73 @@ app.whenReady().then(async () => {
     }
   }
   // The Shop's other views at the two small sizes: Make a style (the editor beside its preview), and a member's pack's
-  // Buy question with its tip picks.
+  // detail with the Buy question and its tip picks.
   report.shop = [];
   for (const [width, height, zoom] of [[1100, 720, 1], [600, 560, 1.5]]) {
     await resize(width, height, zoom);
-    await go("friends-page", { place: "shop" });
-    await until(placeIs("shop") + " && document.getElementById('friends-shop')?.dataset.state === 'ready'", `the Shop at ${width}x${height}@${zoom}`);
-    for (const [view, ready] of [["make", "document.getElementById('friends-shop-form')"], ["packs", "document.getElementById('friends-shop-buy-pack_nightmarket0001')"]]) {
+    await go("shop");
+    await until(shopIs(), `the Shop at ${width}x${height}@${zoom}`);
+    for (const [view, ready] of [["make", "document.getElementById('friends-shop-form')"], ["packs", "document.getElementById('friends-shop-open-packs-pack_nightmarket0001')"]]) {
       await run(`document.getElementById('friends-shop-view-${view}').click();`);
       await until(ready, `the Shop's ${view} view at ${width}x${height}@${zoom}`);
       if (view === "packs") {
+        await run("document.getElementById('friends-shop-open-packs-pack_nightmarket0001').click();");
+        await until("document.getElementById('friends-shop-detail')?.open && document.getElementById('friends-shop-buy-pack_nightmarket0001')", "the pack's detail");
         await run("document.getElementById('friends-shop-buy-pack_nightmarket0001').click();");
-        await until("document.querySelector('#friends-shop .friends-shop-tips')", "the tip picks");
+        await until("document.querySelector('#friends-shop-detail .friends-shop-tips')", "the tip picks");
       }
       await sleep(400);
-      const m = await run(measure);
-      report.shop.push({ view, size: `${width}x${height}@${zoom}`, small: m.small, wide: m.wide, sideways: m.sideways });
-      found.push(...problems(m, `the Shop's ${view} view at ${width}x${height}@${zoom}`));
+      const m = await run(shopMeasure);
+      const inDialog = await run(`const d = document.getElementById('friends-shop-detail'); if (!d?.open) return null; const r = d.getBoundingClientRect(); return { x: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top), b: Math.round(r.bottom), w: innerWidth, h: innerHeight, scroll: d.scrollHeight > d.clientHeight + 1 };`);
+      report.shop.push({ view, size: `${width}x${height}@${zoom}`, small: m.small, wide: m.wide, sideways: m.sideways, dialog: inDialog });
+      found.push(...shopProblems(m, `the Shop's ${view} view at ${width}x${height}@${zoom}`));
+      if (inDialog && (inDialog.x < 0 || inDialog.r > inDialog.w + 1 || inDialog.t < 0 || inDialog.b > inDialog.h + 1)) found.push(`the Shop's detail at ${width}x${height}@${zoom} is off screen ${JSON.stringify(inDialog)}`);
       await capture(`friends-shop-${view}-${width}x${height}@${zoom}.png`);
+      if (inDialog) await run("document.getElementById('friends-shop-detail-close').click();");
     }
     await run("document.getElementById('friends-shop-view-studio').click();");
   }
   report.steps.push("the Shop's editor and tips fit");
+  // The Shop in Social at the owner's two sizes: still Social, the page beside Social's rail, Friends' places as a row.
+  await run("window.MefiVibe?.setMode?.('vibe', { go: false });");
+  for (const [width, height] of [[1440, 900], [1920, 1080]]) {
+    await resize(width, height);
+    const m = await shopShot(`the Shop in Social at ${width}x${height}`, `friends-shop-social-${width}x${height}.png`, width === 1920 ? 5 : 4);
+    assert.equal(m.mode, "vibe", `${width}x${height}: opening the Shop keeps Social`);
+    assert.equal(await run("return document.querySelectorAll('#friends-shop-page .shell-place-bar:not([hidden]) .shell-place-chip').length;"), 7, `${width}x${height}: Friends' places as a row on the page`);
+    assert.equal(await run("return [...document.querySelectorAll('#friends-shop-page .shell-place-bar .studio-select')].filter((node) => node.getClientRects().length).length;"), 0, `${width}x${height}: the row's picker stays folded while the chips fit`);
+  }
+  await run("window.MefiVibe?.setMode?.('build', { go: false }); window.MefiNav.setRailPinned?.(false, { save: false });");
+  // Studio at 1440: the column fills the page beside the list (an earlier capture had about 500 px with the right half empty).
+  await resize(1440, 900);
+  const studio1440 = await shopShot("the Shop in Studio at 1440x900", "friends-shop-studio-1440x900.png", 4);
+  assert.ok(studio1440.list && studio1440.sheet.w >= studio1440.page.w - 4, `1440: the Shop's column fills its page ${JSON.stringify({ page: studio1440.page, sheet: studio1440.sheet })}`);
+  // Signed out, the same page is a showroom: Studio's items from this PC's copy, Try, and Sign in to get it.
+  await run("window.friendsFixture.signedIn(false);");
+  await go("friends-page", { place: "lobby" });
+  await go("shop");
+  await until(shopIs("not-linked") + " && document.getElementById('friends-shop-notice')", "the signed-out showroom");
+  await sleep(600);
+  const showroom = await run(shopMeasure);
+  report.shopPages.push({ ...showroom, tag: "showroom" });
+  found.push(...shopProblems(showroom, "the signed-out showroom at 1440x900", 4));
+  assert.ok(showroom.hero && (await run("return Boolean(document.querySelector('#friends-shop-body > #friends-gate'));")), "the showroom has the drop's banner, and Friends' sign-in card at its foot");
+  await capture("friends-shop-showroom-1440x900.png");
+  await run("document.getElementById('friends-shop-open-home-studio-skin-frost').click();");
+  await until("document.getElementById('friends-shop-detail')?.open && document.getElementById('friends-shop-way-studio-skin-frost')", "a showroom detail with Sign in to get it");
+  await sleep(500);
+  await capture("friends-shop-showroom-detail-1440x900.png");
+  await run("document.getElementById('friends-shop-detail-close').click(); window.friendsFixture.signedIn(true);");
+  await go("friends-page", { place: "lobby" });
+  report.steps.push("the Shop's own page in Studio and Social, and the showroom");
   // The Shop's node styles: their own section, each card a little board its own style paints (renderer/node-styles.js)
   // in the theme's sky. A board is painted when much of it differs from its sky's corner.
   const boards = async (what) => {
-    await go("friends-page", { place: "shop" });
-    await until(placeIs("shop") + " && document.getElementById('friends-shop-group-nodestyle')", `the Shop's node styles (${what})`);
-    await run("document.getElementById('friends-shop-group-nodestyle').scrollIntoView({ block: 'center' });");
+    await go("shop");
+    await until(shopIs() + " && document.getElementById('friends-shop-group-home-nodestyles')", `the Shop's node styles (${what})`);
+    await run("document.getElementById('friends-shop-group-home-nodestyles').scrollIntoView({ block: 'center' });");
     await sleep(700);
-    const painted = await run(`return [...document.querySelectorAll('#friends-shop canvas[data-node-style]')].map((canvas) => {
+    const painted = await run(`return [...document.querySelectorAll('#friends-shop-group-home-nodestyles canvas[data-node-style]')].map((canvas) => {
       const { width, height } = canvas, data = canvas.getContext('2d').getImageData(0, 0, width, height).data;
       let lit = 0;
       for (let i = 0; i < data.length; i += 16) if (Math.abs(data[i] - data[0]) + Math.abs(data[i + 1] - data[1]) + Math.abs(data[i + 2] - data[2]) > 60) lit += 1;
@@ -458,6 +575,7 @@ app.whenReady().then(async () => {
   await sleep(1800); // the colours glide in
   assert.equal(await run("return document.documentElement.dataset.studioThemeTone;"), "light");
   for (const [id] of PLACES) {
+    if (id === "shop") { await shopShot("the Shop in a light palette", "friends-light-shop-1440x900.png", 4); continue; }
     await go("friends-page", { place: id });
     await until(placeIs(id), `${id} in a light palette`);
     await sleep(400);

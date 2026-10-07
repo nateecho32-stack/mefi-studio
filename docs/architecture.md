@@ -578,33 +578,59 @@ settings and per-model work-kind summaries for the shared controls.
   clipped and shown as text, never sent to a model. Playdates need the rooms
   hub to relay `companion` frames (see [community.md](community.md)); until it
   does, Friends says so and Pip is there to practice.
-- **Friends › Shop** (`renderer/friends-shop.js`, `window.MefiShop`; main's
-  `hub:shop` channel; the relay's `relay/src/shop.mjs`): scales for Ember,
-  menu effects, two node styles (**Dragon scales** and **Star chart**) and
-  style packs for the credits members earn (never bought with money), and the
-  style packs members make. Every theme and node style Studio comes with
-  stays free: the Shop sells new things only. Ember the dragon itself
-  comes free with every Studio: its card has no price, Try or Buy, only a
-  **Show Ember** switch (`MefiPets.set({ on })`). The page has the balance,
-  **How to earn credits** (Friends › Events) and four views: **Studio**
-  (Studio's own items), **Community** (members' packs, New or Top), **Owned**
-  and **Make a style**. Every card shows its item live: scales on a flying
-  Ember (`MefiPets.paintPreview`, drawn only while the card is on screen, one
-  still frame with motion off), an effect played on a little menu on hover,
-  focus or Try (`MefiEffects.demo`), a node style as a little board of four
-  of its nodes on their wires with a pulse running one (`MefiNodeStyles`, in
-  the theme's own sky, on screen only, its still pose with motion off), a pack
-  as a tiny app window painted from its own colours. **Try for 2 minutes**
-  previews one item at a time (`MefiPets.preview`, `MefiEffects.preview`,
-  `MefiMusic.previewNodeStyle` on the real tree, `MefiMusic.previewPack`)
-  under a banner with the time left, Buy and Stop; Stop, the clock and leaving
-  the Shop end it. **Buy for N** asks first, naming the item, the price and the
-  balance after. A member's pack can carry a tip for its maker (No tip, 5, 10,
+- **The Shop** (`renderer/friends-shop.js`, `window.MefiShop`; main's
+  `hub:shop` channel; the relay's `relay/src/shop.mjs` and
+  `relay/src/shop-drops.mjs`): scales for Ember, menu effects, node styles
+  (**Dragon scales** and **Star chart**) and themes (Studio's own style packs)
+  for the credits members earn (never bought with money), and the style packs
+  members make. Every theme and node style Studio comes with stays free: the
+  Shop sells new things only. It is a page of its own (route `shop`, a
+  workspace page; `openPage`/`closePage`): Friends' place **Shop**, its Search
+  row, Settings › Appearance's **Open the Shop** and every older way in land
+  there (`renderer/nav.js` `go()`), Friends' list column marks its row and the
+  breadcrumb reads Friends / Shop, and it stays in Social (`renderer/social.js`
+  PAGES), where Friends' places show as a row at its top. Roomy like a
+  storefront: the title, the balance and **How to earn credits** (Friends ›
+  Events), one row of views (**Home**, **Pets**, **Menu effects**, **Node
+  styles**, **Themes**, **Community**, **Owned**, **Make a style**), then on
+  Home the month's **drop** as a banner made from the drop's own data (a
+  gradient and a soft pattern from its colours, "October drop · Leaves in 24
+  days", its name and line, and up to three of its pieces live inside it: a
+  pet flying in the big tile, a node style lit on the drop's own colour, a
+  theme as a little window), the drop's items, the next drop as a teaser
+  ("Next drop: Frost Fair, from 1 November"), **Featured this week** (four
+  classic items, "New picks in 3 days") and every category. Drops rotate
+  monthly ([shop-drops.md](shop-drops.md)): a drop's items are on sale for its
+  month and then rotate out (everyone who got one keeps it); a later drop may
+  bring one back. Cards are evenly sized, the live preview filling most of
+  the card, with the name (the card's one button: the whole card opens it, and
+  the keyboard's ring goes round the whole card), the price with the gem or
+  **Owned**, and badges (**New**, **Leaving soon** in a drop's last week, **In
+  use**). A card opens its **detail**, a dialog with a large live preview,
+  what it is, **Try for 2 minutes** and **Buy** or **Get** (or **Use**), and
+  **Report** (and a moderator's **Remove**) on a member's pack; Esc, ×, or a
+  press on the page around it closes it. Ember the dragon itself comes free
+  with every Studio: its card says Free, and its detail has only a **Show
+  Ember** switch (`MefiPets.set({ on })`). Every preview is live: scales on a
+  flying Ember (`MefiPets.paintPreview`), an effect played on a little menu on
+  hover, focus or Try (`MefiEffects.demo`; by itself in the banner and a
+  detail), a node style as a little board of four of its nodes on their wires
+  with a pulse running one (`MefiNodeStyles`, in the theme's own sky), a theme
+  as a tiny Studio window painted from its own colours. Only what is on screen
+  moves, and only with motion on: one still frame with motion Off, and with
+  motion Calm the cards hold still while the banner and an open detail move.
+  **Try for 2 minutes** previews one item at a time (`MefiPets.preview`,
+  `MefiEffects.preview`, `MefiMusic.previewNodeStyle` on the real tree,
+  `MefiMusic.previewPack`); the detail steps aside so the item can be seen,
+  and a banner at the top has the time left, Buy and Stop; Stop, the clock and
+  leaving the Shop end it. **Buy for N** asks first, naming the item, the price
+  and the balance after. A member's pack can carry a tip for its maker (No tip, 5, 10,
   25 or any amount up to 100; never on Studio's own items) and the question
   shows the total; a member's free pack reads "Free · tips welcome" and its
   **Get** asks the same way. Every refusal is a sentence: how many more
   credits are needed and how to earn them, a changed price asked again, the
-  Project hub's words for a hold, an item no longer in the Shop. **Use** puts
+  Project hub's words for a hold, an item no longer in the Shop, one that
+  rotated out with its drop ("This one has rotated out"). **Use** puts
   what you own on (`MefiPets.set({ skin })`, `MefiEffects.use`,
   `MefiMusic.applyNodeStyle(key)`, `MefiMusic.applyPack(pack, true)`).
   Settings › Appearance lists the Shop's node styles under **From the Shop**,
@@ -617,16 +643,26 @@ settings and per-model work-kind summaries for the shared controls.
   `MefiShop.checkPack` is the relay's own check and says what stops a pack
   from publishing. **Use it myself** puts it on this PC only; **Publish**
   lists it free or for 10 to 250 credits; **Your packs** has Edit, Unlist and
-  List again, sales and credits earned. A member's pack has **Report** (a
-  reason and an optional line), a moderator also sees **Remove**, and a
-  reported pack shows in Friends › Moderation with **Remove pack**. What you
-  own is kept in `localStorage["mefiStudio.shop.v1"]` and read again when the
-  Shop opens, after a purchase and when the room service connects
-  (`mefi-shop-owned` tells the rest of Studio); signed out or out of reach,
-  the Shop is Friends' sign-in card and what you own keeps working. A part
-  not in the build says "Comes with the next Studio update." Settings ›
-  Appearance's Theme section has a way in (**Open the Shop**), and Search
-  finds it.
+  List again, how many times each was got ("Got 5 times") and credits earned.
+  When a member gets one of your packs, Friends' pop-up says so ("A member got
+  one of your style packs: +12 credits", with **Your packs**; off with **Pop-ups
+  from friends**), the Shop's balance moves and Your packs reads again. A
+  member's pack has **Report** (a reason and an optional line), a moderator
+  also sees **Remove**, and a reported pack shows in Friends › Moderation with
+  **Remove pack**. What you own is kept in
+  `localStorage["mefiStudio.shop.v1"]` and read again when the Shop opens,
+  after a purchase and when the room service connects (`mefi-shop-owned` tells
+  the rest of Studio). Signed out or out of reach, the same page is a
+  **showroom**: Studio's own items from this PC's copy of the catalog (main's
+  `hub:shop` shopCatalog, no relay asked), each with its preview and Try, and
+  in place of Buy the one thing that helps (**Sign in to get it**, which brings
+  Friends' sign-in card at the page's foot to the keyboard; **Connect to get
+  it**; **Join the Discord to get it**); members' packs say they need sign-in,
+  and what you own keeps working. A part not in the build says "Comes with
+  the next Studio update." Kill switches per device: `localStorage`
+  `mefiStudio.shop.page` = "off" shows the Shop as a Friends place again,
+  `mefiStudio.shop.showroom` = "off" shows a signed-out Shop only the sign-in
+  card and what you own.
 - **Ember and friends' pets** (`renderer/pets.js`, `window.MefiPets`; main's
   `hub:pet`; the relay's `relay/src/pets.mjs`). Ember, the dragon every Studio
   comes with, flies on its own small canvas above the page and never takes
