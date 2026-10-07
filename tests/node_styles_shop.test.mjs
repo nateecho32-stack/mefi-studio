@@ -354,7 +354,7 @@ test("Lanterns: a paper lantern on its cord, ribbed by tier, capped from T1, its
   // The ribs (each the front of a ring, bowing down): the middle one, two more from T1, the outer pair from T2.
   assert.deepEqual([0, 1, 2, 3].map((detail) => ribsOf(at(detail)).length), [1, 3, 5, 5]);
   // (the still pose leans 0.03 rad, so the paper sits half a pixel off the node's centre)
-  for (const [cx, cy, x, y] of ribsOf(at(3))) assert.ok(cy > y && Math.hypot(x - P.x, y - P.y) <= 0.9 * 12 + 0.5, "each bows down, inside the paper");
+  for (const [, cy, x, y] of ribsOf(at(3))) assert.ok(cy > y && Math.hypot(x - P.x, y - P.y) <= 0.9 * 12 + 0.5, "each bows down, inside the paper");
   // The caps, two closed four-cornered paths from T1; the cord (from the knot) and the caps' two lips from T2; the
   // tassel's cord and its tuft (a third closed path) at T3.
   assert.deepEqual([0, 1, 2, 3].map((detail) => at(detail).calls.closePath), [0, 2, 2, 3]);

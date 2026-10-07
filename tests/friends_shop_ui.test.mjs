@@ -583,7 +583,7 @@ test("a node style's board paints through MefiNodeStyles in the theme's sky, mov
 // The catalog's two new node styles (added at merge to relay/src/shop.mjs, October's drop and a classic): the Shop
 // shows any node style it is sold, so each is a card with its own live board, Try, Buy and Use.
 test("Lanterns (October's drop) and Neon are node style cards once the catalog sells them: a live board in each style, Try, Buy and Use", async () => {
-  const LANTERN = studioItem("studio:style-lantern", "nodestyle", "Lanterns", 80, { blurb: "Glowing paper lanterns that sway on their cords, with a warm light that flickers while they work.", drop: "2026-10" });
+  const LANTERN = studioItem("studio:style-lantern", "nodestyle", "Lanterns", 80, { blurb: "Glowing paper lanterns that sway, their warm light flickering at work.", drop: "2026-10" });
   const NEON = studioItem("studio:style-neon", "nodestyle", "Neon", 80, { blurb: "Bright neon tubes with a soft glow that buzz on when work starts.", drop: null });
   let relayOwned = null;
   const env = environment({
