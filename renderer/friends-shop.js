@@ -1441,16 +1441,19 @@
       if (inDrop.length) parts.push(section("drop", `In ${drop.name}`, `On sale until ${dayOf(drop.until, 1)}.`, grid(inDrop, "drop")));
       return parts;
     }
-    // The next drop, as a teaser: its name and when it starts (its items stay hidden until then).
+    // The next drop, as a teaser: its name and how soon it starts (its items stay hidden until then). Said as a time from
+    // now, as "Leaves in 24 days" is: a drop starts at midnight UTC, which is the evening before in the Americas, so a
+    // date would name the wrong day for many. One whose start has passed (a list read before it) says nothing.
     function teaserPart() {
       const drop = catalog?.drops?.next;
-      if (!drop) return null;
+      const soon = drop ? timeLeft(drop.from) : null;
+      if (!soon) return null;
       const box = node("p", "friends-shop-teaser");
       box.id = "friends-shop-teaser";
       const swatch = node("span", "friends-shop-teaser-swatch");
       swatch.setAttribute("aria-hidden", "true");
       for (const key of ["accent", "accent2", "background"]) if (HEX.test(drop.colors?.[key] ?? "")) { const dot = node("i"); dot.style.setProperty("--swatch", drop.colors[key]); swatch.append(dot); }
-      box.append(swatch, node("span", "", `Next drop: ${drop.name}, from ${dayOf(drop.from)}.`));
+      box.append(swatch, node("span", "", `Next drop: ${drop.name}, ${soon}.`));
       return box;
     }
     function featuredPart() {

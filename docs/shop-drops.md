@@ -89,7 +89,7 @@ entry to `DROPS`, tag the new items with the drop's id, mirror both in
 
 6. **Deploy the relay** (`relay/README.md`) before the drop's `from`. A drop
    listed early is safe: its items stay hidden until it starts, and Studio
-   shows it only as a teaser ("Next: Frost Fair, from 1 November").
+   shows it only as a teaser ("Next drop: Frost Fair, in 24 days").
 
 ## The Featured shelf
 

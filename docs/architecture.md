@@ -598,7 +598,7 @@ settings and per-model work-kind summaries for the shared controls.
   days", its name and line, and up to three of its pieces live inside it: a
   pet flying in the big tile, a node style lit on the drop's own colour, a
   theme as a little window), the drop's items, the next drop as a teaser
-  ("Next drop: Frost Fair, from 1 November"), **Featured this week** (four
+  ("Next drop: Frost Fair, in 24 days"), **Featured this week** (four
   classic items, "New picks in 3 days") and every category. Drops rotate
   monthly ([shop-drops.md](shop-drops.md)): a drop's items are on sale for its
   month and then rotate out (everyone who got one keeps it); a later drop may

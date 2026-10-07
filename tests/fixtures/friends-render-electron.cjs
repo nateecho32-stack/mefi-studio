@@ -157,7 +157,7 @@ app.whenReady().then(async () => {
   const rotation = {
     drops: {
       current: { id: "2026-10", name: "Haunted Hollow", blurb: "Pumpkins, lanterns and friendly spirits for October.", from: "2026-10-01T00:00:00Z", until: dropLeaves, colors: { accent: "#ff8a3d", accent2: "#9b6bff", background: "#140d1c" }, items: ["studio:skin-void", "studio:fx-embers", "studio:style-constellation", "studio:pack-synthwave"] },
-      next: { id: "2026-11", name: "Frost Fair", blurb: "Ice lanterns.", from: "2026-11-01T00:00:00Z", until: "2026-12-01T00:00:00Z", colors: { accent: "#7fd3ff", accent2: "#c3a6ff", background: "#0b1622" } },
+      next: { id: "2026-11", name: "Frost Fair", blurb: "Ice lanterns.", from: dropLeaves, until: new Date(Date.parse(dropLeaves) + 30 * 86_400_000).toISOString(), colors: { accent: "#7fd3ff", accent2: "#c3a6ff", background: "#0b1622" } },
       last: null,
     },
     featured: ["studio:skin-frost", "studio:fx-dissolve", "studio:style-dragonscale", "studio:pack-sakura"], featuredUntil: new Date(now + 3 * 86_400_000 + 3_600_000).toISOString(),

@@ -53,7 +53,7 @@ const CATALOG = [
 ];
 const DROPS = {
   current: { id: "2026-10", name: "Haunted Hollow", blurb: "Pumpkins, lanterns and friendly spirits for October.", from: "2026-10-01T00:00:00Z", until: LEAVES, colors: { accent: "#ff8a3d", accent2: "#9b6bff", background: "#140d1c" }, items: ["studio:skin-void", "studio:fx-embers"] },
-  next: { id: "2026-11", name: "Frost Fair", blurb: "Ice lanterns.", from: "2026-11-01T00:00:00Z", until: "2026-12-01T00:00:00Z", colors: { accent: "#7fd3ff", accent2: "#c3a6ff", background: "#0b1622" } },
+  next: { id: "2026-11", name: "Frost Fair", blurb: "Ice lanterns.", from: LEAVES, until: new Date(Date.parse(LEAVES) + 30 * DAY).toISOString(), colors: { accent: "#7fd3ff", accent2: "#c3a6ff", background: "#0b1622" } },
   last: null,
 };
 const ROTATION = { drops: DROPS, featured: ["studio:skin-frost", "studio:fx-dissolve", "studio:style-dragonscale", "studio:pack-synthwave"], featuredUntil: new Date(Date.now() + 3 * DAY + 3_600_000).toISOString() };
@@ -252,7 +252,7 @@ test("Home: the month's drop as a banner made from its own data, its pieces, the
   assert.equal(card.querySelector(".friends-shop-hero-tile canvas").dataset.size, "big");
   assert.deepEqual(card.querySelector("#friends-shop-group-drop").querySelectorAll("article").map((el) => el.dataset.item), ["studio:skin-void", "studio:fx-embers"], "the drop's items as cards under it");
   assert.match(card.querySelector("#friends-shop-group-drop").textContent, /^In Haunted HollowOn sale until /);
-  assert.match(card.querySelector("#friends-shop-teaser").textContent, /^Next drop: Frost Fair, from .+\.$/, "the next drop, a teaser without its items");
+  assert.equal(card.querySelector("#friends-shop-teaser").textContent, "Next drop: Frost Fair, in 20 days.", "the next drop, a teaser without its items, said as a time from now (a UTC midnight is the evening before in the Americas)");
   const featured = card.querySelector("#friends-shop-group-featured");
   assert.deepEqual(featured.querySelectorAll("article").map((el) => el.dataset.item), ROTATION.featured);
   assert.match(featured.textContent, /^Featured this weekNew picks in 3 days\./);
@@ -473,6 +473,13 @@ test("a known short balance says so before asking the relay", async () => {
   await one(dialog, "Buy for 90").click();
   assert.match(dialog.querySelector(".friends-shop-ask").textContent, /^You need 60 credits more for Burn away\./);
   assert.equal(shopCalls(env, "shopBuy").length, 0);
+});
+
+test("a teaser whose start has passed (a list read before it) says nothing", async () => {
+  const env = environment({ views: { studio: { ok: true, items: CATALOG, next: null, balance: 240, canEarn: true, hold: null, ...ROTATION, drops: { ...DROPS, next: { ...DROPS.next, from: new Date(Date.now() - DAY).toISOString() } } } } });
+  const card = await open(env);
+  assert.equal(card.querySelector("#friends-shop-teaser"), null);
+  assert.ok(card.querySelector("#friends-shop-hero"), "the rest of Home is there");
 });
 
 test("badges: New for a drop's own item and a member's pack of this week, Leaving soon in a drop's last week, In use for what you wear", async () => {
