@@ -876,19 +876,28 @@
     ctx.restore();
   }
   // A pet's name above its head: a friend's pet always (with its owner's
-  // name), your own while it is petted. Outlined so it reads on any page.
-  function nameTag(ctx, pet, label, alpha = 1) {
+  // name), your own while it is petted. A small nameplate in the page's own
+  // tone (light on a dark page, dark on a light one), so it reads anywhere.
+  function nameTag(ctx, pet, label, alpha = 1, light = false) {
     const head = pet.spine[0];
     const lift = (shapeOf(pet.kind).head * 0.7 + 12) * pet.size + 4;
+    const x = head.x, y = head.y - lift;
     ctx.save();
     ctx.globalAlpha = clamp(alpha, 0, 1);
     ctx.font = "600 12px system-ui, sans-serif";
     ctx.textAlign = "center";
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(10, 12, 16, 0.75)";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-    ctx.strokeText(label, head.x, head.y - lift);
-    ctx.fillText(label, head.x, head.y - lift);
+    ctx.textBaseline = "middle";
+    const width = Math.ceil(ctx.measureText?.(label)?.width || label.length * 7) + 14, height = 20;
+    ctx.beginPath();
+    if (typeof ctx.roundRect === "function") ctx.roundRect(x - width / 2, y - height / 2, width, height, height / 2);
+    else ctx.rect(x - width / 2, y - height / 2, width, height);
+    ctx.fillStyle = light ? "rgba(255, 255, 255, 0.94)" : "rgba(16, 18, 24, 0.84)";
+    ctx.fill();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = light ? "rgba(20, 28, 44, 0.16)" : "rgba(255, 255, 255, 0.14)";
+    ctx.stroke();
+    ctx.fillStyle = light ? "#1c2333" : "#f3f5f9";
+    ctx.fillText(label, x, y + 0.5);
     ctx.restore();
   }
   // A firefly: a dark little body and its lamp, glowing on and off.
@@ -1748,8 +1757,8 @@
     if (chest) purrLines(ctx, pet, chest, colours, onLight);
     paintFirefly(ctx, pet, onLight);
     particles(ctx, pet, colours, onLight);
-    if (label) nameTag(ctx, pet, label);
-    else if (name && pet.tag > 0.03) nameTag(ctx, pet, name, pet.tag);
+    if (label) nameTag(ctx, pet, label, 1, onLight);
+    else if (name && pet.tag > 0.03) nameTag(ctx, pet, name, pet.tag, onLight);
   }
   function particles(ctx, pet, colours, light) {
     if (!pet.particles.length) return;

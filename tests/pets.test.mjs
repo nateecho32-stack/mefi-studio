@@ -780,3 +780,23 @@ test("on the page: a pointer resting on your pet pets it (the card's switch off,
   lively.run(0.05);
   assert.equal(lively.me().mode, "chase", "quick circles near it: a chase");
 });
+
+test("a pet's name sits on a nameplate in the page's own tone: dark words on a light page, light words on a dark one", () => {
+  const { pets } = load();
+  const sim = pets.simulate({ kind: "dragon", seed: 3, width: 800, height: 600 });
+  for (const light of [true, false]) {
+    const drawn = [];
+    let fill = null;
+    const ctx = new Proxy({}, {
+      get: (target, name) => (name in target ? target[name]
+        : typeof name === "string" && /^create\w+Gradient$/.test(name) ? () => ({ addColorStop() {} })
+        : name === "fillText" ? (text) => drawn.push({ text, fill })
+        : (...args) => ({ width: String(args[0] ?? "").length * 7 })),
+      set: (target, name, value) => { if (name === "fillStyle") fill = value; target[name] = value; return true; },
+    });
+    pets.paint(ctx, sim.pet, "theme", { label: "Pip · Sam", light });
+    const tag = drawn.find((entry) => entry.text === "Pip · Sam");
+    assert.ok(tag, `the name is drawn (${light ? "light" : "dark"} page)`);
+    assert.equal(tag.fill, light ? "#1c2333" : "#f3f5f9", "its words in the page's opposite tone, on a plate of its own");
+  }
+});
