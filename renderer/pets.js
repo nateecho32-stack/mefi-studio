@@ -1012,6 +1012,18 @@
     if (views.size && visible) start(); else stop();
   }
   function wake() { if (loop.running && !loop.raf && !loop.timer) { loop.last = 0; schedule(); } }
+  // Motion is nav.js's html[data-motion], rewritten on every change of the
+  // body's classes; only a real change counts. Off sends friends' pets home at
+  // once, and On wakes the loop that stopped while every pet slept.
+  let motionSeen = null;
+  function onMotion() {
+    const mode = motionMode();
+    if (mode === motionSeen) return;
+    motionSeen = mode;
+    world.motion = mode;
+    if (roomList.length) guests(roomList);
+    wake();
+  }
 
   // ---- friends' pets ------------------------------------------------------------
   // A room's other members' pets (relay "roomPets", through renderer/rooms.js):
@@ -1035,7 +1047,8 @@
     }
     for (const [id, view] of views) {
       if (!view.guest || wanted.has(id)) continue;
-      if (loop.running) view.sim.leave(world); else dropView(id);
+      // Flies out, unless motion is Off: a guest asleep there could not leave.
+      if (loop.running && motionMode() !== "off") view.sim.leave(world); else dropView(id);
     }
     for (const [id, guest] of wanted) {
       const view = views.get(id);
@@ -1265,6 +1278,10 @@
     window.addEventListener("resize", () => { for (const view of views.values()) sizeCanvas(view); readPage(); });
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("focus", wake);
+    motionSeen = motionMode();
+    if (typeof MutationObserver === "function" && document.documentElement) {
+      new MutationObserver(onMotion).observe(document.documentElement, { attributes: true, attributeFilter: ["data-motion"] });
+    }
     window.addEventListener("mefi:nav-badges", onBadges);
     window.addEventListener("mefi:inbox", onInbox);
     window.addEventListener("mefi-shop-owned", sync);

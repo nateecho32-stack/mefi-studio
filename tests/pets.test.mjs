@@ -239,6 +239,64 @@ test("guests: a room's other pets get a view each (five at most), named for thei
   assert.deepEqual(Array.from(still.pets.guests(room)), [], "motion Off: no visitors flying in");
 });
 
+test("motion turned Off while friends' pets visit sends them home at once; turned On again, they come back and Ember wakes", () => {
+  const { document } = createDom({ ids: ["settings-category-appearance", "settings-appearance"] });
+  document.readyState = "complete";
+  document.documentElement.dataset.motion = "on";
+  // Canvases that draw (so the loop runs), frames run by hand, the html element's watchers kept.
+  const make = document.createElement;
+  document.createElement = (tag) => {
+    const element = make(tag);
+    if (tag === "canvas") {
+      // Every call answers with something gradient- and text-shaped.
+      const answer = { addColorStop() {}, width: 10 };
+      const ctx = new Proxy({}, { get: (target, key) => (key in target ? target[key] : () => answer), set: (target, key, value) => { target[key] = value; return true; } });
+      element.getContext = () => ctx;
+    }
+    return element;
+  };
+  const watchers = [], frames = [], timers = [];
+  class FakeObserver { constructor(callback) { this.callback = callback; } observe(target, options) { watchers.push({ target, options, callback: this.callback }); } }
+  const events = {};
+  const window = {
+    innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, location: { search: "" },
+    addEventListener(name, callback) { (events[name] ||= []).push(callback); },
+    dispatchEvent(event) { for (const callback of events[event.type] || []) callback(event); return true; },
+    MefiShop: { owns: () => false },
+  };
+  let clock = 0;
+  const context = vm.createContext({
+    window, document, console, Math, Date, JSON, Number, Array, Object, Float32Array, Proxy, MutationObserver: FakeObserver,
+    CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
+    requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; }, cancelAnimationFrame() {}, performance: { now: () => clock },
+    getComputedStyle: () => ({ getPropertyValue: () => "" }),
+  });
+  vm.runInContext(source, context);
+  for (const fn of timers.splice(0)) fn();
+  const pets = window.MefiPets;
+  const motion = watchers.find((watch) => watch.target === document.documentElement && watch.options.attributeFilter?.includes("data-motion"));
+  assert.ok(motion, "pets.js watches html[data-motion]");
+  const setMotion = (mode) => { document.documentElement.dataset.motion = mode; motion.callback([{ attributeName: "data-motion", target: document.documentElement }]); };
+  const run = (count) => { for (let n = 0; n < count && (frames.length || timers.length); n += 1) { clock += 16; (frames.shift() || timers.shift())(); } };
+  const guestCanvases = () => document.body.children.filter((node) => node.className === "studio-pet is-guest").length;
+  pets.set({ on: true });
+  const room = [{ id: "u1", name: "Sam", pet: { kind: "dragon", skin: "jade", name: "Pip" } }, { id: "u2", name: "Ari", pet: { kind: "dragon", skin: "gold", name: "Zed" } }];
+  assert.deepEqual(Array.from(pets.guests(room)), ["u1", "u2"]);
+  run(30);
+  assert.equal(guestCanvases(), 2);
+  setMotion("off");
+  assert.equal(guestCanvases(), 0, "motion Off: friends' pets go home at once instead of falling asleep on screen");
+  run(400);
+  assert.equal(frames.length + timers.length, 0, "with motion Off and Ember asleep, no frames are drawn");
+  setMotion("off");
+  assert.equal(frames.length + timers.length, 0, "the same mode written again changes nothing");
+  setMotion("on");
+  assert.equal(guestCanvases(), 2, "motion On: they fly in again");
+  assert.ok(frames.length + timers.length > 0, "and Ember's loop wakes");
+});
+
 test("a preview frame for the Shop's cards draws without a page", () => {
   const { pets } = load();
   const calls = [];

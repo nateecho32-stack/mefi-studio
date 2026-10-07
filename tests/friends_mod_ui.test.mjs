@@ -145,6 +145,22 @@ test("a reported Shop style pack is named, and Remove pack takes it out of the S
   assert.equal(env.calls.filter((call) => call[0] === "modReports").length, 2, "and the reports are read again");
 });
 
+test("Remove pack sends a report's long, many-line reason as one line of at most 200 characters", async () => {
+  const long = `Copies\nsomeone\telse's work.\r\n${"Really. ".repeat(60)}`;
+  const env = environment({
+    extraReports: [{ id: "rep_e", kind: "shop", roomId: "shop", messageId: null, packId: "pack_nightmarket0001", projectId: null, author: BOB, reporter: ALICE, reason: long, text: null, verified: true, createdAt: 5 }],
+    packNames: { pack_nightmarket0001: "Night market" },
+  });
+  const card = env.mod.card();
+  await flush();
+  card.find("friends-mod-reports").buttons("Remove pack")[0].click();
+  await flush();
+  const [, packId, fields] = env.calls.find((call) => call[0] === "shop:modShopRemove");
+  assert.equal(packId, "pack_nightmarket0001");
+  assert.ok(fields.reason.length <= 200 && /^[^\x00-\x1f\x7f]+$/.test(fields.reason), `one line the relay takes: ${JSON.stringify(fields.reason)}`);
+  assert.ok(fields.reason.startsWith("Copies someone else's work. Really."), fields.reason);
+});
+
 test("look someone up by name, then review them; nothing happens without a yes", async () => {
   const env = environment({ confirm: false });
   const card = env.mod.card();

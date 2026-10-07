@@ -81145,7 +81145,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         // pack's open reports with it.
         const pack = shopPack(report);
         if (pack && typeof api.hubShop === "function") tools.push(confirmed("Remove pack", "Take it out of the Shop?", `Take ${pack.name ?? "this pack"} out of the Shop? Members who got it lose it.`, () => guard("Removing…", async () => {
-          const answer = await api.hubShop("modShopRemove", pack.id, { reason: report.reason });
+          // A report's reason may run to 500 characters over several lines; a removal's is one line of 200 at most.
+          const reason = String(report.reason ?? "").replace(/[\x00-\x1f\x7f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200).trim();
+          const answer = await api.hubShop("modShopRemove", pack.id, reason ? { reason } : {});
           status.textContent = answer?.ok ? "The pack is out of the Shop." : why(answer, "It could not be removed.");
           await load();
         })));
@@ -110932,30 +110934,31 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
   }
   function onMutations(records) {
-    if (!enabled()) return;
+    const on = enabled();
     const leaving = [];
     for (const record of records) {
       const element = record.target;
       if (record.attributeName !== "hidden") continue;
       if (element.hidden) {
         // It was shown a moment ago and is a menu we know.
-        if (record.oldValue !== null || !element.matches?.(MENUS) || leaving.includes(element)) continue;
+        if (!on || record.oldValue !== null || !element.matches?.(MENUS) || leaving.includes(element)) continue;
         leaving.push(element);
       } else {
+        // Shown again: the empty mask its last exit left comes off whether or
+        // not an effect is still on (a Try that ended, motion turned Off).
         unmask(element);
         if (playing.has(element)) stopRun(element);
         // A menu opened: its exit is made ready while it is read.
-        if (element.matches?.(MENUS)) soon(() => { if (!element.hidden) prepare(element); });
+        if (on && element.matches?.(MENUS)) soon(() => { if (!element.hidden) prepare(element); });
       }
     }
     if (leaving.length) playAll(leaving, active());
   }
   function onToggle(event) {
-    if (!enabled()) return;
     const element = event.target;
     if (!element?.matches?.("[popover]")) return;
-    if (event.newState === "open") { unmask(element); soon(() => prepare(element)); }
-    else if (event.newState === "closed" && element.matches?.(":popover-open")) play(element, active());
+    if (event.newState === "open") { unmask(element); if (enabled()) soon(() => prepare(element)); }
+    else if (event.newState === "closed" && enabled() && element.matches?.(":popover-open")) play(element, active());
   }
 
   // ---- the API --------------------------------------------------------------------
@@ -112040,6 +112043,18 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (views.size && visible) start(); else stop();
   }
   function wake() { if (loop.running && !loop.raf && !loop.timer) { loop.last = 0; schedule(); } }
+  // Motion is nav.js's html[data-motion], rewritten on every change of the
+  // body's classes; only a real change counts. Off sends friends' pets home at
+  // once, and On wakes the loop that stopped while every pet slept.
+  let motionSeen = null;
+  function onMotion() {
+    const mode = motionMode();
+    if (mode === motionSeen) return;
+    motionSeen = mode;
+    world.motion = mode;
+    if (roomList.length) guests(roomList);
+    wake();
+  }
 
   // ---- friends' pets ------------------------------------------------------------
   // A room's other members' pets (relay "roomPets", through renderer/rooms.js):
@@ -112063,7 +112078,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     for (const [id, view] of views) {
       if (!view.guest || wanted.has(id)) continue;
-      if (loop.running) view.sim.leave(world); else dropView(id);
+      // Flies out, unless motion is Off: a guest asleep there could not leave.
+      if (loop.running && motionMode() !== "off") view.sim.leave(world); else dropView(id);
     }
     for (const [id, guest] of wanted) {
       const view = views.get(id);
@@ -112293,6 +112309,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     window.addEventListener("resize", () => { for (const view of views.values()) sizeCanvas(view); readPage(); });
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("focus", wake);
+    motionSeen = motionMode();
+    if (typeof MutationObserver === "function" && document.documentElement) {
+      new MutationObserver(onMotion).observe(document.documentElement, { attributes: true, attributeFilter: ["data-motion"] });
+    }
     window.addEventListener("mefi:nav-badges", onBadges);
     window.addEventListener("mefi:inbox", onInbox);
     window.addEventListener("mefi-shop-owned", sync);
