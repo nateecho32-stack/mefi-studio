@@ -111,6 +111,26 @@ settings_render 1/1 (57 s), one run each. check ok; lint 47 warnings (as main); 
 of petting, waking, sneezing, the flick, fireflies and the chase were rendered offscreen and kept locally in
 C:\wt\s-pets-lab\out. Not run: the full `npm test`.
 
+## 2026-10-07 The Shop as a page of its own, monthly drops with a Featured shelf, the signed-out showroom and sale pop-ups
+
+Branch `feat/shop-showroom` (C:\wt\s-shop, from origin/main c513838; 906cfbe..448f311, not pushed), on the owner's
+laptop with Node 24.15 and 250 to 900 MB free. Asked: a showroom while signed out, a pop-up when a member gets one of
+your packs, then (the owner) "make the shop its own whole page, make it clean, nice, like discords shop almost, lets
+have the shop rotate in and out styles". Built: relay/src/shop-drops.mjs (DROPS, the windows, the Featured shelf;
+feature shop.drops, refusal not-available) mirrored by main.cjs (SHOP_DROPS, shopCatalog); the route "shop" (the month's
+drop as a banner made from its data, Featured this week, categories, a detail dialog per item, the showroom with Sign in
+to get it); Friends' sale pop-up; the page's head and card names clear of styles.css's header and button rules.
+Relay not deployed (the owner decides). Every Electron run went through the lane with a 600 s limit.
+
+Results: relay_shop_drops 8/8, relay_shop 18/18, shop_host 6/6 (main's rules equal the relay's at 130 times),
+hub_client_shop 8/8, friends_shop_ui 33/33, friends_front_ui 15/15, friends_navigation 13/13; the 20 suites around the
+change 258/258; friends_render (Electron) passed at 34c96d7 (101 s) and on 448f311 (160 s), now walking the Shop's own page
+at 1920x1080 and 1440x900 in Studio and Social, 1100x720 and 600x560@1.5, the showroom and a light palette, with even card
+columns and the column filling the page beside the list. By hand in a real window: no text under 4.5:1 in Daylight,
+Paper or the dark default; Tab reaches a card with a 2 px ring round it, Enter opens its detail, Esc closes only the
+detail. check ok; lint 47 warnings (as main); audit 0 findings; Python contracts 248 OK, 1 skipped. Not run here: the
+full `npm test`.
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -507,25 +527,6 @@ test:one`: 85 of 86 pass; rust_parity_repo's sync test hit its own 240 s timeout
 in 115 s on main's copy earlier today, and this branch does not touch it). The new suites pass:
 run_node_tests_stage_limit (a copy of the runner meets a suite kept alive by a child that never ends: stopped in
 about 5 s, named, the run failed, the turn given back, no process left) and test_lease 13/13.
-
-## 2026-10-06 Sharing playlists in rooms and on the Project hub lands on main
-
-Branch `feat/playlists-share` in `C:\wt\playlists` (aadb6ad; parked first as `wip/playlists-share` 48e3a8a), rebased
-onto main e0e5a46 with the CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged. No relay
-change and no deploy: a room gets the share text as a message, the hub a YouTube `watch_videos` link.
-
-On this PC: `npm run check` ok (296 targets, every selector used), eslint on the touched files adds no warnings (the
-5 in main.cjs are older), `npm run audit` no findings. Node, run together: playlists 16/16 (4 new), rooms_ui and
-project_hub_ui (one new case each; the HUB_PROJECT_METHODS pin now reads playProject: 2 and pins the `here` rule),
-music, booklet_build, together_ui, friends_front_ui and every hub_* suite: 234 pass, 0 fail. Windows CI (`Studio
-checks`) runs on this commit before the fast-forward. Electron suites were not run here: the change adds no window
-fixture and the media ones passed this morning on the same menu; friends_render (12 px text rule) is covered by the
-card's 12 px floor in music.css.
-
-Seen in a browser preview of the real renderer files with a stub room service: Share › Send it to friends lists only
-active rooms you're in (the Lobby first), Post sent 1,337 characters to the Lobby, the chat card plays and saves once
-(then Saved and Open in Playlists), Add to the Project hub sent a 226-character link with a blurb naming the channels,
-and the hub shelf offers Save; no console errors.
 
 ## Read Before Any Tests
 

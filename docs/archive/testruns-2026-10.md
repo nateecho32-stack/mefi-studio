@@ -6,6 +6,25 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Sharing playlists in rooms and on the Project hub lands on main
+
+Branch `feat/playlists-share` in `C:\wt\playlists` (aadb6ad; parked first as `wip/playlists-share` 48e3a8a), rebased
+onto main e0e5a46 with the CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged. No relay
+change and no deploy: a room gets the share text as a message, the hub a YouTube `watch_videos` link.
+
+On this PC: `npm run check` ok (296 targets, every selector used), eslint on the touched files adds no warnings (the
+5 in main.cjs are older), `npm run audit` no findings. Node, run together: playlists 16/16 (4 new), rooms_ui and
+project_hub_ui (one new case each; the HUB_PROJECT_METHODS pin now reads playProject: 2 and pins the `here` rule),
+music, booklet_build, together_ui, friends_front_ui and every hub_* suite: 234 pass, 0 fail. Windows CI (`Studio
+checks`) runs on this commit before the fast-forward. Electron suites were not run here: the change adds no window
+fixture and the media ones passed this morning on the same menu; friends_render (12 px text rule) is covered by the
+card's 12 px floor in music.css.
+
+Seen in a browser preview of the real renderer files with a stub room service: Share › Send it to friends lists only
+active rooms you're in (the Lobby first), Post sent 1,337 characters to the Lobby, the chat card plays and saves once
+(then Saved and Open in Playlists), Add to the Project hub sent a 226-character link with a blurb naming the channels,
+and the hub shelf offers Save; no console errors.
+
 ## 2026-10-06 A way to Routing opens More settings at Routing; the background check reads the Settings strip where Settings shows
 
 Branch `fix/routing-narrow` in `C:\wt\routing`, off main 017d51a. The full Electron lane on main 0b2fa14 (here, one

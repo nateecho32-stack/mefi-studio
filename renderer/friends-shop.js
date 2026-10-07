@@ -1534,7 +1534,9 @@
       else if (way) box.append(button(way.label.replace(/ to get it$/, ""), () => way.run(), "friends-shop-notice-way", PRIMARY));
       return box;
     }
-    // Friends' sign-in card at the foot of the showroom; "Sign in to get it" brings it into view and to the keyboard.
+    // Friends' sign-in card at the foot of the showroom. "Sign in to get it" is that card's own Sign in with Discord: it
+    // comes into view, takes the keyboard and starts (Discord asks in the browser; the card's status line says each step
+    // and onSignedIn opens the Shop for real). A card already signing in is only brought into view.
     function callGate() {
       closeDetail({ focus: false });
       const card_ = gateEl;
@@ -1542,8 +1544,9 @@
       try { card_.scrollIntoView?.({ block: "center", behavior: motionOff() ? "auto" : "smooth" }); } catch { /* it is on the page */ }
       card_.classList?.add("is-called");
       setTimeout(() => card_.classList?.remove("is-called"), 1600);
-      const signIn = card_.querySelector?.("#friends-gate-signin") ?? card_.querySelector?.("button");
+      const signIn = card_.querySelector?.("#friends-gate-signin") ?? null;
       (signIn ?? card_).focus?.({ preventScroll: true });
+      if (signIn && !signIn.disabled) signIn.click?.();
     }
     function viewParts() {
       if (!ready && !showroom()) return cataloguing ? [] : notReady();

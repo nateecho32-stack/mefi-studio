@@ -10262,7 +10262,9 @@ button.front-item:hover b { text-decoration: underline; text-decoration-color: v
 html[data-shell="rail"] .friends-shop-page.workspace-page > .friends-shop-sheet { align-self: start; width: 100%; height: auto; min-height: 100%; max-width: 1320px; max-height: none; margin: 0 auto; padding: 26px clamp(16px, 2.6vw, 40px) 64px; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 
 /* ---- the head: what the Shop is, your balance and how to earn more ---- */
-.friends-shop-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+/* styles.css styles every <header> (a padding and a rule under it) and every <button> (a 36 px floor, a panel fill, a hover
+   tint, no wrapping): the Shop's own say what they need. Its head keeps one hairline under it, on purpose. */
+.friends-shop-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; margin: 0; padding: 0 0 18px; border: 0; border-bottom: 1px solid var(--line); }
 .friends-shop-head-words { display: grid; gap: 6px; flex: 1 1 420px; min-width: 0; }
 .friends-shop-title { margin: 0; font: 650 26px/1.15 var(--font-display); letter-spacing: -0.01em; color: var(--ivory); outline: none; }
 .friends-shop-about { margin: 0; max-width: 70ch; color: var(--muted); font-size: 14px; line-height: 1.5; }
@@ -10341,6 +10343,8 @@ html[data-shell="rail"] .friends-shop-page.workspace-page > .friends-shop-sheet 
 .friends-shop-open { all: unset; color: inherit; font: inherit; white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
 .friends-shop-open::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 .friends-shop-open:focus-visible { outline: none; }
+/* (button:hover and :active would tint the name and press it whenever the pointer is anywhere on the card) */
+.friends-shop-item .friends-shop-open:is(:hover, :active) { background: none; border-color: transparent; box-shadow: none; transform: none; }
 .friends-shop-preview { position: relative; display: grid; place-items: center; min-width: 0; aspect-ratio: 4 / 3; overflow: hidden; background: color-mix(in srgb, var(--ivory) 5%, transparent); }
 .friends-shop-pet { display: block; width: 100%; height: 100%; }
 .friends-shop-placeholder { display: grid; place-items: center; width: 100%; height: 100%; color: var(--muted); }
@@ -86713,7 +86717,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       else if (way) box.append(button(way.label.replace(/ to get it$/, ""), () => way.run(), "friends-shop-notice-way", PRIMARY));
       return box;
     }
-    // Friends' sign-in card at the foot of the showroom; "Sign in to get it" brings it into view and to the keyboard.
+    // Friends' sign-in card at the foot of the showroom. "Sign in to get it" is that card's own Sign in with Discord: it
+    // comes into view, takes the keyboard and starts (Discord asks in the browser; the card's status line says each step
+    // and onSignedIn opens the Shop for real). A card already signing in is only brought into view.
     function callGate() {
       closeDetail({ focus: false });
       const card_ = gateEl;
@@ -86721,8 +86727,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       try { card_.scrollIntoView?.({ block: "center", behavior: motionOff() ? "auto" : "smooth" }); } catch { /* it is on the page */ }
       card_.classList?.add("is-called");
       setTimeout(() => card_.classList?.remove("is-called"), 1600);
-      const signIn = card_.querySelector?.("#friends-gate-signin") ?? card_.querySelector?.("button");
+      const signIn = card_.querySelector?.("#friends-gate-signin") ?? null;
       (signIn ?? card_).focus?.({ preventScroll: true });
+      if (signIn && !signIn.disabled) signIn.click?.();
     }
     function viewParts() {
       if (!ready && !showroom()) return cataloguing ? [] : notReady();
