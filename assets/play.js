@@ -22,79 +22,79 @@
     game: {
       name: "Game-night page", blurb: "RSVP with your friends", project: "Game night", lead: "your game" + NBH + "night page",
       text: "A game-night page with the time, the place and an RSVP button",
-      talk: "Easy: the time, the place and an RSVP friends can press. Build it and I'll split it into three steps.",
+      talk: "Easy: the time, the place and an RSVP friends can press. I split it into three tasks, and three builders are on it.",
       peek: "Is that the game-night thing? Send it when it's done!",
       tasks: [["Lay out the page", "Claude Code", ["reading the project", "writing index.html", "styling the card"]],
         ["Make the RSVP work", "Codex", ["reading rsvp.js", "wiring up the button", "saving who's going"]],
         ["Write the invite", "OpenCode", ["drafting the text", "adding the date", "checking its work"]]],
       ask: { q: "Should RSVPs close an hour before it starts?", yes: "Yes, an hour before", no: "No, keep them open" },
       files: [["index.html", "+88"], ["rsvp.js", "+41"], ["invite.md", "+12"]],
-      share: "Made us a game-night page. RSVP in there!",
+      share: "Our game-night page is on the Project hub. RSVP in there!",
       replies: [["Maxwell", "Wait, it's done already? That's actually useful."], ["Tess", "RSVP'd. See you Friday!"], ["Juno", "Can it list snacks too?"]]
     },
     arcade: {
       name: "Tiny arcade game", blurb: "Catch the falling stars", project: "Star Catch", lead: "your star" + NBH + "catching game",
       text: "A tiny game where you catch falling stars with a paddle and keep score",
-      talk: "Stars fall, a paddle catches them and the score counts up. Build it and I'll split it into three steps.",
+      talk: "Stars fall, a paddle catches them and the score counts up. I split it into three tasks, and three builders are on it.",
       peek: "Is that a game? I'm in.",
       tasks: [["Draw the night sky", "Claude Code", ["reading the project", "writing game.js", "drawing the stars"]],
         ["Move the paddle", "Codex", ["reading input.js", "following the pointer", "testing the edges"]],
         ["Keep the score", "OpenCode", ["writing score.js", "saving the best score", "checking its work"]]],
       ask: { q: "Should the stars fall faster as you score?", yes: "Yes, speed up", no: "Keep one speed" },
       files: [["game.js", "+132"], ["input.js", "+38"], ["score.js", "+24"]],
-      share: "Made a tiny star-catching game. Beat my score!",
+      share: "Star Catch is on the Project hub. Beat my score!",
       replies: [["Rook", "14 stars. Your turn."], ["Juno", "One more round. Okay, two."], ["Maxwell", "Putting this on the Project hub."]]
     },
     band: {
       name: "Our band's site", blurb: "Next gig and a play button", project: "The Late Shift", lead: "your band's site",
       text: "A site for our band with the next gig, our songs and a play button",
-      talk: "Next gig on top, the songs below with a play button. Build it and I'll split it into three steps.",
+      talk: "Next gig on top, the songs below with a play button. I split it into three tasks, and three builders are on it.",
       peek: "Wait, a site for The Late Shift?",
       tasks: [["Build the home page", "Claude Code", ["reading the project", "writing index.html", "setting the type"]],
         ["List the next gig", "Codex", ["reading gigs.json", "adding the date", "linking the venue"]],
         ["Add the player", "OpenCode", ["writing player.js", "adding the songs", "checking its work"]]],
       ask: { q: "Put the next gig above the songs?", yes: "Yes, gig first", no: "Songs first" },
       files: [["index.html", "+94"], ["gigs.json", "+18"], ["player.js", "+52"]],
-      share: "Our band site is up. Press play!",
+      share: "Our band site is on the Project hub. Press play!",
       replies: [["Rook", "The player works!"], ["Tess", "Putting Saturday in my calendar."], ["Maxwell", "Sharing it with everyone."]]
     },
     pixel: {
       name: "Pixel art tool", blurb: "Draw, then save a PNG", project: "Pixel pad", lead: "your pixel art tool",
       text: "A pixel art tool with a small canvas, a palette and Save as PNG",
-      talk: "A small canvas, a few colours and a Save button. Build it and I'll split it into three steps.",
+      talk: "A small canvas, a few colours and a Save button. I split it into three tasks, and three builders are on it.",
       peek: "A pixel tool? I have sprites to make.",
       tasks: [["Draw the canvas", "Claude Code", ["reading the project", "writing canvas.js", "drawing the grid"]],
         ["Add the palette", "Codex", ["reading palette.js", "picking the colours", "testing the picker"]],
         ["Save as PNG", "OpenCode", ["adding the export", "naming the file", "checking its work"]]],
       ask: { q: "Start with a 12 by 12 canvas?", yes: "Yes, 12 by 12", no: "Make it 16 by 16" },
       files: [["canvas.js", "+120"], ["palette.js", "+36"], ["export.js", "+28"]],
-      share: "Made a little pixel art tool. Draw something!",
+      share: "Pixel pad is on the Project hub. Draw something!",
       replies: [["Juno", "Drawing a cat right now."], ["Maxwell", "Could it export sprites for Pixel Forge?"], ["Rook", "Saved my first one. So good."]]
     },
     timer: {
       name: "Study timer", blurb: "Focus together, 25 minutes", project: "Focus Room", lead: "your study timer",
       text: "A study timer with 25 minutes of focus, a short break and friends focusing with you",
-      talk: "A ring that fills over 25 minutes, then a short break, with friends beside you. Build it and I'll split it into three steps.",
+      talk: "A ring that fills over 25 minutes, then a short break, with friends beside you. I split it into three tasks, and three builders are on it.",
       peek: "Ooh, I need that for exams.",
       tasks: [["Draw the timer ring", "Claude Code", ["reading the project", "writing timer.js", "drawing the ring"]],
         ["Add focus and break", "Codex", ["reading modes.js", "switching the modes", "testing the clock"]],
         ["Show who's focusing", "OpenCode", ["writing friends.js", "adding the faces", "checking its work"]]],
       ask: { q: "Play a soft chime when the time is up?", yes: "Yes, a soft chime", no: "No sound" },
       files: [["timer.js", "+86"], ["modes.js", "+30"], ["friends.js", "+22"]],
-      share: "Made us a study timer. Focus with me?",
+      share: "Focus Room is on the Project hub. Focus with me?",
       replies: [["Juno", "Joining. 25 minutes, go."], ["Tess", "The ring is so calm."], ["Rook", "Break at the same time? Deal."]]
     },
     plants: {
       name: "Plant tracker", blurb: "Who needs water today", project: "Leaf Log", lead: "your plant tracker",
       text: "A plant tracker that shows which plants need water today",
-      talk: "A card for each plant, a water button, and the thirsty ones first. Build it and I'll split it into three steps.",
+      talk: "A card for each plant, a water button, and the thirsty ones first. I split it into three tasks, and three builders are on it.",
       peek: "My fern needs this.",
       tasks: [["List the plants", "Claude Code", ["reading the project", "writing plants.json", "laying out the cards"]],
         ["Add the water button", "Codex", ["reading water.js", "filling the gauge", "saving the day"]],
         ["Sort by who's thirsty", "OpenCode", ["writing thirst.js", "sorting the cards", "checking its work"]]],
       ask: { q: "Remind you on the days a plant is thirsty?", yes: "Yes, remind me", no: "No reminders" },
       files: [["plants.json", "+26"], ["water.js", "+44"], ["thirst.js", "+31"]],
-      share: "Made a plant tracker. My fern says thanks.",
+      share: "Leaf Log is on the Project hub. My fern says thanks.",
       replies: [["Tess", "Adding my cactus. It never needs anything."], ["Maxwell", "Can it do my basil too?"], ["Juno", "This is so wholesome."]]
     }
   };
@@ -114,6 +114,9 @@
     play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg>',
     pause: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>',
     lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+    folder: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>',
+    pulse: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></svg>',
+    send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 20 4l-6 16-3-7Z"/></svg>',
     drop: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c3.6 4.7 6 8.1 6 11a6 6 0 0 1-12 0c0-2.9 2.4-6.3 6-11Z"/></svg>'
   };
 
@@ -149,17 +152,17 @@
           '<span class="pl-pill work" aria-hidden="true"><i></i><em class="n-work">0</em> working</span>' +
           '<button type="button" class="pl-skip">Skip to the site' + SVG.close + '</button>' +
         '</header>' +
+        '<p class="pl-banner"><b>Guided demo</b><span class="pl-banner-long">Made-up friends and projects, sped up. Press the glowing button at each step, or wait and it plays itself.</span><span class="pl-banner-short">Press the glowing button, or wait.</span></p>' +
         '<div class="pl-body">' +
-          '<nav class="pl-rail" aria-hidden="true"><i class="on" title="Today">' + SVG.today + '</i><i title="Work">' + SVG.work + '</i><i title="Map">' + SVG.map + '</i><i class="r-friends" title="Friends">' + SVG.friends + '<em class="badge">2</em></i></nav>' +
+          '<nav class="pl-rail" aria-hidden="true"><i class="on" title="Home">' + SVG.today + '</i><i class="r-friends" title="Friends">' + SVG.friends + '<em class="badge">2</em></i><i title="Projects">' + SVG.folder + '</i><i title="Activity">' + SVG.pulse + '</i></nav>' +
           '<main class="pl-main">' +
             '<div class="pl-hello"><span class="pl-orb" aria-hidden="true"></span><div><small><span class="pl-greet">Good evening</span> · Social</small><h2 class="pl-ask-line">What do you want to make?</h2></div></div>' +
             '<form class="pl-box" autocomplete="off">' +
               '<label class="visually-hidden" for="pl-idea">Your idea</label>' +
-              '<textarea id="pl-idea" rows="2" readonly tabindex="-1" spellcheck="false" placeholder="Pick something to build below…"></textarea>' +
+              '<textarea id="pl-idea" rows="2" readonly tabindex="-1" spellcheck="false" placeholder="Pick something to make below…"></textarea>' +
               '<div class="pl-box-row">' +
-                '<span class="pl-chips" aria-hidden="true"><span>Add files</span><span>Auto</span></span>' +
-                '<button type="button" class="pl-talk"><span>Talk it over</span><kbd>Enter</kbd></button>' +
-                '<button type="submit" class="pl-build">' + SVG.spark + '<span>Build it</span><kbd>Ctrl Enter</kbd></button>' +
+                '<span class="pl-chips" aria-hidden="true"><span>Add files</span></span>' +
+                '<button type="submit" class="pl-build">' + SVG.send + '<span>Send</span><kbd>Enter</kbd></button>' +
               '</div>' +
             '</form>' +
             '<div class="pl-gallery" role="group" aria-label="Pick something to build"></div>' +
@@ -186,6 +189,7 @@
         '<footer class="pl-foot"><ol class="pl-steps" aria-label="Steps"></ol></footer>' +
       '</div>' +
       '<div class="pl-hint" aria-hidden="true"><span></span></div>' +
+      '<p class="pl-toast" role="status"></p>' +
       '<p class="visually-hidden pl-live" aria-live="polite"></p>';
   }
 
@@ -251,9 +255,16 @@
       hintEl.classList.add("on");
       follow();
     }
-    // A press anywhere else: the hint and its target bounce, to say "this one". (Web Animations, so the
-    // target's own CSS animations are left alone.)
+    // A press anywhere else: a line says what this is and what to press, and the hint and its target
+    // bounce. (Web Animations, so the target's own CSS animations are left alone.)
+    var toast = $(".pl-toast"), toastTimer = 0;
     function nudge() {
+      toast.textContent = hintTarget
+        ? "This is a guided demo. Press “" + hintEl.firstChild.textContent + "” to go on."
+        : "This is a guided demo. The next part plays by itself.";
+      toast.classList.add("on");
+      clearTimeout(toastTimer);
+      toastTimer = later(function () { toast.classList.remove("on"); }, 2600);
       if (!hintTarget) return;
       hintEl.classList.add("nudge");
       if (still() || !hintEl.animate) return;
@@ -382,29 +393,25 @@
       $(".pl-crumb .pl-proj").textContent = IDEAS[k].project;
       var line = $(".pl-ask-line"); line.textContent = "What’s next for ";
       line.appendChild(el("span", "pl-proj", IDEAS[k].project)); line.appendChild(document.createTextNode("?"));
-      var old = $(".pl-talkback"); if (old) old.remove();
       app.classList.add("picked");
     }
-    // Talk it over: Mefi answers under the box, then Build it is the next thing to press.
-    function talkBack() {
-      if (app.dataset.step !== "0" || !idea) return;
-      var old = $(".pl-talkback"); if (old) old.remove();
-      var reply = el("div", "pl-talkback");
-      reply.appendChild(el("span", "pl-orb sm"));
-      var p = el("p"); p.appendChild(el("b", "", "Mefi")); p.appendChild(document.createTextNode(IDEAS[idea].talk)); reply.appendChild(p);
-      $(".pl-box").insertAdjacentElement("afterend", reply);
-      hint($(".pl-build"), "Build it");
-      say("Mefi: " + IDEAS[idea].talk);
+    // Mefi's line under the box, as on Social's Home: what it made of the message.
+    function mefiSays(text) {
+      var old = $(".pl-mefi"); if (old) old.remove();
+      var row = el("div", "pl-mefi");
+      row.appendChild(el("span", "pl-orb sm"));
+      var p = el("p"); p.appendChild(el("b", "", "Mefi")); p.appendChild(document.createTextNode(text)); row.appendChild(p);
+      row.appendChild(el("span", "pl-mefi-open", "Open conversation"));
+      $(".pl-box").insertAdjacentElement("afterend", row);
+      say("Mefi: " + text);
     }
-    $(".pl-talk").addEventListener("click", talkBack);
     $(".pl-box").addEventListener("submit", function (e) { e.preventDefault(); });
-    // As in Studio: Enter talks it over, Ctrl Enter builds it (the rails still decide).
+    // As in Studio: Enter sends (the rails still decide).
     document.addEventListener("keydown", function (e) {
       if (e.key === "Escape") { e.preventDefault(); leave("skip"); return; }
       if (e.key !== "Enter" || app.dataset.step !== "0" || !idea) return;
-      if (e.ctrlKey || e.metaKey) { e.preventDefault(); $(".pl-build").click(); return; }
       var t = e.target;
-      if (!(t instanceof Element) || !t.closest("button, a")) { e.preventDefault(); $(".pl-talk").click(); }
+      if (e.ctrlKey || e.metaKey || !(t instanceof Element) || !t.closest("button, a")) { e.preventDefault(); $(".pl-build").click(); }
     }, on);
 
     // ---- leaving ---------------------------------------------------------------
@@ -426,22 +433,21 @@
     // ---- the play-through ------------------------------------------------------
     async function run() {
       try {
-        // Idea: pick a project (a card can be pressed from the first moment), then Build it.
+        // Idea: pick a project (a card can be pressed from the first moment), then Send.
         step(0);
         allow(picks);
         var first = picks.filter(function (b) { return !b.classList.contains("built"); })[0] || picks[0];
         await sleep(again ? 500 : 1000); alive();
         if (!idea) { await waitClick([first].concat(picks.filter(function (b) { return b !== first; })), "Pick one", 9000, "above", first); alive(); }
-        await waitClick($(".pl-build"), "Build it", 12000, "above", null, picks.concat($(".pl-talk"))); alive();
+        await waitClick($(".pl-build"), "Send", 12000, "above", null, picks); alive();
         started = true;
         var spec = IDEAS[idea];
         clearInterval(typer); box.value = spec.text;
-        var talked = $(".pl-talkback"); if (talked) talked.remove();
         app.classList.add("sent");
-        say("Three builders start on " + spec.text);
         await sleep(420); alive();
-        box.value = ""; box.placeholder = "Describe an idea, a fix or a question…";
+        box.value = ""; box.placeholder = "Ask Mefi anything, or describe something to make…";
         app.classList.remove("sent");
+        mefiSays(spec.talk);
 
         // Build
         step(1);
@@ -550,22 +556,22 @@
 
         // Share it with friends (the site stays open to play with)
         step(5);
-        var share = el("button", "pl-share"); share.type = "button"; share.innerHTML = SVG.friends + "<span>Share with friends</span>";
+        var share = el("button", "pl-share"); share.type = "button"; share.innerHTML = SVG.friends + "<span>Put it on the Project hub</span>";
         w.bar.appendChild(share);
         await sleep(60); alive();
         share.classList.add("in");
         await waitClick(share, "Share it", 9000, "below", null, [w.body]); alive();
         allow([w.body]);
-        share.disabled = true; share.classList.add("sent"); share.innerHTML = SVG.friends + "<span>Shared</span>";
+        share.disabled = true; share.classList.add("sent"); share.innerHTML = SVG.friends + "<span>On the Project hub</span>";
         app.classList.add("shared", "sheet-friends");
         tab("friends");
-        chat("You", spec.share, true).classList.add("link");
-        say("Shared in Friday hangout.");
+        chat("You", spec.share, true);
+        say("On the Project hub, and Friday hangout knows.");
         await sleep(700); alive();
         for (var k = 0; k < spec.replies.length; k++) {
           var r = spec.replies[k];
           await typing(r[0], r[1], 750); alive();
-          if (k === 0) $(".pl-chat").appendChild(el("span", "pl-credit", "+5 credits · " + r[0] + " tried it"));
+          if (k === 0) $(".pl-chat").appendChild(el("span", "pl-credit", "+5 credits · " + r[0] + " played it"));
           await sleep(450); alive();
         }
         if (built.indexOf(idea) < 0) built.push(idea);

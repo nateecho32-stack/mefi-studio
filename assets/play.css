@@ -23,7 +23,7 @@
   transition: clip-path 1.05s var(--ease-in-out), --hole 1.15s var(--ease-in-out);
   --hole: var(--hole-max, 160vmax);
 }
-.pl-app { position: relative; display: grid; grid-template-rows: 52px minmax(0, 1fr) 44px; height: 100%; }
+.pl-app { position: relative; display: grid; grid-template-rows: 52px 30px minmax(0, 1fr) 44px; height: 100%; }
 
 /* ---- the top bar ---------------------------------------------------------- */
 .pl-top { display: flex; align-items: center; gap: 14px; padding: 0 12px 0 16px; background: rgb(var(--bg-2-rgb)); border-bottom: 1px solid var(--pl-line); min-width: 0; }
@@ -73,14 +73,19 @@
 .pl-box-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .pl-chips { display: flex; gap: 6px; flex: 1; min-width: 0; }
 .pl-chips span { padding: 5px 10px; border-radius: 8px; font-size: 12.5px; color: var(--dim); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08); white-space: nowrap; }
-.pl-app:not(.picked) .pl-talk, .pl-app:not(.picked) .pl-build { opacity: .45; }
-.pl-talk { display: inline-flex; align-items: center; gap: 9px; padding: 9px 9px 9px 15px; border-radius: 12px; font: 650 14px var(--font-ui); color: var(--ivory); cursor: pointer; background: rgb(255 255 255 / 0.05); border: 1px solid rgb(255 255 255 / 0.14); transition: background .2s, border-color .2s; }
-.pl-talk:hover { background: rgb(255 255 255 / 0.09); border-color: rgb(255 255 255 / 0.24); }
-.pl-talk kbd { font: 650 11px var(--font-ui); padding: 3px 7px; border-radius: 7px; color: var(--muted); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
-.pl-app:not([data-step="0"]) .pl-talk { opacity: .45; pointer-events: none; }
-.pl-talkback { display: flex; gap: 12px; align-items: flex-start; max-width: 1060px; margin: 12px auto 0; padding: 12px 16px; border-radius: 16px; background: rgb(var(--accent-2-rgb) / 0.08); box-shadow: inset 0 0 0 1px rgb(var(--accent-2-rgb) / 0.2); animation: pl-msg-in .55s var(--ease-spring) both; }
-.pl-talkback p { margin: 0; font-size: 14px; color: var(--text); }
-.pl-talkback p b { display: block; font-size: 12px; color: var(--accent-bright); }
+.pl-app:not(.picked) .pl-build { opacity: .45; }
+/* Mefi's line under the box, as on Social's Home. */
+.pl-mefi { display: flex; gap: 12px; align-items: center; max-width: 1060px; margin: 12px auto 0; padding: 10px 12px 10px 16px; border-radius: 16px; background: rgb(255 255 255 / 0.03); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08); animation: pl-msg-in .55s var(--ease-spring) both; }
+.pl-mefi p { margin: 0; flex: 1; min-width: 0; font-size: 14px; color: var(--text); }
+.pl-mefi p b { margin-right: 10px; color: var(--ivory); }
+.pl-mefi-open { flex: none; padding: 6px 11px; border-radius: 9px; font-size: 12.5px; font-weight: 650; color: var(--muted); background: rgb(255 255 255 / 0.05); }
+/* It says what it is: a guided demo with made-up people. */
+.pl-banner { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 0; padding: 0 12px; font-size: 12.5px; color: var(--muted); background: linear-gradient(90deg, rgb(var(--accent-2-rgb) / 0.04), rgb(var(--accent-2-rgb) / 0.12), rgb(var(--accent-2-rgb) / 0.04)); border-bottom: 1px solid rgb(var(--accent-2-rgb) / 0.2); white-space: nowrap; overflow: hidden; }
+.pl-banner b { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); background: linear-gradient(180deg, #fff, var(--accent-bright)); }
+.pl-banner-long, .pl-banner-short { overflow: hidden; text-overflow: ellipsis; }
+.pl-banner-short { display: none; }
+.pl-toast { position: absolute; left: 50%; bottom: 58px; z-index: 145; max-width: min(520px, calc(100% - 32px)); margin: 0; padding: 10px 16px; border-radius: 12px; font-size: 13.5px; font-weight: 600; text-align: center; color: var(--ivory); background: rgb(var(--bg-2-rgb) / 0.96); box-shadow: 0 0 0 1px rgb(var(--accent-2-rgb) / 0.4), 0 20px 40px -16px rgb(0 0 0 / 0.9); opacity: 0; transform: translate(-50%, 10px); transition: opacity .3s ease, transform .45s var(--ease-spring); pointer-events: none; }
+.pl-toast.on { opacity: 1; transform: translate(-50%, 0); }
 .pl-orb.sm { width: 28px; height: 28px; animation: none; }
 .pl-build { display: inline-flex; align-items: center; gap: 9px; padding: 9px 9px 9px 16px; border: 0; border-radius: 12px; font: 700 14.5px var(--font-ui); color: var(--ink); cursor: pointer; background: linear-gradient(180deg, #fff, var(--accent-bright) 30%, var(--accent)); box-shadow: inset 0 1px 0 #fff, 0 10px 26px -10px rgb(var(--accent-2-rgb) / 0.7); transition: transform .3s var(--ease-spring); }
 .pl-build:hover { transform: translateY(-1px); } .pl-build:active { transform: scale(.96); }
@@ -442,7 +447,7 @@ canvas.pl-target { animation: pl-pulse 1.8s var(--ease-out) infinite; }
   .pl-pill.need { margin-left: auto; }
 }
 @media (max-width: 900px) {
-  .pl-app { grid-template-rows: 50px minmax(0, 1fr) 0; }
+  .pl-app { grid-template-rows: 50px 28px minmax(0, 1fr) 0; }
   .pl-body { grid-template-columns: 1fr; }
   .pl-rail, .pl-dots, .pl-seg, .pl-foot { display: none; }
   .pl-pill.need { margin-left: auto; }
@@ -461,7 +466,9 @@ canvas.pl-target { animation: pl-pulse 1.8s var(--ease-out) infinite; }
   .pl-crumb { font-size: 13px; }
   .pl-skip { padding: 7px 10px 7px 12px; font-size: 12.5px; }
   .pl-hello h2 { font-size: 1.3rem; }
-  .pl-build kbd, .pl-talk kbd, .pl-chips { display: none; }
+  .pl-build kbd, .pl-chips { display: none; }
+  .pl-banner-long { display: none; } .pl-banner-short { display: inline; }
+  .pl-toast { bottom: 70px; }
   .pl-box-row { justify-content: flex-end; }
   /* one column: the board and the preview window share it */
   .pl-main, .pl-site { grid-area: 1 / 1; }
@@ -484,7 +491,7 @@ canvas.pl-target { animation: pl-pulse 1.8s var(--ease-out) infinite; }
   .pl-top { gap: 8px; padding: 0 8px 0 12px; }
   .pl-crumb i, .pl-crumb .pl-tail { display: none; }
   .pl-box-row { flex-direction: column; align-items: stretch; }
-  .pl-build, .pl-talk { justify-content: center; }
+  .pl-build { justify-content: center; }
   .pl-pick { padding: 8px 8px 11px; }
   .pl-thumb { height: 64px; }
   .pl-pick-words b { font-size: 13px; } .pl-pick-words small { font-size: 11.5px; }

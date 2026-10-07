@@ -201,7 +201,114 @@
     title.classList.remove("split-done", "in");
     if (window.MefiFx) { window.MefiFx.split(title.parentNode); window.MefiFx.reveal(title.parentNode); }
     var lede = $("#final-lede");
-    if (lede) lede.textContent = "Download Studio, open a folder and press Build it. This time a real builder does the work, and your friends are a click away.";
+    if (lede) lede.textContent = "Download Studio, open a folder and say what you want. This time real builders do the work, and your friends are right there with you.";
+  }
+
+  // =========================================================================
+  // The room: a made-up evening in a hangout, played on a loop while it is on
+  // screen. Each step waits, then adds a line, a typing dot, an event, the
+  // shared project or a change to the side panel.
+  // =========================================================================
+  var HUE = { Maxwell: 146, Juno: 268, Rook: 32, Tess: 330 };
+  // Rooms are plain text with @mentions; your own build sits beside the chat, as on Social's Home, and a
+  // play of your project arrives as a pop-up. (No cards are posted into rooms, and there is no voice.)
+  var ROOM = [
+    { wait: 500, say: ["Maxwell", "anyone around tonight?"] },
+    { wait: 1300, type: "Juno", say: ["Juno", "here! fighting my tileset again"] },
+    { wait: 1300, type: "Rook", say: ["Rook", "putting some music on for us"] },
+    { wait: 700, listen: true },
+    { wait: 1500, say: ["You", "what if the jam had a snack list"] },
+    { wait: 1300, type: "Tess", say: ["Tess", "do it, I'll bring lemonade"] },
+    { wait: 900, build: 0.12, step: 0, note: "Your project · 3 builders working" },
+    { wait: 1300, build: 0.5, step: 1 },
+    { wait: 1200, type: "Maxwell", say: ["Maxwell", "wait, you're building it right now?"] },
+    { wait: 1300, build: 1, step: 3, note: "Checks passed · you accepted it" },
+    { wait: 1100, note: "On the Project hub · ready to play" },
+    { wait: 700, say: ["You", "@Maxwell it's on the Project hub, add your snacks"] },
+    { wait: 1600, type: "Maxwell", say: ["Maxwell", "added chips. this is great"] },
+    { wait: 1300, pop: ["Maxwell played Snack list", "+5 credits for you, +2 for Maxwell"] },
+    { wait: 5000, reset: true }
+  ];
+  function room() {
+    var sec = $("#room");
+    if (!sec) return;
+    var chat = $("#rm-chat", sec), now = $("#rm-now", sec), build = $("#rm-build", sec), stage = $(".rm-stage", sec), pop = $("#rm-pop", sec);
+    var bar = build && $(".rm-bar i", build), steps = build ? $$(".rm-steps li", build) : [], say = $("#rm-build-say", sec), sayFirst = say ? say.textContent : "";
+    var at = 0, timer = 0, popTimer = 0, running = false, minute = 41;
+    function el(tag, cls, text) { var n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
+    function av(name) { var a = el("i", "av", name[0]); if (HUE[name] != null) a.style.setProperty("--h", String(HUE[name])); return a; }
+    function add(node) {
+      chat.appendChild(node);
+      var rows = Array.prototype.filter.call(chat.children, function (c) { return !c.classList.contains("gone"); });
+      if (rows.length > 7) rows.slice(0, rows.length - 7).forEach(function (c) { c.classList.add("gone"); setTimeout(function () { c.remove(); }, 450); });
+    }
+    function line(who, text) {
+      var row = el("div", "rm-msg" + (who === "You" ? " me" : ""));
+      row.appendChild(av(who));
+      var p = el("p"); p.appendChild(el("b", "", who)); p.appendChild(el("time", "", "8:" + (minute++) + " PM"));
+      var body = el("span");
+      text.split(/(@\w+)/).forEach(function (part) { if (part) body.appendChild(part[0] === "@" ? el("em", "at", part) : document.createTextNode(part)); });
+      p.appendChild(body);
+      row.appendChild(p);
+      add(row);
+    }
+    function typing(who) { var t = el("div", "rm-typing"); t.appendChild(av(who)); var s = el("span"); s.innerHTML = "<i></i><i></i><i></i>"; t.appendChild(s); add(t); return t; }
+    function setBuild(v, step) {
+      if (!build) return;
+      build.classList.toggle("idle", v === 0);
+      if (bar) bar.style.setProperty("--v", String(v));
+      steps.forEach(function (li, i) { li.className = i < step || v >= 1 ? "done" : i === step ? "run" : ""; });
+    }
+    function popUp(title, sub) {
+      if (!pop) return;
+      $("b", pop).textContent = title; $("small", pop).textContent = sub;
+      pop.classList.add("on");
+      clearTimeout(popTimer);
+      if (!still()) popTimer = setTimeout(function () { pop.classList.remove("on"); }, 3800);
+    }
+    function reset() {
+      Array.prototype.forEach.call(chat.children, function (c) { c.classList.add("gone"); });
+      setTimeout(function () { chat.textContent = ""; }, 460);
+      if (now) now.classList.remove("on");
+      if (pop) pop.classList.remove("on");
+      if (say) say.textContent = sayFirst;
+      setBuild(0, -1);
+      minute = 41;
+    }
+    function apply(s) {
+      if (s.reset) { reset(); return; }
+      if (s.listen && now) now.classList.add("on");
+      if (s.build != null) setBuild(s.build, s.step);
+      if (s.note && say) say.textContent = s.note;
+      if (s.say) line(s.say[0], s.say[1]);
+      if (s.pop) popUp(s.pop[0], s.pop[1]);
+    }
+    function next() {
+      if (!running) return;
+      var s = ROOM[at];
+      at = (at + 1) % ROOM.length;
+      if (s.type) {
+        var t = typing(s.type);
+        timer = setTimeout(function () { t.remove(); apply(s); timer = setTimeout(next, (ROOM[at] || {}).wait || 800); }, 900);
+        return;
+      }
+      apply(s);
+      timer = setTimeout(next, ROOM[at].wait || 800);
+    }
+    // Still: the evening as it stands near the end, all at once.
+    if (still()) {
+      ROOM.forEach(function (s) { if (!s.reset) apply(s); });
+      return;
+    }
+    function go(on) {
+      if (on === running) return;
+      running = on;
+      clearTimeout(timer);
+      if (on) timer = setTimeout(next, at === 0 ? ROOM[0].wait : 400);
+    }
+    stage.addEventListener("playing", function () { go(!document.hidden); });
+    stage.addEventListener("paused", function () { go(false); });
+    document.addEventListener("visibilitychange", function () { go(!document.hidden && stage.classList.contains("playing")); });
   }
 
   // =========================================================================
@@ -391,6 +498,7 @@
       var start = FIRST_MONDAY + week * WEEK, entriesUntil = start + 5 * DAY, end = start + WEEK;
       var at = function (w) { return JAM_THEMES[((w % JAM_THEMES.length) + JAM_THEMES.length) % JAM_THEMES.length]; };
       themeEl.textContent = at(week);
+      $$("[data-jam-theme]").forEach(function (n) { n.textContent = at(week); });
       $("#jam-phase").textContent = now < entriesUntil
         ? "Entries are open until " + when(entriesUntil, true) + " your time. Then everyone plays and votes until " + when(end, true) + ". Next week: " + at(week + 1) + "."
         : "Voting is open until " + when(end, true) + " your time: play the entries, then vote for your favourites. Next week: " + at(week + 1) + ".";
@@ -460,6 +568,7 @@
     if (!gated) { root.classList.remove("gate-on"); if (gate) gate.classList.add("gone"); setTimeout(heroGo, 60); }
     $$("[data-play-demo]").forEach(function (b) { b.addEventListener("click", function () { playDemo(b, false); }); });
     safely("personalise", personalise);
+    safely("room", room);
     safely("showcase", showcase);
     safely("walkthrough", journey);
     safely("modes", modes);
