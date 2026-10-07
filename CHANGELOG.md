@@ -7,6 +7,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Two new node styles in the Shop: Lanterns and Neon.** **Lanterns** (part
+  of October's drop) turns every node on the Map into a glowing paper lantern
+  that sways on its cord; its candle flickers while a job runs, its lines are
+  strings of festival lights, a small lantern floats along them to bring
+  news, and fireflies circle the one you chose. **Neon** draws each node as a
+  bright neon tube with a soft glow that buzzes on when a job starts; its
+  lines are lit tubes with current running along them. Both are in Settings ›
+  Appearance under **From the Shop** and can be tried for two minutes first;
+  every node style Studio already had stays free.
+
 - **Sign in to GitHub can finish.** Its setup window opened blank: the
   GitHub CLI never showed its one-time code or opened the browser, so the
   sign-in behind the Git chip, Publish to GitHub, Link to a repository, the
