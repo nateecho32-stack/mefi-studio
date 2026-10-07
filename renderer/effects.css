@@ -14,6 +14,9 @@
 .studio-pet { z-index: 2147482600; }
 .studio-pet[hidden] { display: none; }
 .exit-effect-dust { z-index: 2147482500; }
+/* Glitch's filter lives in a little SVG of its own (effects.js): it takes no
+   room and is never seen, but stays rendered so the filter can be used. */
+.exit-effect-defs { position: fixed; left: 0; top: 0; width: 0; height: 0; overflow: hidden; pointer-events: none; }
 /* Settings › Appearance › Interface: the pet and menu effect card (pets.js). */
 .settings-flair-body { display: grid; gap: 16px; }
 .settings-flair-body > .field { display: grid; gap: 8px; }

@@ -39,6 +39,17 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   older Studio does not know yet shows there as Ember. The first run's
   **Your dragon** row has a tiny Ember beside it, and the Shop's pet cards
   fly at their proper calm pace again (they were spinning far too fast).
+- **Four more menu effects, and they play in more places.** The Shop gets
+  **Blown away** (the menu drifts aside like sand in the wind, its grains
+  streaming off), **Shatter** (it cracks like glass and falls away in
+  pieces), **Glitch** (it tears into slices that jump with a colour split and
+  blink out) and, for October, **Spirits** (it fades into ghostly wisps of
+  smoke that rise and curl away). Whichever effect you use now also plays
+  when a right-click or tab menu, Search or a popover closes (permissions,
+  the chat's tools, the Inbox, Build's More, the session panel's menus, the
+  Layout card). A closing menu is out of the keyboard's and screen readers'
+  way at once, a menu you open again mid-effect is back at once, and motion
+  Off or **It fades out** still close every menu at once.
 
 - **Sign in to GitHub can finish.** Its setup window opened blank: the
   GitHub CLI never showed its one-time code or opened the browser, so the

@@ -1418,7 +1418,9 @@
     const menu = state.menu;
     if (!menu) return false;
     state.menu = null;
-    menu.node.remove?.();
+    // A menu effect from the Shop plays it away (renderer/effects.js); without one it simply goes.
+    const effects = window.MefiEffects;
+    if (typeof effects?.leave === "function") effects.leave(menu.node); else menu.node.remove?.();
     state.statusParts?.items?.layout?.setAttribute?.("aria-expanded", "false");
     if (restore) {
       const back = menu.returnTo?.isConnected === false ? state.statusParts?.items?.layout : menu.returnTo;
