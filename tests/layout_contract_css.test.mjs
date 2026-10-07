@@ -126,8 +126,9 @@ const DELTAS = {
 };
 
 test("the ledger is the whole set of declarations that moved, and each is in the stylesheet as written", () => {
-  // 74 moved; the classic Agents menu's max-width went with the menu.
-  assert.ok(ledger.length >= 73, "the ledger lists every declaration that moved");
+  // 74 moved; the classic Agents menu's max-width went with the menu, and Social's Home lost its three no-rail offsets (overlays,
+  // toasts and the project panel at the list's edge) when its rail came to Home too (2026-10-06).
+  assert.ok(ledger.length >= 70, "the ledger lists every declaration that moved");
   const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   for (const [file, property, , after] of ledger) {
     assert.ok(css[file], `${file} exists`);
@@ -255,9 +256,11 @@ test("the full-window layers take all four edges from the free area", () => {
   has(styles, /html\[data-shell="rail"\] #idle-hud \{ top: var\(--shell-y0\); \}/, "Command's HUD");
   has(styles, /#app-rail \{\s*position: fixed; top: 0; bottom: var\(--shell-y1\); left: 0;/, "the rail stops above the status bar");
   has(css["agents.css"], /\.agents-overlay \{ position: fixed; inset: var\(--shell-y0, 72px\) var\(--shell-x1, 0px\) var\(--shell-y1, 0px\) var\(--shell-x0, 80px\);/, "the agents page");
-  has(css["vibe.css"], /inset: var\(--shell-tabs-h\) var\(--shell-x1\) var\(--shell-y1\) var\(--shell-list-w\);/, "Vibe's own home has no rail or local navigation, so it claims only what can sit beside it");
+  has(css["vibe.css"], /inset: var\(--shell-tabs-h\) var\(--shell-x1\) var\(--shell-y1\) var\(--shell-list-w\);/, "Social's own layer claims what can sit beside the list (the frame moves its left edge past Social's rail: shell.css)");
   has(css["vibe.css"], /\.vibe-rail \{\s*position: fixed; top: 0; bottom: var\(--shell-y1\);/, "Vibe's rail stops above the status bar");
   has(styles, /html\[data-shell="rail"\] #workspace-sidebar-panel \{ left: var\(--shell-rail-w\); height: calc\(100% - var\(--shell-y1\)\); \}/, "and so does the project panel that slides out of it");
   has(css["music.css"], /html\[data-layout="v2"\] body \{ --appearance-w: min\(clamp\(320px, 28vw, 390px\), calc\(100vw - var\(--shell-x0, 0px\) - var\(--shell-x1, 0px\) - 24px\)\); \}/, "the Appearance editor takes the room that is there between the columns, in v2 only");
-  has(css["vibe.css"], /body\.vibe-active:not\(:has\(\.workspace-page:not\(\[hidden\]\)\)\):not\(:has\(#friends-overlay:not\(\[hidden\]\)\)\) #toast-host \{ left: calc\(var\(--shell-list-w\) \+ 24px\); bottom: calc\(104px \+ var\(--shell-y1\)\); \}/, "toasts on Vibe's Home (no page, Friends included, over it) stand right of the list and above the status bar");
+  has(css["vibe.css"], /body\.vibe-active:not\(:has\(\.workspace-page:not\(\[hidden\]\)\)\):not\(:has\(#friends-overlay:not\(\[hidden\]\)\)\) #toast-host \{ bottom: calc\(104px \+ var\(--shell-y1\)\); \}/, "toasts on Social's Home (no page, Friends included, over it) stand above the status bar, clear of the box, beside the rail like everywhere else");
+  assert.ok(!/#toast-host \{ left: calc\(var\(--shell-list-w\) \+ 24px\)/.test(css["vibe.css"]), "and no longer at the list's edge, where Social's rail is now");
+  has(css["vibe.css"], /#workspace-sidebar-panel \{ top: 80px; left: calc\(var\(--shell-x0\) \+ 24px\);/, "the project panel on Social's Home opens beside the rail, not over it");
 });

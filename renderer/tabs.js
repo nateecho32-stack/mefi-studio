@@ -180,7 +180,8 @@
     for (const task of Array.isArray(data?.tasks) ? data.tasks : []) if (task?.id) tasks.set(String(task.id), task);
     return { data, tasks, loaded: Boolean(data && tasks.size > 0) };
   }
-  const homeTitle = () => (window.MefiToday ? "Today" : words(safe(() => window.MefiNav?.get?.("workspace")?.short, ""), 20) || "Home");
+  // Social calls its Home what its rail calls it; Studio's Home is Today (renderer/today.js).
+  const homeTitle = () => (document.documentElement?.dataset?.uiMode === "vibe" ? "Home" : window.MefiToday ? "Today" : words(safe(() => window.MefiNav?.get?.("workspace")?.short, ""), 20) || "Home");
 
   // What a tab shows: its words, its glyph (or, for a session, a dot in its state's colour) and whether it is finished.
   function describe(rec, ctx) {
@@ -1218,6 +1219,29 @@
   }
 
   // The Add menu: every place in the registry, this project's sessions and what was closed, one search box.
+  // Friends' places are one page with a place each ("friends-page", { place }); the registry's ways into them are
+  // actions, so they are listed from the page's own places (moderators see Moderation) with the words people use.
+  const FRIENDS_WORDS = {
+    lobby: "friends social online people who is here chat say hi lobby front page home",
+    rooms: "friends chat rooms room hangout cowork invite join requests talk",
+    pcs: "friends pc pcs laptop computer devices connect another pc pair pairing sync github battery keep on",
+    playground: "friends companion pet playdate share sharing rules practice",
+    hub: "friends projects shared share creations play star credits ranks games apps",
+    events: "friends events build jam jam cowork co-work hour together",
+    mod: "friends moderation reports moderate suspend",
+  };
+  function friendsRows(nav) {
+    const places = safe(() => window.MefiCompanionHub?.friendsPlaces?.(), []) || [];
+    const dest = safe(() => nav?.get?.("friends-page"), null);
+    const group = (dest && safe(() => nav.sectionLabel?.(dest), null)) || "Friends";
+    const rank = dest ? safe(() => nav.sectionRank?.(dest), 99) ?? 99 : 99;
+    return places.filter((entry) => entry && typeof entry.id === "string").map((entry) => {
+      const known = friendsPlaceOf(entry.id);
+      const route = place("friends-page", { place: entry.id });
+      return route && { group, rank, route, title: words(entry.label, 40), glyph: entry.glyph,
+        terms: `friends ${entry.label || ""} ${known?.about || ""} ${FRIENDS_WORDS[entry.id] || ""}` };
+    }).filter(Boolean);
+  }
   function destinations() {
     const nav = window.MefiNav;
     const all = safe(() => nav?.list?.(), []) || [];
@@ -1231,6 +1255,7 @@
       const group = safe(() => nav.sectionLabel?.(dest), null) || "Pages";
       rows.push({ group, rank: safe(() => nav.sectionRank?.(dest), 99) ?? 99, route, title: words(dest.short || dest.label, 40), terms: `${dest.label || ""} ${dest.searchTerms || ""} ${dest.desc || ""}`, glyph: dest.glyph });
     }
+    rows.push(...friendsRows(nav));
     return rows.sort((a, b) => a.rank - b.rank);
   }
   function sessionRows(query) {

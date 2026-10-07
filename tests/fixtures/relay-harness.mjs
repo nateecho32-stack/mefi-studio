@@ -52,12 +52,15 @@ export function member(relay, token) {
 
 export const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 
-export async function until(check, what, ms = 3000) {
-  const end = Date.now() + ms;
+// Ten seconds, not three: a busy or slower PC took longer than 3 s for a relay round trip in memory, and seven
+// relay_pcs cases failed there on 2026-10-06 while the live relay was fine. A passing wait returns as soon as it
+// holds, so the longer limit costs nothing when the suite is green.
+export async function until(check, what, ms = 10000) {
+  const start = Date.now(), end = start + ms;
   for (;;) {
     const value = await check();
     if (value) return value;
-    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what} after ${Date.now() - start} ms (an in-memory relay; the live one is not involved)`);
     await wait(5);
   }
 }

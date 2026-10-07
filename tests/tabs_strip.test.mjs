@@ -966,6 +966,36 @@ test("typing narrows the list (titles, headings and the registry's own search wo
   assert.equal(rowsOf(t)[0], "Plans", "clearing the box brings Recently closed back");
 });
 
+// A QA run on 2026-10-06 found no match for "Friends" or "Lobby" here: Friends' ways in are actions, so the menu skipped them.
+test("the Add menu finds Friends' places by their names and the words people use for them, and opens one as a Friends tab", async () => {
+  const PLACES = [
+    { id: "lobby", label: "The Lobby", glyph: "g-community", about: "Who's online, the rooms open now and what your friends are making." },
+    { id: "rooms", label: "Rooms", glyph: "g-chat", about: "Hang out, cowork, listen together." },
+    { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines." },
+    { id: "mod", label: "Moderation", glyph: "g-flag", about: "Only moderators see this place.", modOnly: true },
+  ];
+  const registry = [...REGISTRY, { id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", glyph: "g-orbit", showIn: { dock: false, footer: false, help: false, palette: false, tabs: false, tools: false } }];
+  const t = await tabsEnv({ registry });
+  // What renderer/companion-hub.js answers: the places this member sees (Moderation only for a moderator).
+  t.window.MefiCompanionHub = { FRIENDS_PLACES: PLACES, friendsPlaces: () => PLACES.filter((entry) => !entry.modOnly).map(({ id, label, glyph }) => ({ id, label, glyph, current: false })) };
+  await openAdd(t);
+  assert.ok(groupsOf(t).includes("Friends"), "Friends has a heading of its own");
+  await typeIn(t, "friends");
+  assert.deepEqual(rowsOf(t), ["The Lobby", "Rooms", "Your PCs"], "every place this member sees, and not Moderation");
+  await typeIn(t, "lobby");
+  assert.deepEqual(rowsOf(t), ["The Lobby"]);
+  await typeIn(t, "laptop");
+  assert.deepEqual(rowsOf(t), ["Your PCs"], "the words people use count too");
+  await typeIn(t, "chat");
+  assert.ok(rowsOf(t).includes("Rooms"));
+  await typeIn(t, "lobby");
+  await press(addBox(t), "Enter");
+  const lobby = t.tabs.list().find((tab) => tab.route.id === "friends-page");
+  assert.ok(lobby, "it opens as a tab");
+  assert.deepEqual(JSON.parse(JSON.stringify(lobby.route.params)), { place: "lobby" });
+  assert.deepEqual(t.nav.calls.at(-1), ["friends-page", { place: "lobby" }]);
+});
+
 test("arrows move through the rows and wrap; Enter opens the row as a tab of its own, Shift+Enter opens and pins it", async () => {
   const t = await tabsEnv();
   await openAdd(t);

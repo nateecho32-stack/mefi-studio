@@ -7,6 +7,65 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Make it yours, Ember the dragon, menu effects and the Shop.** The first
+  run now starts with **Make it yours**: pick **Light**, **Dark** or
+  **Stylized** (glowing colour and bold headings), a colour within it, the
+  text size and how much things move, and see Studio change behind the card
+  as you pick. When the welcome closes, a small note by the Settings button
+  says all of it lives in **Settings › Appearance**. New light themes,
+  **Daylight** and **Paper**, hold 4.5:1 contrast on every page, and the
+  two-tone Void themes paint their second colour again. Every Studio comes
+  with **Ember**, a little dragon that flies around the window, naps on the
+  top and status bars, comes to look at your pointer, loops with a puff of
+  fire when a job finishes and flies to the Inbox when something needs you.
+  It stays on its perch while you type, sleeps when you step away and sits
+  still with motion Off. A new install starts with Ember on (the first run
+  has the switch); on an existing install, turn it on in Settings ›
+  Appearance › Interface. In a room, friends' dragons fly in and play with
+  yours. The new **Shop** (Friends › Shop, also from Settings › Appearance)
+  has skins for Ember, menu effects that make menus **Dissolve**, **Burn
+  away** or turn to **Stardust** when they close, node styles and style
+  packs, all for credits you earn on the social side; credits can't be
+  bought or cashed out. Try anything free for two minutes first. Anyone can
+  make a style pack (colours, node style, font) and list it free or for
+  credits; buyers can add a tip, the maker gets three quarters, and the rest
+  is taken out of circulation.
+- **The Map shows each job's state at a glance.** Every task orb wears a
+  ring in the legend's colours: it breathes while the job runs, pulses when
+  it needs you, and holds still for Review and Done (on a light theme the
+  rings and the legend take deeper inks). Task orbs are a size bigger, and a
+  small tree spreads out to fill the 3D view instead of sitting in the
+  middle.
+
+- **Social is about people, rooms and a simple talk with Mefi.** Social's
+  rail (Home, Friends, Projects, Activity) is on its Home too. Home has one
+  box with one action, Send: Mefi offers to build what you describe, and
+  Ctrl Enter still builds right away. Under it, your work is a short list
+  beside who is online, the rooms open now and what friends shared this
+  week. Studio's pages (the Map, the boards, Team, Fleet, Trace, Worktrees)
+  and sessions open in Studio from Social, keeping where you were going, and
+  Social's status bar leaves usage, cost, the machine's load and the
+  permission mode to Studio. A task's state reads the same everywhere (needs
+  you, running, up next or paused, in review, done), so a column never says
+  Running 0 over queued work, and the line under the box clears once its
+  news is old. Fixed: the tab picker finds Friends' places (Friends, Lobby,
+  a laptop), a key tip no longer covers a control (one covered Resume), a
+  briefing about high CPU no longer files a "Fix:" task, a GitHub CLI
+  sign-in made while Studio is open counts for the updater within a minute,
+  the in-memory relay tests wait up to ten seconds on a slow PC, and a card
+  on Today that is redrawn while you tab through it (its "4 min" turning "5
+  min") keeps the keyboard on the same button.
+
+- **Friends › Your PCs starts with Connect another PC.** Three plain
+  steps (open Studio on the other PC, sign in to Friends with the same
+  Discord account on both, press Pair and check that both show the same six
+  numbers) follow what Studio sees as you go, and fold to one button once a
+  PC of yours is paired. Your PCs come next. Keeping this PC in step with
+  GitHub, power and battery, lending this PC, setting it up, paired workers
+  and reaching it from Discord are folded groups below, the GitHub line
+  still showing when this PC is behind, and sharing has its own heading,
+  Share projects.
+
 - **A more compact Studio: less empty space, more of your work on screen.**
   Today puts its board about 130 px higher. The line of keys under the box
   is gone (Talk it over shows Enter, Build it shows Ctrl Enter), the scope

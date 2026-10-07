@@ -178,8 +178,14 @@ class MefiStudioIdleTests(unittest.TestCase):
         styles = (STUDIO / "renderer" / "styles.css").read_text(encoding="utf-8")
         self.assertIn("background: var(--panel-solid);", styles)
         self.assertIn(".assistant-msg.user {", styles)
-        self.assertIn("background: #231e16;", styles)
-        self.assertIn("background: #14151a;", styles)
+        # Opaque in every theme (the light themes' sweep took the fixed dark
+        # hexes out): the owner's bubble is the accent mixed into the solid
+        # panel, the assistant's is the solid panel itself.
+        def rule(selector):
+            start = styles.index(selector + " {")
+            return styles[start : styles.index("}", start)]
+        self.assertIn("background: color-mix(in srgb, var(--gold) 12%, var(--panel-solid));", rule(".assistant-msg.user"))
+        self.assertIn("background: var(--panel-solid);", rule(".assistant-msg.assistant"))
         self.assertIn(".cmd-chat.collapsed .chat-log-body { display: none; }", styles)
         self.assertNotIn(".cmd-chat.collapsed .feed-state { display: none; }", styles)
         self.assertIn(".cmd-chat.collapsed .feed-state {", styles)

@@ -163,7 +163,9 @@
         // pack's open reports with it.
         const pack = shopPack(report);
         if (pack && typeof api.hubShop === "function") tools.push(confirmed("Remove pack", "Take it out of the Shop?", `Take ${pack.name ?? "this pack"} out of the Shop? Members who got it lose it.`, () => guard("Removing…", async () => {
-          const answer = await api.hubShop("modShopRemove", pack.id, { reason: report.reason });
+          // A report's reason may run to 500 characters over several lines; a removal's is one line of 200 at most.
+          const reason = String(report.reason ?? "").replace(/[\x00-\x1f\x7f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200).trim();
+          const answer = await api.hubShop("modShopRemove", pack.id, reason ? { reason } : {});
           status.textContent = answer?.ok ? "The pack is out of the Shop." : why(answer, "It could not be removed.");
           await load();
         })));

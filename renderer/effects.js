@@ -406,30 +406,31 @@
     }
   }
   function onMutations(records) {
-    if (!enabled()) return;
+    const on = enabled();
     const leaving = [];
     for (const record of records) {
       const element = record.target;
       if (record.attributeName !== "hidden") continue;
       if (element.hidden) {
         // It was shown a moment ago and is a menu we know.
-        if (record.oldValue !== null || !element.matches?.(MENUS) || leaving.includes(element)) continue;
+        if (!on || record.oldValue !== null || !element.matches?.(MENUS) || leaving.includes(element)) continue;
         leaving.push(element);
       } else {
+        // Shown again: the empty mask its last exit left comes off whether or
+        // not an effect is still on (a Try that ended, motion turned Off).
         unmask(element);
         if (playing.has(element)) stopRun(element);
         // A menu opened: its exit is made ready while it is read.
-        if (element.matches?.(MENUS)) soon(() => { if (!element.hidden) prepare(element); });
+        if (on && element.matches?.(MENUS)) soon(() => { if (!element.hidden) prepare(element); });
       }
     }
     if (leaving.length) playAll(leaving, active());
   }
   function onToggle(event) {
-    if (!enabled()) return;
     const element = event.target;
     if (!element?.matches?.("[popover]")) return;
-    if (event.newState === "open") { unmask(element); soon(() => prepare(element)); }
-    else if (event.newState === "closed" && element.matches?.(":popover-open")) play(element, active());
+    if (event.newState === "open") { unmask(element); if (enabled()) soon(() => prepare(element)); }
+    else if (event.newState === "closed" && enabled() && element.matches?.(":popover-open")) play(element, active());
   }
 
   // ---- the API --------------------------------------------------------------------

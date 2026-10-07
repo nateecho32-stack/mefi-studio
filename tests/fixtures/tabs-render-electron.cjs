@@ -693,13 +693,18 @@ app.whenReady().then(async () => {
   // ===================================================================================================================================
   await resize([1440, 900, 1]); await run("await window.MefiNav.go('workspace');");
   await setup("vibe"); await home(); await sleep(300);
-  await run(`const T = window.MefiTabs; for (const id of ['fleet', 'plans']) { T.open(id, {}, { preview: false }); await window.__fx.tick(); }`);
+  // Social's own pages as tabs (a Studio page opens in Studio: renderer/social.js).
+  await run(`const T = window.MefiTabs; for (const id of ['inbox', 'activity']) { T.open(id, {}, { preview: false }); await window.__fx.tick(); }`);
   await sleep(300);
   const vibe = await strip();
+  assert.equal(await run("return window.MefiVibe.mode();"), "vibe", "Social's own pages keep Social");
   assert.ok(vibe.strip.y >= -0.5 && vibe.strip.b <= vibe.usable.top + 0.5, "Vibe: the strip is at the top of the window, over the page");
   assert.equal(await run("return window.MefiNav.get('workspace').short;"), "Social", "in Social the nav calls Home by its own name");
-  assert.deepEqual(vibe.items.filter((item) => item.home).map((item) => item.title), [await run("return window.MefiToday ? 'Today' : 'Social';")], "and the first tab says the same, until the Today board (where it is in the window) gives it its name");
+  assert.deepEqual(vibe.items.filter((item) => item.home).map((item) => item.title), ["Home"], "and the first tab is Home, as Social's rail and trail say it");
   await capture("tabs-vibe.png");
+  // A tab of Studio's own, opened from Social, opens in Studio.
+  await run(`const T = window.MefiTabs; T.open('fleet', {}, { preview: false }); await window.__fx.tick();`);
+  await until("window.MefiVibe.mode() === 'build' && window.MefiNav.current() === 'fleet'", "a Studio page's tab switches to Studio and opens there");
   await run("await window.MefiNav.go('workspace');");
   await setup("build"); await home();
   // A light custom palette (the themes themselves are dark): every colour on the strip and its menus comes from the tokens, so it follows.

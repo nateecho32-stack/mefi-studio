@@ -64,11 +64,11 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/0.5/today.webp" alt="Social in the 0.5 layout: What's next for Notes app? with a box to build or talk it over, and a board of Needs you, Running, Review and Done cards">
-      <p><strong>Today.</strong> Social's home: one box to build or ask, and a board of what needs you, what runs, what to review and what is done.</p>
+      <img src="docs/images/0.5/today.webp" alt="Social's Home in the 0.5 layout: its rail with Home, Friends, Projects and Activity; What's next for Notes app? with one box and its Send button; Your work as a short list of what needs you, beside the Friends card with who is online, the rooms open now and what friends shared this week">
+      <p><strong>Home.</strong> Social's home: one box to talk with Mefi, your work in short, and who is online.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/0.5/inbox.webp" alt="The Inbox over Social's Today: a failed check with Try a different approach, a permission request with Deny recommended, and a question with Mefi's suggestion and numbered options">
+      <img src="docs/images/0.5/inbox.webp" alt="The Inbox over Social's Home: a failed check with Try a different approach, a permission request with Deny recommended, and a question with Mefi's suggestion and numbered options">
       <p><strong>One Inbox.</strong> Every question, approval and failed check that waits on you, with a suggested answer.</p>
     </td>
   </tr>

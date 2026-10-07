@@ -35,12 +35,10 @@ html[data-frame] #tree-rail { display: none !important; }
 html[data-frame] body, html[data-frame] body:has(#tree-rail.pinned) { padding-right: calc(var(--gutter) + var(--shell-x1)); }
 /* A narrow window keeps the page's own narrow margin (styles.css, max-width 900px), as it had with the strip. */
 @media (max-width: 900px) { html[data-frame] body, html[data-frame] body:has(#tree-rail.pinned) { padding-right: calc(var(--s4) + var(--shell-x1)); } }
-/* Vibe's own Home has no rail on screen: the list starts at the window's edge there. */
-html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
 
 /* Vibe's own layer starts under the bar; its header keeps the project, new app, update, conversation
    and settings buttons and drops the mode switch, the pulse and the search the bar carries now. */
-html[data-frame] #vibe-layer { top: var(--shell-y0); }
+html[data-frame] #vibe-layer { top: var(--shell-y0); left: var(--shell-x0); }
 /* Build's Home in its sessions layout is a layer of its own, with no local bar, that would start at the window's top (or under the strip
    alone, builder.css): with the frame it starts under the bar and the strip. */
 html[data-frame][data-home-layout="sessions"][data-shell="rail"] body.workspace-active:not(:has(.workspace-page:not([hidden]))) #workspace-layer { top: var(--shell-y0); }

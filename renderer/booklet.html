@@ -9614,13 +9614,21 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .agent-hub-extra h3 { margin: 0; font-size: 18px; font-weight: 500; }
 .agent-hub-extra p { font-size: 12px; line-height: 1.7; margin: 0; }
 .agent-hub-action { text-align: left; white-space: normal; border: 1px solid var(--hairline); padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--gold) 4%, transparent); }
-/* Friends › Your PCs (renderer/pc-sync.js). */
-.pc-sync { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--hairline); border-left: 3px solid var(--hairline); border-radius: 14px; }
-.pc-sync[data-state=clean] { border-left-color: var(--good); }
-.pc-sync[data-state=pending] { border-left-color: var(--warn); }
-.pc-sync[data-state=problem] { border-left-color: var(--bad); }
-.pc-sync[data-state=offline] { border-left-color: var(--muted); }
+/* Friends › Your PCs (renderer/pc-sync.js): Connect another PC and My PCs first (pc-fleet.js), then the folded groups, then
+   Share projects (pc-vault.js). */
+.pc-sync { display: grid; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; }
 .pc-sync-title { margin: 0; font-size: 13px; font-weight: 600; }
+/* Keep this PC in step with GitHub: the status line and Sync this PC, marked by how this PC stands against GitHub. The line
+   and its buttons show while the group is folded only when something needs the owner (pc-sync.js needsYou). */
+.pc-sync-group { display: grid; gap: 8px; }
+.pc-sync-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; padding: 4px 0 4px 10px; border-left: 3px solid var(--hairline); }
+.pc-sync[data-state=clean] .pc-sync-head { border-left-color: var(--good); }
+.pc-sync[data-state=pending] .pc-sync-head { border-left-color: var(--warn); }
+.pc-sync[data-state=problem] .pc-sync-head { border-left-color: var(--bad); }
+.pc-sync[data-state=offline] .pc-sync-head { border-left-color: var(--muted); }
+.pc-sync-status { flex: 0 1 auto; min-width: 0; margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.pc-sync-body { display: grid; gap: 8px; min-width: 0; }
+.pc-sync-body > p { margin: 0; }
 .pc-sync-list, .pc-sync-brief { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .pc-sync-toggle { justify-self: start; }
 .pc-sync-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -9648,7 +9656,51 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-vault > :not(summary), .pc-vault-linked > *, .pc-vault-setup > *, .pc-vault-keys > :not(summary) { margin-top: 8px; }
 .pc-vault-heading { margin: 12px 0 0; font-size: 12px; font-weight: 600; }
 .pc-vault-label { display: block; font-size: 12px; color: var(--muted); }
+/* Every folded group in the card has one look: a row with a marker that turns when it opens. Keep this PC in step with
+   GitHub folds with a button of its own; the others are <details>. */
+.pc-group { min-width: 0; border-top: 1px solid var(--hairline); padding-top: 8px; }
+.pc-group-title { margin: 0; }
+.pc-group > summary, .pc-group-toggle { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; min-height: 28px; padding: 2px 0; border: 0; border-radius: 6px; background: none; box-shadow: none; color: var(--ivory); font-size: 13px; font-weight: 600; line-height: 1.35; text-align: left; white-space: normal; list-style: none; cursor: pointer; }
+.pc-group > summary::-webkit-details-marker { display: none; }
+.pc-group > summary::before, .pc-group-toggle::before { content: ""; flex: none; width: 0; height: 0; border-block: 4px solid transparent; border-left: 6px solid var(--muted); transition: rotate var(--motion-fast, 120ms) var(--ease-out, ease); }
+.pc-group[open] > summary::before, .pc-group-toggle[aria-expanded=true]::before { rotate: 90deg; }
+.pc-group > summary:hover, .pc-group-toggle:hover { background: none; color: var(--gold-bright); }
+.pc-group-note { font-size: 12px; font-weight: 400; }
+.pc-fleet-group .pc-sync-actions { align-items: center; }
+/* Connect another PC (renderer/pc-fleet.js): three numbered steps on a soft panel; folded, one button. */
+.pc-fleet { display: grid; gap: 12px; min-width: 0; }
+.pc-walk { min-width: 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--hairline)); border-radius: 12px; background: color-mix(in srgb, var(--gold) 5%, transparent); }
+.pc-walk-head { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; color: var(--ivory); font-size: 15px; font-weight: 650; line-height: 1.3; }
+.pc-walk-head::-webkit-details-marker { display: none; }
+.pc-walk[open] > .pc-walk-head::after { content: ""; flex: none; width: 7px; height: 7px; margin-left: auto; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); rotate: -135deg; translate: 0 2px; }
+.pc-walk:not([open]) { justify-self: start; padding: 0; border: 0; background: none; }
+.pc-walk:not([open]) > .pc-walk-head { min-height: 34px; padding: 0 14px; border: 1px solid var(--hairline-strong); border-radius: 8px; font-size: 13px; font-weight: 600; }
+.pc-walk:not([open]) > .pc-walk-head::before { content: "+"; color: var(--gold-bright); font-size: 16px; line-height: 1; }
+.pc-walk:not([open]) > .pc-walk-head:hover { background: var(--tint-gold-2); }
+.pc-walk-steps { display: grid; gap: 12px; margin: 12px 0 0; padding: 0; list-style: none; }
+.pc-walk-step { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; }
+.pc-walk-num { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--hairline-strong); border-radius: 50%; color: var(--muted); font-size: 12px; font-weight: 700; }
+.pc-walk-step[data-state=now] .pc-walk-num { border-color: var(--gold-bright); color: var(--gold-bright); }
+.pc-walk-step[data-state=done] .pc-walk-num { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--ivory); }
+.pc-walk-text, .pc-walk-now, .pc-walk-live { display: grid; gap: 6px; min-width: 0; }
+.pc-walk-what { margin: 3px 0 0; font-size: 13px; font-weight: 600; line-height: 1.45; }
+.pc-walk-now { font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.pc-walk-now p { margin: 0; }
+.pc-walk-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+/* The six numbers two PCs compare while pairing, set apart from the sentence around them. */
+.pc-fleet-numbers { color: var(--ivory); font-size: 15px; font-weight: 700; letter-spacing: .08em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pc-walk-copied:empty { display: none; }
+.pc-walk-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; }
 /* Friends › Your PCs › My PCs (renderer/pc-fleet.js): one row per PC, its readings and why it is not taking work. */
+.pc-fleet-list { display: grid; gap: 8px; min-width: 0; }
+.pc-fleet-list > :is(p, h5, ul) { margin: 0; }
+.pc-fleet-title { font-size: 13px; font-weight: 600; }
+.pc-fleet-rename { align-items: center; font-size: 12px; }
+.pc-fleet-project, .pc-fleet-handoffs-box { display: grid; gap: 6px; min-width: 0; }
+.pc-fleet-project > p, .pc-fleet-handoffs-box > p { margin: 0; font-size: 12px; }
+.pc-fleet-handoffs-box > button { justify-self: start; }
+.pc-fleet-lately > summary { width: fit-content; color: var(--muted); font-size: 12px; cursor: pointer; }
+.pc-fleet-lately[open] > summary { margin-bottom: 6px; }
 .pc-fleet-rows, .pc-fleet-asks { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .pc-fleet-row { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--hairline); border-left: 3px solid var(--good); border-radius: 10px; font-size: 12px; min-width: 0; }
 .pc-fleet-row[data-state=busy] { border-left-color: var(--warn); }
@@ -9684,6 +9736,10 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-vault-preview > summary { cursor: pointer; font-size: 11px; color: var(--muted); }
 .pc-vault-preview pre, .pc-share-text { max-height: 180px; overflow: auto; margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--gold) 3%, transparent); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .pc-share-out, .pc-share-in { display: grid; gap: 6px; }
+/* Share projects (pc-vault.js group): a group of its own, set apart from the PC sections above it. */
+.pc-share-group { display: grid; gap: 8px; min-width: 0; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--hairline-strong); }
+.pc-share-group-title { margin: 0; font-size: 13px; font-weight: 600; }
+.pc-share-group-about { margin: 0; font-size: 12px; line-height: 1.5; }
 /* Friends › Rooms (renderer/rooms.js). */
 .rooms { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; }
 .rooms-title { margin: 0; font-size: 13px; font-weight: 600; }
@@ -10929,8 +10985,8 @@ html[data-ui-mode="vibe"] :is(#app-rail, #workspace-sidebar-toggle) { display: n
   font-family: var(--font-ui);
   animation: vibe-rail-in var(--motion-slow) var(--ease-out) both;
 }
-/* Off on Today itself (its own home), on every page over it, Friends included. */
-.vibe-rail[hidden], body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) .vibe-rail { display: none; }
+/* On every Social page, Home included (a QA pass on 2026-10-06 found Friends out of reach from Home); hidden in Studio. */
+.vibe-rail[hidden] { display: none; }
 html[data-no-blur] .vibe-rail { backdrop-filter: none; background: color-mix(in srgb, var(--panel-solid) 96%, transparent); }
 @keyframes vibe-rail-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
 .vibe-rail-items, .vibe-rail-foot { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
@@ -10983,10 +11039,8 @@ html[data-ui-mode="vibe"] {
   html[data-ui-mode="vibe"]:not([data-no-blur], [data-studio-material="solid"]):not([data-studio-theme-tone="light"]):not(:has([data-media-background="true"])) { --studio-float-blur: blur(26px) saturate(1.5) brightness(.9); }
 }
 
-/* On Vibe's own page there is no rail, so sheets and the project panel use
-   the whole window instead of leaving a strip where the rail would be. */
-body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) :is(.overlay, .planning-overlay, .profiler-overlay, .music-overlay) { left: var(--shell-list-w); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #toast-host { left: calc(var(--shell-list-w) + 24px); bottom: calc(104px + var(--shell-y1)); }
+/* Social's Home keeps its rail, so a sheet over it starts beside the rail like everywhere else; toasts stay clear of the box. */
+body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #toast-host { bottom: calc(104px + var(--shell-y1)); }
 
 /* Search */
 html[data-ui-mode="vibe"] #palette-overlay { padding-top: 11vh; background: color-mix(in srgb, var(--bg-deep) 50%, transparent); }
@@ -11009,11 +11063,11 @@ html[data-ui-mode="vibe"] #help-overlay .sheet-head { border-radius: 18px; }
 html[data-ui-mode="vibe"] #help-overlay .eyebrow { color: var(--gold-bright); }
 html[data-ui-mode="vibe"] .overlay:not(.workspace-page) .sheet-close { border-radius: 12px; }
 
-/* The project panel: a floating card beside the rail, or under Vibe's
-   project button on the Vibe page. */
+/* The project panel: a floating card beside the rail on every Social page; on Home, where the rail stands too since
+   2026-10-06, it sits lower, under the project button's row. */
 html[data-ui-mode="vibe"] #workspace-sidebar-panel { top: 10px; bottom: calc(10px + var(--shell-y1)); left: calc(var(--shell-rail-w) + 10px); height: auto; padding: 16px; border: 1px solid var(--v-menu-edge); border-radius: 24px; background: var(--studio-wash), var(--studio-float-fill); backdrop-filter: var(--studio-float-blur); transform: translateX(-24px) scale(.98); opacity: 0; transition: transform var(--motion-slow) var(--ease-emphasized), opacity var(--motion-base) var(--ease-out), visibility var(--motion-slow); }
 html[data-ui-mode="vibe"] #workspace-sidebar[data-open="true"] #workspace-sidebar-panel { transform: none; opacity: 1; box-shadow: var(--studio-float-shadow); }
-body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-list-w) + 24px); bottom: calc(24px + var(--shell-y1)); }
+body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) #workspace-sidebar-panel { top: 80px; left: calc(var(--shell-x0) + 24px); bottom: calc(24px + var(--shell-y1)); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project { border-radius: 14px; font-size: 13px; }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project:hover { background: color-mix(in srgb, var(--ivory) 6%, transparent); }
 html[data-ui-mode="vibe"] #workspace-sidebar-panel .ws-project.selected { color: var(--ivory); background: var(--v-menu-pick); border-color: color-mix(in srgb, var(--gold) 30%, transparent); }
@@ -11711,6 +11765,115 @@ html[data-ui-mode="vibe"] .settings-nav :is(button, a) { border-radius: 12px; }
 @media (max-width: 680px) {
   #workspace-layer .today-b .today-b-talk { margin-left: 0; }
   .today-b-hint { text-align: left; }
+}
+
+/* Social (renderer/social.js, renderer/today.js): people, rooms, your projects and a simple talk with Mefi, with the details
+   left to Studio. Inlined after today.css, so it wins its ties. Every colour is a theme token and no text is under 12 px, at
+   any text size (--text-scale). Nothing here matches in Studio: each rule waits for Social's own layer, its pages or
+   html[data-ui-mode="vibe"]. */
+
+.social-sheet, .today-social {
+  --s-f12: max(12px, calc(12px * var(--text-scale, 1)));
+  --s-f13: max(12px, calc(13px * var(--text-scale, 1)));
+  --s-f14: max(12px, calc(14px * var(--text-scale, 1)));
+  --s-f15: max(12px, calc(15px * var(--text-scale, 1)));
+  --s-f18: max(12px, calc(18px * var(--text-scale, 1)));
+  --s-ink: var(--ivory);
+  --s-soft: var(--muted);
+  --s-faint: var(--dim);
+  --s-edge: color-mix(in srgb, var(--ivory) 12%, transparent);
+  --s-card: color-mix(in srgb, var(--panel-solid) 44%, transparent);
+  --s-row: color-mix(in srgb, var(--panel-solid) 62%, transparent);
+  --s-gap: var(--d-gap, 12px);
+}
+
+/* ---- the status bar: what runs and what waits on you; usage, cost, the machine's load and the permission mode are Studio's ---- */
+html[data-ui-mode="vibe"] #shell-status :is(.shell-usage, .shell-usage-sep, .shell-machine, .shell-cost, .shell-permission) { display: none !important; }
+
+/* ---- Home's box: one conversation, one action (Send). Build it, the permission mode, the answer styles, the starting points,
+   "decided for you" and the Git chip step aside here; Studio's box and header keep them. ---- */
+#vibe-layer[data-today="on"] :is(#vibe-build, #vibe-autonomy-control, #vibe-chat-tools, #vibe-sparks, #vibe-decisions) { display: none !important; }
+#vibe-layer[data-today="on"] > .vibe-top :is(.gs-slot, [data-vibe-panel="settings"]) { display: none !important; }
+#vibe-layer[data-today="on"] .today .vibe-compose #vibe-talk { min-width: 96px; justify-content: center; }
+
+/* ---- Home under the box: your work beside your friends ---- */
+.today-social { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: var(--s-gap); align-items: start; min-width: 0; }
+.today-social > * { min-width: 0; }
+.today-social:not(:has(> .social-people:not([hidden]))) { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 1080px) { .today-social { grid-template-columns: minmax(0, 1fr); } }
+
+.social-card { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 10px; min-width: 0; padding: 12px 14px 14px; border: 1px solid var(--s-edge); border-radius: 14px; background: var(--s-card); backdrop-filter: var(--studio-glass-blur, blur(16px) saturate(1.3)); color: var(--s-ink); }
+.social-card[hidden] { display: none; }
+.social-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; min-width: 0; }
+.social-card-title { margin: 0; color: var(--s-ink); font: 650 var(--s-f15)/1.3 var(--font-ui); }
+.social-card-links { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }
+.social-card-note { margin: 0; color: var(--s-soft); font-size: var(--s-f13); line-height: 1.5; }
+.social-card-note:empty { display: none; }
+.social-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.social-card-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-top: 2px; }
+.social-card-foot[hidden] { display: none; }
+.social-link { min-height: 0; padding: 2px 0; border: 0; background: none; box-shadow: none; color: var(--s-soft); font: 600 var(--s-f13)/1.3 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; cursor: pointer; }
+.social-link:hover, .social-link:focus-visible { color: var(--s-ink); }
+.social-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid var(--hairline-strong); border-radius: 10px; background: transparent; color: var(--s-ink); font: 600 var(--s-f13)/1 var(--font-ui); white-space: nowrap; cursor: pointer; }
+.social-btn:hover { border-color: color-mix(in srgb, var(--ivory) 30%, transparent); }
+/* A ring on every stop of Social's own, as Today's (today.css). */
+:is(.social-link, .social-btn, .social-person-go):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+.social-btn.primary { border-color: transparent; background: var(--ivory); color: var(--on-ivory, var(--bg)); }
+
+/* Your work: the list (data-style="list"), a few compact rows of each group with a heading; a group with nothing in it takes no room. */
+.today-board[data-style="list"] { gap: 8px; }
+.today-board[data-style="list"] .today-groups { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.today-board[data-style="list"] .today-group { gap: 6px; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; }
+.today-board[data-style="list"] .today-group[hidden] { display: none; }
+.today-board[data-style="list"] .today-group > h3 { padding: 0 2px; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.today-board[data-style="list"] .today-group[data-group="queued"] > h3 { color: var(--muted); }
+.today-board[data-style="list"] .today-cards { gap: 6px; }
+.today-board[data-style="list"] .today-card { gap: 4px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--panel-solid) 58%, transparent); }
+.today-board[data-style="list"] :is(.today-wt, .today-card-more) { display: none; }
+.today-board[data-style="list"] .today-more { justify-self: start; }
+/* In Social the run's own lines (the last output, a check's command) are Studio's. */
+html[data-ui-mode="vibe"] :is(.today-need-evidence, .today-card-more) { display: none; }
+.social-work > .today-quiet { margin: 0; }
+
+/* ---- the Friends card ---- */
+.social-online { display: inline-flex; align-items: center; gap: 6px; color: var(--s-soft); font: 600 var(--s-f13)/1 var(--font-ui); }
+.social-online[hidden] { display: none; }
+.social-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px color-mix(in srgb, var(--good) 70%, transparent); }
+.social-card-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+.social-people-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.social-person-go { display: flex; align-items: center; justify-content: flex-start; gap: 9px; width: 100%; min-height: 44px; padding: 6px 8px; border: 1px solid transparent; border-radius: 10px; background: var(--s-row); color: var(--s-ink); text-align: left; cursor: pointer; }
+.social-person-go:hover, .social-person-go:focus-visible { border-color: var(--s-edge); }
+.social-face { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: hsl(var(--who-hue, 210) 45% 34%); color: #fff; font: 700 var(--s-f12)/1 var(--font-ui); }
+.social-person-text, .social-row-text { display: grid; gap: 2px; min-width: 0; }
+.social-person-text b, .social-row-text b { overflow: hidden; color: var(--s-ink); font: 600 var(--s-f13)/1.3 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+.social-person-text small, .social-row-text small { overflow: hidden; color: var(--s-soft); font-size: var(--s-f12); line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.social-empty { color: var(--s-soft); font-size: var(--s-f13); line-height: 1.5; list-style: none; }
+.social-subsection { display: grid; gap: 6px; min-width: 0; }
+.social-subhead { margin: 0; color: var(--s-soft); font: 650 max(12px, calc(12.5px * var(--text-scale, 1)))/1.2 var(--font-ui); }
+.social-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.social-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; padding: 6px 8px 6px 10px; border-radius: 10px; background: var(--s-row); }
+
+/* ---- Projects and Activity: pages of Social's own, in the main area like every other page ---- */
+.social-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 960px; margin: 0 auto; padding: 22px 16px 28px; color: var(--s-ink); }
+html[data-shell="rail"] .social-page > .social-sheet { width: 100%; height: auto; min-height: 100%; max-width: 960px; margin: 0 auto; overflow: visible; background: transparent; }
+.social-page { overflow-y: auto; overscroll-behavior: contain; }
+.social-page-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; }
+.social-page-words { display: grid; gap: 4px; min-width: 0; flex: 1 1 320px; }
+.social-page-words h1 { margin: 0; color: var(--s-ink); font: 650 var(--s-f18)/1.3 var(--font-display, var(--font-ui)); letter-spacing: -.01em; outline: none; }
+.social-page-about { margin: 0; max-width: 70ch; color: var(--s-soft); font-size: var(--s-f14); line-height: 1.5; }
+.social-projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.social-project { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px; border: 1px solid var(--s-edge); border-radius: 12px; background: var(--s-card); }
+.social-project[data-current="true"] { border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.social-projects-friends > .social-btn { justify-self: start; }
+.social-project-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--gold) 22%, var(--panel-solid)); color: var(--s-ink); font: 700 var(--s-f12)/1 var(--font-ui); }
+/* Activity is a page in the main area (.workspace-page): its bar and its list in a centred column, like Projects and Friends. */
+#activity-overlay > .activity-sheet { background: transparent; }
+#activity-overlay .activity-sheet > :is(.sheet-head, .today-page-body) { width: min(960px, 100%); margin: 0 auto; box-sizing: border-box; }
+#activity-overlay .activity-sheet > .sheet-head { padding: 18px 20px 6px; border: 0; background: none; }
+@media (max-width: 680px) {
+  .social-card { padding: 10px 12px 12px; }
+  .social-project { grid-template-columns: auto minmax(0, 1fr); }
+  .social-project > .social-btn { grid-column: 1 / -1; justify-self: start; }
 }
 
 /* The setup helper (renderer/setup-helper.js): one sheet for every agent
@@ -13254,12 +13417,10 @@ html[data-frame] #tree-rail { display: none !important; }
 html[data-frame] body, html[data-frame] body:has(#tree-rail.pinned) { padding-right: calc(var(--gutter) + var(--shell-x1)); }
 /* A narrow window keeps the page's own narrow margin (styles.css, max-width 900px), as it had with the strip. */
 @media (max-width: 900px) { html[data-frame] body, html[data-frame] body:has(#tree-rail.pinned) { padding-right: calc(var(--s4) + var(--shell-x1)); } }
-/* Vibe's own Home has no rail on screen: the list starts at the window's edge there. */
-html[data-frame] body.vibe-active:not(:has(.workspace-page:not([hidden]))):not(:has(#friends-overlay:not([hidden]))) :is(.shell-region, .shell-split) { --frame-rail-w: 0px; }
 
 /* Vibe's own layer starts under the bar; its header keeps the project, new app, update, conversation
    and settings buttons and drops the mode switch, the pulse and the search the bar carries now. */
-html[data-frame] #vibe-layer { top: var(--shell-y0); }
+html[data-frame] #vibe-layer { top: var(--shell-y0); left: var(--shell-x0); }
 /* Build's Home in its sessions layout is a layer of its own, with no local bar, that would start at the window's top (or under the strip
    alone, builder.css): with the frame it starts under the bar and the strip. */
 html[data-frame][data-home-layout="sessions"][data-shell="rail"] body.workspace-active:not(:has(.workspace-page:not([hidden]))) #workspace-layer { top: var(--shell-y0); }
@@ -14862,6 +15023,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   <symbol id="g-bell" viewBox="0 0 16 16"><path d="M3.5 11.6c1-.95 1.45-2 1.45-3.4V6.9a3.05 3.05 0 0 1 6.1 0v1.3c0 1.4.45 2.45 1.45 3.4Z"/><path d="M8 2.1v1.7M6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></symbol>
   <symbol id="g-clip" viewBox="0 0 16 16"><path d="M13.2 7.4 7.6 13a3.3 3.3 0 0 1-4.7-4.7L8.7 2.6a2.3 2.3 0 0 1 3.3 3.3l-5.7 5.7a1.3 1.3 0 0 1-1.9-1.9L9.3 4.8"/></symbol>
   <symbol id="g-chat" viewBox="0 0 16 16"><path d="M2.7 3.3h10.6v7.4H6l-3.3 2.6z"/></symbol>
+  <!-- Social's rail (renderer/social.js): Projects, and Activity, the open project's work in one list. -->
+  <symbol id="g-folder" viewBox="0 0 16 16"><path d="M2.25 4.25a1 1 0 0 1 1-1h3.1l1.3 1.5h5.1a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H3.25a1 1 0 0 1-1-1z"/><path d="M2.25 6.75h11.5"/></symbol>
+  <symbol id="g-activity" viewBox="0 0 16 16"><path d="M1.75 8.25h2.7l1.6-4.5 3.4 8.5 1.7-4h3.1"/></symbol>
 </svg>
 <!-- The one navigation rail (docs/ux-audit.md, Phase 3). Every destination in
      nav.js's registry, grouped Home / Work / Live / Models / Settings, built by
@@ -15118,20 +15282,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     <footer class="vibe-ask-foot vibe-panel-foot"><span id="vibe-panel-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-panel-full" class="vibe-ask-link" type="button">Full view <span aria-hidden="true">↗</span></button></footer>
   </aside>
 </section>
-<!-- Vibe's frame for every other page (renderer/vibe.js). In Vibe mode this
-     rail stands in for Build's #app-rail on Tasks, Plans, Command, Settings
-     and the rest, so leaving the front door never lands in the Build view; the
-     spark at the top goes back to Vibe and only the switch at the foot leaves
-     the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
+<!-- Social's rail (renderer/vibe.js, renderer/social.js): Home, Friends, Projects and Activity, on every Social page, Home
+     included. Studio's pages (the Map, the boards, Team and the rest) open in Studio, so the rail never leads out of the
+     mode without saying so; only the Studio switch at the foot leaves it. Hidden in Studio. -->
 <nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Today (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Today</span></button>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Home: talk with Mefi, your friends and your work (H)"><svg class="glyph" aria-hidden="true"><use href="#g-home"/></svg><span>Home</span></button>
   <div class="vibe-rail-items">
-    <button type="button" data-nav="friends" data-vibe-place="friends" title="Friends: the Lobby, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
-    <button type="button" data-nav="command" data-vibe-place="map" title="The Map: your agents at work, live (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span>Map</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button type="button" data-nav="tasks" data-vibe-place="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
-    <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
-    <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button type="button" data-nav="agents" data-vibe-place="team" title="Team: who builds, which AI it uses and how much it may decide"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span>Team</span></button>
+    <button id="vibe-rail-friends" type="button" data-nav="friends" data-vibe-place="friends" title="Friends: who's online, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
+    <button id="vibe-rail-projects" type="button" data-nav="projects" title="Projects: your apps, and New app"><svg class="glyph" aria-hidden="true"><use href="#g-folder"/></svg><span>Projects</span></button>
+    <button id="vibe-rail-activity" type="button" data-nav="activity" title="Activity: what needs you, what's running and what's done"><svg class="glyph" aria-hidden="true"><use href="#g-activity"/></svg><span>Activity</span><span id="vibe-rail-needs" class="count warn" hidden></span></button>
     <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
   </div>
   <div class="vibe-rail-foot" id="vibe-rail-foot">
@@ -15185,6 +15344,33 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       <div id="inbox-list" class="inbox-list" role="list" aria-label="Waiting on you"></div>
       <div id="inbox-empty" class="today-empty" hidden><b>All clear</b><span>Questions, permissions, approvals and failures land here, in one place.</span></div>
       <section class="inbox-decided-wrap" aria-label="Decided for you"><div id="inbox-decided" class="inbox-decided"></div></section>
+    </div>
+  </div>
+</div>
+<!-- Social's Activity (renderer/today.js registers "activity"): the open project's work in one list, the board Social's Home
+     shows in short. What needs you answers in its row; anything deeper (a session, its changes and checks) opens in Studio. -->
+<div class="overlay explorer workspace-page" id="activity-overlay" hidden>
+  <div class="explorer-sheet today-sheet activity-sheet" role="dialog" aria-modal="true" aria-labelledby="activity-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="activity" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Social</div>
+        <h2 id="activity-heading">Activity</h2>
+      </div>
+      <div class="sheet-actions">
+        <button id="activity-studio" class="ghost" type="button" title="Every session with its changes, checks and logs">Open in Studio</button>
+        <button id="activity-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="today-page-body">
+      <div class="today-top">
+        <p class="today-page-lead">What needs you, what's running, what's next and what finished today, for the open project.</p>
+        <div id="activity-summary" class="today-summary" role="group" aria-label="What is happening"></div>
+      </div>
+      <p id="activity-quiet" class="today-quiet" role="status" hidden></p>
+      <div id="activity-board" class="today-board" data-style="list">
+        <div class="today-groups"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -25562,6 +25748,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const isWorkspacePage = (dest) => WORKSPACE_PAGES.has(dest?.id);
   // Settings' Size and density page (renderer/size.js, registered only in layout v2) is a page of the workspace too.
   WORKSPACE_PAGES.add("size");
+  // So are Social's own Activity (renderer/today.js) and Projects (renderer/social.js).
+  WORKSPACE_PAGES.add("activity");
+  WORKSPACE_PAGES.add("projects");
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
     for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #vibe-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
@@ -25866,6 +26055,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const sessionRoute = window.MefiSessions?.redirect?.(id, params);
     if (sessionRoute) return go(sessionRoute.id, sessionRoute.params, options);
     // ---- end of sessions ----
+    // Social keeps to its own places (renderer/social.js): a page of Studio's (the Map, the boards, Team, Fleet, Trace,
+    // Worktrees, a session) asked for while Social is the mode opens in Studio. The mode switches first, then the page opens
+    // with what it was asked for, so nothing of the way in is lost.
+    if (window.MefiSocial?.studioOnly?.(id, params)) window.MefiSocial.toStudio?.();
     // In Vibe mode, Home is Vibe: every Home button, H and Esc out of Command land there.
     if (id === "workspace" && window.MefiVibe?.mode?.() === "vibe") id = "vibe";
     closeHelpMenu();
@@ -72199,7 +72392,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }, 15000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) refresh(); });
   }
-  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview, snapshot, setComposerMode: setMode, send: (purpose) => submit(null, purpose) };
+  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, selectProject: (id) => selectProject(id), buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview, snapshot, setComposerMode: setMode, send: (purpose) => submit(null, purpose) };
   init();
 })();
 
@@ -77636,18 +77829,24 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   else init();
 })();
 
-// Friends › Your PCs: whether the open project on this PC matches its default
-// branch on GitHub, what has not reached GitHub yet, and Sync this PC. The
-// words come from scripts/sync.mjs through main's sync:status, sync:run and
-// sync:event; this file only lays them out. Opening the card looks (a fetch
-// that moves no branch). Only the buttons pull and push: Sync this PC, and Put
-// my commits on top of GitHub's when both sides moved and nothing is
-// uncommitted. A push waits for the project's own check. badge() is what the
+// Friends › Your PCs: the card, top to bottom. renderer/pc-fleet.js's Connect
+// another PC walkthrough and My PCs come first; then folded groups, each a
+// row that opens in place: Keep this PC in step with GitHub (this file),
+// pc-fleet.js's Power and battery and Lend this PC to a friend, then Set up
+// this PC, Paired workers and Reach this PC from Discord (this file); last,
+// renderer/pc-vault.js's Share projects group. The GitHub group says whether
+// the open project on this PC matches its default branch on GitHub, what has
+// not reached GitHub yet, and offers Sync this PC. The words come from
+// scripts/sync.mjs through main's sync:status, sync:run and sync:event; this
+// file only lays them out. Opening the card looks (a fetch that moves no
+// branch). Only the buttons pull and push: Sync this PC, and Put my commits on
+// top of GitHub's when both sides moved and nothing is uncommitted. A push
+// waits for the project's own check. While the group is folded, its status
+// line and buttons show only when something needs the owner (what badge()
+// counts, or a sync that stopped) or after a press there. badge() is what the
 // Friends bubble shows: work only this PC holds, plus commits waiting on
 // GitHub, plus a GitHub that could not be checked. renderer/companion-hub.js
-// mounts the card in the Friends section and draws the badge; the card holds
-// renderer/pc-fleet.js's My PCs, Set up this PC and renderer/pc-vault.js's two
-// sharing sections.
+// mounts the card on the Friends page and draws the badge.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
@@ -77673,6 +77872,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const risk = Number.isFinite(result.risk) ? result.risk : 0;
     const unchecked = kinds(result).some((kind) => kind === "fetch-failed" || kind === "error") ? 1 : 0;
     return risk + (result.state?.behind ? 1 : 0) + unchecked;
+  }
+
+  // Whether the GitHub group speaks while folded: what the badge counts, or a
+  // sync that stopped. A project with no GitHub link yet stays quiet.
+  function needsYou(result) {
+    if (!result) return false;
+    if (badge(result) > 0) return true;
+    return result.ok === false && result.state?.repo !== false && result.state?.remote !== false;
   }
 
   function remember(result) {
@@ -77701,7 +77908,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // project from GitHub, which clones from the account's own list into a
   // folder main's dialog asks for. Nothing runs until the section is opened.
   function setupSection(api) {
-    const box = node("details", "pc-setup");
+    const box = node("details", "pc-setup pc-group");
     box.id = "pc-setup";
     const status = node("p", "muted pc-setup-status", "Checks Git, your GitHub sign-in and this project.");
     status.id = "pc-setup-status";
@@ -77834,7 +78041,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // and is never shown again. Nothing runs until the section is opened.
   const HOURS = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}:00`);
   function remoteSection(api) {
-    const box = node("details", "pc-setup pc-remote");
+    const box = node("details", "pc-setup pc-group pc-remote");
     box.id = "pc-remote";
     const status = node("p", "muted pc-setup-status", "Check on this PC and talk to Mefi from a Discord DM.");
     status.id = "pc-remote-status";
@@ -77976,7 +78183,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
 
   function pairedSection(api) {
-    const box = node("details", "pc-setup"); box.id = "pc-paired-workers";
+    const box = node("details", "pc-setup pc-group"); box.id = "pc-paired-workers";
     const status = node("p", "muted pc-setup-status", "Off until you start the coordinator or worker."); status.id = "paired-status"; status.setAttribute("role", "status");
     const controls = new Set(), jobRows = new Map(), workers = node("ul", "pc-sync-list"), jobs = node("div"), recovery = node("ul", "pc-sync-list");
     let busy = false, latest = null, timer = null, cursor = null;
@@ -78012,7 +78219,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const refreshButton = button("paired-refresh", "Refresh", async () => { cursor = null; return api.pairedStatus(); });
     const older = button("paired-older", "Older jobs", async () => { cursor = latest?.coordinator?.nextCursor ?? null; return api.pairedStatus({ before: cursor }); });
     const actions = (...buttons) => { const row = node("div", "pc-sync-actions"); row.append(...buttons); return row; };
-    box.append(node("summary", "", "Paired repository checks"), status,
+    box.append(node("summary", "", "Paired workers"), status,
       node("p", "muted", "Make this PC the coordinator, or pair it as a worker. The first profile checks Studio at an exact saved commit in a fresh checkout. Your current changes stay here. What you start comes back by itself after Studio restarts or updates, and a worker reconnects by itself after a lost connection. PCs on different Studio versions keep working together; only one that is far behind is asked to update."),
       node("h5", "", "Coordinator"), port.wrapper, mode, address.wrapper, actions(startCoordinator, stopCoordinator, invite, enqueue), coordinatorAuto.wrapper, invitation.wrapper, actions(copy),
       node("h5", "", "This PC as a worker"), code.wrapper, actions(pair, startWorker, stopWorker, forget), workerAuto.wrapper, recovery,
@@ -78118,6 +78325,30 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     root.setAttribute("aria-labelledby", "pc-sync-title");
     const title = node("h4", "pc-sync-title", "Your PCs");
     title.id = "pc-sync-title";
+    // Keep this PC in step with GitHub: a folded group with a button of its
+    // own, not a <details>, because its status line and buttons sit between
+    // the button and the folded rest and can show while it is folded: when
+    // something needs the owner, and after a press there, so the answer stays
+    // in sight.
+    const group = node("div", "pc-group pc-sync-group");
+    group.id = "pc-sync-group";
+    const groupTitle = node("h5", "pc-group-title");
+    const fold = node("button", "pc-group-toggle", "Keep this PC in step with GitHub");
+    fold.type = "button";
+    fold.id = "pc-sync-group-toggle";
+    fold.setAttribute("aria-controls", "pc-sync-body");
+    groupTitle.append(fold);
+    const head = node("div", "pc-sync-head");
+    head.id = "pc-sync-head";
+    const body = node("div", "pc-sync-body");
+    body.id = "pc-sync-body";
+    let open = false, acted = false, attention = false;
+    const paintFold = () => {
+      fold.setAttribute("aria-expanded", open ? "true" : "false");
+      body.hidden = !open;
+      head.hidden = !(open || attention || acted);
+    };
+    fold.addEventListener("click", () => { open = !open; if (!open) acted = false; paintFold(); });
     const status = node("p", "pc-sync-status", "Checking GitHub…");
     status.id = "pc-sync-status";
     status.setAttribute("role", "status");
@@ -78142,7 +78373,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const meta = node("p", "muted pc-sync-meta");
     meta.hidden = true;
     const note = node("p", "muted", "Sync pulls what your other PCs pushed and pushes this PC's commits after the project's check passes. It never overwrites uncommitted work or force-pushes.");
-    root.append(title, status, summary, list, toggle, actions, meta, note);
+    head.append(status, actions);
+    body.append(summary, list, toggle, meta, note);
+    group.append(groupTitle, head, body);
+    paintFold();
     const api = bridge();
     // Keep this PC up to date: main checks GitHub every minute and, when this
     // PC has nothing of its own in the way, pulls what the other PCs pushed.
@@ -78155,16 +78389,23 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       follow.append(tick, node("span", "", "Keep this PC up to date: bring in other PCs' pushes within a minute, when nothing here is in the way"));
       tick.addEventListener("change", () => { void Promise.resolve(api.syncFollow(tick.checked)).then((answer) => { if (answer?.ok) tick.checked = answer.on !== false; }).catch(() => {}); });
       void Promise.resolve(api.syncFollow()).then((answer) => { if (answer?.ok) tick.checked = answer.on !== false; }).catch(() => {});
-      root.append(follow);
+      body.append(follow);
     }
-    // My PCs (renderer/pc-fleet.js): the owner's PCs live, open by default.
-    if (window.MefiPcFleet && typeof api?.pcsStatus === "function") root.append(window.MefiPcFleet.section(api));
+    root.append(title);
+    // Connect another PC and My PCs (renderer/pc-fleet.js) at the top; its
+    // Power and battery and Lend this PC to a friend come after this group.
+    const fleet = window.MefiPcFleet && typeof api?.pcsStatus === "function" ? window.MefiPcFleet.section(api) : null;
+    if (fleet) root.append(fleet);
+    root.append(group);
+    if (fleet?.parts) root.append(...[fleet.parts.power, fleet.parts.lend].filter(Boolean));
     if (typeof api?.pcSetupStatus === "function") root.append(setupSection(api));
     if (typeof api?.pairedStatus === "function") root.append(pairedSection(api));
     // Reach this PC from Discord (the remote section above).
     if (typeof api?.remoteStatus === "function") root.append(remoteSection(api));
-    // Share between my PCs and Share with friends (renderer/pc-vault.js).
-    if (window.MefiPcVault) root.append(window.MefiPcVault.section(), window.MefiPcVault.shareSection());
+    // Share projects (renderer/pc-vault.js): Share between my PCs and Share
+    // with friends, a group of their own after the PC sections.
+    const vault = window.MefiPcVault;
+    if (vault) root.append(...(typeof vault.group === "function" ? [vault.group()] : [vault.section(), vault.shareSection()]));
     if (typeof api?.syncStatus !== "function" || typeof api?.syncRun !== "function") {
       status.textContent = "Syncing your PCs works in the desktop app.";
       actions.hidden = true;
@@ -78176,6 +78417,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const show = (result) => {
       if (!result) return;
       root.dataset.state = stateOf(result);
+      attention = needsYou(result);
+      paintFold();
       status.textContent = result.headline || "Sync did not answer. Try again.";
       const details = Array.isArray(result.lines) ? result.lines.slice(1) : [];
       list.replaceChildren(...details.map((line) => node("li", "", line)));
@@ -78196,6 +78439,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const ask = async (mode) => {
       if (busy) return;
       busy = true;
+      // A press here keeps the line and its buttons in sight for the answer.
+      if (mode !== "look") { acted = true; paintFold(); }
       run.disabled = rebase.disabled = true;
       if (mode === "sync") run.textContent = "Syncing…";
       if (mode === "rebase") rebase.textContent = "Putting your commits on top…";
@@ -78246,7 +78491,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 // confirmation. A friend share is one scrubbed item in a file the owner saves
 // where they like; an opened one is reviewed before it can be kept. Text only:
 // nothing here is set as HTML, and key values never reach this page.
-// renderer/pc-sync.js mounts both sections in the Your PCs card.
+// group() puts both sections under one heading, Share projects, which
+// renderer/pc-sync.js mounts at the foot of the Your PCs card, after the PC
+// sections; both stay folded until opened.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
@@ -78303,7 +78550,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 
   function section() {
     const api = bridge();
-    const box = node("details", "pc-vault");
+    const box = node("details", "pc-vault pc-group");
     box.id = "pc-vault";
     const status = node("p", "muted pc-vault-status", "Keeps what you choose in step across your PCs.");
     status.id = "pc-vault-status";
@@ -78623,7 +78870,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // Share with friends: one scrubbed item in a file, or a file to review.
   function shareSection() {
     const api = bridge();
-    const box = node("details", "pc-vault pc-share");
+    const box = node("details", "pc-vault pc-group pc-share");
     box.id = "pc-share";
     const status = node("p", "muted pc-vault-status", "Show friends what works for you without showing them your PC.");
     status.id = "pc-share-status";
@@ -78703,22 +78950,52 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return box;
   }
 
-  window.MefiPcVault = { section, shareSection };
+  // Share projects: both sections under a heading of their own, set apart from
+  // the PC sections above them. Each stays folded, and reads nothing, until opened.
+  function group() {
+    const box = node("section", "pc-share-group");
+    box.id = "pc-share-group";
+    box.setAttribute("aria-labelledby", "pc-share-group-title");
+    const title = node("h5", "pc-share-group-title", "Share projects");
+    title.id = "pc-share-group-title";
+    box.append(title, node("p", "muted pc-share-group-about", "Send a project's brains, recipes, team setups, tasks and notes to your other PCs, sealed in your own private vault, or one item to a friend as a file. The code itself moves through GitHub."), section(), shareSection());
+    return box;
+  }
+
+  window.MefiPcVault = { section, shareSection, group };
 })();
 
-// Friends › Your PCs › My PCs (docs/my-pcs.md): the owner's PCs live — what
-// each has free, what it runs, why it is not taking work — and pairing by the
-// six numbers, sending work to a PC, the battery's Continue, Keep this PC on,
-// the open project's switch, handoffs and lending this PC to a friend.
-// Everything comes from main's "My PCs" block through pcs:* (pcsStatus with a
-// watch lease while the section is open, onPcsEvent while it holds one); this
-// file only lays it out. renderer/pc-sync.js mounts it at the top of the card.
+// Friends › Your PCs, the PCs themselves (docs/my-pcs.md). Connect another PC
+// comes first: three plain steps (open Studio on the other PC, sign in to
+// Friends with the same Discord account on both, press Pair and compare the
+// six numbers) that follow what main reports, folded to one button once a PC
+// of the owner's is paired. Then My PCs, the owner's PCs live — what each has
+// free, what it runs, why it is not taking work — with Pair, Send work here,
+// Forget and Rename, pairing asks with the six numbers, the battery stop's
+// Continue, cards out on other PCs, the open project's switch and handoffs.
+// Then two folded groups: Power and battery (Keep this PC on, the battery
+// lines) and Lend this PC to a friend. Everything comes from main's "My PCs"
+// block through pcs:* (pcsStatus with a watch lease while the card is on the
+// page, onPcsEvent while it holds one); this file only lays it out. Signing in
+// goes the way Friends' own sign-in card does (friends-front.js gate:
+// MefiCommunity.link, then hubConnect). section() returns all of it;
+// renderer/pc-sync.js mounts the walkthrough and the list at the top of the
+// Your PCs card and moves the two groups (section().parts) below its GitHub one.
 (function () {
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
   const plain = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : (error?.name === "Error" && error.message) || fallback);
   const button = (label, id = null, cls = "ghost pc-sync-run") => { const el = node("button", cls, label); el.type = "button"; if (id) el.id = id; return el; };
   const WATCH_MS = 45_000;
+  // Where Studio is downloaded: the releases page renderer/demo-panel.js links too.
+  const DOWNLOAD_URL = "https://github.com/nateecho32-stack/mefi-studio/releases/latest";
+  const DOWNLOAD_SHOWN = "github.com/nateecho32-stack/mefi-studio/releases";
+  // Connect another PC, opened or folded by the owner's own press (null until
+  // they press it). It lasts while Studio runs, so Your PCs opened again looks
+  // the way it was left; without a press it is open until a PC of theirs is
+  // paired. pairedBefore is what the last answer said about that, so a card
+  // built again folds the same way before its own first answer arrives.
+  let walkChoice = null, pairedBefore = null;
 
   const gb = (mb) => (Number.isFinite(mb) ? `${(mb / 1024).toFixed(mb >= 10240 ? 0 : 1)} GB` : "?");
   const ago = (at, now) => {
@@ -78728,6 +79005,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (minutes < 60) return `${minutes} min ago`;
     const hours = Math.round(minutes / 60);
     return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
+  };
+  const names = (rows) => {
+    const list = rows.map((row) => row.name);
+    return list.length <= 2 ? list.join(" and ") : `${list.slice(0, -1).join(", ")} and ${list.at(-1)}`;
   };
 
   // One PC's readings in a line: CPU, memory, battery, slots.
@@ -78742,10 +79023,89 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return parts.join(" · ");
   }
 
+  // Where Connect another PC stands, from one pcs:status answer: the step the
+  // third line speaks for, the owner's other PCs (seen, paired, or online and
+  // not paired yet) and the pairing asks between them. A friend's lent PC and
+  // its asks belong to lending, not here.
+  function walkState(result) {
+    const rows = Array.isArray(result?.rows) ? result.rows : [];
+    const relay = result?.relay ?? {};
+    const own = rows.filter((row) => !row.self && row.mine);
+    const paired = own.filter((row) => row.paired);
+    const found = own.filter((row) => row.online && (!row.paired || row.keysChanged));
+    const asks = (Array.isArray(result?.asks) ? result.asks : []).filter((ask) => ask.relation !== "borrow");
+    const stage = !result ? "loading"
+      : !result.ok ? "error"
+      : !relay.linked ? "signin"
+      : relay.state !== "ready" ? "connecting"
+      : !relay.carries ? "outdated"
+      : !result.encryption ? "nokeys"
+      : asks.length ? "asked"
+      : found.length ? "found"
+      : "waiting";
+    return { stage, relay, own, paired, found, asks };
+  }
+
   function section(api = window.mefiStudio) {
-    const box = node("details", "pc-setup pc-fleet");
+    const box = node("div", "pc-fleet");
     box.id = "pc-fleet";
-    box.open = true;
+    const head = (text) => node("p", "pc-setup-links-head", text);
+
+    // ---- Connect another PC ----
+    const walk = node("details", "pc-walk");
+    walk.id = "pc-walk";
+    walk.open = walkChoice ?? !pairedBefore;
+    const walkHead = node("summary", "pc-walk-head", "Connect another PC");
+    walkHead.id = "pc-walk-head";
+    // The owner's press, not a fold this file makes: a click comes before the toggle.
+    walkHead.addEventListener("click", () => { walkChoice = !walk.open; });
+    const steps = node("ol", "pc-walk-steps");
+    steps.id = "pc-walk-steps";
+    const step = (n, words) => {
+      const item = node("li", "pc-walk-step");
+      item.dataset.step = String(n);
+      const num = node("span", "pc-walk-num", String(n));
+      num.setAttribute("aria-hidden", "true");
+      const text = node("div", "pc-walk-text");
+      const now = node("div", "pc-walk-now");
+      text.append(node("p", "pc-walk-what", words), now);
+      item.append(num, text);
+      steps.append(item);
+      return { item, num, now };
+    };
+    // 1. Studio on the other PC, with where to get it.
+    const one = step(1, "Open Studio on your other PC.");
+    const getNote = node("p", "muted", `Not on it yet? Get it from ${DOWNLOAD_SHOWN}`);
+    const get = button("Open the download page", "pc-walk-get");
+    const copy = button("Copy the link", "pc-walk-copy");
+    const copied = node("span", "muted pc-walk-copied", "");
+    copied.setAttribute("role", "status");
+    const getRow = node("div", "pc-sync-actions");
+    getRow.append(get, copy, copied);
+    one.now.append(getNote, getRow);
+    // 2. This PC's sign-in; the other PC says its own.
+    const two = step(2, "Sign in to Friends with the same Discord account on both PCs.");
+    const signLine = node("p", "pc-walk-signed", "");
+    signLine.id = "pc-walk-signed";
+    const signIn = button("Sign in with Discord", "pc-walk-signin", "primary pc-sync-run");
+    const join = button("Join the Discord", "pc-walk-join", "primary pc-sync-run");
+    const recheck = button("Check again", "pc-walk-recheck");
+    const connect = button("Connect", "pc-walk-connect");
+    const signRow = node("div", "pc-sync-actions");
+    signRow.append(signIn, join, recheck, connect);
+    two.now.append(signLine, signRow);
+    // 3. What main sees now: waiting, found (with Pair), or the six numbers.
+    const three = step(3, "When your other PC shows up, press Pair and check that both screens show the same six numbers.");
+    const live = node("div", "pc-walk-live");
+    live.id = "pc-walk-status";
+    live.setAttribute("role", "status");
+    live.tabIndex = -1;
+    three.now.append(live);
+    walk.append(walkHead, steps, node("p", "muted pc-walk-note", "Only paired PCs can send each other work. A PC never sees another's screen, files or keys."));
+
+    // ---- My PCs ----
+    const list = node("div", "pc-fleet-list");
+    list.id = "pc-fleet-list";
     const status = node("p", "muted pc-setup-status", "Looking for your PCs…");
     status.id = "pc-fleet-status";
     status.setAttribute("role", "status");
@@ -78759,6 +79119,19 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     asks.id = "pc-fleet-asks";
     const rows = node("ul", "pc-fleet-rows");
     rows.id = "pc-fleet-rows";
+    // Rename: this PC's name, opened from its own row.
+    const renameRow = node("div", "pc-sync-actions pc-fleet-rename");
+    renameRow.id = "pc-fleet-rename";
+    renameRow.hidden = true;
+    const nameLabel = node("label", "muted", "This PC's name");
+    nameLabel.htmlFor = "pc-fleet-name";
+    const nameInput = node("input", "pc-remote-name");
+    nameInput.id = "pc-fleet-name";
+    nameInput.maxLength = 40;
+    nameInput.setAttribute("aria-label", "This PC's name");
+    const nameSave = button("Save name", "pc-fleet-name-save");
+    const nameCancel = button("Cancel", "pc-fleet-name-cancel");
+    renameRow.append(nameLabel, nameInput, nameSave, nameCancel);
     // Sending work: a new task, or one of the open project's ready cards.
     const form = node("div", "pc-fleet-send");
     form.id = "pc-fleet-send";
@@ -78785,36 +79158,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     form.append(formHead, pick, titleInput, brief, formActions);
     const moved = node("ul", "pc-sync-list");
     moved.id = "pc-fleet-moved";
-    const movedHead = node("p", "pc-setup-links-head", "Out on other PCs");
+    const movedHead = head("Out on other PCs");
     const sent = node("ul", "pc-sync-list");
     sent.id = "pc-fleet-sent";
-    const sentHead = node("p", "pc-setup-links-head", "Sent from here");
+    const sentHead = head("Sent from here");
     const waiting = node("ul", "pc-sync-list");
     waiting.id = "pc-fleet-waiting";
-    const waitingHead = node("p", "pc-setup-links-head", "Friends' tasks waiting for your OK");
-    // This PC.
-    // Keep this PC on: awake with nothing running, while plugged in. Awake
-    // while work runs stays the assistant's switch in Settings.
-    const stay = node("input");
-    stay.type = "checkbox";
-    stay.id = "pc-fleet-stay";
-    stay.setAttribute("role", "switch");
-    const stayRow = node("label", "pc-sync-follow");
-    stayRow.append(stay, node("span", "", "Keep this PC on so my other PCs can send it work (while plugged in)"));
-    const nameInput = node("input", "pc-remote-name");
-    nameInput.id = "pc-fleet-name";
-    nameInput.maxLength = 40;
-    nameInput.setAttribute("aria-label", "This PC's name");
-    const nameSave = button("Save name", "pc-fleet-name-save");
-    const nameRow = node("div", "pc-sync-actions");
-    nameRow.append(nameInput, nameSave);
-    const batteryRow = node("div", "pc-sync-actions pc-fleet-battery");
-    batteryRow.id = "pc-fleet-battery";
-    const number = (id, label, min, max) => { const input = node("input", "pc-fleet-number"); input.type = "number"; input.min = String(min); input.max = String(max); input.id = id; input.setAttribute("aria-label", label); return input; };
-    const lowInput = number("pc-fleet-low", "Finish up at this battery level", 10, 50);
-    const stopInput = number("pc-fleet-stop-at", "Stop at this battery level", 5, 30);
-    const batterySave = button("Save", "pc-fleet-battery-save");
-    batteryRow.append(node("span", "muted", "Finish up at"), lowInput, node("span", "muted", "% and stop at"), stopInput, node("span", "muted", "%"), batterySave);
+    const waitingHead = head("Friends' tasks waiting for your OK");
+    // This project: shown once another PC of the owner's is paired.
+    const project = node("div", "pc-fleet-project");
+    project.id = "pc-fleet-project";
+    project.hidden = true;
     const share = node("input");
     share.type = "checkbox";
     share.id = "pc-fleet-share";
@@ -78822,11 +79176,55 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const shareText = node("span", "", "My other PCs may take this project's work");
     shareRow.append(share, shareText);
     const shareNote = node("p", "muted", "");
-    // Handoffs.
+    project.append(shareRow, shareNote);
+    // Handoffs: shown while one waits, or when GitHub could not be asked.
+    const handoffBox = node("div", "pc-fleet-handoffs-box");
+    handoffBox.hidden = true;
     const handoffs = node("ul", "pc-sync-list");
     handoffs.id = "pc-fleet-handoffs";
     const look = button("Check GitHub now", "pc-fleet-handoffs-look");
-    // Lending.
+    handoffBox.append(head("Handoffs"), node("p", "muted", "Work one of your PCs parked on GitHub when it had to stop. Pick it up to carry on here."), handoffs, look);
+    // Lately: what happened, folded.
+    const lately = node("details", "pc-fleet-lately");
+    lately.hidden = true;
+    const notes = node("ul", "pc-sync-list pc-fleet-notes");
+    notes.id = "pc-fleet-notes";
+    lately.append(node("summary", "", "Lately"), notes);
+    list.append(
+      node("h5", "pc-fleet-title", "My PCs"), status, stopBanner, asks, rows, renameRow, form,
+      movedHead, moved, sentHead, sent, waitingHead, waiting, project, handoffBox, lately,
+    );
+
+    // ---- Power and battery ----
+    // Keep this PC on: awake with nothing running, while plugged in. Awake
+    // while work runs stays the assistant's switch in Settings.
+    const power = node("details", "pc-setup pc-group pc-fleet-group");
+    power.id = "pc-fleet-power";
+    const powerNote = node("span", "muted pc-group-note", "");
+    const powerHead = node("summary", "", "Power and battery");
+    powerHead.append(powerNote);
+    const stay = node("input");
+    stay.type = "checkbox";
+    stay.id = "pc-fleet-stay";
+    stay.setAttribute("role", "switch");
+    const stayRow = node("label", "pc-sync-follow");
+    stayRow.append(stay, node("span", "", "Keep this PC on so my other PCs can send it work (while plugged in)"));
+    const batteryRow = node("div", "pc-sync-actions pc-fleet-battery");
+    batteryRow.id = "pc-fleet-battery";
+    const number = (id, label, min, max) => { const input = node("input", "pc-fleet-number"); input.type = "number"; input.min = String(min); input.max = String(max); input.id = id; input.setAttribute("aria-label", label); return input; };
+    const lowInput = number("pc-fleet-low", "Finish up at this battery level", 10, 50);
+    const stopInput = number("pc-fleet-stop-at", "Stop at this battery level", 5, 30);
+    const batterySave = button("Save", "pc-fleet-battery-save");
+    batteryRow.append(node("span", "muted", "Finish up at"), lowInput, node("span", "muted", "% and stop at"), stopInput, node("span", "muted", "%"), batterySave);
+    const batteryAbout = node("p", "muted", "At the first level this laptop starts nothing new and offers its waiting work to your other PCs. At the second it stops, parks its work for them and waits for you.");
+    power.append(powerHead, stayRow, batteryRow, batteryAbout);
+
+    // ---- Lend this PC to a friend ----
+    const lend = node("details", "pc-setup pc-group pc-fleet-group");
+    lend.id = "pc-fleet-lending";
+    const lendNote = node("span", "muted pc-group-note", "");
+    const lendHead = node("summary", "", "Lend this PC to a friend");
+    lendHead.append(lendNote);
     const lends = node("ul", "pc-sync-list");
     lends.id = "pc-fleet-lends";
     const findInput = node("input", "pc-setup-repos");
@@ -78839,21 +79237,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     found.id = "pc-fleet-lend-found";
     const findRow = node("div", "pc-sync-actions");
     findRow.append(findInput, find);
-    const notes = node("ul", "pc-sync-list pc-fleet-notes");
-    notes.id = "pc-fleet-notes";
-    const head = (text) => node("p", "pc-setup-links-head", text);
-    box.append(
-      node("summary", "", "My PCs"), status, stopBanner, asks, rows, form,
-      movedHead, moved, sentHead, sent, waitingHead, waiting,
-      head("This PC"), nameRow, stayRow, batteryRow,
-      head("This project"), shareRow, shareNote,
-      head("Handoffs"), handoffs, look,
-      head("Lend this PC to a friend"), node("p", "muted", "Someone you share a room with in Friends › Rooms. Their PCs can then send it work: each task waits for your OK unless you tick Run without asking, and runs with this PC's agents."), lends, findRow, found,
-      head("Lately"), notes,
-      node("p", "muted", "Your PCs see each other once each signs in to Friends with the same Discord account. Pair each one once by checking the six numbers on both screens; only paired PCs can send each other work. A PC never sees another's screen, files or keys."),
-    );
+    lend.append(lendHead, node("p", "muted", "Someone you share a room with in Friends › Rooms. Their PCs can then send it work: each task waits for your OK unless you tick Run without asking, and runs with this PC's agents."), lends, findRow, found);
 
-    let busy = false, last = null, timer = null, sendTo = null;
+    box.append(walk, list, power, lend);
+    box.parts = { walk, list, power, lend };
+
+    let busy = false, last = null, timer = null, sendTo = null, renameOpener = null;
+    let account = null, accountAsked = false, signing = false, signNote = "", mustJoin = false, liveKey = "";
 
     const guard = async (label, work) => {
       if (busy) return;
@@ -78871,13 +79261,164 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       box.removeAttribute("aria-busy");
     };
     const refresh = async () => paint(await api.pcsStatus(true));
+    // Pair from a row or from the walkthrough (which shows the numbers itself).
+    const pairWith = (row, fromWalk = false) => guard("Asking it to pair…", async () => {
+      const answer = await api.pcsPair(row.id);
+      await refresh();
+      if (answer?.ok && !fromWalk) status.textContent = `Check that ${row.name} shows ${answer.numbers}, then choose Pair there.`;
+      return answer;
+    });
+    const answerAsk = (ask, yes) => guard(yes ? "Pairing…" : "Saying no…", async () => { const answer = await api.pcsPairAnswer(ask.id, yes); await refresh(); return answer; });
+    // A sentence with the six numbers set apart, so the two screens are easy to compare.
+    const withNumbers = (before, numbers, after) => { const span = node("span", ""); span.append(before, node("strong", "pc-fleet-numbers", numbers), after); return span; };
+    // One pairing ask: ours (check the other screen) or theirs (Pair or Not mine).
+    function askView(ask, cls) {
+      const item = node(cls === "pc-walk-line" ? "div" : "li", cls);
+      if (ask.dir === "out") {
+        item.append(cls === "pc-walk-line" ? withNumbers(`${ask.name} should now show `, ask.numbers, ". If it does, choose Pair there.") : withNumbers(`Check that ${ask.name} shows `, ask.numbers, ", then choose Pair there."));
+        return item;
+      }
+      item.append(withNumbers(`${ask.name} asks to pair${ask.relation === "borrow" ? " to use this PC" : ""}. Pair only if its screen shows `, ask.numbers, "."));
+      const yes = button("Pair", null, "primary pc-sync-run");
+      const no = button("Not mine");
+      yes.addEventListener("click", () => { void answerAsk(ask, true); });
+      no.addEventListener("click", () => { void answerAsk(ask, false); });
+      item.append(yes, no);
+      return item;
+    }
 
-    function rowView(row, now, result) {
+    // Signing in, as Friends' own sign-in card does it (friends-front.js gate).
+    async function connected(note = "Signed in. Connecting…") {
+      mustJoin = false;
+      signNote = note;
+      paintWalk(last);
+      try { await api.hubConnect?.(); } catch { /* the next look says why */ }
+      signNote = "";
+      await refresh().catch(() => paintWalk(last));
+    }
+    async function startSignIn() {
+      const community = window.MefiCommunity;
+      // A build without Friends' Discord link: Settings › Community has it.
+      if (typeof community?.link !== "function") { window.MefiNav?.go?.("community"); return; }
+      if (signing) return;
+      signing = true;
+      signNote = "Discord is asking in your browser. Press Authorize there, then come back.";
+      paintWalk(last);
+      let linked = null;
+      try { linked = await community.link(); } catch (error) { linked = { ok: false, error: plain(error, "") }; }
+      signing = false;
+      if (linked?.ok) { await connected(); return; }
+      if (linked?.error === "not-member") { mustJoin = true; signNote = ""; paintWalk(last); return; }
+      signNote = linked?.error === "canceled" ? "Signing in was cancelled. Press Sign in with Discord to try again." : "Signing in didn't finish. Press Sign in with Discord to try again.";
+      paintWalk(last);
+    }
+    async function checkAgain() {
+      if (signing) return;
+      signing = true;
+      signNote = "Checking…";
+      paintWalk(last);
+      let checked = null;
+      try { checked = await window.MefiCommunity?.check?.(); } catch { checked = null; }
+      signing = false;
+      if (checked?.ok === false && checked.error === "not-member") { mustJoin = true; signNote = ""; paintWalk(last); return; }
+      await connected();
+    }
+    signIn.addEventListener("click", () => { void startSignIn(); });
+    join.addEventListener("click", () => { void window.MefiCommunity?.join?.(); });
+    recheck.addEventListener("click", () => { void checkAgain(); });
+    connect.addEventListener("click", () => { void connected("Connecting…"); });
+    get.addEventListener("click", () => { void Promise.resolve(api?.openExternal?.(DOWNLOAD_URL)).catch(() => {}); });
+    copy.addEventListener("click", () => {
+      void Promise.resolve(api?.shellCopy?.(DOWNLOAD_URL)).then((answer) => { copied.textContent = answer?.ok === false ? "" : "Copied."; }, () => { copied.textContent = ""; });
+    });
+
+    // The walkthrough from one answer (or none yet). Returns where it stands.
+    function paintWalk(result) {
+      const w = walkState(result);
+      walk.dataset.stage = w.stage;
+      // A build without My PCs (MEFI_STUDIO_NO_PCS) has no steps to follow.
+      walk.hidden = w.stage === "error" && result?.error === "unavailable";
+      const known = w.stage !== "loading" && w.stage !== "error";
+      if (known) pairedBefore = w.paired.length > 0;
+      // Open until a PC of the owner's is paired, unless they chose; a fold
+      // that would take the focus with it hands it to the walkthrough's button.
+      const open = walkChoice ?? !pairedBefore;
+      if (walk.open !== open) {
+        const inside = !open && walk.contains?.(document.activeElement) && document.activeElement !== walkHead;
+        walk.open = open;
+        if (inside) walkHead.focus?.();
+      }
+      // Step 2: whether this PC is signed in, and the one thing that helps.
+      const relay = w.relay;
+      const said = known && relay.linked ? window.MefiFriendsFront?.hubState?.({ configured: relay.error !== "unavailable", linked: true, state: relay.state, error: relay.error }) ?? null : null;
+      // Discord linked the account but it is not in the server yet: join first.
+      const action = !known ? null : mustJoin ? "join" : !relay.linked ? "signin" : said?.action ?? null;
+      const signedIn = known && Boolean(relay.linked) && action !== "signin" && action !== "join";
+      if (!relay.linked) { account = null; accountAsked = false; }
+      if (signedIn && relay.state === "ready" && !account && !accountAsked && typeof api?.hubStatus === "function") {
+        accountAsked = true;
+        void Promise.resolve(api.hubStatus()).then((answer) => {
+          const name = answer?.status?.user?.name;
+          if (typeof name === "string" && name.trim()) { account = name.trim().slice(0, 40); paintWalk(last); }
+        }).catch(() => {});
+      }
+      signLine.textContent = signNote || (!known ? ""
+        : action === "join" ? "Your Discord account isn't in the Void Engine server yet. Join it, then check again."
+        : !relay.linked ? "This PC is not signed in yet."
+        : action === "signin" ? said?.text || "Sign in with Discord again."
+        : `✓ This PC is signed in${account ? ` as ${account}` : ""}.${said?.text ? ` ${said.text}` : ""}`);
+      signIn.hidden = action !== "signin";
+      join.hidden = recheck.hidden = action !== "join";
+      connect.hidden = action !== "connect";
+      signIn.disabled = join.disabled = recheck.disabled = connect.disabled = signing;
+      signRow.hidden = signIn.hidden && join.hidden && connect.hidden;
+      // Each step's mark: done, the one to do now, or still ahead.
+      const marks = [w.own.length > 0, signedIn && w.own.length > 0, w.paired.length > 0 && !w.found.length && !w.asks.length];
+      const now = known && !signedIn ? 1 : marks.findIndex((done) => !done);
+      [one, two, three].forEach((part, index) => {
+        part.item.dataset.state = marks[index] ? "done" : index === now ? "now" : "ahead";
+        part.num.textContent = marks[index] ? "✓" : String(index + 1);
+      });
+      // Step 3: what main sees now. Repainted only when it says something new,
+      // so a watch renewal neither re-reads it aloud nor drops a focused Pair.
+      const lines = [];
+      if (!known) lines.push({ text: w.stage === "error" ? "" : "Looking for your PCs…" });
+      else if (!signedIn) lines.push({ text: "Your other PC shows up here once both PCs are signed in." });
+      else if (w.stage === "connecting") lines.push({ text: "Your other PC shows up here once this PC is connected." });
+      else if (w.stage === "outdated") lines.push({ text: "The room service does not carry My PCs yet. It does once it is updated." });
+      else if (w.stage === "nokeys") lines.push({ text: "Windows cannot keep this PC's keys safe, so it cannot pair." });
+      else {
+        for (const ask of w.asks) lines.push({ ask });
+        for (const row of w.found.filter((pc) => !w.asks.some((ask) => ask.id === pc.id))) lines.push({ row, text: row.keysChanged ? `${row.name}'s keys changed. Pair it again:` : `Found ${row.name}:` });
+        if (!lines.length) lines.push({ text: w.paired.length ? `Paired with ${names(w.paired)}. Waiting for another PC to sign in…` : "Waiting for your other PC to sign in…" });
+      }
+      const key = JSON.stringify(lines.map((line) => [line.text ?? null, line.ask ? [line.ask.id, line.ask.dir, line.ask.numbers] : null, line.row?.id ?? null]));
+      if (key !== liveKey) {
+        liveKey = key;
+        // A Pair or Not mine pressed here goes with its line; the focus stays in the step.
+        const focused = live.contains?.(document.activeElement);
+        live.replaceChildren(...lines.filter((line) => line.ask || line.text).map((line) => {
+          if (line.ask) return askView(line.ask, "pc-walk-line");
+          const item = node("div", "pc-walk-line");
+          item.append(node("span", "", line.text));
+          if (line.row) {
+            const pair = button("Pair", null, "primary pc-sync-run");
+            pair.addEventListener("click", () => { void pairWith(line.row, true); });
+            item.append(pair);
+          }
+          return item;
+        }));
+        if (focused) (walk.open ? live : walkHead).focus?.();
+      }
+      return w;
+    }
+
+    function rowView(row, now, result, power) {
       const item = node("li", "pc-fleet-row");
       item.dataset.pc = row.id;
       const state = row.heard?.state ?? null;
       // This PC is busy while its battery holds new work or it is not taking any.
-      const selfBusy = row.self && (result.power.stage !== "ok" || state?.accepting === false);
+      const selfBusy = row.self && (power.stage !== "ok" || state?.accepting === false);
       item.dataset.state = !row.online ? "offline" : row.why || selfBusy ? "busy" : "free";
       const name = node("strong", "", row.name);
       const kind = row.self ? "This PC" : !row.mine ? `lent to you by ${row.owner?.name || "a friend"}` : row.kind === "laptop" ? "laptop" : "desktop";
@@ -78885,17 +79426,24 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       top.append(name, node("span", "muted", ` · ${kind}`));
       item.append(top);
       if (row.online && state) item.append(node("div", "pc-fleet-meters", meters(state)));
-      const why = row.self ? (result.power.stage !== "ok" ? result.power.words : state?.accepting ? "Taking work" : null)
+      const why = row.self ? (power.stage !== "ok" ? power.words : state?.accepting ? "Taking work" : null)
         : !row.online ? `Offline${row.lastSeen ? ` since ${ago(row.lastSeen, now)}` : ""}`
         : row.keysChanged ? "Its keys changed: pair again before it can send or take work"
         : !row.paired ? "Not paired yet"
         : row.why || "Taking work";
       if (why) item.append(node("div", "pc-fleet-why", why));
-      if (!row.self) {
-        const actions = node("div", "pc-sync-actions");
+      const actions = node("div", "pc-sync-actions");
+      if (row.self) {
+        const rename = button("Rename", "pc-fleet-rename-open", "ghost mini pc-sync-run");
+        rename.setAttribute("aria-controls", "pc-fleet-rename");
+        rename.setAttribute("aria-expanded", String(!renameRow.hidden));
+        rename.addEventListener("click", () => { if (renameRow.hidden) openRename(rename); else closeRename(); });
+        renameOpener = rename;
+        actions.append(rename);
+      } else {
         if (row.online && (!row.paired || row.keysChanged) && (row.mine || row.lends)) {
           const pair = button("Pair");
-          pair.addEventListener("click", () => { void guard("Asking it to pair…", async () => { const answer = await api.pcsPair(row.id); await refresh(); if (answer?.ok) status.textContent = `Check that ${row.name} shows ${answer.numbers}, then choose Pair there.`; return answer; }); });
+          pair.addEventListener("click", () => { void pairWith(row); });
           actions.append(pair);
         }
         if (row.paired && row.online && (row.relation === "mine" || row.relation === "lender")) {
@@ -78909,10 +79457,31 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           if (window.MefiUi?.arm) window.MefiUi.arm(forget, { run, armed: `Forget ${row.name}?` }); else forget.addEventListener("click", run);
           actions.append(forget);
         }
-        if (actions.children.length) item.append(actions);
       }
+      if (actions.children.length) item.append(actions);
       return item;
     }
+
+    function openRename(opener) {
+      renameRow.hidden = false;
+      opener?.setAttribute("aria-expanded", "true");
+      nameInput.value = last?.me?.name ?? nameInput.value;
+      nameInput.focus?.();
+      nameInput.select?.();
+    }
+    function closeRename() {
+      renameRow.hidden = true;
+      renameOpener?.setAttribute("aria-expanded", "false");
+      renameOpener?.focus?.();
+    }
+    const saveName = () => {
+      const name = nameInput.value.trim();
+      if (!name) return;
+      void save({ name }).then(() => { if (last?.ok) closeRename(); });
+    };
+    nameSave.addEventListener("click", saveName);
+    nameCancel.addEventListener("click", closeRename);
+    nameInput.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault?.(); saveName(); } });
 
     function openForm(row, result) {
       sendTo = row;
@@ -78951,34 +79520,30 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     function paint(result) {
       if (!result) return;
       last = result;
+      const w = paintWalk(result);
       if (!result.ok) { status.textContent = result.error === "unavailable" ? "My PCs is not in this build." : result.error || "My PCs could not be read."; return; }
       const now = Date.now();
-      const others = result.rows.filter((row) => !row.self);
+      const all = Array.isArray(result.rows) ? result.rows : [];
+      const others = all.filter((row) => !row.self);
       const online = others.filter((row) => row.online).length;
       const relay = result.relay ?? {};
+      const power = { stage: "ok", reading: null, words: "", ...(result.power ?? {}) };
+      const lines = { low: 20, stop: 10, ...(power.lines ?? {}) };
       status.textContent = !relay.linked ? "Sign in with Discord in Friends on each of your PCs to see them here."
         : relay.state === "ready" && !relay.carries ? "The relay does not carry My PCs yet. It does once it is updated."
         : relay.state !== "ready" ? "Connecting to the relay…"
         : !result.encryption ? "Windows cannot keep this PC's keys safe, so it cannot pair. Your other PCs still show here."
         : others.length ? `${others.length} other PC${others.length === 1 ? "" : "s"}, ${online} online.`
         : "No other PC yet. Sign in to Friends with the same Discord account on another PC.";
-      stopBanner.hidden = result.power.stage !== "stopped";
-      stopText.textContent = `Stopped at ${result.power.reading?.level ?? "low"}% battery. ${result.held ? `${result.held} task${result.held === 1 ? " was" : "s were"} stopped with progress saved and parked for your other PCs. ` : ""}Nothing runs here until you choose Continue.`;
+      stopBanner.hidden = power.stage !== "stopped";
+      stopText.textContent = `Stopped at ${power.reading?.level ?? "low"}% battery. ${result.held ? `${result.held} task${result.held === 1 ? " was" : "s were"} stopped with progress saved and parked for your other PCs. ` : ""}Nothing runs here until you choose Continue.`;
+      // The open walkthrough shows the asks between the owner's own PCs; the list keeps a friend's.
       asks.replaceChildren(...(result.asks ?? []).map((ask) => {
-        const item = node("li", "pc-fleet-ask");
-        if (ask.dir === "out") {
-          item.append(node("span", "", `Check that ${ask.name} shows ${ask.numbers}, then choose Pair there.`));
-          return item;
-        }
-        item.append(node("span", "", `${ask.name} asks to pair${ask.relation === "borrow" ? " to use this PC" : ""}. Pair only if its screen shows ${ask.numbers}.`));
-        const yes = button("Pair", null, "primary pc-sync-run");
-        const no = button("Not mine");
-        yes.addEventListener("click", () => { void guard("Pairing…", async () => { const answer = await api.pcsPairAnswer(ask.id, true); await refresh(); return answer; }); });
-        no.addEventListener("click", () => { void guard("Saying no…", async () => { const answer = await api.pcsPairAnswer(ask.id, false); await refresh(); return answer; }); });
-        item.append(yes, no);
+        const item = askView(ask, "pc-fleet-ask");
+        item.hidden = walk.open && ask.relation !== "borrow";
         return item;
       }));
-      rows.replaceChildren(...result.rows.map((row) => rowView(row, now, result)));
+      rows.replaceChildren(...all.map((row) => rowView(row, now, result, power)));
       moved.replaceChildren(...(result.moved ?? []).map((task) => {
         const item = node("li", "", `${task.title} · ${task.pending ? `offered to ${task.to}` : `on ${task.to}`}`);
         if (!task.pending) {
@@ -79001,20 +79566,25 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       sentHead.hidden = sent.hidden = !sent.children.length;
       waiting.replaceChildren(...(result.waiting ?? []).map((task) => node("li", "", `${task.title} · from ${task.from}. Open it in Tasks and say "work on it" to run it here.`)));
       waitingHead.hidden = waiting.hidden = !waiting.children.length;
-      if (document.activeElement !== nameInput) nameInput.value = result.me?.name ?? "";
+      // A name being typed stays as it is until it is saved or cancelled.
+      if (renameRow.hidden && document.activeElement !== nameInput) nameInput.value = result.me?.name ?? "";
+      // Power and battery.
       stay.checked = result.stayOn === "always";
-      const laptop = result.power.reading && !result.power.reading.error;
-      batteryRow.hidden = !laptop;
-      if (document.activeElement !== lowInput) lowInput.value = String(result.power.lines.low);
-      if (document.activeElement !== stopInput) stopInput.value = String(result.power.lines.stop);
-      const project = result.project;
-      share.disabled = !project?.github;
-      share.checked = Boolean(project?.share);
-      shareText.textContent = project ? `My other PCs may take ${project.name}'s work` : "Open a project to choose whether your other PCs may take its work";
-      shareNote.textContent = !project ? "" : !project.github ? "This project has no GitHub repository, so its work stays on this PC."
-        : `At most ${result.limits.movedPerProject} of its tasks are out on other PCs at once, and at most ${result.limits.parkedPerProject} handoffs wait on GitHub. Handoffs are branches of the project's repository, as visible as it is.`;
-      const list = result.handoffs?.list ?? [];
-      handoffs.replaceChildren(...list.map((row) => {
+      powerNote.textContent = result.stayOn === "always" ? "Kept on" : "";
+      const laptop = power.reading && !power.reading.error;
+      batteryRow.hidden = batteryAbout.hidden = !laptop;
+      if (document.activeElement !== lowInput) lowInput.value = String(lines.low);
+      if (document.activeElement !== stopInput) stopInput.value = String(lines.stop);
+      // This project: whether the owner's other PCs may take its work.
+      const open = result.project;
+      project.hidden = !open || !w.paired.length;
+      share.disabled = !open?.github;
+      share.checked = Boolean(open?.share);
+      shareText.textContent = open ? `My other PCs may take ${open.name}'s work` : "Open a project to choose whether your other PCs may take its work";
+      shareNote.textContent = !open ? "" : !open.github ? "This project has no GitHub repository, so its work stays on this PC."
+        : `At most ${result.limits?.movedPerProject ?? 2} of its tasks are out on other PCs at once, and at most ${result.limits?.parkedPerProject ?? 3} handoffs wait on GitHub. Handoffs are branches of the project's repository, as visible as it is.`;
+      const parked = result.handoffs?.list ?? [];
+      handoffs.replaceChildren(...parked.map((row) => {
         const item = node("li", "", `${row.titles.join(", ")} · from ${row.mine ? "this PC" : row.pcName}${row.why === "battery" && Number.isFinite(row.level) ? ` at ${row.level}% battery` : ""} · ${ago(row.at, now)}`);
         if (!row.mine) {
           const take = button("Pick up");
@@ -79027,28 +79597,31 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         return item;
       }));
       if (!handoffs.children.length) handoffs.append(node("li", "muted", result.handoffs?.error ? `GitHub could not be asked: ${result.handoffs.error}` : "None waiting."));
-      lends.replaceChildren(...(result.lend ?? []).map((lend) => {
+      handoffBox.hidden = !parked.length && !result.handoffs?.error;
+      // Lend this PC to a friend.
+      const lent = result.lend ?? [];
+      lendNote.textContent = !lent.length ? "" : lent.length === 1 ? `Lent to ${lent[0].name}` : `Lent to ${lent.length} friends`;
+      lends.replaceChildren(...lent.map((row) => {
         const item = node("li", "pc-fleet-lend");
         const auto = node("input");
         auto.type = "checkbox";
-        auto.checked = lend.auto === true;
+        auto.checked = row.auto === true;
         const autoLabel = node("label", "pc-sync-follow");
         autoLabel.append(auto, node("span", "", "Run without asking"));
-        auto.addEventListener("change", () => { void save({ lend: result.lend.map((row) => (row.id === lend.id ? { ...row, auto: auto.checked } : row)) }); });
+        auto.addEventListener("change", () => { void save({ lend: lent.map((other) => (other.id === row.id ? { ...other, auto: auto.checked } : other)) }); });
         const stop = button("Stop lending");
-        stop.addEventListener("click", () => { void save({ lend: result.lend.filter((row) => row.id !== lend.id) }, `Stopping the lend to ${lend.name}…`); });
-        item.append(node("span", "", lend.name), autoLabel, stop);
+        stop.addEventListener("click", () => { void save({ lend: lent.filter((other) => other.id !== row.id) }, `Stopping the lend to ${row.name}…`); });
+        item.append(node("span", "", row.name), autoLabel, stop);
         return item;
       }));
       if (!lends.children.length) lends.append(node("li", "muted", "Not lent to anyone."));
       notes.replaceChildren(...(result.notes ?? []).map((note) => node("li", "", `${ago(note.at, now)} · ${note.text}`)));
-      if (!notes.children.length) notes.append(node("li", "muted", "Nothing yet."));
+      lately.hidden = !notes.children.length;
     }
 
     const save = (patch, label = "Saving…") => guard(label, async () => { const answer = await api.pcsSet(patch); paint(answer); return answer; });
     go.addEventListener("click", () => { void guard("Starting again…", async () => { const answer = await api.pcsContinue(); await refresh(); if (answer?.ok && answer.elsewhere) status.textContent = `${answer.elsewhere} task${answer.elsewhere === 1 ? " is" : "s are"} on another PC now; the rest run here again.`; return answer; }); });
     stay.addEventListener("change", () => { void save({ stayOn: stay.checked ? "always" : "working" }); });
-    nameSave.addEventListener("click", () => { if (nameInput.value.trim()) void save({ name: nameInput.value.trim() }); });
     batterySave.addEventListener("click", () => {
       const low = Number(lowInput.value), stop = Number(stopInput.value);
       if (!(stop < low)) { status.textContent = "The stop level must be below the finish-up level."; return; }
@@ -79064,31 +79637,33 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const people = Array.isArray(answer?.members) ? answer.members : Array.isArray(answer?.people) ? answer.people : [];
         found.replaceChildren(...people.slice(0, 8).map((person) => {
           const item = node("li", "", person.name);
-          const lend = button("Lend to them");
-          lend.addEventListener("click", () => {
-            const list = [...(last?.lend ?? []).filter((row) => row.id !== person.id), { id: person.id, name: person.name, auto: false }];
+          const lendTo = button("Lend to them");
+          lendTo.addEventListener("click", () => {
+            const next = [...(last?.lend ?? []).filter((row) => row.id !== person.id), { id: person.id, name: person.name, auto: false }];
             found.replaceChildren();
             findInput.value = "";
-            void save({ lend: list }, `Lending this PC to ${person.name}…`);
+            void save({ lend: next }, `Lending this PC to ${person.name}…`);
           });
-          item.append(" ", lend);
+          item.append(" ", lendTo);
           return item;
         }));
         if (!found.children.length) found.append(node("li", "muted", answer?.ok === false ? "Friends could not be searched just now." : "Nobody by that name."));
       });
     });
-    if (typeof api?.onPcsEvent === "function") api.onPcsEvent((result) => { if (box.isConnected !== false && box.open) paint(result); });
-    // The watch lease: renewed while the section is open and on the page.
+    const onPage = () => box.isConnected !== false;
+    if (typeof api?.onPcsEvent === "function") api.onPcsEvent((result) => { if (onPage()) paint(result); });
+    // The watch lease: renewed while the card is on the page.
     const watch = () => {
       if (timer) clearTimeout(timer);
       timer = null;
-      if (box.isConnected === false || !box.open) return;
+      if (!onPage()) return;
       void refresh().catch(() => {});
       timer = setTimeout(watch, WATCH_MS);
     };
-    box.addEventListener("toggle", watch);
+    paintWalk(null);
     if (typeof api?.pcsStatus !== "function") {
       status.textContent = "My PCs works in the desktop app.";
+      walk.hidden = true;
       return box;
     }
     setTimeout(watch, 0);
@@ -82379,7 +82954,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         // pack's open reports with it.
         const pack = shopPack(report);
         if (pack && typeof api.hubShop === "function") tools.push(confirmed("Remove pack", "Take it out of the Shop?", `Take ${pack.name ?? "this pack"} out of the Shop? Members who got it lose it.`, () => guard("Removing…", async () => {
-          const answer = await api.hubShop("modShopRemove", pack.id, { reason: report.reason });
+          // A report's reason may run to 500 characters over several lines; a removal's is one line of 200 at most.
+          const reason = String(report.reason ?? "").replace(/[\x00-\x1f\x7f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200).trim();
+          const answer = await api.hubShop("modShopRemove", pack.id, reason ? { reason } : {});
           status.textContent = answer?.ok ? "The pack is out of the Shop." : why(answer, "It could not be removed.");
           await load();
         })));
@@ -86034,6 +86611,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       ],
       action: "Walk me to Team › Providers", route: "agents", params: { place: "providers" },
       station: "This is Team › Providers. At the top, one subscription can do everything. Lower down, the highlighted Providers card takes API keys and LM Studio. Nothing is sent to an AI until you choose to test it.",
+      // Team is Studio's; in Social the walk stays in Social, on the setup guide's own page for connecting an AI.
+      vibeAction: "Walk me to Connect an AI", vibeRoute: "setup-helper", vibeParams: { section: "providers" }, vibeTarget: "#setup-helper-sheet",
+      vibeStation: "This is the setup guide, on Connect an AI: what is connected, and where to sign in to another tool or paste a key. Studio's Team › Providers has the same and more. Nothing is sent to an AI until you choose to test it.",
       note: "Tests and AI requests use your plan's allowance, and only when you run them.",
       target: "#settings-assistant-heading", done: "Accounts checked",
     },
@@ -86050,7 +86630,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       action: "Walk me to the box", route: "task", secondary: "Plan it first", secondaryRoute: "plans",
       station: "This is the box on Today, in Studio. Type what you want and how you will check it. Build it makes a task; Talk it over chats about it first. I don't send anything from here.",
       // In Social, Home is Social's own Today with its own box (reachWorkspace).
-      vibeStation: "This is the box on Today, in Social. Type what you want and how you will check it. Build it makes a task; Talk it over chats about it first. I don't send anything from here.",
+      vibeStation: "This is the box on Home, in Social. Type what you want and how you will check it. Send talks it over with Mefi, who offers to build it; Ctrl+Enter builds it right away. I don't send anything from here.",
       note: "These buttons only take you to the box or to Plans. They never send a task or start a plan.",
       target: "#workspace-input", vibeTarget: "#vibe-input", done: "Box found",
     },
@@ -86066,6 +86646,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       // rail: "work" puts Live work in front: the rail remembers its last tab, and a selected task would show its own panel.
       action: "Walk me to the Map", route: "command", params: { rail: "work" }, secondary: "Open the task board", secondaryRoute: "tasks",
       station: "This is the Map. Live work, on the right, lists what is running and the step it is on. Press Ready, Waiting or Attention to see those tasks and why. Click anything on the Map to see more.",
+      // The Map is Studio's; Social's own picture of the work is Activity.
+      vibeAction: "Walk me to Activity", vibeRoute: "activity", vibeTarget: "#activity-board", vibeSecondary: null,
+      vibeStation: "This is Activity: what needs you, what is running and what waits its turn, for the open project. Studio's Map shows the same work live, with every step.",
       note: "Looking around the Map changes nothing in your project.",
       target: "#idle-feed", done: "Map found",
     },
@@ -86073,7 +86656,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       title: "Check what your AI made", short: "Check", glyph: "g-eyes",
       copy: "When your AI says it is done, take a look before you trust it. Open the finished task, see what changed, and try it yourself.",
       points: [
-        "Finished work waits under Review: a column on Today in Social, a group in the session list in Studio, and a filter on the task board.",
+        "Finished work waits for your check: under Needs you on Home in Social, in a group in the session list in Studio, and in a filter on the task board.",
         "Open a task to see what changed, which checks passed and what your AI said. In Studio, the Changes and Checks tabs show this.",
         "Something went wrong? Read the reason first. Fix what it names, such as a sign-in or an unclear description, then try again.",
         "Keep failed work for now: it shows what went wrong. Task history can bring back an earlier description, but it does not undo changes to your files.",
@@ -86081,9 +86664,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       // Studio's Today has no Review column, so Studio's walk opens the task board on Review (reachWorkspace).
       action: "Walk me to Review", route: "review",
       station: "This is the task board, on Review: finished work that waits for you to check, and tasks that need help. Open one to see what changed and run its checks.",
-      vibeStation: "This is Today. The Review column holds finished work that waits for you. Press a card to open it and see what changed. Anything stuck waits under Needs you, with its reason.",
+      vibeStation: "This is Your work, on Home. Finished work that waits for your check is under Needs you, marked Ready to review. Press it to see what changed, in Studio. Anything stuck waits there too, with its reason.",
       note: "You can take this tour again any time from Help › Start here. Finishing the tour does not mark any task done.",
-      target: "#task-filter-review", vibeTarget: '#today-board [data-group="review"]', done: "Review found",
+      target: "#task-filter-review", vibeTarget: "#today-work", done: "Review found",
     },
   ];
   const blankDone = () => lessons.map(() => false);
@@ -86181,6 +86764,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // point at Social's own controls there (vibeTarget, vibeStation).
   const vibeMode = () => { try { return window.MefiVibe?.mode?.() === "vibe"; } catch { return false; } };
   const targetOf = (lesson) => (vibeMode() && lesson.vibeTarget) || lesson.target;
+  // Social keeps to its own pages (renderer/social.js): a stop whose place is Studio's has a Social way of its own.
+  const routeOf = (lesson) => (vibeMode() && lesson.vibeRoute) || lesson.route;
+  const paramsOf = (lesson) => (vibeMode() && lesson.vibeRoute ? lesson.vibeParams : lesson.params);
+  const actionOf = (lesson) => (vibeMode() && lesson.vibeAction) || lesson.action;
+  const secondaryOf = (lesson) => (vibeMode() && lesson.vibeRoute && "vibeSecondary" in lesson ? lesson.vibeSecondary : lesson.secondary);
   const stationOf = (lesson) => (vibeMode() && lesson.vibeStation) || lesson.station || lesson.copy;
   function isDone(index) {
     if (state.done[index]) return true;
@@ -86242,10 +86830,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if ($("build-mode")) $("build-mode").hidden = !BUILD_MODE_STEPS.includes(state.step);
     renderBuildMode();
     $("note").textContent = lesson.note;
-    $("action").hidden = !lesson.action;
-    $("action").textContent = lesson.action || "";
-    $("secondary").hidden = !lesson.secondary;
-    $("secondary").textContent = lesson.secondary || "";
+    $("action").hidden = !actionOf(lesson);
+    $("action").textContent = actionOf(lesson) || "";
+    $("secondary").hidden = !secondaryOf(lesson);
+    $("secondary").textContent = secondaryOf(lesson) || "";
     $("back").disabled = state.step === 0;
     $("next").textContent = state.step === lessons.length - 1 ? "Finish guide" : "Next step";
     const steps = lessons.map((item, index) => {
@@ -86707,10 +87295,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // Today's Review column in Social and the task board in Studio (targetOf /
   // reachWorkspace).
   function routeTo(lesson) {
-    const route = lesson.route;
+    const route = routeOf(lesson);
     let focused = null;
     if (["project", "task", "review"].includes(route)) focused = reachWorkspace(route);
-    else window.MefiNav?.go?.(route, lesson.params);
+    else window.MefiNav?.go?.(route, paramsOf(lesson));
     if (lesson.menu) window.MefiSidebar?.open?.();
     highlight(targetOf(lesson));
     if (route === "project") { focused = document.getElementById("workspace-add-project") ?? null; focused?.focus?.(); }
@@ -89424,7 +90012,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     // renderer/friends-front.js: Friends' front page, and the sign-in card for anyone not signed in yet.
     { id: "lobby", label: "The Lobby", glyph: "g-community", about: "Who's online, the rooms open now and what your friends are making." },
     { id: "rooms", label: "Rooms", glyph: "g-chat", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
-    { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
+    { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Connect another PC and see your PCs at a glance. Keeping work in step through GitHub, power, lending and sharing wait folded below." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
     { id: "hub", label: "Project hub", glyph: "g-spark", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
@@ -98263,7 +98851,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!gate) return;
     box.dataset.tone = gate.tone;
     $("gate-title").textContent = gate.title;
-    $("gate-text").textContent = gate.text;
+    // The line says what holds the work and the button what frees it; a failed start's own error is Studio's to show (the
+    // whole line stays in the tooltip).
+    const said = gate.key === "parked" ? String(gate.text || "").replace(/\s*Last error: [\s\S]*$/, "") : gate.text;
+    $("gate-text").textContent = said;
+    box.title = said !== gate.text ? `${gate.title} ${gate.text}` : "";
     const button = $("gate-action");
     button.hidden = !gate.action;
     if (gate.action) {
@@ -98912,7 +99504,18 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     finally { suggestion.saving = false; if (id === projectId() && epoch === draftEpoch) renderEvolution(); }
   }
   function grow() { const input = $("input"); input.style.height = "auto"; input.style.height = `${Math.min(220, input.scrollHeight)}px`; }
-  function feedback(text, tone = "") { const node = $("feedback"); node.textContent = text; node.dataset.tone = tone; }
+  // The line under the box says what just happened. It is news for a while, then it would be stale (a QA pass on 2026-10-06
+  // still read "its first build is queued" after that build was verified): good news leaves after FEEDBACK_GOOD_MS and a
+  // warning after FEEDBACK_WARN_MS, unless something newer took its place. An error, or a note about work in flight
+  // ("Sizing it up…"), stays until the next thing you do.
+  const FEEDBACK_GOOD_MS = 20000, FEEDBACK_WARN_MS = 60000;
+  let feedbackTimer = 0;
+  function feedback(text, tone = "") {
+    const node = $("feedback"); node.textContent = text; node.dataset.tone = tone;
+    clearTimeout(feedbackTimer); feedbackTimer = 0;
+    const keep = tone === "good" ? FEEDBACK_GOOD_MS : tone === "warn" ? FEEDBACK_WARN_MS : 0;
+    if (text && keep) feedbackTimer = setTimeout(() => { feedbackTimer = 0; if (node.textContent === text) { node.textContent = ""; node.dataset.tone = ""; } }, keep);
+  }
   // ---- the sizing strip -------------------------------------------------------
   // Build it's wait, live under the box (renderer/vibe-flow.js): the quick
   // look, the lead planning the steps, then the board. It shows only when the
@@ -99860,6 +100463,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const vibe = () => window.MefiVibe;
   const page = () => document.documentElement;
   const v2 = () => page()?.dataset?.layout === "v2";
+  // Social (MefiVibe's "vibe" mode) keeps to people, rooms and a light eye on the work: details open in Studio (renderer/social.js).
+  const social = () => vibe()?.mode?.() === "vibe";
+  // A question's detail as Social says it: what is asked, without the run's last output or the check's command (Studio shows those).
+  const plainWords = (text) => String(text ?? "").replace(/\s+(?:Check: |Last output: )[\s\S]*$/, "").trim();
   const byId = (id) => document.getElementById(id);
 
   // ---- words and small helpers -----------------------------------------------------------------
@@ -100108,7 +100715,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       meta: `${task.verification?.state === "verified" ? "Verified" : "Done"} · ${ago(finishedAt(task), now)}`, more: [clip(task.verification?.reason, 140)].filter(Boolean) }));
     const notices = (Array.isArray(d.assistant?.messages) ? d.assistant.messages : []).filter((message) => message?.kind === "notice" && message.text && !String(message.taskId || "").startsWith("__")).slice(-4).reverse()
       .map((message) => ({ key: `note:${message.id || message.at}`, text: clip(message.text, 160), at: time(message.at) }));
-    return { needs, running, review, done, doneMore: Math.max(0, finished.length - done.length), latest: notices, total: needs.filter((card) => !card.decided).length + running.length + review.filter((card) => !card.decided).length + done.length };
+    // `hold` is what keeps queued work from starting (the gate under the box), for the heading over it.
+    return { needs, running, review, done, doneMore: Math.max(0, finished.length - done.length), latest: notices, hold: stopped ? gate : null, total: needs.filter((card) => !card.decided).length + running.length + review.filter((card) => !card.decided).length + done.length };
   }
 
   // ---- state ---------------------------------------------------------------------------------------
@@ -100248,10 +100856,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     else node.addEventListener("click", onClick);
     return node;
   }
-  function openTask(taskId, { projectId = null, from = null } = {}) {
+  function openTask(taskId, { projectId = null, from = null, tab = null } = {}) {
     if (!taskId) return false;
     closeInbox({ restore: false });
     if (from && typeof from.focus === "function") state.anchor = state.anchor || from;
+    // In Social a task's details are Studio's: its session opens there (renderer/social.js switches the mode first).
+    if (social() && window.MefiSocial?.openTask) return window.MefiSocial.openTask(String(taskId), { projectId: projectId || (state.data || {}).projectId || null, tab });
     // The one place that knows which route a session is: the session panels (layout v2) show a task as a thread, in a tab of
     // its own (the preview tab until you use it). Without them the task's own page is asked of the router, with the task: a
     // tab cannot say which task a board page shows (only a session is a place of its own), so the strip follows the route.
@@ -100266,6 +100876,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   function openChanges(taskId) {
     if (!taskId) return false;
     closeInbox({ restore: false });
+    if (social() && window.MefiSocial?.openTask) return window.MefiSocial.openTask(String(taskId), { tab: "changes" });
     const sessions = window.MefiSessions;
     if (sessions?.active?.() && sessions.open?.(String(taskId), { preview: true, tab: "changes" })) return true;
     return openTask(taskId);
@@ -100323,9 +100934,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     node.append(head, title);
     const under = item.from && item.from !== item.title ? item.from : item.facts;
     if (under) node.append(el("p", "today-need-from", under));
-    if (item.detail && !(ctx.compact && item.kind !== "question" && item.detail.length > 140)) node.append(el("p", "today-need-detail", ctx.compact ? clip(item.detail, 160) : item.detail));
+    // Social says what is asked and leaves the run's own lines (its last output, the check's command) to Studio.
+    const detail = social() ? plainWords(item.detail) : item.detail;
+    if (detail && !(ctx.compact && item.kind !== "question" && detail.length > 140)) node.append(el("p", "today-need-detail", ctx.compact ? clip(detail, 160) : detail));
     if (item.hint) node.append(el("p", "today-need-hint", item.hint));
-    if (!ctx.compact && item.evidence.length) node.append(el("pre", "today-need-evidence", item.evidence.join("\n")));
+    if (!ctx.compact && !social() && item.evidence.length) node.append(el("pre", "today-need-evidence", item.evidence.join("\n")));
     if (!ctx.compact && item.steps.length) { const list = el("ol", "today-need-steps"); for (const step of item.steps) list.append(el("li", "", step)); node.append(list); }
     // What can be done.
     const choices = el("div", "today-need-options");
@@ -100385,7 +100998,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (choices.children.length) node.append(choices);
     }
     const foot = el("div", "today-need-foot");
-    if (item.taskId) foot.append(button("Open task", "today-link", () => openTask(item.taskId, { from: ctx.anchor }), { title: "Open this task in a tab" }));
+    if (item.taskId) foot.append(social()
+      ? button("Open in Studio", "today-link", () => openTask(item.taskId, { from: ctx.anchor }), { title: "See the whole task, its changes and its checks in Studio" })
+      : button("Open task", "today-link", () => openTask(item.taskId, { from: ctx.anchor }), { title: "Open this task in a tab" }));
     foot.append(button(postponed ? "Decide now" : "Decide later", "today-link", () => later(item.key, !postponed), { title: postponed ? "Put it back where it was" : "Put it last for now; it still needs you" }));
     node.append(foot);
     if (state.errors.has(item.key)) { const note = el("p", "today-need-note", state.errors.get(item.key)); note.setAttribute("role", "alert"); node.append(note); }
@@ -100396,6 +101011,9 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // scroll stay where they were) and rebuilding only what moved on. A rebuilt card that held the focus hands it
   // to its successor (the answer box keeps its caret, anything else lands on the card), and a card that left
   // hands it to the list, so the keyboard never falls out to the page.
+  // What Tab can reach inside a card, in order: a rebuilt card gives the focus back to the control at the same place in it.
+  const FOCUSABLE = "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])";
+  const controlsOf = (node) => { try { return [...(node.querySelectorAll?.(FOCUSABLE) ?? [])]; } catch { return []; } };
   function reconcile(host, entries) {
     const cache = state.painted.get(host) || new Map();
     state.painted.set(host, cache);
@@ -100407,7 +101025,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       if (hit && hit.sig === entry.sig) { wanted.push(hit.node); continue; }
       const node = entry.build();
       if (hit?.node?.parentNode === host) {
-        if (held && hit.node.contains?.(held)) successor = { node, field: /^input$/i.test(held.tagName || "") };
+        if (held && hit.node.contains?.(held)) successor = { node, field: /^input$/i.test(held.tagName || ""), index: controlsOf(hit.node).indexOf(held) };
         host.insertBefore(node, hit.node); hit.node.remove();
       }
       cache.set(entry.key, { node, sig: entry.sig });
@@ -100418,8 +101036,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const now = host.children;
     if (now.length !== wanted.length || wanted.some((node, index) => now[index] !== node)) host.replaceChildren(...wanted);
     if (held && successor && !host.contains?.(held)) {
+      // The answer box keeps its caret; any other control hands the focus to the one at its place in the rebuilt card (a
+      // card's "4 min" turning "5 min" rebuilds it, and the keyboard used to fall out to the page), else the card.
       const field = successor.field ? successor.node.querySelector?.("input") : null;
-      const target = field || successor.node;
+      const controls = field ? [] : controlsOf(successor.node);
+      const target = field || (successor.index >= 0 ? controls[successor.index] : null) || controls[0] || successor.node;
       try { target.focus?.({ preventScroll: true }); if (field) field.setSelectionRange?.(field.value.length, field.value.length); } catch { /* not focusable */ }
     }
   }
@@ -100640,6 +101261,29 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     pageWired = true;
     byId("inbox-close")?.addEventListener("click", () => window.MefiNav?.close?.("inbox") ?? closeInboxPage());
     byId("today-close")?.addEventListener("click", () => window.MefiNav?.close?.("today") ?? closeTodayPage());
+    byId("activity-close")?.addEventListener("click", () => window.MefiNav?.close?.("activity") ?? closeActivityPage());
+    byId("activity-studio")?.addEventListener("click", () => { closeActivityPage(); window.MefiSocial?.openInStudio?.("workspace"); });
+  }
+  // Social's Activity: the open project's work in one list (the Home's rows, all of them), a page in Social's rail.
+  function openActivityPage(params = {}) {
+    if (!state.on || !byId("activity-overlay")) return false;
+    wirePages();
+    window.MefiNav?.claim?.("activity");
+    byId("activity-overlay").hidden = false;
+    state.pageOpen = "activity";
+    startClock();
+    paint();
+    if (params?.focus !== false) requestAnimationFrame?.(() => byId("activity-close")?.focus?.({ preventScroll: true }));
+    return true;
+  }
+  function closeActivityPage() {
+    const overlay = byId("activity-overlay");
+    if (!overlay || overlay.hidden) return false;
+    overlay.hidden = true;
+    if (state.pageOpen === "activity") state.pageOpen = null;
+    window.MefiNav?.release?.("activity");
+    stopClockIfIdle();
+    return true;
   }
   function openInboxPage(params = {}) {
     if (!state.on || !byId("inbox-overlay")) return false;
@@ -100740,47 +101384,101 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // The prototype's four columns (Done holds what finished today), each with its own words when it is empty.
   const GROUPS = [["needs", "Needs you"], ["running", "Running"], ["review", "Review"], ["done", "Done"]];
   const GROUP_EMPTY = { needs: "Nothing is waiting on you.", running: "Nothing is running.", review: "Nothing to review.", done: "Nothing finished yet today." };
+  // Social's list (its Home and Activity, data-style="list"): what waits its turn has a heading of its own, and a group with
+  // nothing in it takes no room. One set of words for where a task stands, everywhere: needs you, running, up next (or what
+  // holds it: paused, agents off, no AI), ready to review, done.
+  const LIST_GROUPS = [["needs", "Needs you"], ["running", "Running"], ["queued", "Up next"], ["review", "In review"], ["done", "Done today"]];
+  const QUEUE_HEAD = { paused: "Paused", held: "Agents off", key: "No AI connected" };
+  // A card waiting its turn is "next" in the model (boardOf), filed with Running there; the list gives it its own group. The list
+  // also files a result waiting for your review under Needs you, so its heading counts what the "N need you" pill and the Inbox
+  // count; In review keeps what is being checked and plans.
+  function groupCards(board, key, style) {
+    const running = Array.isArray(board.running) ? board.running : [];
+    const review = Array.isArray(board.review) ? board.review : [];
+    if (key === "queued") return running.filter((card) => card.tone === "next");
+    if (style === "list") {
+      if (key === "running") return running.filter((card) => card.tone !== "next");
+      if (key === "needs") return [...(Array.isArray(board.needs) ? board.needs : []), ...review.filter((card) => card.item)];
+      if (key === "review") return review.filter((card) => !card.item);
+    }
+    return Array.isArray(board[key]) ? board[key] : [];
+  }
+  // What a heading says and counts. Running counts what runs, never what waits: a column with nothing running and only
+  // queued work is named for the queue ("Up next", or "Paused" while new work is paused), not "Running 0" over queued cards.
+  function groupHead(board, key, label, style) {
+    const cards = groupCards(board, key, style);
+    if (key === "running" && style !== "list") {
+      const live = cards.filter((card) => card.tone !== "next");
+      if (live.length || !cards.length) return { label, count: live.length };
+      return { label: QUEUE_HEAD[board.hold] || "Up next", count: cards.length };
+    }
+    if (key === "queued") return { label: QUEUE_HEAD[board.hold] || label, count: cards.length };
+    return { label, count: cards.filter((card) => !card.decided && !card.stopped).length };
+  }
   // What a card says, time included (its meta carries "4 min"), so it is rebuilt exactly when something it shows has changed.
   const cardSignature = (card, detail) => JSON.stringify([card.key, card.title, card.meta, card.q ?? null, card.acts ?? null, card.progress ?? null, card.worktree ?? false, card.quick?.map((option) => option.id) ?? null, card.item ? state.busy.has(card.item.key) : 0,
     card.item ? state.errors.get(card.item.key) ?? null : null, card.decided ? [card.item.handled.label, Boolean(card.item.handled.undo)] : 0, detail, card.more]);
   // The four groups stay put as nodes (all four while a project is open, each saying so when it is empty, as the prototype's board);
   // their cards are kept or rebuilt one by one, so a push that changes one card leaves the others, and any answer being typed, alone.
-  function paintBoard(holder, current, detail) {
+  // Social's list (style "list") shows a group only while it holds something; `caps` keeps each to a few rows (Social's Home) with
+  // the rest one press away on Activity.
+  function paintBoard(holder, current, detail, { style = "board", caps = null } = {}) {
     const now = Date.now();
     const groups = holder.querySelector?.(".today-groups") || holder;
-    const shown = current.projectId ? GROUPS : [];
+    const shown = current.projectId ? (style === "list" ? LIST_GROUPS : GROUPS) : [];
     holder.dataset.groups = String(shown.length);
-    reconcile(groups, shown.map(([key, label]) => ({
-      key, sig: `${key}|${label}`,
+    reconcile(groups, shown.map(([key]) => ({
+      key, sig: `${key}|${style}`,
       build: () => {
         const group = el("section", "today-group");
-        group.dataset.group = key; group.setAttribute("aria-label", label);
-        const heading = el("h3", "", label); heading.append(el("span", "today-count", ""));
-        const empty = el("p", "today-col-empty", GROUP_EMPTY[key]); empty.hidden = true;
+        group.dataset.group = key;
+        const heading = el("h3", "");
+        heading.append(el("span", "today-group-name", ""), el("span", "today-count", ""));
+        const empty = el("p", "today-col-empty", GROUP_EMPTY[key] || ""); empty.hidden = true;
         group.append(heading, el("div", "today-cards"), empty);
         return group;
       },
     })));
     for (const group of [...groups.children]) {
       const key = group.dataset?.group;
-      if (!key || !current.board[key]) continue;
-      const cards = current.board[key];
+      const entry = shown.find(([id]) => id === key);
+      if (!entry) continue;
+      const head = groupHead(current.board, key, entry[1], style);
+      const name = group.querySelector(".today-group-name");
+      if (name && name.textContent !== head.label) { name.textContent = head.label; group.setAttribute("aria-label", head.label); }
       const count = group.querySelector(".today-count");
-      const open = cards.filter((card) => !card.decided && !card.stopped).length;
-      if (count && count.textContent !== String(open)) count.textContent = String(open);
+      if (count && count.textContent !== String(head.count)) count.textContent = String(head.count);
+      const cards = groupCards(current.board, key, style);
+      const cap = caps && Number.isFinite(caps[key]) ? caps[key] : Infinity;
+      // A cap counts what still waits. A Decided line is not counted: it keeps its place for the few seconds it shows, so an
+      // answer reads where it was given, and it never pushes a card that needs you behind "N more" (three answers in a row
+      // used to hide the fourth question until their lines went).
+      const live = cards.filter((card) => !card.decided);
+      const shownLive = new Set(live.slice(0, cap));
+      const kept = cards.filter((card) => card.decided || shownLive.has(card));
       const list = group.querySelector(".today-cards");
-      reconcile(list, cards.map((card) => ({ key: card.key, sig: cardSignature(card, detail), build: () => renderCard(card, detail) })));
+      reconcile(list, kept.map((card) => ({ key: card.key, sig: cardSignature(card, detail), build: () => renderCard(card, detail) })));
       const empty = group.querySelector(".today-col-empty");
-      if (empty && empty.hidden !== (cards.length > 0)) empty.hidden = cards.length > 0;
-      if (key === "done") {
-        let more = group.querySelector(".today-more");
-        if (current.board.doneMore && !more) { more = button("", "today-link today-more", () => window.MefiNav?.go?.("tasks", { filter: "done" }), { title: "All finished work" }); group.append(more); }
-        if (more) { more.hidden = !current.board.doneMore; more.textContent = `${current.board.doneMore} more`; }
+      // A list hides a group with nothing in it; the board's columns stay and say they are empty.
+      if (style === "list") { if (group.hidden !== (cards.length === 0)) group.hidden = cards.length === 0; if (empty) empty.hidden = true; }
+      else if (empty && empty.hidden !== (cards.length > 0)) empty.hidden = cards.length > 0;
+      // "N more": rows Home leaves for Activity, and finished work past the day's six, which is the task board's.
+      const capped = live.length - shownLive.size;
+      const extra = (style === "list" ? capped : 0) + (key === "done" ? current.board.doneMore : 0);
+      let more = group.querySelector(".today-more");
+      if (extra > 0 && !more) {
+        more = button("", "today-link today-more", () => (more.dataset.to === "activity" ? window.MefiNav?.go?.("activity") : window.MefiNav?.go?.("tasks", { filter: "done" })));
+        group.append(more);
+      }
+      if (more) {
+        more.dataset.to = style === "list" && capped > 0 ? "activity" : "tasks";
+        more.title = more.dataset.to === "activity" ? "Everything in Activity" : "All finished work";
+        more.hidden = !(extra > 0); more.textContent = `${extra} more`;
       }
     }
     const feed = holder.querySelector?.(".today-latest");
     if (feed) {
-      const notes = detail === "titles" ? [] : current.board.latest;
+      const notes = detail === "titles" || style === "list" ? [] : current.board.latest;
       feed.hidden = notes.length === 0;
       reconcile(feed.querySelector(".today-latest-rows") || feed, notes.map((note) => ({ key: note.key, sig: `${note.text}|${Math.floor(now / 60000)}`, build: () => { const row = el("li", "today-latest-row"); row.append(el("i", "today-dot"), el("span", "", note.text), el("time", "", ago(note.at, now))); return row; } })));
     }
@@ -100798,8 +101496,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     holder.append(node);
     return node;
   }
-  function paintSummary(holder, current) {
-    const needs = current.count, running = current.board.running.filter((card) => card.tone === "live").length, review = current.board.review.filter((card) => !card.decided).length;
+  // In Social's list a result waiting for your review is under Needs you (and in "N need you"), so its chip counts what the list
+  // calls In review: what is being checked, and plans.
+  function paintSummary(holder, current, style = "board") {
+    const needs = current.count, running = current.board.running.filter((card) => card.tone === "live").length;
+    const review = current.board.review.filter((card) => !card.decided && !(style === "list" && card.item)).length;
     const set = (key, tag, words, on) => {
       const node = chip(holder, key, tag);
       node.hidden = !on;
@@ -100809,13 +101510,18 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     set("need", "button", `${needs} ${needs === 1 ? "needs" : "need"} you`, needs > 0);
     set("clear", "span", "All clear", needs === 0);
     set("run", "span", `${running} running`, running > 0);
-    set("rev", "span", `${review} to review`, review > 0);
+    set("rev", "span", style === "list" ? `${review} in review` : `${review} to review`, review > 0);
   }
 
-  // Everything Today shows, on whichever host is up: the front door's own page, and the Today page Build opens.
+  // Everything Today shows, on whichever host is up: Social's Home (the front door's own page) and its Activity page draw
+  // the list (style "list": a group only while it holds something), Social's Home a few rows of each; the Today page Studio
+  // opens draws the prototype's four columns.
+  const HOME_CAPS = Object.freeze({ needs: 3, running: 3, queued: 2, review: 2, done: 3 });
+  const QUIET_LIST = "All quiet: nothing needs you and nothing is running. Ask Mefi above to start something.";
   const HOSTS = [
-    { id: "vibe", summary: "today-summary", quiet: "today-quiet", board: "today-board", up: () => state.host === "vibe", none: "Pick a project to begin: choose one from the project name above." },
-    { id: "page", summary: "today-overlay-summary", quiet: "today-overlay-quiet", board: "today-overlay-board", up: () => byId("today-overlay")?.hidden === false, none: "Pick a project to begin: choose one from the project menu." },
+    { id: "vibe", summary: "today-summary", quiet: "today-quiet", board: "today-board", style: "list", caps: HOME_CAPS, up: () => state.host === "vibe", none: "Pick a project to begin: open Projects, or choose one from the project name above." },
+    { id: "page", summary: "today-overlay-summary", quiet: "today-overlay-quiet", board: "today-overlay-board", style: "board", caps: null, up: () => byId("today-overlay")?.hidden === false, none: "Pick a project to begin: choose one from the project menu." },
+    { id: "activity", summary: "activity-summary", quiet: "activity-quiet", board: "activity-board", style: "list", caps: null, up: () => byId("activity-overlay")?.hidden === false, none: "Pick a project to begin: open Projects and choose one." },
   ];
   function paintToday() {
     const current = model();
@@ -100825,16 +101531,26 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const board = byId(host.board);
       if (!board) continue;
       const summary = byId(host.summary), quiet = byId(host.quiet);
-      if (summary) paintSummary(summary, current);
-      // With a project open the four columns say what is empty; without one, this line says what to do.
+      if (summary) paintSummary(summary, current, host.style);
+      // With a project open the four columns say what is empty, and the list says it once, here; without one, this line says what to do.
       if (quiet) {
-        const hasProject = Boolean(current.projectId);
-        quiet.hidden = hasProject;
-        quiet.textContent = hasProject ? "" : host.none;
+        const words = !current.projectId ? host.none : host.style === "list" && !current.board.total ? QUIET_LIST : "";
+        quiet.hidden = !words;
+        if (quiet.textContent !== words) quiet.textContent = words;
       }
-      paintBoard(board, current, detail);
+      paintBoard(board, current, detail, { style: host.style, caps: host.caps });
     }
     if (homeShowing()) paintHome(current);
+  }
+  // Social's rail carries what waits on you on Activity's stop (renderer/booklet.template.html #vibe-rail-needs).
+  function paintRailCount(total) {
+    const badge = byId("vibe-rail-needs");
+    if (!badge) return;
+    const words = total > 0 ? String(total) : "";
+    if (badge.textContent !== words) badge.textContent = words;
+    if (badge.hidden !== !words) badge.hidden = !words;
+    const stop = byId("vibe-rail-activity");
+    if (stop) stop.setAttribute("aria-label", total > 0 ? `Activity, ${total} need${total === 1 ? "s" : ""} you` : "Activity");
   }
 
   // ---- hosts ------------------------------------------------------------------------------------------------
@@ -100852,13 +101568,28 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const summary = el("div", "today-summary"); summary.id = "today-summary"; summary.setAttribute("role", "group"); summary.setAttribute("aria-label", "What is happening");
     const slot = el("div", "today-box");
     const quiet = el("p", "today-quiet"); quiet.id = "today-quiet"; quiet.hidden = true; quiet.setAttribute("role", "status");
-    const board = el("div", "today-board"); board.id = "today-board";
+    const board = el("div", "today-board"); board.id = "today-board"; board.dataset.style = "list";
     const groups = el("div", "today-groups");
     const latest = el("section", "today-latest"); latest.hidden = true; latest.setAttribute("aria-label", "Latest");
     const latestRows = el("ul", "today-latest-rows");
     latest.append(el("h3", "", "Latest"), latestRows);
     board.append(groups, latest);
-    column.append(row, slot, quiet, board);
+    // Under the box, Social's Home is your work in short beside your friends (a QA pass on 2026-10-06 found it read as an agent
+    // dashboard): a few rows of what needs you, runs, waits, wants a look and finished, with Activity for the rest and Studio for
+    // the details, and the Friends card (renderer/social.js) with who is online, the rooms open now and what friends shared.
+    const grid = el("div", "today-social");
+    const work = el("section", "social-card social-work"); work.id = "today-work"; work.setAttribute("aria-labelledby", "today-work-title");
+    const workHead = el("header", "social-card-head");
+    const workTitle = el("h2", "social-card-title", "Your work"); workTitle.id = "today-work-title";
+    const links = el("span", "social-card-links");
+    links.append(button("See all", "social-link", () => window.MefiNav?.go?.("activity"), { title: "Everything that needs you, runs, waits and finished, in Activity" }),
+      button("Open in Studio", "social-link", () => window.MefiSocial?.openInStudio?.("workspace"), { title: "Sessions, changes, checks and logs, in Studio" }));
+    workHead.append(workTitle, links);
+    work.append(workHead, quiet, board);
+    grid.append(work);
+    const people = window.MefiSocial?.peopleCard?.();
+    if (people) grid.append(people);
+    column.append(row, slot, grid);
     scroll.append(column); today.append(scroll);
     // Under the front door's own top bar, which stays (the project, New app, the conversation, Settings, an update waiting), so Tab reads the page
     // top to bottom; its stage and dock step aside (today.css). The sky is out of flow behind everything.
@@ -100887,6 +101618,24 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       button.append(key); button.setAttribute("aria-keyshortcuts", shortcut);
       (state.added ||= []).push(() => { key.remove?.(); button.removeAttribute?.("aria-keyshortcuts"); });
     }
+    // Social's box is one conversation with one action: Send talks with Mefi, who offers to build what it hears (main.cjs turns a
+    // card the model would file into an offer while you talk), and Ctrl Enter still builds at once. Build it, the permission mode,
+    // the answer styles and the starting points step aside here (social.css); Studio's own box keeps every one of them.
+    const talk = byId("vibe-talk");
+    const said = talk ? [...(talk.childNodes ?? [])].find((child) => child.nodeType === 3 && child.textContent.trim()) : null;
+    if (talk && said) {
+      const was = { text: said.textContent, title: talk.title || "", quiet: Boolean(talk.classList?.contains?.("quiet")) };
+      said.textContent = "Send";
+      talk.title = "Send to Mefi (Enter). Mefi offers to build what you describe; Ctrl Enter builds it right away.";
+      talk.classList?.remove?.("quiet"); talk.classList?.add?.("primary");
+      (state.added ||= []).push(() => { said.textContent = was.text; talk.title = was.title; talk.classList?.remove?.("primary"); if (was.quiet) talk.classList?.add?.("quiet"); });
+    }
+    const input = byId("vibe-input");
+    if (input) {
+      const was = input.placeholder;
+      input.placeholder = "Ask Mefi anything, or describe something to make…";
+      (state.added ||= []).push(() => { input.placeholder = was; });
+    }
     return today;
   }
   function show() {
@@ -100897,6 +101646,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     state.host = "vibe";
     if (layer.dataset) layer.dataset.today = "on";
     paint(); startClock();
+    // The Friends card (renderer/social.js) reads nothing while Home is away; back on Home it catches up.
+    byId("social-people")?.wake?.();
     return true;
   }
   function hide() {
@@ -100911,6 +101662,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const { node, parent, next } of [...(state.parts || [])].reverse()) { if (parent) parent.insertBefore(node, next && next.parentNode === parent ? next : null); }
     state.parts = null;
     for (const undo of (state.added || []).splice(0)) { try { undo(); } catch { /* already gone */ } }
+    const people = byId("social-people");
+    people?.dispose?.();
     byId("today-page")?.remove();
     if (layer?.dataset) delete layer.dataset.today;
     state.host = null;
@@ -101363,11 +102116,12 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (!state.on) return;
     sweepHandled();
     announce();
-    if (state.host === "vibe" || byId("today-overlay")?.hidden === false || homeShowing()) paintToday();
+    paintRailCount(model().count);
+    if (state.host === "vibe" || byId("today-overlay")?.hidden === false || byId("activity-overlay")?.hidden === false || homeShowing()) paintToday();
     if (state.inbox.open) paintInbox();
     if (byId("inbox-overlay")?.hidden === false) paintInboxPage();
   }
-  const visible = () => state.host === "vibe" || state.inbox.open || homeShowing() || byId("today-overlay")?.hidden === false || byId("inbox-overlay")?.hidden === false;
+  const visible = () => state.host === "vibe" || state.inbox.open || homeShowing() || byId("today-overlay")?.hidden === false || byId("inbox-overlay")?.hidden === false || byId("activity-overlay")?.hidden === false;
   // One slow clock while something is showing, so "4 min" and the decided lines stay true without a timer per card.
   function startClock() {
     if (state.clock || !visible()) return;
@@ -101460,6 +102214,14 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       open: (params) => openInboxPage(params), close: () => closeInboxPage(), isOpen: () => overlayOpen("inbox-overlay"),
     });
     nav.register({
+      id: "activity", label: "Activity", short: "Activity", kind: "overlay", layer: "sheet", section: "home", group: "surfaces", key: null, glyph: "g-activity", badge: null,
+      desc: "What needs you, what's running, what's next and what finished today, in one list",
+      searchTerms: "activity work tasks progress running queued up next paused done today needs you social list",
+      showIn: showIn({ palette: true }), hidden: () => vibe()?.mode?.() !== "vibe",
+      element: "activity-overlay", focus: "#activity-close",
+      open: (params) => openActivityPage(params), close: () => closeActivityPage(), isOpen: () => overlayOpen("activity-overlay"),
+    });
+    nav.register({
       id: "home-chat", label: "Open the conversation", short: "Conversation", kind: "action", layer: null, section: "home", group: "surfaces", key: null, glyph: "g-chat", badge: null,
       paletteGroup: "Actions", desc: "Studio's Home as it was: the conversation with Mefi, the queue, Activity and the app preview",
       searchTerms: "conversation chat talk message assistant mefi classic home queue activity preview",
@@ -101498,7 +102260,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   function stop() {
     if (!state.on) return false;
-    closeInbox({ restore: false }); closeInboxPage(); closeTodayPage();
+    closeInbox({ restore: false }); closeInboxPage(); closeTodayPage(); closeActivityPage();
     restore();
     unmountHome();
     state.home.node?.remove?.(); state.home.tools?.remove?.();
@@ -101519,7 +102281,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   window.MefiToday = {
     start, stop, show, hide, isOn: () => state.on, takesNeeds: () => state.on,
     count, items, needTasks, onChange, openInbox, closeInbox, toggleInbox, isInboxOpen: inboxIsOpen, ownsKeys, openInboxPage, closeInboxPage, openPage: openTodayPage, closePage: closeTodayPage,
-    openNeed, openFromAlert, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
+    openNeed, openFromAlert, openActivity: openActivityPage, closeActivity: closeActivityPage, refresh: () => Promise.resolve(vibe()?.refresh?.()).then(() => { onData(); }),
     // Build's Home (layout v2): workspace.js asks when Home comes and goes and when its box sends; the router's view "chat" is the classic Home.
     syncHome, hostsComposer: () => state.home.on, composerChanged: () => { if (state.home.on) paintHomeTools(); }, homeView: () => state.homeView, openChat, suggest: () => homeSuggest(),
     // For tests and anything driving Studio: the pure model, and what is in flight.
@@ -101527,6 +102289,365 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();
+})();
+
+// Social: the mode for people, rooms, what friends make and a simple talk with Mefi (window.MefiSocial).
+//
+// A QA pass on 2026-10-06 found Social reading as a development dashboard with a social area attached: Friends only
+// through Search, worktrees, Fleet, Trace, models, the machine's load and Git in every corner, eight choices around the
+// one box. Studio owns detailed building now; this file is what keeps Social to its own places.
+//
+// - Which pages stay in Social (PAGES): Home, Friends, Projects, Activity, the Inbox, Settings, Size and the setup guide.
+//   Any other page (the Map, the boards, Team, Fleet, Trace, Worktrees, the model pages) and any session opens in Studio:
+//   renderer/nav.js go() asks studioOnly() and switches the mode before it goes, so the page and what it was opened with
+//   are kept. openInStudio() is the same on purpose, for an "Open in Studio" button. Search and the tab strip still list
+//   everything; choosing a Studio page from Social is the switch.
+// - The Friends card on Social's Home (peopleCard): who is online and where, the rooms open now and what friends shared
+//   this week, read from the relay's front page (main's hub:room "front", the read The Lobby makes) once a minute while
+//   it shows and the window can be seen. Signed out, it is one line and the way to The Lobby's sign-in. Everything is
+//   text (textContent); nothing from the relay becomes a link.
+// - Projects (route "projects"): your projects to open (MefiWorkspace.selectProject, which asks before it stops working
+//   agents), New app (renderer/vibe-panels.js) and the way to what friends shared (Friends › Project hub).
+// Activity (route "activity") is renderer/today.js's: the open project's work in one list.
+(function () {
+  "use strict";
+  const bridge = () => window.mefiStudio;
+  const nav = () => window.MefiNav;
+  const el = (tag, className, text) => { const node = document.createElement(tag); if (className) node.className = className; if (text !== undefined && text !== null) node.textContent = String(text); return node; };
+  const button = (label, className, run, { id = null, title = "" } = {}) => {
+    const node = el("button", className, label);
+    node.type = "button";
+    if (id) node.id = id;
+    if (title) node.title = title;
+    node.addEventListener("click", run);
+    return node;
+  };
+  const socialMode = () => window.MefiVibe?.mode?.() === "vibe";
+  // Kill switches, per device (localStorage): "mefiStudio.social.allPages" = "on" opens every page inside Social's rail again,
+  // as before 2026-10-06; "mefiStudio.social.friendsCard" = "off" leaves the Friends card off Social's Home.
+  const read = (key) => { try { return globalThis.localStorage?.getItem?.(key) ?? null; } catch { return null; } };
+  const allPages = () => read("mefiStudio.social.allPages") === "on";
+  const friendsCardOff = () => read("mefiStudio.social.friendsCard") === "off";
+  const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+  const initials = (name) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase() || "?";
+  // A steady colour per member, from their id (The Lobby's own rule, renderer/friends-front.js).
+  const hue = (id) => [...String(id)].reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) % 360, 7);
+  const KINDS = { game: "game", app: "app", tool: "tool", art: "art", music: "music", other: "project" };
+  const goFriends = (place, extra = {}) => nav()?.go?.("friends-page", { place, ...extra });
+
+  // ---- which pages are Social's --------------------------------------------------------------------------------
+  // Pages, not actions or Search: an action (Pause agents, a Friends way in) runs where it is. Any page filed under Settings,
+  // Help or Friends is Social's too, so a Settings page added later needs no line here.
+  const PAGES = Object.freeze(["vibe", "friends-page", "inbox", "projects", "activity", "studio", "size", "setup-helper"]);
+  const SOCIAL_SECTIONS = Object.freeze(["settings", "help", "friends"]);
+  function studioOnly(id, params = {}) {
+    if (!socialMode() || typeof id !== "string" || allPages()) return false;
+    // Home stays Social's; a session (a task's thread) or the classic chat view is Studio's.
+    if (id === "workspace") return Boolean(params && typeof params === "object" && params.view);
+    if (PAGES.includes(id)) return false;
+    const dest = nav()?.get?.(id);
+    if (!dest || dest.kind === "action" || dest.layer === "transient") return false;
+    return !SOCIAL_SECTIONS.includes(dest.section);
+  }
+  let toldOnce = false;
+  // Leave Social for Studio, keeping the page under it: what nav.js go() does before it opens a Studio page asked for from
+  // Social. The first time in a session a note says where you are and the way back.
+  function toStudio() {
+    if (!socialMode()) return false;
+    window.MefiVibe?.setMode?.("build", { go: false });
+    if (!toldOnce) {
+      toldOnce = true;
+      window.MefiToast?.("Opened in Studio, where the details live. The Social switch at the top (Ctrl M) goes back.", "info");
+    }
+    return true;
+  }
+  // "Open in Studio": the switch, then the page.
+  function openInStudio(id, params = {}) {
+    toStudio();
+    return nav()?.go?.(id, params);
+  }
+  // A task opens as its session in Studio (renderer/sessions.js; `tab` picks the inspector's tab, "changes" for a result to
+  // review), or on Studio's board where sessions are off.
+  function openTask(taskId, { projectId = null, tab = null } = {}) {
+    if (!taskId) return false;
+    const id = String(taskId);
+    toStudio();
+    const sessions = window.MefiSessions;
+    if (sessions?.active?.() && sessions.open?.(id, { preview: true, ...(tab ? { tab } : {}) })) return true;
+    nav()?.go?.("tasks", { taskId: id, ...(projectId ? { projectId } : {}), filter: "all" });
+    return true;
+  }
+
+  // ---- the Friends card on Social's Home ---------------------------------------------------------------------------
+  // Home is up most of the day, so the card asks the relay sparingly: once when it shows, then every five minutes while it
+  // can be seen, and again when the window comes back after a minute away (every read is one request on the relay's daily
+  // budget; The Lobby, open now and then, reads every minute).
+  const REFRESH_MS = 5 * 60_000;
+  const WAKE_AFTER_MS = 60_000;
+  const MAX_PEOPLE = 6, MAX_ROOMS = 3, MAX_SHARED = 3;
+  function peopleCard() {
+    const root = el("section", "social-card social-people");
+    root.id = "social-people";
+    root.setAttribute("aria-labelledby", "social-people-title");
+    const head = el("header", "social-card-head");
+    const title = el("h2", "social-card-title", "Friends");
+    title.id = "social-people-title";
+    const online = el("span", "social-online");
+    online.hidden = true;
+    head.append(title, online);
+    const body = el("div", "social-card-body");
+    const foot = el("div", "social-card-foot");
+    foot.append(button("Open the Lobby", "social-link", () => goFriends("lobby"), { id: "social-people-lobby" }),
+      button("Rooms", "social-link", () => goFriends("rooms")));
+    root.append(head, body, foot);
+    const api = bridge();
+    // No room service in this build (a test page, the web preview), or the card switched off: it is not drawn at all.
+    if (typeof api?.hubStatus !== "function" || typeof api?.hubRoom !== "function" || friendsCardOff()) { root.hidden = true; root.dataset.state = "unavailable"; return root; }
+    let timer = 0, seq = 0, tried = false, readAt = 0;
+    const gone = () => root.isConnected === false;
+    // Social's Home stays in the page while Studio is up (its layer is hidden): the card reads nothing until it is seen again.
+    const seen = () => document.visibilityState !== "hidden" && (typeof root.getClientRects !== "function" || root.getClientRects().length > 0);
+    const schedule = (ms = REFRESH_MS) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = 0;
+        if (gone()) return;
+        if (!seen()) { schedule(); return; }
+        void load();
+      }, ms);
+    };
+    const say = (state, words, ...actions) => {
+      root.dataset.state = state;
+      online.hidden = true;
+      foot.hidden = state !== "ready";
+      const line = el("p", "social-card-note", words);
+      line.setAttribute("role", "status");
+      body.replaceChildren(line, ...(actions.length ? [el("div", "social-card-actions")] : []));
+      if (actions.length) body.lastChild.append(...actions);
+    };
+    async function load() {
+      const mine = ++seq;
+      let hub = null;
+      try { hub = (await api.hubStatus())?.status ?? null; } catch { hub = null; }
+      if (gone() || mine !== seq) return;
+      if (!hub?.configured) { say("unavailable", "Friends needs the room service, which this copy of Studio can't reach."); return; }
+      if (!hub.linked) {
+        say("signed-out", "See who's online, join a room and share what you make.",
+          button("Sign in with Discord", "social-btn primary", () => goFriends("lobby"), { id: "social-people-signin", title: "The Lobby asks Discord once, in your browser" }));
+        return;
+      }
+      if (hub.state !== "ready") {
+        // Signed in and not connected yet: looking at Friends is the ask, as The Lobby does it.
+        if (hub.state === "off" && !hub.error && !tried && typeof api.hubConnect === "function") {
+          tried = true;
+          say("connecting", "Connecting to Friends…");
+          try { await api.hubConnect(); } catch { /* the next look says why */ }
+          if (!gone() && mine === seq) void load();
+          return;
+        }
+        const words = window.MefiFriendsFront?.hubState?.(hub)?.text || "Not connected to Friends yet.";
+        say(hub.state || "off", words, button("Open Friends", "social-btn", () => goFriends("lobby")));
+        schedule();
+        return;
+      }
+      if (!hub.front) { say("ready", "You're connected. The Lobby shows who's here."); foot.hidden = false; return; }
+      let page = null;
+      try { page = await api.hubRoom("front"); } catch { page = null; }
+      if (gone() || mine !== seq) return;
+      if (!page?.ok) { if (root.dataset.state !== "ready") say("error", "Friends could not be read just now. It tries again in a minute."); schedule(); return; }
+      readAt = Date.now();
+      paint(page, hub.user?.id ?? null);
+      schedule();
+    }
+    function paint(page, me) {
+      root.dataset.state = "ready";
+      foot.hidden = false;
+      const people = (Array.isArray(page.online?.people) ? page.online.people : []).filter((person) => person && person.id !== me);
+      const count = Number(page.online?.count) || 0;
+      online.hidden = false;
+      online.replaceChildren(el("i", "social-dot"), document.createTextNode(` ${count} online`));
+      const parts = [];
+      const list = el("ul", "social-people-list");
+      list.setAttribute("aria-label", "Online now");
+      for (const person of people.slice(0, MAX_PEOPLE)) {
+        const item = el("li", "social-person");
+        item.dataset.person = String(person.id);
+        const face = el("span", "social-face", initials(person.name));
+        face.style.setProperty("--who-hue", String(hue(person.id)));
+        face.setAttribute("aria-hidden", "true");
+        const where = person.where ? (person.where.id === "lobby" ? "In the Lobby" : `In ${person.where.name}`) : person.building?.project ? `Building ${person.building.project}` : "In Studio";
+        const words = el("span", "social-person-text");
+        words.append(el("b", "", person.name), el("small", "", where));
+        const open = button("", "social-person-go", () => (person.where && person.where.id !== "lobby" ? goFriends("rooms", { room: person.where.id }) : goFriends("lobby")));
+        open.setAttribute("aria-label", `${person.name}, ${where.toLowerCase()}. ${person.where && person.where.id !== "lobby" ? "Open the room." : "Open the Lobby."}`);
+        open.append(face, words);
+        item.append(open);
+        list.append(item);
+      }
+      if (!people.length) list.append(el("li", "social-empty", "Nobody else is on right now. The Lobby has your invite code."));
+      parts.push(list);
+      const rooms = (Array.isArray(page.rooms) ? page.rooms : []).filter((room) => room && room.status !== "closed").slice(0, MAX_ROOMS);
+      if (rooms.length) {
+        const box = el("div", "social-subsection");
+        box.append(el("h3", "social-subhead", "Rooms open now"));
+        const roomList = el("ul", "social-rows");
+        for (const room of rooms) {
+          const item = el("li", "social-row");
+          const here = Number(room.here) || 0;
+          const words = el("span", "social-row-text");
+          words.append(el("b", "", room.name), el("small", "", [room.kind === "cowork" ? "Cowork" : room.kind === "listen" ? "Listening" : "Hangout", here ? `${here} here now` : plural(Number(room.memberCount) || 0, "person", "people")].join(" · ")));
+          const member = ["owner", "member", "host"].includes(room.you);
+          item.append(words, button(member ? "Open" : "Join", "social-btn", () => goFriends("rooms", { room: room.id }), { title: member ? `Open ${room.name}` : `Ask to join ${room.name}` }));
+          roomList.append(item);
+        }
+        box.append(roomList);
+        parts.push(box);
+      }
+      const shared = [page.top, ...(Array.isArray(page.fresh) ? page.fresh : [])].filter((project) => project && project.title);
+      const seen = new Set();
+      const unique = shared.filter((project) => (seen.has(project.id) ? false : seen.add(project.id)));
+      if (unique.length) {
+        const box = el("div", "social-subsection");
+        box.append(el("h3", "social-subhead", "Shared this week"));
+        const sharedList = el("ul", "social-rows");
+        for (const project of unique.slice(0, MAX_SHARED)) {
+          const item = el("li", "social-row");
+          const words = el("span", "social-row-text");
+          words.append(el("b", "", project.title), el("small", "", `${project.owner?.name || "A friend"}'s ${KINDS[project.kind] ?? "project"}`));
+          item.append(words, button("See it", "social-btn", () => goFriends("hub"), { title: "Play it from the Project hub" }));
+          sharedList.append(item);
+        }
+        box.append(sharedList);
+        parts.push(box);
+      }
+      body.replaceChildren(...parts);
+    }
+    // Back on screen (the window came forward, or Home shows again: renderer/today.js show()) after a minute or more: read
+    // again soon rather than wait out the five minutes.
+    const wake = () => { if (!gone() && seen() && Date.now() - readAt >= WAKE_AFTER_MS) schedule(800); };
+    document.addEventListener?.("visibilitychange", wake);
+    root.wake = wake;
+    root.refresh = () => { tried = false; void load(); };
+    root.dispose = () => { clearTimeout(timer); timer = 0; seq += 1; document.removeEventListener?.("visibilitychange", wake); };
+    say("loading", "Looking for your friends…");
+    void load();
+    return root;
+  }
+
+  // ---- Projects --------------------------------------------------------------------------------------------------
+  const projects = { root: null, list: null, note: null, signature: "" };
+  const shortPath = (value) => { const parts = String(value || "").split(/[\\/]+/).filter(Boolean); return parts.length > 2 ? `…/${parts.slice(-2).join("/")}` : parts.join("/"); };
+  function mountProjects() {
+    if (projects.root) return projects.root;
+    const overlay = el("div", "overlay workspace-page social-page");
+    overlay.id = "projects-overlay";
+    overlay.hidden = true;
+    const sheet = el("section", "sheet social-sheet");
+    sheet.tabIndex = -1;
+    sheet.setAttribute("role", "region");
+    sheet.setAttribute("aria-labelledby", "projects-title");
+    const head = el("header", "social-page-head");
+    const words = el("div", "social-page-words");
+    const title = el("h1", "", "Projects");
+    title.id = "projects-title";
+    title.tabIndex = -1;
+    words.append(title, el("p", "social-page-about", "Your apps and projects. Open one to talk about it with Mefi or to build on it."));
+    const make = button("New app", "social-btn primary", () => { nav()?.go?.("vibe"); window.MefiVibe?.openPanel?.("newapp"); }, { id: "projects-new-app", title: "Start a new app from a few words" });
+    head.append(words, make);
+    const list = el("ul", "social-projects");
+    list.id = "projects-list";
+    list.setAttribute("aria-label", "Your projects");
+    const note = el("p", "social-card-note");
+    note.id = "projects-note";
+    note.setAttribute("role", "status");
+    const friends = el("section", "social-card social-projects-friends");
+    friends.setAttribute("aria-labelledby", "projects-friends-title");
+    const friendsTitle = el("h2", "social-card-title", "What friends made");
+    friendsTitle.id = "projects-friends-title";
+    friends.append(friendsTitle, el("p", "social-card-note", "Play what your friends share, and share yours, in the Project hub."), button("Open the Project hub", "social-btn", () => goFriends("hub"), { id: "projects-hub" }));
+    sheet.append(head, note, list, friends);
+    overlay.append(sheet);
+    document.body.append(overlay);
+    Object.assign(projects, { root: overlay, list, note });
+    return overlay;
+  }
+  async function paintProjects() {
+    const api = bridge();
+    let answer = null;
+    try { answer = await api?.projectsList?.(); } catch { answer = null; }
+    if (!projects.root || projects.root.hidden) return;
+    const rows = Array.isArray(answer?.projects) ? answer.projects : [];
+    const active = window.MefiWorkspace?.activeProjectId?.() || answer?.activeId || null;
+    const signature = JSON.stringify([rows.map((row) => [row.id, row.name, row.path]), active]);
+    if (signature === projects.signature) return;
+    projects.signature = signature;
+    projects.list.replaceChildren();
+    if (!rows.length) { projects.list.append(el("li", "social-empty", "No projects yet. New app makes one from a few words.")); return; }
+    for (const row of rows) {
+      const item = el("li", "social-project");
+      item.dataset.project = String(row.id);
+      const mark = el("span", "social-project-mark", initials(row.name).slice(0, 2));
+      mark.setAttribute("aria-hidden", "true");
+      const words = el("span", "social-row-text");
+      words.append(el("b", "", row.name || "A project"), el("small", "", shortPath(row.path)));
+      const here = row.id === active;
+      if (here) item.dataset.current = "true";
+      const open = button(here ? "Open now" : "Open", here ? "social-btn" : "social-btn primary", () => void choose(row), { title: here ? "This is the open project. Back to Home." : `Open ${row.name}` });
+      if (here) open.setAttribute("aria-current", "true");
+      item.append(mark, words, open);
+      projects.list.append(item);
+    }
+  }
+  async function choose(row) {
+    const active = window.MefiWorkspace?.activeProjectId?.();
+    if (row.id === active) { nav()?.go?.("vibe"); return; }
+    projects.note.textContent = `Opening ${row.name}…`;
+    try {
+      // Home's own switch: it asks before it stops agents that are still working, and saves their progress when you say so.
+      const select = window.MefiWorkspace?.selectProject;
+      if (typeof select === "function") await select(row.id);
+      else { const answer = await bridge()?.projectsSelect?.(row.id); if (answer?.ok === false) throw new Error(answer.error || "That project could not be opened."); }
+      if ((window.MefiWorkspace?.activeProjectId?.() ?? row.id) !== row.id) { projects.note.textContent = "Still in the same project."; return; }
+      projects.note.textContent = "";
+      nav()?.go?.("vibe");
+    } catch (error) {
+      projects.note.textContent = error?.message || "That project could not be opened.";
+    }
+  }
+  function openProjects() {
+    mountProjects();
+    nav()?.claim?.("projects");
+    projects.root.hidden = false;
+    projects.signature = "";
+    window.MefiShell?.sync?.("projects");
+    void paintProjects();
+    requestAnimationFrame?.(() => document.getElementById("projects-title")?.focus?.({ preventScroll: true }));
+    return true;
+  }
+  function closeProjects() {
+    if (!projects.root || projects.root.hidden) return false;
+    projects.root.hidden = true;
+    nav()?.release?.("projects");
+    return true;
+  }
+
+  // ---- the registry -------------------------------------------------------------------------------------------------
+  function register() {
+    nav()?.register?.({
+      id: "projects", label: "Projects", short: "Projects", kind: "overlay", layer: "sheet", section: "home", group: "surfaces",
+      glyph: "g-folder", badge: null, desc: "Your apps and projects, New app, and what friends made",
+      searchTerms: "projects project apps app open switch new app folder my projects shared friends made",
+      showIn: { tabs: false, tools: false, dock: false, palette: true, help: false, footer: false },
+      element: "projects-overlay", focus: "#projects-title",
+      open: () => openProjects(), close: () => closeProjects(), isOpen: () => Boolean(projects.root && !projects.root.hidden),
+    });
+  }
+  if (nav()?.register) register();
+  else document.addEventListener?.("DOMContentLoaded", register, { once: true });
+  // The project list follows a switch made anywhere while the page shows.
+  window.addEventListener?.("mefi:project-changed", () => { if (projects.root && !projects.root.hidden) { projects.signature = ""; void paintProjects(); } });
+
+  window.MefiSocial = { PAGES, studioOnly, toStudio, openInStudio, openTask, peopleCard, openProjects, closeProjects };
 })();
 
 // Key tips: small pop-ups beside a button, tab or box that name the key doing
@@ -101555,8 +102676,11 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   // Each tip: where it applies, the control it points at (the first visible
   // match), which side it sits on, and its keys with what they do.
   const TIPS = [
-    // Under Build it, not beside the box: the box runs the page's width, so beside it the tip landed on Build it itself.
-    { id: "vibe-box", when: onVibe, target: "#vibe-build", side: "bottom", parts: [["/", "jump into the box"], ["Enter", "talk it over"], ["Ctrl+Enter", "build it"]] },
+    // Beside Send, Social's one action (Build it is a key there, not a button). Under the box it covered the Resume of the line
+    // below it (QA, 2026-10-06), so a tip now takes whichever side leaves every control clear (clearSide).
+    { id: "vibe-box", when: onVibe, target: "#vibe-talk", side: "right", parts: [["/", "jump into the box"], ["Enter", "send to Mefi"], ["Ctrl+Enter", "build it right away"]] },
+    // Social's rail: the keys for what it holds (its own pulse and Search buttons are the frame's top bar's now).
+    { id: "vibe-rail", when: onVibe, target: "#vibe-rail .vibe-rail-items", side: "right", parts: [["N", "what needs you"], ["C", "the conversation"], ["Ctrl+K", "find anything"]] },
     { id: "vibe-dock", when: onVibe, target: "#vibe-dock", side: "right", parts: [["D", "watch the tree"], ["T", "tasks"], ["M", "team"]] },
     { id: "vibe-pulse", when: onVibe, target: "#vibe-pulse", side: "bottom", parts: [["N", "what needs you"], ["C", "the conversation"]] },
     { id: "vibe-search", when: onVibe, target: "#vibe-layer .vibe-top-actions [data-nav='palette']", side: "bottom", parts: [["Ctrl+K", "find anything"], ["?", "every shortcut"]] },
@@ -101663,6 +102787,31 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     return { left: clampedLeft, top: clampedTop, right: clampedLeft + width, bottom: clampedTop + height };
   }
   const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  // Whether a tip at `rect` would cover something you use: what is under a few points of it, other than the tip itself and the
+  // control it points at. A tip may sit over text and empty glass, never over a button, a link or a field.
+  const CONTROL = "button, a[href], input, textarea, select, [role='button'], [role='switch'], [role='tab'], [contenteditable='true']";
+  function coversControl(rect, box, target) {
+    if (typeof document.elementsFromPoint !== "function") return false;
+    const xs = [rect.left + 4, (rect.left + rect.right) / 2, rect.right - 4], ys = [rect.top + 4, (rect.top + rect.bottom) / 2, rect.bottom - 4];
+    for (const x of xs) for (const y of ys) {
+      for (const node of document.elementsFromPoint(x, y) ?? []) {
+        if (box.contains?.(node) || node.closest?.(".key-tip")) continue;
+        const control = node.closest?.(CONTROL);
+        if (control && control !== target && !control.contains?.(target)) return true;
+      }
+    }
+    return false;
+  }
+  // The side a tip asks for, else the first other side that leaves every control and every other tip clear; null when none does.
+  const SIDES = ["right", "bottom", "top", "left"];
+  function clearSide(box, target, wanted, others) {
+    for (const side of [wanted, ...SIDES.filter((one) => one !== wanted)]) {
+      const rect = place(box, target, side);
+      if (others.some((other) => overlaps(other, rect)) || coversControl(rect, box, target)) continue;
+      return rect;
+    }
+    return null;
+  }
 
   function hide(id, { seen = false } = {}) {
     const entry = state.shown.get(id);
@@ -101690,8 +102839,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     const rects = [];
     for (const [id, entry] of [...state.shown]) {
       const target = entry.tip.when() ? targetOf(entry.tip) : null;
-      if (!target) { hide(id); continue; }
-      rects.push(place(entry.box, target, entry.tip.side));
+      // A tip whose place is gone, or that something you use has moved under, steps aside until the next pass.
+      const rect = target ? clearSide(entry.box, target, entry.tip.side, rects) : null;
+      if (!rect) { hide(id); continue; }
+      rects.push(rect);
     }
     for (const tip of remaining()) {
       if (state.shown.size >= MAX_SHOWN) break;
@@ -101701,8 +102852,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const box = build(tip);
       if (state.shown.size) box.style.setProperty?.("--tip-delay", "420ms");
       document.body.append(box);
-      const rect = place(box, target, tip.side);
-      if (rects.some((other) => overlaps(other, rect))) { box.remove(); continue; }
+      const rect = clearSide(box, target, tip.side, rects);
+      if (!rect) { box.remove(); continue; }
       rects.push(rect);
       state.shown.set(tip.id, { tip, box });
     }
@@ -106797,7 +107948,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const chat = window.MefiToday?.homeView?.() === "chat" && rootEl().dataset.uiMode !== "vibe";
       if (session || built?.title) parts.push(String(session || built.title));
       // Vibe's Today is the board: the prototype's breadcrumb says so.
-      else parts.push(window.MefiToday ? (chat ? "Chat" : rootEl().dataset.uiMode === "vibe" ? "Today, the board" : "Today") : String(dest?.label || dest?.short || "Home"));
+      else parts.push(window.MefiToday ? (chat ? "Chat" : rootEl().dataset.uiMode === "vibe" ? "Home" : "Today") : String(dest?.label || dest?.short || "Home"));
       return parts;
     }
     const place = placeTrail(n, id, dest);
@@ -106902,6 +108053,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
   // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
   function placeTrail(n, id, dest) {
+    // Social's own pages (renderer/social.js, renderer/today.js) are places of their own: the project, then the page.
+    if (id === "activity" || id === "projects") return [String(dest?.label || id)];
     const place = placeOfRoute(n, id);
     if (place === "settings") {
       if (id === "size") return ["Settings", "Appearance", String(dest?.label || "Size and density")];
@@ -107258,6 +108411,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // ---- the status bar -----------------------------------------------------------------------------
+  const socialActivity = () => currentMode() === "vibe" && Boolean(nav()?.get?.("activity"));
   function buildStatus(bar) {
     const items = {};
     const item = (key, className, run, label) => {
@@ -107271,7 +108425,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     items.layout.setAttribute("aria-expanded", "false");
     items.layout.setAttribute("title", "Layout: list, inspector, tab strip and sizes");
     items.layout.append(icon("panelL"), text("span", "shell-status-word", "Layout"));
-    const working = item("working", "shell-working", () => nav()?.go?.("command"), "Nothing running");
+    // What is running opens the Map in Studio, and Activity in Social (renderer/social.js keeps Social to its own pages).
+    const working = item("working", "shell-working", () => nav()?.go?.(socialActivity() ? "activity" : "command"), "Nothing running");
     working.append(el("i", "shell-dot", { "aria-hidden": "true" }), text("span", "", ""));
     const waiting = item("waiting", "shell-waiting", () => openInbox(waiting), "Waiting on you");
     waiting.append(icon("bell"), text("span", "", ""));
@@ -107377,7 +108532,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       working.dataset.tone = run;
       working.children[1].textContent = word;
       working.setAttribute("aria-label", word);
-      working.setAttribute("title", "What is running. Open the Map.");
+      working.setAttribute("title", socialActivity() ? "What is running. Open Activity." : "What is running. Open the Map.");
     }
     const needs = live.needs || 0;
     waiting.hidden = needs <= 0;
@@ -108001,7 +109156,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     for (const task of Array.isArray(data?.tasks) ? data.tasks : []) if (task?.id) tasks.set(String(task.id), task);
     return { data, tasks, loaded: Boolean(data && tasks.size > 0) };
   }
-  const homeTitle = () => (window.MefiToday ? "Today" : words(safe(() => window.MefiNav?.get?.("workspace")?.short, ""), 20) || "Home");
+  // Social calls its Home what its rail calls it; Studio's Home is Today (renderer/today.js).
+  const homeTitle = () => (document.documentElement?.dataset?.uiMode === "vibe" ? "Home" : window.MefiToday ? "Today" : words(safe(() => window.MefiNav?.get?.("workspace")?.short, ""), 20) || "Home");
 
   // What a tab shows: its words, its glyph (or, for a session, a dot in its state's colour) and whether it is finished.
   function describe(rec, ctx) {
@@ -109039,6 +110195,29 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   }
 
   // The Add menu: every place in the registry, this project's sessions and what was closed, one search box.
+  // Friends' places are one page with a place each ("friends-page", { place }); the registry's ways into them are
+  // actions, so they are listed from the page's own places (moderators see Moderation) with the words people use.
+  const FRIENDS_WORDS = {
+    lobby: "friends social online people who is here chat say hi lobby front page home",
+    rooms: "friends chat rooms room hangout cowork invite join requests talk",
+    pcs: "friends pc pcs laptop computer devices connect another pc pair pairing sync github battery keep on",
+    playground: "friends companion pet playdate share sharing rules practice",
+    hub: "friends projects shared share creations play star credits ranks games apps",
+    events: "friends events build jam jam cowork co-work hour together",
+    mod: "friends moderation reports moderate suspend",
+  };
+  function friendsRows(nav) {
+    const places = safe(() => window.MefiCompanionHub?.friendsPlaces?.(), []) || [];
+    const dest = safe(() => nav?.get?.("friends-page"), null);
+    const group = (dest && safe(() => nav.sectionLabel?.(dest), null)) || "Friends";
+    const rank = dest ? safe(() => nav.sectionRank?.(dest), 99) ?? 99 : 99;
+    return places.filter((entry) => entry && typeof entry.id === "string").map((entry) => {
+      const known = friendsPlaceOf(entry.id);
+      const route = place("friends-page", { place: entry.id });
+      return route && { group, rank, route, title: words(entry.label, 40), glyph: entry.glyph,
+        terms: `friends ${entry.label || ""} ${known?.about || ""} ${FRIENDS_WORDS[entry.id] || ""}` };
+    }).filter(Boolean);
+  }
   function destinations() {
     const nav = window.MefiNav;
     const all = safe(() => nav?.list?.(), []) || [];
@@ -109052,6 +110231,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       const group = safe(() => nav.sectionLabel?.(dest), null) || "Pages";
       rows.push({ group, rank: safe(() => nav.sectionRank?.(dest), 99) ?? 99, route, title: words(dest.short || dest.label, 40), terms: `${dest.label || ""} ${dest.searchTerms || ""} ${dest.desc || ""}`, glyph: dest.glyph });
     }
+    rows.push(...friendsRows(nav));
     return rows.sort((a, b) => a.rank - b.rank);
   }
   function sessionRows(query) {
@@ -112281,30 +113461,31 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
   }
   function onMutations(records) {
-    if (!enabled()) return;
+    const on = enabled();
     const leaving = [];
     for (const record of records) {
       const element = record.target;
       if (record.attributeName !== "hidden") continue;
       if (element.hidden) {
         // It was shown a moment ago and is a menu we know.
-        if (record.oldValue !== null || !element.matches?.(MENUS) || leaving.includes(element)) continue;
+        if (!on || record.oldValue !== null || !element.matches?.(MENUS) || leaving.includes(element)) continue;
         leaving.push(element);
       } else {
+        // Shown again: the empty mask its last exit left comes off whether or
+        // not an effect is still on (a Try that ended, motion turned Off).
         unmask(element);
         if (playing.has(element)) stopRun(element);
         // A menu opened: its exit is made ready while it is read.
-        if (element.matches?.(MENUS)) soon(() => { if (!element.hidden) prepare(element); });
+        if (on && element.matches?.(MENUS)) soon(() => { if (!element.hidden) prepare(element); });
       }
     }
     if (leaving.length) playAll(leaving, active());
   }
   function onToggle(event) {
-    if (!enabled()) return;
     const element = event.target;
     if (!element?.matches?.("[popover]")) return;
-    if (event.newState === "open") { unmask(element); soon(() => prepare(element)); }
-    else if (event.newState === "closed" && element.matches?.(":popover-open")) play(element, active());
+    if (event.newState === "open") { unmask(element); if (enabled()) soon(() => prepare(element)); }
+    else if (event.newState === "closed" && enabled() && element.matches?.(":popover-open")) play(element, active());
   }
 
   // ---- the API --------------------------------------------------------------------
@@ -113389,6 +114570,18 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     if (views.size && visible) start(); else stop();
   }
   function wake() { if (loop.running && !loop.raf && !loop.timer) { loop.last = 0; schedule(); } }
+  // Motion is nav.js's html[data-motion], rewritten on every change of the
+  // body's classes; only a real change counts. Off sends friends' pets home at
+  // once, and On wakes the loop that stopped while every pet slept.
+  let motionSeen = null;
+  function onMotion() {
+    const mode = motionMode();
+    if (mode === motionSeen) return;
+    motionSeen = mode;
+    world.motion = mode;
+    if (roomList.length) guests(roomList);
+    wake();
+  }
 
   // ---- friends' pets ------------------------------------------------------------
   // A room's other members' pets (relay "roomPets", through renderer/rooms.js):
@@ -113412,7 +114605,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     for (const [id, view] of views) {
       if (!view.guest || wanted.has(id)) continue;
-      if (loop.running) view.sim.leave(world); else dropView(id);
+      // Flies out, unless motion is Off: a guest asleep there could not leave.
+      if (loop.running && motionMode() !== "off") view.sim.leave(world); else dropView(id);
     }
     for (const [id, guest] of wanted) {
       const view = views.get(id);
@@ -113642,6 +114836,10 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     window.addEventListener("resize", () => { for (const view of views.values()) sizeCanvas(view); readPage(); });
     document.addEventListener("visibilitychange", sync);
     window.addEventListener("focus", wake);
+    motionSeen = motionMode();
+    if (typeof MutationObserver === "function" && document.documentElement) {
+      new MutationObserver(onMotion).observe(document.documentElement, { attributes: true, attributeFilter: ["data-motion"] });
+    }
     window.addEventListener("mefi:nav-badges", onBadges);
     window.addEventListener("mefi:inbox", onInbox);
     window.addEventListener("mefi-shop-owned", sync);

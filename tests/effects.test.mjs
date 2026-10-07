@@ -144,3 +144,72 @@ test("a closing menu is held where it was: its display pinned (even after its ow
   assert.equal(menu.style.has("display"), false, "opened again: let go at once");
   assert.equal(menu.style.has("opacity"), false);
 });
+
+test("a menu that left under an effect shows again once the effect is off, or motion is off", () => {
+  for (const turnOff of ["none", "motion"]) {
+    const storage = new Map();
+    let observed = null;
+    class FakeObserver { constructor(callback) { observed = callback; } observe() {} }
+    const { document } = createDom();
+    document.readyState = "complete";
+    document.documentElement.dataset.motion = "on";
+    const style = () => {
+      const values = new Map();
+      return {
+        setProperty(name, value, priority = "") { values.set(name, [String(value), priority]); },
+        getPropertyValue(name) { return values.get(name)?.[0] ?? ""; },
+        getPropertyPriority(name) { return values.get(name)?.[1] ?? ""; },
+        removeProperty(name) { values.delete(name); },
+        has: (name) => values.has(name),
+      };
+    };
+    // Canvases that make mask pictures, so a finished exit leaves a real (empty) mask on.
+    let pictures = 0;
+    const make = document.createElement;
+    document.createElement = (tag) => {
+      const element = make(tag);
+      if (tag === "canvas") {
+        element.style = style();
+        const ctx = new Proxy({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }) }, { get: (target, key) => (key in target ? target[key] : () => {}), set: (target, key, value) => { target[key] = value; return true; } });
+        element.getContext = () => ctx;
+        element.toDataURL = () => `data:image/png;base64,step${(pictures += 1)}`;
+        element.remove = () => {};
+      }
+      return element;
+    };
+    const menu = new Element("div");
+    menu.id = "app-help-menu";
+    menu.style = style();
+    menu.isConnected = true;
+    menu.getBoundingClientRect = () => ({ left: 10, top: 500, right: 250, bottom: 700, width: 240, height: 200 });
+    document.body.append(menu);
+    const timers = [], frames = [];
+    let clock = 0;
+    const window = { innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, addEventListener() {}, dispatchEvent() { return true; }, MefiShop: { owns: () => true } };
+    const context = vm.createContext({
+      window, document, console, Math, JSON, Number, Array, Object, Float32Array, Uint8ClampedArray, Proxy, CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+      MutationObserver: FakeObserver,
+      localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)) },
+      setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
+      requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; }, cancelAnimationFrame() {}, performance: { now: () => clock },
+      getComputedStyle: () => ({ display: "flex", getPropertyValue: () => "", backgroundColor: "rgb(30, 35, 48)", color: "rgb(230, 230, 230)" }),
+    });
+    vm.runInContext(source, context);
+    for (const fn of timers.splice(0)) fn();
+    window.MefiEffects.use("dissolve");
+    menu.hidden = true;
+    observed([{ attributeName: "hidden", oldValue: null, target: menu }]);
+    // Play it to the end, crumbs and all.
+    for (let n = 0; n < 400 && frames.length; n += 1) { clock += 50; frames.shift()(); }
+    assert.equal(frames.length, 0, `${turnOff}: the exit finished`);
+    assert.match(menu.style.getPropertyValue("mask-image"), /^url\("data:image\/png;base64,step\d+"\)$/, `${turnOff}: gone, its last (empty) mask stays on while it is hidden`);
+    assert.equal(menu.style.has("display"), false, `${turnOff}: the hold let go`);
+    if (turnOff === "none") window.MefiEffects.use("none");
+    else document.documentElement.dataset.motion = "off";
+    menu.hidden = false;
+    observed([{ attributeName: "hidden", oldValue: "", target: menu }]);
+    assert.equal(menu.style.has("mask-image"), false, `${turnOff}: shown again, it is not left invisible`);
+    assert.equal(menu.style.has("-webkit-mask-image"), false);
+    assert.equal(menu.style.has("image-rendering"), false);
+  }
+});
