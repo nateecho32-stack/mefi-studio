@@ -106,6 +106,9 @@ button.front-item:hover b { text-decoration: underline; text-decoration-color: v
 .friends-mod-section { display: grid; gap: 6px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-lg); }
 .friends-mod-heading { margin: 0 0 4px; font: 650 12px/1.2 var(--font-ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ivory); }
 .friends-mod-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+/* A jam vote under its entry (Build Jam review): set in, a quieter rule, the name in the body's weight. */
+.friends-mod-voter { margin-left: 18px; padding: 5px 0; border-top-style: dashed; }
+.friends-mod-voter .friends-mod-words strong { font-weight: 500; }
 .friends-mod-words { display: grid; gap: 2px; min-width: 0; flex: 1 1 280px; }
 .friends-mod-words strong { color: var(--ivory); font-weight: 600; overflow-wrap: anywhere; }
 .friends-mod-words .muted { font-size: 12.5px; overflow-wrap: anywhere; }

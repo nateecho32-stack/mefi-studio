@@ -244,8 +244,12 @@ test("Forget me cannot reset a limit: the account is held for 30 days and what i
   relay.sql("UPDATE meta SET value = '0' WHERE key = 'upkeep_at'");
   await relay.runAlarm();
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM credit_holds")[0].n, 0, "the hold goes after 30 days");
-  assert.equal(relay.sql(`SELECT COUNT(*) AS n FROM credit_events WHERE actor_id LIKE 'gone:%'`)[0].n, 0, "and so do the fingerprinted rows, after a week");
+  assert.equal(relay.sql(`SELECT COUNT(*) AS n FROM credit_events WHERE actor_id LIKE 'gone:%'`)[0].n, 1, "what Bob gave stays, under an id that names nobody");
   assert.equal((await playOnce()).credited.owner, 5, "after the hold, Bob counts again");
+  clock += 150 * DAY;
+  relay.sql("UPDATE meta SET value = '0' WHERE key = 'upkeep_at'");
+  await relay.runAlarm();
+  assert.equal(relay.sql(`SELECT COUNT(*) AS n FROM credit_events WHERE actor_id LIKE 'gone:%'`)[0].n, 0, "and goes after the 180 days every credit row is kept");
 });
 
 test("moderators see where a member's credits came from and take back farmed ones for good", async () => {
@@ -366,4 +370,106 @@ test("forget me removes credits, projects and stars; idle projects leave after 9
   relay.sql("UPDATE meta SET value = '0' WHERE key = 'upkeep_at'");
   await relay.runAlarm();
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM projects")[0].n, 0, "a project nobody played for 90 days leaves the hub");
+});
+
+test("what a member who used Forget me gave stays for moderators: flagged, reviewed and taken back, under an id that names nobody", async () => {
+  let clock = morning();
+  const ALT = { id: "200000000000000031", username: "alt", global_name: "Alt" };
+  const relay = makeRelay({ now: () => clock, discord: { "tok-alt": { user: ALT } } });
+  const as = api(relay);
+  const id = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const playOnce = async (token) => {
+    const play = await as(token, "POST", `/v1/projects/${id}/play`);
+    clock += 2 * 60_000 + 1;
+    return as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
+  };
+  // A second account pays Alice the 15 a week the pair limit allows, two weeks running; Bob plays once.
+  for (let week = 0; week < 2; week += 1) {
+    for (let day = 0; day < 3; day += 1) {
+      await playOnce("tok-alt");
+      clock += DAY;
+    }
+    clock += 6 * DAY;
+  }
+  await playOnce("tok-bob");
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.lifetime, 35);
+  await as("tok-alt", "POST", "/v1/me/forget");
+  // Long past the week the old rule kept them.
+  clock += 9 * DAY;
+  relay.sql("UPDATE meta SET value = '0' WHERE key = 'upkeep_at'");
+  await relay.runAlarm();
+  const flag = (await as("tok-mod", "GET", "/v1/admin/credits/flags")).flags.find((item) => item.id === ALICE.id);
+  assert.deepEqual([flag?.why, flag?.top.id, flag?.top.name, flag?.top.forgotten, flag?.top.amount], ["one-giver", null, "a member who used Forget me", true, 30]);
+  const review = await as("tok-mod", "GET", `/v1/admin/credits/${ALICE.id}`);
+  const gone = review.givers.find((giver) => giver.forgotten);
+  assert.match(gone.id, /^gone:[A-Za-z0-9_-]{16}$/);
+  assert.deepEqual([gone.name, gone.amount, gone.accountCreatedAt], ["a member who used Forget me", 30, null]);
+  assert.ok(!JSON.stringify(review).includes(ALT.id), "nothing in the review names them");
+  assert.equal(relay.sql(`SELECT COUNT(*) AS n FROM credit_events WHERE actor_id LIKE 'gone:%' AND ref IS NOT NULL`)[0].n, 0, "nor which project it was");
+  const taken = await as("tok-mod", "POST", `/v1/admin/credits/${ALICE.id}/revoke`, { from: gone.id });
+  assert.deepEqual([taken.revoked, taken.credits.lifetime], [30, 5], "only what the forgotten member gave");
+  assert.equal((await as("tok-mod", "POST", `/v1/admin/credits/${ALICE.id}/revoke`, { from: "gone:x" })).status, 400);
+});
+
+test("moderators switch a kind of reward off and back on: nothing pays for what happened meanwhile, other kinds go on, featuring waits", async () => {
+  let clock = morning();
+  const relay = makeRelay({ now: () => clock });
+  const as = api(relay);
+  const switches = (key, on) => as("tok-mod", "POST", "/v1/admin/credits/switches", { key, on });
+  assert.equal((await as("tok-bob", "GET", "/v1/admin/credits/switches")).status, 403, "moderators only");
+  assert.equal((await as("tok-bob", "POST", "/v1/admin/credits/switches", { key: "plays", on: false })).status, 403);
+  assert.deepEqual((await as("tok-mod", "GET", "/v1/admin/credits/switches")).switches, ["plays", "stars", "together", "cowork", "jam", "sales", "featuring", "review", "batches"]);
+  assert.deepEqual([(await switches("nope", false)).status, (await switches("plays", "no")).status], [400, 400]);
+  assert.deepEqual((await switches("plays", false)).off, ["plays"]);
+  const id = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const playOnce = async (token) => {
+    const play = await as(token, "POST", `/v1/projects/${id}/play`);
+    clock += 2 * 60_000 + 1;
+    return as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
+  };
+  const paused = await playOnce("tok-bob");
+  assert.deepEqual([paused.credited, paused.counted, paused.why], [{ owner: 0, you: 0 }, true, "paused"], "the play still counts toward Top");
+  await as("tok-bob", "POST", `/v1/projects/${id}/star`);
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.balance, 3, "stars still pay");
+  assert.deepEqual((await switches("plays", true)).off, []);
+  assert.deepEqual((await playOnce("tok-bob")).credited, { owner: 0, you: 0 }, "Bob's play while plays were off used up his day with Alice");
+  assert.deepEqual((await playOnce("tok-cara")).credited, { owner: 5, you: 2 }, "a new play pays");
+
+  relay.sql("UPDATE accounts SET balance = 200 WHERE user_id = ?", ALICE.id);
+  await switches("featuring", false);
+  const refused = await as("tok-alice", "POST", `/v1/projects/${id}/feature`);
+  assert.deepEqual([refused.status, refused.reason], [409, "featuring-paused"]);
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.balance, 200, "nothing was spent");
+  // A paused relay refuses every write, never a moderator's switch.
+  await as("tok-mod", "POST", "/v1/admin/pause", { paused: true });
+  assert.equal((await switches("featuring", true)).status, 200);
+  await as("tok-mod", "POST", "/v1/admin/pause", { paused: false });
+  assert.equal((await as("tok-alice", "POST", `/v1/projects/${id}/feature`)).status, 200);
+  assert.deepEqual(relay.sql(`SELECT actor_id, detail FROM audit WHERE kind = 'credits-switch' ORDER BY id`).map((row) => [row.actor_id, JSON.parse(row.detail)]),
+    [[MOD.id, { key: "plays", on: false }], [MOD.id, { key: "plays", on: true }], [MOD.id, { key: "featuring", on: false }], [MOD.id, { key: "featuring", on: true }]]);
+});
+
+test("Top counts each member once a week per project, however often they play it", async () => {
+  let clock = morning();
+  const relay = makeRelay({ now: () => clock });
+  const as = api(relay);
+  const id = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const playOnce = async (token) => {
+    const play = await as(token, "POST", `/v1/projects/${id}/play`);
+    clock += 2 * 60_000 + 1;
+    return as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
+  };
+  const plays = () => relay.sql("SELECT plays FROM projects WHERE id = ?", id)[0].plays;
+  for (let day = 0; day < 4; day += 1) {
+    assert.equal((await playOnce("tok-bob")).counted, true, "every day's play is still logged (the jam's votes read it)");
+    clock += DAY;
+  }
+  assert.equal(plays(), 1, "four days of Bob's plays count once");
+  await playOnce("tok-cara");
+  assert.equal(plays(), 2);
+  const front = await as("tok-alice", "GET", "/v1/front");
+  assert.deepEqual([front.top.id, front.top.weekPlays, front.you.week.plays], [id, 2, 2], "the Lobby's week counts players, not days played");
+  clock += 7 * DAY;
+  await playOnce("tok-bob");
+  assert.equal(plays(), 3, "a new week, a new count");
 });

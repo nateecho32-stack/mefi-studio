@@ -165,6 +165,33 @@ node_styles_overlays and node_styles_wires pass; node_paint_cache 1/1, node_view
 settings_render run sat in the lane behind another helper's hung window test until it was killed; the rerun passed. Not
 run here: the full `npm test`, friends_render (the Shop's window fixture: its catalog has no new items until the merge).
 
+## 2026-10-07 Credits harder to farm: Forget me keeps what was given, reward switches, once-a-week Top, Shop and jam gates, the jam's review day and batch rule, moderators' alerts
+
+Branch `fix/credits-guard` (C:\wt\credits-guard, off main c513838). The owner asked whether the credits can be cheated
+("i dont want a system where hackers can ruin the fun for everyone"), then said "do it" to the five fixes proposed. A
+read-only review found no way to change a balance directly. Aged second Discord accounts can still farm within the
+caps, and a throwaway probe against the relay harness confirmed three gaps: five alts paid a main 40 credits with no
+flag, and after they used Forget me the `gone:` rows went in 8 days, so review showed 0 and revoke took 0 while the main
+kept all 40; a revoke stops at a 0 balance and items bought with the credits stay; and an account 3 days old, an hour in
+the server, published a free pack that unaged accounts' free Gets put first on the Shop's Top list. Changed: Forget me
+keeps what a member gave under a random `gone:` id and no project for the usual 180 days, counted in
+`credits.mjs farmingFlags` and taken back by revoke's `from`. Switches (`/v1/admin/credits/switches`, audited, not a
+write route): plays, stars, together, cowork, sales and featuring pay nothing while off, and their rows stay at 0 so the
+time off never pays later; jam holds prizes; review and batches turn the jam's new rules off. Top and the Lobby's week
+count each player once a week per project. A pack's sales count only from buyers in good standing, and publishing (free
+too), listing again and entering the jam need good standing. A closed jam waits a day in `review`, with
+`/v1/admin/jam` (every vote, why not counted, account age, join date and batch letter), votes void plus bar, entry
+removal and release. One batch (made within 3 days, joined within 12 h) counts once and never for its own entry.
+`relay/src/alerts.mjs` posts a nameless line to the optional `MOD_ALERT_WEBHOOK`. Studio: hub-client mod methods,
+HUB_ROOM_METHODS, Friends › Moderation's Build Jam and Rewards, Events' "results come", Project hub's paused words. The
+fake Discord now spreads members' join dates by id (3 days apart) so test members are no batch. Here: relay_credits,
+relay_shop and relay_events 47 pass, 0 fail (9 new, one of them Studio's real hub client against the relay);
+relay_core, relay_e2e, relay_connect, relay_pcs, relay_pets, hub_client, hub_client_shop, friends_mod_ui,
+friends_events_ui, friends_front_ui, rooms_ui and project_hub_ui 127 pass, 0 fail (5 new); check ok; audit 0
+findings; eslint on the changed files clean (npm run lint 47 warnings, as main, none in them). Not run here: the
+full `npm test` (this PC is shared; ci.yml on the pushed branch is the gate). The relay is not deployed: one deploy
+from main once feat/shop-season has landed too.
+
 ## 2026-10-07 Social uses a wide window: Friends over the docked conversation at the right; menus without odd gaps
 
 Branch `ui/social-wide` in C:\wt\social-wide, off main c513838. The owner asked for Social Home's empty sides to be used
@@ -515,23 +542,6 @@ Not checked: the workflow on a runner, and the Rust host's smoke launch there (W
 Start-Process -Wait on its child processes); the first `host: tauri` dispatch shows both.
 
 My merge of `ui/social-studio-names` 0fc3043 was dropped before pushing: main's 0f5076a carries the same change.
-
-## 2026-10-06 Background git leaves no fsmonitor daemons, and Claude workers start only the desk's MCP servers
-
-Branch `fix/git-fsmonitor-worker-mcp` in `C:\wt\fsmon`: the 2026-10-03 commit c575fd3 (left on one PC in `C:\wt\mem`,
-260 commits behind) replayed onto main 539fb8f. One conflict, `cliInvocation`'s Claude line, which main had given live
-progress and the thinking flag: `--strict-mcp-config` sits beside them. Added since: the `MEFI_STUDIO_WORKER_OWN_MCP=1`
-switch and its pin, a live-mode pin, a `sync` test (git reports `core.fsmonitor=false` in a repository that turns it on),
-and the same override in the Rust ports (`repo::run_git`, `git::run`'s `child_env` for git children, `eyes::git`).
-The memory figures (nine daemons at ~44 MB from one worktree list; ~380 MB of the owner's own MCP servers per Claude
-worker) are the 10-03 measurements, not taken again.
-
-CI `Studio checks` (Windows: check, lint, `npm test`, audit) green on 7a034f1, the same change on main 4b150b3.
-Local, with mefi-core built from this branch (`CARGO_TARGET_DIR=C:\rt\fsmon`): rust_parity_repo, rust_parity_git,
-rust_parity_eyes, executor_core and sync 86/86, none skipped. `npm run check` ok on 539fb8f. An earlier local run
-(executor_core, executor_live_progress, executor_worktree, git_actions, sync x5, outside_work x2, usage_tracker_host,
-eyes x3) had one failure, `sync`'s session-hook test, where `git config` hit runGit's 30 s limit with 128-617 MB free
-and eight sessions' tests queued; it passed in the 86/86 run.
 
 ## Read Before Any Tests
 

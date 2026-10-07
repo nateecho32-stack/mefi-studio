@@ -7,7 +7,7 @@ import { CATALOG, ITEM_KINDS, PACK_ID, SHOP, createShop } from "../relay/src/sho
 import { saleOf } from "../relay/src/shop-drops.mjs";
 import { MIGRATIONS, SCHEMA_VERSION, createStore } from "../relay/src/store.mjs";
 import { hmacKey, randomBytes } from "../relay/src/util.mjs";
-import { ALICE, BOB, CARA, MOD, makeRelay, member, connectAll, rawSocket, until } from "./fixtures/relay-harness.mjs";
+import { ALICE, BOB, CARA, MOD, NEWBIE, makeRelay, member, connectAll, rawSocket, until } from "./fixtures/relay-harness.mjs";
 
 // The Shop on the relay (relay/src/shop.mjs): Studio's own items and members'
 // style packs, got with credits. A purchase is one transaction that never
@@ -366,7 +366,7 @@ test("tips: up to 100 credits for a pack's maker, a free pack too; the maker's 7
   buyer.socket.close();
 });
 
-test("publishing checks the pack, the name and the price, and a priced pack needs a maker who may earn", async () => {
+test("publishing checks the pack, the name and the price, and needs a maker who may earn, for a free pack too", async () => {
   const clock = morning();
   const relay = makeRelay({ now: () => clock, discord: MORE });
   const as = api(relay);
@@ -393,12 +393,15 @@ test("publishing checks the pack, the name and the price, and a priced pack need
   assert.deepEqual([made.status, made.pack.name, made.pack.blurb, made.pack.price], [201, "Neon night", "Blue on black", 10], "names and blurbs are cleaned like other relay text");
   assert.deepEqual(await refusal({ name: "NEON NIGHT" }), [409, "conflict", "name-taken"], "a name once among a maker's listed packs, upper or lower case alike");
   assert.equal((await publish(as, "tok-bob", { name: "Neon night" })).status, 201, "another maker may use it");
-  // A priced pack needs a maker in good standing; a free one only a member who may write.
+  // Publishing needs a maker in good standing, a free pack too: a new second account can neither sell nor fill the Shop.
   const newbie = await publish(as, "tok-newbie", { name: "First go", price: 20 });
   assert.deepEqual([newbie.status, newbie.error, newbie.hold], [403, "hold", "new-member"]);
   assert.ok(newbie.until > clock, "with when the hold lifts");
   assert.equal((await publish(as, "tok-fresh", { name: "Fresh", price: 20 })).hold, "new-account");
-  assert.equal((await publish(as, "tok-newbie", { name: "First go", price: 0 })).status, 201);
+  const free = await publish(as, "tok-newbie", { name: "First go", price: 0 });
+  assert.deepEqual([free.status, free.error, free.hold], [403, "hold", "new-member"], "a free pack too");
+  assert.equal((await publish(as, "tok-fresh", { name: "Fresh", price: 0 })).hold, "new-account");
+  assert.equal(relay.sql("SELECT COUNT(*) AS n FROM shop_packs WHERE maker_id IN (?, ?)", NEWBIE.id, FRESH.id)[0].n, 0);
 });
 
 test("a maker lists 12 packs at most and publishes 4 a day, even when the relay sleeps; the Shop holds 2000", async () => {
@@ -469,11 +472,16 @@ test("a maker changes, unlists and lists a pack again; its owners keep it and al
   assert.equal(back.pack.status, "listed");
   assert.deepEqual((await as("tok-cara", "GET", "/v1/shop?view=new")).items.map((item) => item.id), [pack.id]);
   assert.equal((await as("tok-alice", "PUT", `/v1/shop/packs/${pack.id}`, { listed: false })).pack.status, "unlisted");
-  // Setting a price is selling: a maker who may not earn yet is held, as when publishing.
-  const first = (await publish(as, "tok-newbie", { name: "Starter" })).pack.id;
-  const priced = await as("tok-newbie", "PUT", `/v1/shop/packs/${first}`, { price: 20 });
+  // Setting a price is selling, and listing a pack again is publishing: a maker who may not earn now (here, back in the
+  // server only an hour ago) is held for both, as when publishing, and may still change the rest.
+  const first = (await publish(as, "tok-cara", { name: "Starter" })).pack.id;
+  await as("tok-cara", "DELETE", `/v1/shop/packs/${first}`);
+  relay.sql("UPDATE members SET joined_at = ? WHERE user_id = ?", clock - 3_600_000, CARA.id);
+  const priced = await as("tok-cara", "PUT", `/v1/shop/packs/${first}`, { price: 20 });
   assert.deepEqual([priced.status, priced.error, priced.hold], [403, "hold", "new-member"]);
-  assert.equal((await as("tok-newbie", "PUT", `/v1/shop/packs/${first}`, { name: "Starter kit" })).status, 200, "a free pack's other fields are theirs to change");
+  const listed = await as("tok-cara", "PUT", `/v1/shop/packs/${first}`, { listed: true });
+  assert.deepEqual([listed.status, listed.error, listed.hold], [403, "hold", "new-member"], "a free pack listed again too");
+  assert.equal((await as("tok-cara", "PUT", `/v1/shop/packs/${first}`, { name: "Starter kit" })).status, 200, "an unlisted free pack's other fields are theirs to change");
 });
 
 test("a reported pack reaches the moderators, and removing it takes it off the Shop and from everyone who owns it", async () => {
@@ -625,4 +633,18 @@ test("Studio's client: the Shop's lists, a price that changed, a pack published,
   assert.deepEqual((await bob.client.shopOwned()).items.map((item) => item.id), ["studio:fx-embers", "studio:skin-gold"], "a removed pack leaves its owners too");
   assert.equal((await mod.client.modReports()).reports.filter((item) => item.kind === "shop").length, 0);
   for (const one of [alice, bob, mod, newbie]) await one.client.disconnect();
+});
+
+test("a pack's sales, which its Top list ranks by, count only buyers in good standing", async () => {
+  const clock = morning();
+  const relay = makeRelay({ now: () => clock, discord: MORE });
+  const as = api(relay);
+  const spam = (await publish(as, "tok-bob", { name: "Spam pack", price: 0 })).pack.id;
+  const honest = (await publish(as, "tok-alice", { name: "Honest pack", price: 0 })).pack.id;
+  for (const token of ["tok-fresh", "tok-newbie"]) {
+    const got = await as(token, "POST", `/v1/shop/${spam}/buy`, { price: 0 });
+    assert.deepEqual([got.status, got.item.owned, got.item.sales], [200, true, 0], `${token}: still theirs, and counted for nothing`);
+  }
+  await as("tok-cara", "POST", `/v1/shop/${honest}/buy`, { price: 0 });
+  assert.deepEqual((await as("tok-alice", "GET", "/v1/shop?view=top")).items.map((item) => [item.name, item.sales]), [["Honest pack", 1], ["Spam pack", 0]]);
 });

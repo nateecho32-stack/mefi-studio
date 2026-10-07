@@ -31,6 +31,8 @@ that comes back has to match what was actually said.
 | Deleted message ids | a peer's copy cannot bring a deleted message back | 7 days |
 | Whether you chose not to show in Who's online | the "Show me as online" switch | until you change it, or forget me |
 | Credits: balance, rank, streak, and who credited whom (ids, kind, amount) | earning, the anti-farming limits, a moderator's credit review | 180 days for each credit |
+| After Forget me: what the member gave others (kind, amount, day), under a random id that names nobody and with no project | the receivers' limits, and a moderator can still take back what second accounts paid someone | 180 days, as every credit |
+| What a moderator switched off for now (reward kinds, the jam's prizes, featuring) | the switches in Friends › Moderation | until switched back on |
 | Which member played which project on which day | a play counts once per player and day | 8 days |
 | After Forget me: a keyed fingerprint of the account (not its id) | forgetting cannot reset the credit limits | 30 days |
 | Community events: each week's Build Jam (theme, entries as member and project ids, votes as voter and entrant ids, the results) and each co-work hour (its room, and how many of its three looks saw each member) | the events run by themselves | 180 days |
@@ -39,7 +41,7 @@ that comes back has to match what was actually said.
 | Shop style packs: each member-made pack's name, blurb, price and data (colours and a few style keys, at most 2 KB), its sales count, whether it is listed, and its maker's id | the Shop | until its maker uses Forget me; a pack a moderator removed goes 30 days later |
 | What each member got in the Shop: the item's id, what it cost and when | the things you own, on every PC | until Forget me |
 | Reports: the reason, plus the reported message only when its relay signature checks out (for a project or a Shop pack, its name and what the reporter added) | moderation | 30 days |
-| Moderator actions (ids only) | accountability | 90 days |
+| Moderator actions (ids only), including a jam voter's votes taken out | accountability; a voter taken out cannot vote in that jam again | 90 days |
 
 Forget me (`POST /v1/me/forget`) deletes every row about you and closes the
 rooms you own; your Shop packs are taken off for everyone, with no id, name
@@ -100,7 +102,15 @@ alt accounts, trading and replays:
   sides of midnight. Starting plays and starring are limited to 30 an hour.
 - Forget me keeps a keyed fingerprint for 30 days, so leaving and coming back
   cannot reset a limit, and the credits you gave stay counted for the
-  people who received them.
+  people who received them, under a random id that names nobody, for the
+  180 days every credit row is kept: second accounts cannot hide what they
+  paid someone by forgetting themselves, since a moderator can still see it
+  and take it back.
+- "Top" (the hub's Top list and the Lobby's project of the week) counts each
+  member once a week per project, however often they play it, so a few
+  second accounts playing every day cannot outrun many different players. A
+  Shop pack's sales, which the Shop's Top list ranks by, count only buyers in
+  good standing.
 - Featuring is once a week per owner, however projects are removed and
   shared again.
 - Ranks unlock one thing: a room in the public list opens at Flame (200
@@ -113,8 +123,21 @@ alt accounts, trading and replays:
   last 30 days, by who caused them and with their account ages;
   `POST /v1/admin/credits/:id/revoke` (`{ "from": "<id>", "days": 30 }`, both
   optional) takes them back off the balance and the lifetime total, and the
-  same plays and stars can never pay again. Suspending a member stops their
-  credits too. `POST /v1/projects/:id/report` (anyone, not their own, once
+  same plays and stars can never pay again; `from` also takes the random id
+  a member who used Forget me since has in the review. Suspending a member
+  stops their credits too.
+- Switches (`GET`/`POST /v1/admin/credits/switches`, `{ "key": "plays", "on":
+  false }`, audited, and working while the relay is paused): a moderator can
+  switch off plays, stars, building together, co-work hours, Shop sales or
+  featuring while they look into a new trick, without pausing anything else.
+  A kind that is off pays nothing, and what happened meanwhile never pays
+  later. The jam's prizes are held instead, and pay once switched back on.
+  The jam's day of review and its one-vote-per-batch rule can be switched
+  off the same way, should either misfire.
+- Alerts (`src/alerts.mjs`): with the optional `MOD_ALERT_WEBHOOK` secret
+  (a Discord webhook in a private moderators' channel), the relay posts one
+  line a day when members newly look like farming, and one when a Build
+  Jam's voting closes. A line names nobody; the details stay in Studio. `POST /v1/projects/:id/report` (anyone, not their own, once
   each, 10 an hour) puts a project in `GET /v1/admin/reports` with its card.
 
 ## Community events and the community budget
@@ -126,9 +149,19 @@ plays and stars, with both sides in good standing, once each, under the caps:
 - **The weekly Build Jam.** A jam opens every Monday 00:00 UTC with a theme
   from a rotating list (next week's is shown too). Until Saturday a member
   may enter one of their own shared projects; until Monday members play the
-  entries and vote for up to three. A vote counts only from a member in good
-  standing who played that entry during the jam, and votes stay hidden until
-  the results. On Monday an entry played by three or more members earns a
+  entries and vote for up to three. Only members in good standing may enter.
+  A vote counts only from a member in good standing who played that entry
+  during the jam, and votes stay hidden until the results. Votes from one
+  batch of accounts (Discord accounts made within 3 days of each other that
+  joined the server within 12 hours of each other, most likely one person's)
+  count once, and not at all for their own batch's entry. When voting closes
+  on Monday, the jam waits a day for a moderator's look: `GET /v1/admin/jam`
+  shows every vote, whether it counts and why not, and each voter's account
+  age, join date and batch; `DELETE /v1/admin/jam/:id/votes/:userId` takes a
+  voter's votes out (and they cannot vote in that jam again), an entry can
+  be taken out, `POST /v1/admin/jam/:id/release` pays sooner, and the jam
+  switch holds the prizes for as long as it is off. Nobody acting, they pay
+  by themselves on Tuesday: an entry played by three or more members earns a
   showcase reward (5 each, at most 30% of the pot), then the top three with
   three votes or more share the rest 50/30/20, at most 40 credits a vote.
   Whoever took a place sits out the places of the next two jams, an entry
@@ -197,9 +230,11 @@ what was paid, tip included, only when buyer and maker are both in good
 standing; one buyer is worth at most 100 credits to one maker in 7 days,
 and a maker earns at most 300 a day from sales. The rest is nobody's, so
 moving credits between two accounts through the Shop loses at least a
-quarter of them every time, and soon pays nothing. Selling needs the same good standing as earning; a free pack needs
-only a member who may write. A maker lists 12 packs at most and publishes 4 a
-day, and the Shop holds 2000.
+quarter of them every time, and soon pays nothing. Publishing a pack, free or
+priced, needs the same good standing as earning, so a new second account can
+neither sell nor fill the Shop, and a pack's sales count toward its Top list
+only from buyers in good standing. A maker lists 12 packs at most and
+publishes 4 a day, and the Shop holds 2000.
 
 `GET /v1/shop?view=studio|new|top|owned|mine` lists (30 packs a page, with
 `cursor`), `GET /v1/shop/owned` puts what a member owns back on a new PC, and
@@ -263,8 +298,13 @@ node scripts/smoke.mjs http://127.0.0.1:8787 --fake-discord 8799
    Flame rank unlocks listed rooms. `MOD_ROLE_IDS` and `ROLE_IDS_JSON` are
    optional, for also honouring Discord roles (moderators, a Room Host role,
    extra badges).
-3. `npx wrangler deploy` prints `https://mefi-relay.<account>.workers.dev`.
-4. `node scripts/smoke.mjs https://mefi-relay.<account>.workers.dev`.
+3. Optional: `npx wrangler secret put MOD_ALERT_WEBHOOK` and paste a Discord
+   webhook made in a private moderators' channel (Channel settings ›
+   Integrations › Webhooks). The relay then tells that channel when members
+   newly look like farming and when a Build Jam waits for its look. Without
+   it, nothing is ever posted.
+4. `npx wrangler deploy` prints `https://mefi-relay.<account>.workers.dev`.
+5. `node scripts/smoke.mjs https://mefi-relay.<account>.workers.dev`.
 
 ## Free-plan budget
 

@@ -681,6 +681,28 @@ settings and per-model work-kind summaries for the shared controls.
   `mefiStudio.shop.page` = "off" shows the Shop as a Friends place again,
   `mefiStudio.shop.showroom` = "off" shows a signed-out Shop only the sign-in
   card and what you own.
+- **Friends › Moderation** (`renderer/friends-mod.js`, `window.MefiFriendsMod`;
+  main's `hub:room` mod* methods; the relay's `/v1/admin/*` routes, which check
+  the member is a moderator again). Shown only to moderators. **Looks like
+  farming** lists members whose last 30 days of credits came mostly from one
+  member, or two members trading (`credits.mjs farmingFlags`, a member who
+  used Forget me since counted under an id that names nobody), each with
+  **Review**: where the credits came from, account ages, **Take back** from
+  one giver (a forgotten one too) or all of them, and **Suspend**. **Build
+  Jam** shows the jam waiting for its day of review (else this week's): each
+  entry in its place now, every vote, whether it counts and why not, and each
+  voter's account age, join date and batch letter (accounts made within 3
+  days of each other that joined within 12 hours count once, `events.mjs`),
+  with **Don't count** a voter, **Remove from the jam**, **Pay the prizes
+  now** and **Hold the prizes**. **Reports** (messages, projects, Shop packs)
+  and **Look someone up** as before. **Rewards** turns plays, stars, building
+  together, co-work hours, Shop sales, featuring or the jam's prizes off for
+  everyone while a new trick is looked into (`credits.mjs SWITCHES`, audited):
+  a kind that is off pays nothing and never pays later for that time, and the
+  jam's prizes are held, not lost; the jam's day of review and its
+  one-vote-per-batch rule can be switched off too, should either misfire. The relay can also post a one-line heads-up
+  to a private moderators' Discord channel (`relay/src/alerts.mjs`, the
+  optional `MOD_ALERT_WEBHOOK` secret).
 - **Ember and friends' pets** (`renderer/pets.js`, `window.MefiPets`; main's
   `hub:pet`; the relay's `relay/src/pets.mjs`). Ember, the dragon every Studio
   comes with, flies on its own small canvas above the page and never takes

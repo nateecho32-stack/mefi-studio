@@ -2562,6 +2562,7 @@ const HUB_ROOM_METHODS = Object.freeze({
   roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1, front: 0,
   // Friends › Moderation (renderer/friends-mod.js); the relay refuses anyone who is not a moderator.
   modFlags: 0, modReview: 1, modRevoke: 2, modReports: 0, modResolve: 1, modSuspend: 2,
+  modSwitches: 0, modSwitch: 2, modJam: 0, modJamVoid: 2, modJamRelease: 1,
   // The Lobby's "Share what I'm building" switch (hubBuildingShare below), not a hub-client method.
   shareBuilding: 1,
   // The Lobby's "Reconnect by itself" switch (hubAutoConnect below), not a hub-client method either.

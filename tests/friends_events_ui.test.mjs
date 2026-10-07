@@ -263,3 +263,24 @@ test("main lets the renderer call only the event methods; the bridge, the place 
   assert.match(builder, /"friends-events\.css",/);
   assert.ok(!/innerHTML/.test(source), "text only, never markup");
 });
+
+test("while a closed jam waits for a moderator's look, the page says when its results come; a vote taken out says why", async () => {
+  const now = Date.now();
+  const page = { ...eventsPage({ now }), reviewing: { id: "jam_w2908b", theme: "Glow", resultsAt: now + 20 * HOUR } };
+  page.jam = { ...page.jam, resultsAt: page.jam.endsAt + DAY };
+  const env = environment({ page, answers: { voteEvent: { ok: false, error: "forbidden", reason: "barred" } } });
+  const card = env.events.card();
+  await flush();
+  const results = card.find("friends-events-results");
+  assert.match(results.textContent, /Glow: voting has closed\. The results come .+, after a moderator's look\./);
+  assert.match(results.textContent, /1st Bob/, "the jam before keeps its results under it");
+  assert.match(card.find("friends-events-jam").textContent, /Votes stay hidden until the results, .+, and count only for entries you played\./);
+  card.find(`friends-events-vote-${BOB.id}`).click();
+  await flush();
+  assert.equal(card.find("friends-events-status").textContent, "A moderator took your votes out of this jam.");
+
+  const held = environment({ page: { ...eventsPage({ now }), lastJam: null, reviewing: { id: "jam_w2908b", theme: "Glow", resultsAt: null } } });
+  const heldCard = held.events.card();
+  await flush();
+  assert.match(heldCard.find("friends-events-results").textContent, /Glow: voting has closed\. A moderator is looking at the results before they come\./, "a held jam promises no time");
+});

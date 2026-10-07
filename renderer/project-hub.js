@@ -36,6 +36,7 @@
     "one-featured": "One of your projects is already featured.",
     "featured-full": "All three featured spots are taken. One frees up within a day.",
     cooldown: "This project was featured recently. It can be featured again a week after.",
+    "featuring-paused": "Featuring is paused for a while. Your credits weren't spent.",
     credits: "You need 100 credits to feature a project.",
     self: "You cannot star your own project.",
     title: "Give it a title.",
@@ -70,6 +71,7 @@
       case "read-only": return "Play noted. Credits are paused while your account is read-only in the server.";
       case "maker-held": return "Play counted. The maker's account can't earn credits right now, so nobody earned this time.";
       case "limit": return "Play counted. You've already earned from this maker today, or reached a daily or weekly limit.";
+      case "paused": return "Play counted. Plays aren't earning credits for a while; the moderators paused them.";
       case "expired": return "That play took more than six hours to finish, so it wasn't counted. Press Play again.";
       default: return event?.counted ? "Play counted." : "Play noted.";
     }

@@ -20,6 +20,7 @@
 // sleeping; everything in this file's memory does not, and nothing here needs
 // it to: rate buckets refill, pending peer-history asks just lapse.
 
+import { createAlerts } from './alerts.mjs';
 import { createChat, idTime } from './chat.mjs';
 import { FRONT, RANKS, createCredits, rankFor } from './credits.mjs';
 import { createEconomy } from './economy.mjs';
@@ -153,6 +154,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   let shop = null;
   let pcs = null;
   let pets = null;
+  let alerts = null;
   let alarmAt = undefined; // unknown after a wake
   const oembed = createOembed({ fetch: fetchImpl, now });
 
@@ -191,8 +193,10 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     economy = createEconomy({ store, now });
     credits = createCredits({ store, now, key: keys.play, sendToUser, member: (uid) => sessions.member(uid), economy });
     credits.routes(route);
+    // A line to the moderators' private Discord channel when something needs a look (alerts.mjs; off without the secret).
+    alerts = createAlerts({ store, fetch: fetchImpl, webhook: env?.MOD_ALERT_WEBHOOK });
     // Community events the relay runs by itself (events.mjs): the weekly Build Jam, co-work hours, building together.
-    events = createEvents({ store, now, credits, economy, paused, rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
+    events = createEvents({ store, now, credits, economy, paused, review: (info) => alerts.jam(info), rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
     events.routes(route);
     // The Shop (shop.mjs): Studio's own items and members' style packs, bought with credits.
     shop = createShop({ store, now, credits });
@@ -485,7 +489,15 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     for (const roomId of swept.roomIds) publishClaims(roomId);
     listen.sweep();
     for (const [id, ask] of pendingHistory) if (ask.expiresAt <= at) pendingHistory.delete(id);
-    if (at - Number(store.meta('upkeep_at') ?? 0) >= RETENTION.maintenanceEveryMs) upkeep();
+    if (at - Number(store.meta('upkeep_at') ?? 0) >= RETENTION.maintenanceEveryMs) {
+      upkeep();
+      // Once a day, after the upkeep: the moderators hear about members who newly look like farming (alerts.mjs).
+      try {
+        await alerts.flags(credits.farmingFlags());
+      } catch {
+        // the next day's upkeep tells them
+      }
+    }
     // The community events never stop the rest of the alarm: a fault there waits for the next one.
     if (!paused()) {
       try {

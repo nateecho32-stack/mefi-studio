@@ -30,7 +30,11 @@
 // nothing at all.
 //
 // Makers: 12 listed packs at most, 4 published a day, 2000 in the whole
-// Shop, and a name once among a maker's listed packs. Unlisting keeps a pack
+// Shop, and a name once among a maker's listed packs. Publishing a pack, free
+// or priced, needs a member in good standing (credits.mjs standing()), and a
+// pack's sales, which its "Top" list ranks by, count only buyers in good
+// standing: brand-new second accounts can neither fill the Shop nor push a
+// pack up the list. Unlisting keeps a pack
 // for the members who own it, with its newest data. A moderator's removal (a
 // report resolved with "remove", or POST /v1/admin/shop/:id/remove) takes it
 // from everyone for good. Forget me removes the member's packs, with nothing
@@ -340,7 +344,8 @@ export function createShop({ store, now, credits, catalog = CATALOG, drops = DRO
           if (!credits.spend(actor.uid, paid)) return { error: fail(409, 'short', { balance: credits.account(actor.uid).balance, price, ...(tip ? { tip } : {}) }) };
           store.run('INSERT INTO shop_owned (user_id, item_id, price, at) VALUES (?, ?, ?, ?)', actor.uid, params.id, paid, now());
           if (!pack) return { paid, payout: 0, makerId: null };
-          store.run('UPDATE shop_packs SET sales = sales + 1 WHERE id = ?', pack.id);
+          // A pack's sales rank it on "Top": only a buyer in good standing counts, so new second accounts cannot push it up.
+          if (credits.standing(actor.uid, buyerHeld).ok) store.run('UPDATE shop_packs SET sales = sales + 1 WHERE id = ?', pack.id);
           // The maker's share of what was paid, a tip included; what the sale caps leave out is nobody's.
           const payout = paid > 0 ? credits.sale({ buyer: actor.uid, maker: pack.maker_id, itemId: pack.id, amount: Math.floor(paid * SHOP.makerShare), buyerHeld, makerHeld }) : 0;
           return { paid, payout, makerId: pack.maker_id };
@@ -354,8 +359,8 @@ export function createShop({ store, now, credits, catalog = CATALOG, drops = DRO
       { write: true, body: 'shopBuy', param: ITEM_PARAM },
     );
 
-    // Publishing a style pack. A free one needs only a member who may write; a priced one, a maker in good standing
-    // (credits.mjs standing()), so a second account cannot sell before it could earn any other way.
+    // Publishing a style pack, free or priced, needs a maker in good standing (credits.mjs standing()), so a second
+    // account can neither sell before it could earn any other way nor fill the Shop with free packs.
     route(
       'POST',
       '/v1/shop/packs',
@@ -363,10 +368,8 @@ export function createShop({ store, now, credits, catalog = CATALOG, drops = DRO
         const read = readFields(body, fail);
         if (read.error) return read.error;
         const { fields } = read;
-        if (fields.price > 0) {
-          const stand = await standingOf(actor.uid);
-          if (!stand.ok) return fail(403, 'hold', { hold: stand.reason, until: stand.until });
-        }
+        const stand = await standingOf(actor.uid);
+        if (!stand.ok) return fail(403, 'hold', { hold: stand.reason, until: stand.until });
         const at = now();
         const result = store.transaction(() => {
           const full = roomToList(actor.uid, fields.name, fail);
@@ -401,8 +404,9 @@ export function createShop({ store, now, credits, catalog = CATALOG, drops = DRO
         if (!first || first.status === 'removed') return fail(404, 'not-found');
         if (first.maker_id !== actor.uid) return fail(403, 'forbidden');
         const relist = body.listed === true && first.status === 'unlisted';
-        // A price set, or a priced pack listed again, is selling: that needs a maker in good standing, as publishing does.
-        if ((fields.price ?? first.price) > 0 && (fields.price !== undefined || relist)) {
+        // A price set is selling, and listing a pack again is publishing: both need a maker in good standing, as
+        // publishing does.
+        if (relist || ((fields.price ?? first.price) > 0 && fields.price !== undefined)) {
           const stand = await standingOf(actor.uid);
           if (!stand.ok) return fail(403, 'hold', { hold: stand.reason, until: stand.until });
         }
