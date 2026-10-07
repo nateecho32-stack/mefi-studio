@@ -39,6 +39,30 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-06 Social is about people: the QA pass's findings, on ui/social-simple, with Your PCs' Connect another PC
+
+Branch `ui/social-simple` (71c45d6, 3e7a6b9, merge 5c8f2ef of `ui/pcs-walkthrough` 0a35dcb built by a subagent in
+C:\wt\social-pcs, and 63da96c), off main da9b951, in C:\wt\social. A QA pass on the installed build found Social
+reading as a development dashboard; Studio's controls leave Social (renderer/social.js studioOnly, asked by nav.js
+go()), Social's rail stands on its Home, the box has one action, Your work is a list beside a Friends card, and
+Activity and Projects are pages of Social's own. Fixtures follow the new behaviour: today_render (a task opened from
+Social opens in Studio; the Tab walk has no Build it or starters), sessions_render (trail "Home", a group only while
+it holds something, Send; the press check looks past the toasts earlier steps leave up), tabs_render (Social opens
+Social's tabs; a Studio tab switches modes) and the CSS contract pins (three no-rail offsets left the layout ledger).
+The window runs found two real bugs, fixed in 63da96c: Home's three-row cap counted Decided lines, so answers could
+hide the next question behind "N more", and a card rebuilt under the focus dropped the keyboard to the page.
+Node here through `npm run test:one`: social 6/6 (new), today_page 25, today_inbox 39, today_model and today_home
+pass (Today set 94/94), vibe_home 10, vibe_frame 9, onboarding, key_tips 7, tabs_strip, briefing_fix_requests 3,
+layout_contract_css and shell_frame_css 18, the Your PCs set with tabs and social 275/275. Windows: today_render
+3 runs in a row after 63da96c, sessions_render, shell_render, tabs_render, friends_render, companion_hub_render,
+team_render, map_render, settings_render, size_render, autonomy_render and friends_two_render pass; the other 40
+window files 115/129 in a loaded lane, their 12 failures rerun 29/32 with 2 skips. Not ours: builder_render fails
+identically on clean main da9b951 ("the greeting has a size at 1920x1080@1"; task chip offered);
+task_overview_render's 35 s kill timer is too tight on this loaded PC for main too (timer raised: main 45 s and 37 s,
+this branch 38 s and 30 s); shell_render failed once at "the saved widths are the launch's" with 604 MB free and
+passed alone. check ok, lint 47 warnings (as main), audit 0 findings. Hosted CI: run 37551601070 failed on the
+three CSS contract pins (fixed in 3e7a6b9), run 37554612664 green on 5c8f2ef, run 37556171702 green on 63da96c.
+
 ## 2026-10-06 paired_reconnect waits for the resumed worker's first poll and for missed heartbeats, not fixed sleeps
 
 Branch `fix/paired-reconnect-wait` (9da2cc1, off main 149e770, in C:\wt\rcwait), fast-forwarded onto main. Hosted
@@ -471,33 +495,6 @@ at 600) and command_render (task pixels): Linux fonts and software rendering. fr
 pass; their screenshots show the open room as a chat app, rooms as cards, each place's own icon, two Studios catching
 up after one was away, and no scroll arrow over the status bar.
 
-## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
-
-Branch `wip/social-polish` in `C:\wt\polish` (bea5ec9 an open room like a chat app, rooms as cards, Friends icons,
-plain words; 671b1b8 the two-Studio proof and The Lobby following who arrives), main merged (1de784f, clean;
-booklet.html regenerated and equal).
-
-The two-person flow, recorded (tests/friends_two_render.test.mjs, new): one Electron process plays two PCs, two real
-windows in the 0.5 layout with their own user data (separate session partitions), each bridge reaching its own copy
-of main.cjs's real Rooms hub block, and the real relay between them (relay/node/adapter.mjs: the Worker, the Hub
-object, SQLite, scripted Discord). Both meet in The Lobby and see each other online; PC one makes "Two PC test" from
-New room and reads its invite code from the room's menu; PC two joins with the code typed in lower case with a space;
-they chat both ways with Enter and see each other's face in the room; PC two closes Studio, PC one sends two more, PC
-two comes back and the two missed messages are filled in from PC one's copy (the relay keeps none); PC one starts
-Listen together and PC two hears the shared player; PC one shares a project from the Project hub and PC two plays it:
-the link opens in the browser, two minutes on PC one gets "Someone played your project: +5 credits" and its Lobby
-shows 5 credits, PC two's shows 2. 1/1, about 40 s.
-
-Polish checked in real windows (friends_render): an open room with five messages (a mention of this member, one of
-someone unnamed, and this member's own) at 1920x1080, 1100x720 and 600x560 at 150%: the room's name once, the chat
-taking most of the height, the composer on screen with Send inside it, Load earlier at the top of the log, mentions as
-names and "@someone"; every Friends place at 1920x1080, 1440x900, 1100x720 and 600x560 at 150% in Chrome, and every
-place plus an open room in a light palette, with no text under 12 px and nothing wider than the page.
-
-Run alone here on the merge: friends_render, companion_hub_render, friends_two_render and unified_studio_render 1/1
-each; rooms_ui 14/14, friends_front_ui 12/12, friends_mod_ui 4/4, friends_navigation 8/8, project_hub_ui 7/7, app_rail
-40/40, onboarding 43/43, tabs_strip 66/66, module_purity 63/63, booklet_build 5/5, hub_host 14/14, relay_connect 6/6.
-`npm run check` ok. Windows CI runs the full gate on the landing commit before the fast-forward.
 ## Read Before Any Tests
 
 This is the test guide for the standalone Mefi's Studio AI+ repository. Run all commands from this repository root.
