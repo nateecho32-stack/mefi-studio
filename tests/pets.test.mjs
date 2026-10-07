@@ -13,7 +13,7 @@ import { createDom } from "./fixtures/renderer-dom.mjs";
 
 const source = await readFile(new URL("../renderer/pets.js", import.meta.url), "utf8");
 
-function load({ storage = new Map(), owned = [], motion = "on" } = {}) {
+function load({ storage = new Map(), owned = [], motion = "on", bridge = null } = {}) {
   const { document } = createDom({ ids: ["settings-category-appearance", "settings-appearance"] });
   document.readyState = "complete";
   document.documentElement.dataset.motion = motion;
@@ -24,7 +24,9 @@ function load({ storage = new Map(), owned = [], motion = "on" } = {}) {
     innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, location: { search: "" },
     addEventListener(name, callback) { (events[name] ||= []).push(callback); },
     dispatchEvent(event) { sent.push(event); for (const callback of events[event.type] || []) callback(event); return true; },
+    // The Shop's owns(), stubbed: what this profile has.
     MefiShop: { owns: (item) => owned.includes(item) },
+    ...(bridge ? { mefiStudio: bridge } : {}),
   };
   const context = vm.createContext({
     window, document, console, CustomEvent, Math, Date, JSON, Number, Array, Object, Float32Array,
@@ -158,7 +160,7 @@ test("a resting pointer draws it over; a fast pointer makes it dart away; a wind
 test("Ember is free and off until switched on; skins need the Shop; a Try borrows one without saving; choices survive a reload", () => {
   const storage = new Map();
   let env = load({ storage });
-  assert.deepEqual(Array.from(env.pets.kinds(), (kind) => kind.item), [null], "the dragon is no Shop item");
+  assert.deepEqual(Array.from(env.pets.kinds(), (kind) => kind.item), [null, "studio:pet-cloud", "studio:pet-phoenix", "studio:pet-wisp"], "the dragon is no Shop item; the other pets are");
   assert.deepEqual(Array.from(env.pets.skins(), (skin) => skin.id), ["theme", "frost", "jade", "void", "gold"]);
   assert.equal(env.pets.state().on, false, "an existing profile gets no surprise dragon after an update");
   env.pets.set({ on: true, skin: "void", name: "  Smaug  " });
@@ -305,4 +307,471 @@ test("a preview frame for the Shop's cards draws without a page", () => {
   assert.equal(pets.paintPreview(canvas, { kind: "dragon", skin: "gold", time: 1.2 }), true);
   assert.ok(calls.filter((name) => name === "fill").length > 20, "the body, wings, horns and head are filled");
   assert.equal(pets.paintPreview(canvas, { kind: "cat" }), false, "an unknown pet draws nothing");
+});
+
+// ---- the Shop's pets, petting, the chase and the little things ------------------------------------
+const KINDS = ["dragon", "cloud", "phoenix", "wisp"];
+// A drawing context that answers everything and counts what it was asked to do (`own` answers some calls itself).
+function recorder(own = {}) {
+  const calls = [];
+  const ctx = new Proxy({}, { get: (_target, name) => (Object.hasOwn(own, name) ? own[name] : name in Object.prototype ? undefined : typeof name === "string" && /^(create\w+Gradient)$/.test(name) ? () => ({ addColorStop() {} }) : (...args) => { calls.push(name); return { width: 10 }; }), set: () => true });
+  return { ctx, calls, fills: () => calls.filter((name) => name === "fill").length };
+}
+// A pet sat down on a perch the flight's own way: fly there, curl round the spot, rest.
+function sitDown(sim, world) {
+  world.perches = [{ x: 640, y: 620 }];
+  sim.enter("perch", world);
+  for (let n = 0; n < 60 * 20 && sim.pet.mode !== "rest"; n += 1) sim.step(1 / 60, world);
+  assert.equal(sim.pet.mode, "rest", "sat down");
+}
+const turnBetween = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+
+test("every pet flies a minute inside the window with its body whole, through wander, perch, coil and rest; motion off is one still pose", () => {
+  const { pets } = load();
+  const lengths = { dragon: 26, cloud: 40, phoenix: 26, wisp: 18 };
+  for (const kind of KINDS) {
+    const sim = pets.simulate({ kind, seed: 11, width: 1280, height: 800 });
+    assert.equal(sim.pet.kind, kind);
+    let outside = 0;
+    fly(sim, 60, WORLD(), (pet) => { if (pet.x < 0 || pet.y < 0 || pet.x > 1280 || pet.y > 800) outside += 1; });
+    assert.equal(outside, 0, `${kind}: the head never leaves the window`);
+    for (const mode of ["wander", "perch", "coil", "rest"]) assert.ok(sim.pet.events.includes(mode), `${kind} flew through ${mode} (${[...new Set(sim.pet.events)].join(", ")})`);
+    assert.equal(sim.pet.spine.length, lengths[kind], `${kind}'s body`);
+    for (let index = 1; index < sim.pet.spine.length; index += 1) {
+      const length = linkLength(sim.pet.spine[index - 1], sim.pet.spine[index]);
+      assert.ok(length > 2 && length < 7, `${kind} link ${index} is ${length.toFixed(2)} px`);
+    }
+    const still = pets.simulate({ kind, seed: 3 });
+    const off = WORLD({ motion: "off" });
+    still.step(1 / 60, off);
+    const before = JSON.stringify(still.pet.spine);
+    fly(still, 5, off);
+    assert.deepEqual([still.pet.mode, JSON.stringify(still.pet.spine), still.pet.particles.length, still.pet.firefly], ["sleep", before, 0, null], `${kind}: motion off, asleep and still, nothing around it`);
+  }
+  assert.equal(pets.simulate({ kind: "cat" }).pet.kind, "dragon", "an unknown kind flies as Ember");
+});
+
+test("petting: a pointer that comes to rest on the pet for half a second stops it; it looks at the pointer and purrs, a few hearts rise and its name shows; it goes back when the hand leaves", () => {
+  const { pets } = load();
+  for (const kind of KINDS) {
+    const sim = pets.simulate({ kind, seed: 5 });
+    const world = WORLD();
+    sitDown(sim, world);
+    const spot = { x: sim.pet.spine[3].x, y: sim.pet.spine[3].y };
+    world.pointer = { x: spot.x, y: spot.y, speed: 0, still: 0.05 };
+    const rest = () => { world.pointer.still += 1 / 60; };
+    fly(sim, 0.4, world, rest);
+    assert.equal(sim.pet.mode, "rest", `${kind}: not yet at 0.4 s`);
+    fly(sim, 0.2, world, rest);
+    assert.equal(sim.pet.mode, "petted", `${kind}: half a second under the hand`);
+    const head = { x: sim.pet.x, y: sim.pet.y };
+    let hearts = 0;
+    fly(sim, 4, world, (pet) => { rest(); hearts = Math.max(hearts, pet.particles.filter((bit) => bit.kind === "heart").length); });
+    assert.equal(sim.pet.mode, "petted", `${kind}: it stays while the hand does`);
+    assert.ok(Math.hypot(sim.pet.x - head.x, sim.pet.y - head.y) < 1, `${kind}: sitting, it stays where it sat`);
+    assert.ok(sim.pet.purr > 0.9 && sim.pet.tag > 0.9, `${kind}: purring (${sim.pet.purr.toFixed(2)}), its name showing (${sim.pet.tag.toFixed(2)})`);
+    assert.ok(sim.pet.hearts === 4 && hearts >= 1 && hearts <= 4, `${kind}: a few small hearts (${sim.pet.hearts}, ${hearts} at once)`);
+    // Its head turned toward the hand, as far as a neck goes.
+    const [a, b] = sim.pet.spine;
+    const facing = Math.atan2(a.y - b.y, a.x - b.x), toward = Math.atan2(spot.y - a.y, spot.x - a.x);
+    const before = turnBetween(facing, toward), after = turnBetween(facing + sim.pet.look, toward);
+    assert.ok(after <= Math.max(0.12, before - Math.min(before, 1.05) * 0.8), `${kind}: looks at the pointer (${before.toFixed(2)} -> ${after.toFixed(2)})`);
+    // The hand goes: back to its rest, the purr and the name fading.
+    world.pointer = { x: spot.x + 320, y: spot.y, speed: 400, still: 0 };
+    fly(sim, 0.8, world);
+    assert.equal(sim.pet.mode, "rest", `${kind}: the hand left`);
+    fly(sim, 1.5, world);
+    assert.ok(sim.pet.purr < 0.05 && sim.pet.tag < 0.05, `${kind}: the purr and the name fade`);
+  }
+});
+
+test("a flying pet the pointer lands on slows under the hand, then hovers there; after a long petting it waits for the hand to go and come back", () => {
+  const { pets } = load();
+  const sim = pets.simulate({ seed: 8 });
+  const world = WORLD();
+  fly(sim, 1, world);
+  // The hand follows it a moment, then rests.
+  for (let n = 0; n < 60 && sim.pet.mode !== "petted"; n += 1) {
+    const at = sim.pet.spine[3];
+    world.pointer = { x: at.x, y: at.y, speed: 120, still: 0.02 };
+    sim.step(1 / 60, world);
+  }
+  assert.equal(sim.pet.mode, "petted", `petted mid-flight (${sim.pet.events.join(" > ")})`);
+  const found = { x: sim.pet.x, y: sim.pet.y };
+  let farthest = 0;
+  fly(sim, 3, world, (pet) => { world.pointer.still += 1 / 60; world.pointer.speed = 0; farthest = Math.max(farthest, Math.hypot(pet.x - found.x, pet.y - found.y)); });
+  assert.ok(farthest < 8, `hovers where the hand found it (${farthest.toFixed(1)} px)`);
+  assert.ok(sim.pet.speed < 5);
+  // Eighteen seconds is enough: it goes back to flying, and the same resting hand does not start it again.
+  fly(sim, 16, world, () => { world.pointer.still += 1 / 60; });
+  assert.equal(sim.pet.mode, "wander", "enough petting for now");
+  const petted = sim.pet.events.filter((mode) => mode === "petted").length;
+  fly(sim, 2, world, () => { world.pointer.still += 1 / 60; });
+  assert.equal(sim.pet.events.filter((mode) => mode === "petted").length, petted, "not again until the hand goes and comes back");
+});
+
+test("never petted by accident: not by a pointer that had long been still when the pet flew under it, a quick swipe, while typing, with the switch off or with motion off", () => {
+  const { pets } = load();
+  const cases = [
+    ["a resting pointer it flew under", {}, { still: 6 }],
+    ["a swipe", {}, { speed: 2400 }],
+    ["typing", { typing: true }, {}],
+    ["Plays with your pointer off", { touch: false }, {}],
+  ];
+  for (const [what, extra, hand] of cases) {
+    const sim = pets.simulate({ seed: 5 });
+    const world = WORLD();
+    sitDown(sim, world);
+    Object.assign(world, extra);
+    const at = sim.pet.spine[3];
+    world.pointer = { x: at.x, y: at.y, speed: 0, still: 0.05, ...hand };
+    fly(sim, 2, world, () => { world.pointer.still += 1 / 60; });
+    assert.ok(!sim.pet.events.includes("petted"), `${what}: no petting`);
+  }
+  const still = pets.simulate({ seed: 5 });
+  const world = WORLD({ motion: "off" });
+  still.step(1 / 60, world);
+  const at = still.pet.spine[3];
+  world.pointer = { x: at.x, y: at.y, speed: 0, still: 0.05 };
+  fly(still, 2, world, () => { world.pointer.still += 1 / 60; });
+  assert.deepEqual([still.pet.mode, still.pet.purr], ["sleep", 0], "motion off: one still pose, petted or not");
+});
+
+test("quick circles near your pet: it gives chase for a moment, then lets it be a while; a friend's pet never chases, nor any with calm motion", () => {
+  const { pets } = load();
+  const circling = (sim, world, seconds, each = () => {}) => {
+    const centre = { x: sim.pet.x + 70, y: sim.pet.y + 20 };
+    let closest = Infinity, clock = 0;
+    fly(sim, seconds, world, (pet) => {
+      clock += 1 / 60;
+      const a = clock * 9;
+      world.pointer = { x: centre.x + Math.cos(a) * 55, y: centre.y + Math.sin(a) * 55, speed: 500, still: 0, circling: true, circle: centre };
+      if (pet.mode === "chase") closest = Math.min(closest, Math.hypot(pet.x - world.pointer.x, pet.y - world.pointer.y));
+      each(pet);
+    });
+    return closest;
+  };
+  const mine = pets.simulate({ seed: 31, id: "you" });
+  const world = WORLD();
+  fly(mine, 1, world);
+  const closest = circling(mine, world, 1.2);
+  assert.ok(mine.pet.events.includes("chase"), "it chases");
+  assert.ok(closest < 40, `close behind the pointer (${closest.toFixed(0)} px)`);
+  circling(mine, world, 3);
+  assert.notEqual(mine.pet.mode, "chase", "for a moment only");
+  const chases = mine.pet.events.filter((mode) => mode === "chase").length;
+  circling(mine, world, 3);
+  assert.equal(mine.pet.events.filter((mode) => mode === "chase").length, chases, "then it lets the pointer be a while");
+  const guest = pets.simulate({ seed: 31, id: "guest:7" });
+  fly(guest, 1, WORLD());
+  const guestWorld = WORLD();
+  circling(guest, guestWorld, 2);
+  assert.ok(!guest.pet.events.includes("chase"), "a friend's pet does not chase your pointer");
+  const calm = pets.simulate({ seed: 31, id: "you" });
+  const calmWorld = WORLD({ motion: "calm" });
+  fly(calm, 1, calmWorld);
+  circling(calm, calmWorld, 2);
+  assert.ok(!calm.pet.events.includes("chase"), "calm motion keeps it on its perch");
+});
+
+test("the little things are rare: minutes between a sneeze or a firefly, seconds between a resting flick", () => {
+  const { pets } = load();
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const { pet } = pets.simulate({ seed });
+    assert.ok(pet.sneezeAt >= 240 && pet.sneezeAt <= 540, `a sneeze in 4 to 9 minutes (${pet.sneezeAt.toFixed(0)} s)`);
+    assert.ok(pet.fireflyAt >= 300 && pet.fireflyAt <= 620, `a firefly in 5 to 10 minutes (${pet.fireflyAt.toFixed(0)} s)`);
+    assert.ok(pet.flickAt >= 6 && pet.flickAt <= 15);
+  }
+  // Ten minutes of flight: a sneeze or two and a firefly or two, no more.
+  const sim = pets.simulate({ seed: 12 });
+  fly(sim, 600, WORLD());
+  const fireflies = sim.pet.events.filter((mode) => mode === "firefly").length;
+  assert.ok(fireflies <= 2, `${fireflies} fireflies in ten minutes`);
+});
+
+test("waking: a stretch and a yawn, wings spread for a moment; calm motion keeps it small; the kill switch skips it", () => {
+  const { pets } = load();
+  const wake = (extra = {}) => {
+    const sim = pets.simulate({ seed: 5 });
+    const world = WORLD(extra);
+    sitDown(sim, world);
+    world.quiet = 200;
+    fly(sim, 0.5, world);
+    assert.equal(sim.pet.mode, "sleep");
+    world.quiet = 0;
+    world.pointer = { x: sim.pet.x + 40, y: sim.pet.y, speed: 120, still: 0 };
+    let yawn = 0, fold = 1;
+    for (let n = 0; n < 60 * 3; n += 1) {
+      sim.step(1 / 60, world);
+      if (world.pointer) world.pointer.speed = 120;
+      yawn = Math.max(yawn, sim.pet.yawn); fold = Math.min(fold, sim.pet.fold);
+    }
+    return { sim, yawn, fold };
+  };
+  const full = wake();
+  assert.ok(full.sim.pet.events.includes("rest"), "awake");
+  assert.ok(full.yawn > 0.8, `a big yawn (${full.yawn.toFixed(2)})`);
+  assert.ok(full.fold < 0.7, `wings out in the stretch (fold ${full.fold.toFixed(2)})`);
+  assert.equal(full.sim.pet.stretch, 0, "done in two seconds");
+  const calm = wake({ motion: "calm" });
+  assert.ok(calm.yawn > 0.2 && calm.yawn <= 0.61, `calm: a small one (${calm.yawn.toFixed(2)})`);
+  const off = wake({ antics: false });
+  assert.equal(off.yawn, 0, "the little things switched off: no yawn");
+});
+
+test("a flick of the tail at rest, a tiny sneeze of sparks, a firefly chased and lost; with calm a firefly drifts past and it only watches; none with the switch off", () => {
+  const { pets } = load();
+  // The flick.
+  const flick = pets.simulate({ seed: 5 });
+  const world = WORLD();
+  sitDown(flick, world);
+  flick.pet.flickAt = 0.01;
+  flick.step(1 / 60, world);
+  assert.ok(flick.pet.flick > 0, "a flick");
+  // The sneeze: a little burst of sparks from the snout, half a second in.
+  const sneeze = pets.simulate({ seed: 6 });
+  const there = WORLD();
+  sitDown(sneeze, there);
+  sneeze.pet.sneezeAt = 0.01;
+  let sparks = 0;
+  fly(sneeze, 1, there, (pet) => { sparks = Math.max(sparks, pet.particles.filter((bit) => bit.kind === "spark").length); });
+  assert.ok(sparks >= 5 && sparks <= 9, `a tiny sneeze (${sparks} sparks)`);
+  // The firefly: chased, snapped at, gone.
+  const hunter = pets.simulate({ seed: 7 });
+  const sky = WORLD();
+  fly(hunter, 1, sky);
+  hunter.pet.fireflyAt = 0.01;
+  hunter.step(1 / 60, sky);
+  assert.equal(hunter.pet.mode, "firefly");
+  assert.ok(hunter.pet.firefly && !hunter.pet.firefly.drift);
+  let nearest = Infinity;
+  fly(hunter, 6, sky, (pet) => { if (pet.firefly && pet.mode === "firefly") nearest = Math.min(nearest, Math.hypot(pet.firefly.x - pet.x, pet.firefly.y - pet.y)); });
+  assert.ok(nearest < 60, `it got close (${nearest.toFixed(0)} px)`);
+  assert.equal(hunter.pet.mode === "firefly", false, "and gave up or snapped");
+  fly(hunter, 2, sky);
+  assert.equal(hunter.pet.firefly, null, "the firefly flew off");
+  // Calm: it drifts past, the pet watches from its perch.
+  const watcher = pets.simulate({ seed: 8 });
+  const calm = WORLD({ motion: "calm" });
+  sitDown(watcher, calm);
+  watcher.pet.fireflyAt = 0.01;
+  watcher.step(1 / 60, calm);
+  assert.ok(watcher.pet.firefly?.drift, "a firefly drifts past");
+  let turned = 0;
+  fly(watcher, 3, calm, (pet) => { turned = Math.max(turned, Math.abs(pet.look)); });
+  assert.equal(watcher.pet.mode, "rest", "it stays put");
+  assert.ok(!watcher.pet.events.includes("firefly"));
+  assert.ok(turned > 0.1, "it watches the firefly go by");
+  // The kill switch: none of it.
+  const quiet = pets.simulate({ seed: 9 });
+  const off = WORLD({ antics: false });
+  sitDown(quiet, off);
+  Object.assign(quiet.pet, { flickAt: 0.01, sneezeAt: 0.01, fireflyAt: 0.01 });
+  fly(quiet, 2, off);
+  assert.deepEqual([quiet.pet.flick, quiet.pet.sneeze, quiet.pet.firefly, quiet.pet.particles.filter((bit) => bit.kind === "spark").length], [0, 0, null, 0], "the little things switched off");
+});
+
+test("the Shop's pets: worn only once owned (Ember otherwise), each with its own name; a Try borrows one unsaved; the relay hears the pet on show", () => {
+  const storage = new Map();
+  const heard = [];
+  const bridge = { hubPet: (pet) => { heard.push(JSON.parse(JSON.stringify(pet))); return Promise.resolve({ ok: true }); } };
+  let env = load({ storage, bridge });
+  assert.deepEqual(Array.from(env.pets.kinds(), (kind) => [kind.id, kind.item, kind.name]), [["dragon", null, "Ember the dragon"], ["cloud", "studio:pet-cloud", "Cloud dragon"], ["phoenix", "studio:pet-phoenix", "Phoenix"], ["wisp", "studio:pet-wisp", "Will-o'-wisp"]]);
+  env.pets.set({ on: true, kind: "cloud" });
+  assert.deepEqual([env.pets.state().kind, env.pets.state().name], ["dragon", "Ember"], "not owned: Ember flies, and the relay hears Ember");
+  assert.equal(heard.at(-1).kind, "dragon");
+  env = load({ storage, owned: ["studio:pet-cloud"], bridge });
+  assert.deepEqual([env.pets.state().kind, env.pets.state().name], ["cloud", "Nimbus"], "owned: the choice comes back, with its own name");
+  assert.deepEqual(heard.at(-1), { kind: "cloud", skin: "theme", name: "Nimbus" });
+  env.pets.set({ name: "  Mist  " });
+  assert.equal(env.pets.state().name, "Mist");
+  env.pets.set({ kind: "dragon" });
+  assert.equal(env.pets.state().name, "Ember", "Ember keeps its own name");
+  env = load({ storage, owned: ["studio:pet-cloud"] });
+  env.pets.set({ kind: "cloud" });
+  assert.equal(env.pets.state().name, "Mist", "names survive a reload");
+  env.pets.preview({ kind: "phoenix" }, 120000);
+  assert.deepEqual([env.pets.state().kind, env.pets.state().preview, env.pets.state().name], ["phoenix", true, "Blaze"], "a Try");
+  assert.ok(!String(storage.get("mefiStudio.pet.v1")).includes("phoenix"), "a Try is never saved");
+  env.pets.endPreview();
+  assert.equal(env.pets.state().kind, "cloud");
+  assert.deepEqual(JSON.parse(storage.get("mefiStudio.pet.v1")).names, { cloud: "Mist" });
+});
+
+test("your pet and friends' pets fly as their own kinds; one this Studio does not know comes as Ember; a new kind gets a new body", () => {
+  const env = load({ owned: ["studio:pet-wisp"] });
+  env.pets.set({ on: true, kind: "wisp" });
+  const kinds = () => Object.fromEntries(env.pets.flying().map((pet) => [pet.id, pet.kind]));
+  assert.deepEqual(kinds(), { you: "wisp" });
+  env.pets.guests([
+    { id: "u1", name: "Sam", pet: { kind: "cloud", skin: "jade", name: "Nimbus" } },
+    { id: "u2", name: "Ari", pet: { kind: "phoenix", skin: "gold", name: "Blaze" } },
+    { id: "u3", name: "Lou", pet: { kind: "griffin", skin: "theme", name: "Grif" } },
+  ]);
+  assert.deepEqual(kinds(), { you: "wisp", "guest:u1": "cloud", "guest:u2": "phoenix", "guest:u3": "dragon" });
+  env.pets.guests([{ id: "u1", name: "Sam", pet: { kind: "wisp", skin: "jade", name: "Nimbus" } }]);
+  assert.deepEqual(kinds(), { you: "wisp", "guest:u1": "wisp" }, "the others went; Sam's pet changed");
+  env.pets.preview({ kind: "dragon" }, 120000);
+  assert.equal(kinds().you, "dragon", "a Try changes your pet's body too");
+  env.pets.endPreview();
+  assert.equal(kinds().you, "wisp");
+});
+
+test("Settings' pet card: a live picture of the pet, which pet (the Shop's once owned), its name and colours, and the pointer switch with how to pet it", async () => {
+  const env = load({ owned: ["studio:pet-cloud"] });
+  const card = env.document.querySelector("#settings-flair");
+  const kinds = card.querySelector("#settings-pet-kind");
+  assert.deepEqual(kinds.children.map((option) => [option.value, option.textContent, option.disabled]), [["dragon", "Ember the dragon", false], ["cloud", "Cloud dragon", false], ["phoenix", "Phoenix (in the Shop)", true], ["wisp", "Will-o'-wisp (in the Shop)", true]]);
+  const stage = card.querySelector("canvas.settings-flair-preview");
+  assert.ok(stage, "a picture of the pet");
+  assert.deepEqual([stage.getAttribute("role"), stage.getAttribute("aria-label")], ["img", "Ember the dragon"]);
+  assert.deepEqual(card.querySelectorAll(".settings-flair-pick .field-label").map((label) => label.textContent), ["Pet", "Name", "Colours"], "each control has its name above it");
+  assert.equal(card.querySelector("#settings-pet-name").value, "Ember");
+  assert.match(card.textContent, /Plays with your pointer/);
+  assert.match(card.textContent, /Rest the pointer on Ember to pet it\. Circle the pointer quickly near it to play chase\./);
+  assert.match(card.textContent, /More pets, skins and menu effects are in the Shop/);
+  // Choosing the cloud dragon: the card follows, with its name in the switch and the picture.
+  kinds.value = "cloud";
+  await kinds.trigger("change");
+  assert.equal(env.pets.state().kind, "cloud");
+  const again = env.document.querySelector("#settings-flair");
+  assert.equal(again.querySelector("#settings-pet-name").value, "Nimbus");
+  assert.match(again.textContent, /Nimbus the cloud dragon swims around the studio/);
+  assert.equal(again.querySelector("canvas.settings-flair-preview").getAttribute("aria-label"), "Nimbus the cloud dragon");
+  const name = again.querySelector("#settings-pet-name");
+  name.value = "Mist";
+  await name.trigger("change");
+  assert.equal(env.pets.state().name, "Mist");
+  assert.match(again.textContent, /Mist the cloud dragon swims around the studio/);
+  // The pointer switch, and a Try of a pet not owned yet.
+  const touch = again.querySelectorAll("label.switch").find((label) => /Plays with your pointer/.test(label.textContent)).querySelector("input");
+  touch.checked = false;
+  await touch.trigger("change");
+  assert.equal(env.pets.state().touch, false);
+  const tryPet = again.querySelectorAll("button").find((button) => button.textContent === "Try a pet for 2 minutes");
+  await tryPet.click();
+  assert.deepEqual([env.pets.state().kind, env.pets.state().preview], ["phoenix", true]);
+  const all = load({ owned: ["studio:pet-cloud", "studio:pet-phoenix", "studio:pet-wisp", "studio:skin-frost", "studio:skin-jade", "studio:skin-void", "studio:skin-gold"] });
+  assert.doesNotMatch(all.document.querySelector("#settings-flair").textContent, /Try a/, "everything owned: nothing to try");
+});
+
+test("previews: every pet draws small and large, flying, resting or asleep; a calm loop that comes back round to where it began", () => {
+  const { pets } = load();
+  for (const kind of KINDS) {
+    for (const [width, height] of [[96, 64], [300, 150], [360, 240]]) {
+      for (const pose of ["fly", "rest", "sleep"]) {
+        const paint = recorder();
+        const canvas = { clientWidth: width, clientHeight: height, width, height, getContext: () => paint.ctx };
+        assert.equal(pets.paintPreview(canvas, { kind, skin: "frost", time: 2.5, pose }), true);
+        assert.ok(paint.fills() >= 8, `${kind} ${pose} at ${width}x${height}: ${paint.fills()} fills`);
+      }
+    }
+  }
+  // The loop: a frame and the same frame one turn later put the head in the same place (read off the drawing's moves).
+  const first = (time) => {
+    const transforms = [];
+    const paint = recorder({ setTransform: (...args) => transforms.push(args) });
+    const canvas = { clientWidth: 300, clientHeight: 200, width: 300, height: 200, getContext: () => paint.ctx };
+    pets.paintPreview(canvas, { kind: "dragon", time });
+    return transforms.at(-1).map((value) => Math.round(value));
+  };
+  const turn = (2 * Math.PI) / 1.1;
+  assert.deepEqual(first(1 + turn), first(1), "one turn of the loop later, the same place");
+});
+
+test("a live preview moves only while it is on screen, the window shows and motion is on; the kill switch keeps it still", () => {
+  const page = ({ storage = new Map(), motion = "on" } = {}) => {
+    const { document } = createDom({ ids: [] });
+    document.readyState = "complete";
+    document.documentElement.dataset.motion = motion;
+    const frames = [], watched = [];
+    let clock = 0;
+    class Watch { constructor(callback) { this.callback = callback; } observe(target) { watched.push({ target, callback: this.callback }); } unobserve() {} }
+    const window = { innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, location: { search: "" }, addEventListener() {}, dispatchEvent() { return true; }, MefiShop: { owns: () => true } };
+    const context = vm.createContext({
+      window, document, console, Math, Date, JSON, Number, Array, Object, Proxy, IntersectionObserver: Watch,
+      CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+      localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)) },
+      setTimeout: () => 0, clearTimeout() {}, requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; }, cancelAnimationFrame() {}, performance: { now: () => clock },
+      getComputedStyle: () => ({ getPropertyValue: () => "" }),
+    });
+    vm.runInContext(source, context);
+    const paint = recorder();
+    const canvas = { clientWidth: 200, clientHeight: 120, width: 200, height: 120, getContext: () => paint.ctx, isConnected: true };
+    const run = (count) => { let ran = 0; for (let n = 0; n < count && frames.length; n += 1) { clock += 40; frames.shift()(clock); ran += 1; } return ran; };
+    return { pets: window.MefiPets, canvas, paint, frames, watched, run, see: (on) => watched.at(-1).callback([{ target: canvas, isIntersecting: on }]) };
+  };
+  const live = page();
+  const show = live.pets.livePreview(live.canvas, { kind: "cloud" });
+  assert.ok(live.paint.fills() > 0, "a still frame at once");
+  assert.equal(live.frames.length, 0, "nothing moves before it is seen");
+  live.see(true);
+  const drawn = live.paint.fills();
+  assert.equal(live.run(10), 10, "on screen: it moves");
+  assert.ok(live.paint.fills() > drawn);
+  live.see(false);
+  live.run(5);
+  assert.equal(live.frames.length, 0, "off screen: it stops");
+  show.stop();
+  const still = page({ motion: "off" });
+  still.pets.livePreview(still.canvas, { kind: "wisp" });
+  still.see(true);
+  assert.equal(still.frames.length, 0, "motion Off: one still frame");
+  const killed = page({ storage: new Map([["mefiStudio.pet.livePreview", "off"]]) });
+  killed.pets.livePreview(killed.canvas, { kind: "phoenix" });
+  killed.see(true);
+  assert.equal(killed.frames.length, 0, "the kill switch keeps it still");
+  assert.equal(killed.pets.state().livePreview, false);
+  assert.equal(page({ storage: new Map([["mefiStudio.pet.antics", "off"]]) }).pets.state().antics, false, "and the little things' own switch is read at load");
+});
+
+test("on the page: a pointer resting on your pet pets it (the card's switch off, it does not), and quick circles near it start a chase", () => {
+  const page = ({ motion = "calm" } = {}) => {
+    const { document } = createDom({ ids: [] });
+    document.readyState = "complete";
+    document.documentElement.dataset.motion = motion;
+    const make = document.createElement;
+    document.createElement = (tag) => { const element = make(tag); if (tag === "canvas") element.getContext = () => recorder().ctx; return element; };
+    const frames = [], timers = [], events = {};
+    let clock = 0;
+    const window = {
+      innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1, location: { search: "" },
+      addEventListener(name, callback) { (events[name] ||= []).push(callback); }, dispatchEvent() { return true; }, MefiShop: { owns: () => true },
+    };
+    const context = vm.createContext({
+      window, document, console, Math, Date, JSON, Number, Array, Object, Proxy,
+      CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
+      localStorage: { getItem: () => null, setItem() {} },
+      setTimeout: (fn) => { timers.push(fn); return timers.length; }, clearTimeout() {},
+      requestAnimationFrame: (fn) => { frames.push(fn); return frames.length; }, cancelAnimationFrame() {}, performance: { now: () => clock },
+      getComputedStyle: () => ({ getPropertyValue: () => "" }),
+    });
+    vm.runInContext(source, context);
+    for (const fn of timers.splice(0)) fn();
+    const pets = window.MefiPets;
+    const run = (seconds) => { const end = clock + seconds * 1000; while (clock < end && (frames.length || timers.length)) { clock += 16; (frames.shift() || timers.shift())(clock); } };
+    const move = (x, y) => { for (const callback of events.pointermove || []) callback({ type: "pointermove", clientX: x, clientY: y }); };
+    const me = () => pets.flying().find((pet) => pet.id === "you");
+    return { pets, run, move, me, tick: (ms) => { clock += ms; } };
+  };
+  const calm = page();
+  calm.pets.set({ on: true });
+  for (let n = 0; n < 40 && calm.me().mode !== "rest"; n += 1) calm.run(0.5);
+  assert.equal(calm.me().mode, "rest", "calm motion: it sits on its perch");
+  calm.move(calm.me().x, calm.me().y);
+  calm.run(0.7);
+  assert.equal(calm.me().mode, "petted", "a resting hand on it");
+  const off = page();
+  off.pets.set({ on: true, touch: false });
+  for (let n = 0; n < 40 && off.me().mode !== "rest"; n += 1) off.run(0.5);
+  off.move(off.me().x, off.me().y);
+  off.run(0.7);
+  assert.equal(off.me().mode, "rest", "Plays with your pointer off: no petting");
+  const lively = page({ motion: "on" });
+  lively.pets.set({ on: true });
+  lively.run(1);
+  const { x, y } = lively.me();
+  for (let n = 0; n < 48; n += 1) { lively.tick(14); const a = (n / 30) * 2 * Math.PI; lively.move(x + 60 + Math.cos(a) * 50, y + Math.sin(a) * 50); }
+  lively.run(0.05);
+  assert.equal(lively.me().mode, "chase", "quick circles near it: a chase");
 });

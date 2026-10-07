@@ -20,6 +20,11 @@
 .settings-flair-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .settings-flair-name { width: min(200px, 100%); }
 .settings-flair-shop { justify-self: start; }
+/* The pet's live picture, and its three picks side by side (one under another when narrow). */
+.settings-flair-preview { display: block; width: min(100%, 360px); height: 132px; border: 1px solid var(--hairline, rgba(127, 127, 127, 0.25)); border-radius: 12px; background: color-mix(in srgb, var(--gold) 5%, transparent); }
+.settings-flair-picks { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+.settings-flair-pick { display: grid; gap: 6px; flex: 1 1 160px; min-width: 0; max-width: 240px; }
+.settings-flair-pick > :is(select, input) { width: 100%; min-width: 0; }
 @media print {
   .studio-pet, .exit-effect-dust { display: none; }
 }

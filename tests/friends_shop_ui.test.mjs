@@ -120,7 +120,7 @@ function environment({ hub = { configured: true, linked: true, state: "ready", u
     set: (patch) => { shown.push(["pets.set", clone(patch)]); Object.assign(pet, patch); },
     preview: (options, ms) => shown.push(["pets.preview", clone(options), ms]),
     endPreview: () => shown.push(["pets.endPreview"]),
-    paintPreview: (_canvas, options) => shown.push(["pets.paint", options.kind, options.skin]),
+    paintPreview: (_canvas, options) => shown.push(["pets.paint", options.kind, options.skin, options.time]),
   };
   if (modules.effects) window.MefiEffects = {
     list: () => [{ id: "dissolve", item: "studio:fx-dissolve", name: "Dissolve" }],
@@ -252,7 +252,7 @@ test("Ember the dragon is free with every Studio: no price, Try or Buy, just a s
   assert.equal(toggle().getAttribute("aria-checked"), "false");
   assert.match(toggle().textContent, /Show EmberOff/);
   await toggle().click();
-  assert.deepEqual(acted(env), ["pets.set", { on: true }], "the switch is MefiPets.set({ on })");
+  assert.deepEqual(acted(env), ["pets.set", { on: true, kind: "dragon" }], "the switch is MefiPets.set({ on }), and On is Ember");
   assert.equal(toggle().getAttribute("aria-checked"), "true");
   assert.match(toggle().textContent, /Show EmberOn/);
   assert.equal(status(card), "Ember is out. Look for it around your studio.");
@@ -261,6 +261,39 @@ test("Ember the dragon is free with every Studio: no price, Try or Buy, just a s
   assert.equal(toggle().getAttribute("aria-checked"), "false");
   assert.equal(status(card), "Ember is resting.");
   assert.equal(shopCalls(env, "shopBuy").length, 0);
+});
+
+test("a pet from the Shop: its card flies it, Try borrows it, Use lets it out, and Ember's switch says Ember rests meanwhile", async () => {
+  const cloud = studioItem("studio:pet-cloud", "pet", "Cloud dragon", 120, { blurb: "A long, wingless dragon that swims through the air in waves." });
+  const env = environment({ views: { studio: { ok: true, items: [cloud, ...CATALOG], next: null, balance: 240, canEarn: true, hold: null } } });
+  let card = await open(env);
+  const box = () => item(card, "studio:pet-cloud");
+  assert.equal(box().querySelector("canvas.friends-shop-pet").dataset.kind, "cloud", "the card flies the cloud dragon");
+  assert.ok(env.shown.some(([what, kind]) => what === "pets.paint" && kind === "cloud"));
+  assert.match(box().textContent, /Cloud dragonby Mefi StudioA long, wingless dragon/);
+  await one(box(), "Try for 2 minutes").click();
+  assert.deepEqual(env.shown.find(([what]) => what === "pets.preview"), ["pets.preview", { kind: "cloud", skin: "theme" }, 120000], "a Try borrows it");
+  await one(card.querySelector("#friends-shop-try"), "Stop").click();
+  // Owned, it is put to use; Ember's own switch then reads Off, and On brings Ember back.
+  const owned = environment({ owned: [{ id: "studio:pet-cloud", kind: "pet", name: "Cloud dragon", data: null, updatedAt: 1 }], views: { studio: { ok: true, items: [{ ...cloud, owned: true }, ...CATALOG], next: null, balance: 240, canEarn: true, hold: null } } });
+  card = await open(owned);
+  await one(item(card, "studio:pet-cloud"), "Use").click();
+  assert.deepEqual(acted(owned), ["pets.set", { on: true, kind: "cloud" }]);
+  card = await open(owned);
+  const toggle = card.querySelector("#friends-shop-ember-switch");
+  assert.equal(toggle.getAttribute("aria-checked"), "false", "the cloud dragon is out, so Ember is resting");
+  await toggle.click();
+  assert.deepEqual(acted(owned), ["pets.set", { on: true, kind: "dragon" }]);
+});
+
+test("a pet's card flies on seconds: the frame at 5 s draws it at 5, and a still frame at 0", async () => {
+  const env = environment({ frames: true });
+  await open(env);
+  env.frame(5000);
+  const times = env.shown.filter(([what]) => what === "pets.paint").map((entry) => entry[3]);
+  assert.ok(times.includes(0), "the still frame each card starts with");
+  assert.ok(times.includes(5), `the 5000 ms frame draws time 5 (${times.join(", ")})`);
+  assert.ok(times.every((time) => time < 100), "never milliseconds, which spun the pet round its loop many times a frame");
 });
 
 test("motion off: a pet is one still frame; nothing plays on hover", async () => {
@@ -480,7 +513,7 @@ test("Use per kind: Ember's switch, scales dress it, an effect and a pack are pu
   assert.deepEqual(env.went.at(-1), ["friends-page", { place: "shop" }]);
   assert.equal(card.querySelectorAll("article")[0].dataset.item, EMBER, "Ember is yours too, with its switch");
   await card.querySelector("#friends-shop-ember-switch").click();
-  assert.deepEqual(acted(env), ["pets.set", { on: true }]);
+  assert.deepEqual(acted(env), ["pets.set", { on: true, kind: "dragon" }]);
   await one(item(card, "studio:skin-frost"), "Use").click();
   assert.deepEqual(acted(env), ["pets.set", { skin: "frost" }]);
   assert.equal(status(card), "Frost scales is in use.");

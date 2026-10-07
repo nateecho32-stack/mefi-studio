@@ -234,6 +234,8 @@ button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40
 .setup-welcome-look-row { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; gap: 4px 12px; margin-top: 8px; }
 .setup-welcome-look-label { color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); font-weight: 600; }
 .setup-welcome-look-note { grid-column: 2; color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); line-height: 1.4; }
+/* The dragon row's tiny Ember (renderer/pets.js livePreview), under its name. */
+.setup-welcome-pet { grid-column: 1; grid-row: 2; justify-self: start; width: 108px; height: 54px; pointer-events: none; }
 .setup-welcome-seg { justify-self: start; min-width: min(100%, 300px); }
 .setup-welcome-seg > button { min-height: 34px; justify-items: center; text-align: center; font-size: max(12px, calc(13px * var(--text-scale, 1))); }
 .setup-welcome-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -258,5 +260,6 @@ button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40
   .setup-welcome-look-row { grid-template-columns: minmax(0, 1fr); }
   .setup-welcome-look-art { aspect-ratio: 16 / 7; }
   .setup-welcome-look-note { grid-column: 1; }
+  .setup-welcome-pet { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .setup-welcome { animation: none; } }

@@ -351,7 +351,8 @@
   function drawLive(canvas, time) {
     try {
       if (canvas.dataset.nodeStyle) paintBoard(canvas, time);
-      else window.MefiPets?.paintPreview?.(canvas, { kind: canvas.dataset.kind, skin: canvas.dataset.skin, time });
+      // A board counts in milliseconds; a pet's flight in seconds.
+      else window.MefiPets?.paintPreview?.(canvas, { kind: canvas.dataset.kind, skin: canvas.dataset.skin, time: time / 1000 });
     } catch { /* the next frame tries again */ }
   }
   function watchLive(canvas) {
@@ -802,10 +803,12 @@
       const row = node("div", "friends-shop-actions");
       if (typeof window.MefiPets?.set !== "function") row.append(node("span", "friends-shop-soon", SOON));
       else {
-        const on = petState().on === true;
+        // On when Ember itself is out: another pet from the Shop flying instead is Ember resting.
+        const emberOut = () => petState().on === true && (petState().kind ?? "dragon") === "dragon";
+        const on = emberOut();
         const toggle = button("", () => {
-          const next = petState().on !== true;
-          try { window.MefiPets.set({ on: next }); } catch { /* said below either way */ }
+          const next = !emberOut();
+          try { window.MefiPets.set(next ? { on: true, kind: "dragon" } : { on: false }); } catch { /* said below either way */ }
           status.textContent = next ? "Ember is out. Look for it around your studio." : "Ember is resting.";
           paint();
         }, "friends-shop-ember-switch", "friends-shop-switch");

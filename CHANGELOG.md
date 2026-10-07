@@ -7,6 +7,25 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Pet your dragon, and more pets.** Rest the pointer on Ember for half a
+  second and it stops, turns to look at the pointer and purrs, with a few
+  small hearts and its name above it; circle the pointer quickly near it and
+  it gives chase for a moment. Clicks still go through to whatever is under
+  it. Now and then it does a little thing of its own: a stretch and a yawn
+  as it wakes, a flick of the tail while it rests, a tiny sneeze of sparks,
+  a firefly to chase. None of it happens with motion Off, and Calm keeps it
+  small. Settings › Appearance › Interface's pet card now shows your pet
+  moving, has **Pet**, **Name** and **Colours** picks (each pet keeps its own
+  name) and a **Plays with your pointer** switch. Three more pets are coming
+  to the Shop: a **Cloud dragon** that swims through the air with a flowing
+  mane, a **Phoenix** with a long tail of flame feathers and a
+  **Will-o'-wisp**, a little ghostly flame that trails sparks. Every skin
+  fits every pet, any of them can be tried for two minutes first, and
+  friends' pets visit as themselves. Ember stays free, and a pet a friend's
+  older Studio does not know yet shows there as Ember. The first run's
+  **Your dragon** row has a tiny Ember beside it, and the Shop's pet cards
+  fly at their proper calm pace again (they were spinning far too fast).
+
 - **Sign in to GitHub can finish.** Its setup window opened blank: the
   GitHub CLI never showed its one-time code or opened the browser, so the
   sign-in behind the Git chip, Publish to GitHub, Link to a repository, the
