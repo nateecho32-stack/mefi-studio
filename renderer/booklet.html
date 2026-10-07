@@ -23555,7 +23555,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const current = popup; popup = null;
     current.button.setAttribute("aria-expanded", "false"); current.button.removeAttribute("aria-activedescendant");
     // A menu effect from the Shop plays it away (renderer/effects.js); without one it simply goes.
-    if (typeof window.MefiEffects?.leave === "function") window.MefiEffects.leave(current.root); else current.root.remove();
+    // Read through globalThis: tests run this function in a vm with no window.
+    const effects = globalThis.window?.MefiEffects;
+    if (typeof effects?.leave === "function") effects.leave(current.root); else current.root.remove();
     if (focus && visible(current.button)) current.button.focus({ preventScroll: true });
     schedule();
   }
@@ -23676,7 +23678,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     root.append(list); layer().append(root); root.addEventListener("keydown", selectKeys);
     button.setAttribute("aria-controls", list.id); button.setAttribute("aria-expanded", "true");
     drawOptions(); root.querySelector("input")?.focus({ preventScroll: true });
-    if (typeof window.MefiEffects?.prepare === "function" && typeof requestAnimationFrame === "function") requestAnimationFrame(() => window.MefiEffects.prepare(root));
+    const effects = globalThis.window?.MefiEffects;
+    if (typeof effects?.prepare === "function" && typeof requestAnimationFrame === "function") requestAnimationFrame(() => effects.prepare(root));
   }
   function enhanceSelect(select) {
     if (selects.has(select) || select.hidden || select.classList.contains("segmented-source") || select.getAttribute("aria-hidden") === "true") return;
@@ -38486,6 +38489,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // only dims nothing without it, so the classic layout never shows a dim it has no switch for.
     runningOnly: readStore("mefiStudio.cmdRunningOnly") === "1",
     mapOn: false,
+    // Kill switches, read once: "mefiStudio.mapRings" or "mefiStudio.mapFill"
+    // saved as "off" puts the work orbs' state rings, or a small tree's fill
+    // of the 3D overview, back as they were.
+    mapRings: readStore("mefiStudio.mapRings") !== "off",
+    mapFill: readStore("mefiStudio.mapFill") !== "off",
   };
 
   const el = {};
@@ -43405,7 +43413,17 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       // middle; the room checks below still shrink it to fit. The flat map
       // keeps 1: its nodes hold the screen places they were given.
       const live = anchors.filter(({ node }) => !node.dying && !node._absorbed && node._layoutAnchor).map(({ node }) => node._layoutAnchor);
-      const fill = state.view !== "2d" ? fillCeiling(live.length) : 1;
+      // The ceiling itself moves over about a third of a second as nodes come
+      // and go, so a tree that gains its tenth node settles back to 1 instead
+      // of popping; motion Off moves it at once.
+      const target = state.view !== "2d" && state.mapFill !== false ? fillCeiling(live.length) : 1;
+      let fill = target;
+      if (state.view !== "2d" && Number.isFinite(state.fillNow) && state.fillNow !== target && !still && Number.isFinite(animationTime) && Number.isFinite(state.overviewAt)) {
+        const dt = Math.max(0, Math.min(0.1, (animationTime - state.overviewAt) / 1000));
+        fill = state.fillNow + (target - state.fillNow) * (1 - Math.exp(-dt / 0.12));
+        if (Math.abs(target - fill) < 0.002) fill = target;
+      }
+      state.fillNow = fill;
       let scale = fill;
       if (state.view !== "2d") scale = orbitEnvelope(live, state.orbitFrame, halfW, halfH, fill) * (groove?.frame ?? 1);
       const roomX = Math.max(1, halfW - Math.abs(swayX)), roomY = Math.max(1, halfH - Math.abs(swayY));
@@ -47388,7 +47406,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       // Needs you, Review, Done) round every work orb, so the Map reads like
       // its legend in every theme. Under the work orbit and the done badge;
       // labels and callouts keep clear of it.
-      const ring = stateRingOf(node, active, hold);
+      const ring = state.mapRings !== false ? stateRingOf(node, active, hold) : null;
       if (ring) {
         drawStateRing(ctx, node, p, radius, ring, motion, time, still, Math.max(0.35, factor));
         node._styleReach = Math.max(node._styleReach ?? 0, radius + 6);

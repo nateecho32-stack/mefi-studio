@@ -1632,14 +1632,19 @@ failed process stays an error and cannot produce briefing requests.
   With the spin running, the camera also drifts inside that frame: a slow
   pan and a gentle zoom that keep the whole tree in view. A small tree (fewer
   than ten live nodes) may come in closer than its usual size, up to 1.7×
-  for one to three nodes, as far as the room allows; coming in eases, a
-  frame that must shrink does so at once, and the flat map keeps its size.
+  for one to three nodes, as far as the room allows. That ceiling eases over
+  about a third of a second as nodes come and go (at once with motion Off),
+  a frame that must shrink to keep a node in view does so at once, and the
+  flat map keeps its size. `mefiStudio.mapFill` saved as `off` in
+  localStorage keeps every tree at its usual size.
 - Every work orb shows its state as a ring in its legend colour (the
   legend's Running, Needs you, Review and Done): a few pixels off the node
   style's own outline, under the work orbit and the done badge. Running
   breathes, Needs you pulses, Review and Done hold still (all still with
   motion Off), and a light page draws it in the colour's deep ink. Agents,
   the hub and quiet work wear none. Task orbs are a size up from the rest.
+  `mefiStudio.mapRings` saved as `off` in localStorage turns the rings off
+  (both switches are read when the Map loads).
 - The **Ambience** popover keeps the quick audio-source control beside the
   canvas and links to canonical **Appearance** and **Audio** settings.
   Appearance opens beside the live tree in a compact sidebar. **Theme**,

@@ -1903,6 +1903,41 @@ test("a small tree fills the 3D overview: a handful of nodes comes in closer tha
   flat.state.view = "2d";
   overviewTurn(flat.env, flat.state, flat.nodes, flat.area, 0, () => {});
   assert.ok(flat.state.overviewScale <= 1, "2D stays at 1");
+  // The kill switch ("mefiStudio.mapFill" saved as "off") keeps a small tree at 1.
+  const off = overviewFixture("constellation", { count: 3 });
+  off.state.mapFill = false;
+  overviewTurn(off.env, off.state, off.nodes, off.area, 0, () => {});
+  assert.ok(off.state.overviewScale <= 1, `the fill switched off stays at 1 (${off.state.overviewScale})`);
+});
+
+test("the Map's state rings and a small tree's fill each have a kill switch, read once", () => {
+  const source = section("    runningOnly: readStore(", "  const el = {};");
+  assert.match(source, /mapRings: readStore\("mefiStudio\.mapRings"\) !== "off"/);
+  assert.match(source, /mapFill: readStore\("mefiStudio\.mapFill"\) !== "off"/);
+  const loop = section("      // The node's state at a glance:", "      drawWorkOrbit(ctx, node, p, radius, time, still);");
+  assert.ok(loop.includes("const ring = state.mapRings !== false ? stateRingOf(node, active, hold) : null;"), "rings off: no ring is worked out or drawn");
+});
+
+test("a small tree's fill ceiling eases as nodes come and go, and moves at once with motion off", () => {
+  const { env, state, nodes, area } = overviewFixture("constellation", { count: 10 });
+  let time = 1000;
+  const frame = (still = false) => {
+    state.camera.x = state.camera.tx ?? state.camera.x; state.camera.y = state.camera.ty ?? state.camera.y; state.camera.z = state.camera.tz ?? state.camera.z;
+    env.layoutProjectedGraph(nodes.map((node) => ({ node, p: env.project(node) })), area, "orbit", time, still);
+    time += 16;
+  };
+  const near = (value, expected) => Math.abs(value - expected) < 1e-9;
+  for (const node of nodes.slice(4)) node.dying = true;
+  frame(true);
+  assert.ok(near(state.fillNow, 1.6), `four live nodes may come in to 1.6 (${state.fillNow})`);
+  for (const node of nodes.slice(4)) node.dying = false;
+  frame();
+  assert.ok(state.fillNow > 1.45 && state.fillNow < 1.6, `ten live nodes: a frame later the ceiling has only begun to come down (${state.fillNow})`);
+  for (let i = 0; i < 60; i += 1) frame();
+  assert.equal(state.fillNow, 1, "and it settles at 1 within a second");
+  for (const node of nodes.slice(4)) node.dying = true;
+  frame(true);
+  assert.ok(near(state.fillNow, 1.6), "with motion off it moves at once");
 });
 
 test("every work orb's ring is a Map legend state: Done while its finish holds, then Review, Needs you, Running; quiet work and agents wear none", () => {

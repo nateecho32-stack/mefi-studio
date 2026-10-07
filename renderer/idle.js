@@ -442,6 +442,11 @@
     // only dims nothing without it, so the classic layout never shows a dim it has no switch for.
     runningOnly: readStore("mefiStudio.cmdRunningOnly") === "1",
     mapOn: false,
+    // Kill switches, read once: "mefiStudio.mapRings" or "mefiStudio.mapFill"
+    // saved as "off" puts the work orbs' state rings, or a small tree's fill
+    // of the 3D overview, back as they were.
+    mapRings: readStore("mefiStudio.mapRings") !== "off",
+    mapFill: readStore("mefiStudio.mapFill") !== "off",
   };
 
   const el = {};
@@ -5361,7 +5366,17 @@
       // middle; the room checks below still shrink it to fit. The flat map
       // keeps 1: its nodes hold the screen places they were given.
       const live = anchors.filter(({ node }) => !node.dying && !node._absorbed && node._layoutAnchor).map(({ node }) => node._layoutAnchor);
-      const fill = state.view !== "2d" ? fillCeiling(live.length) : 1;
+      // The ceiling itself moves over about a third of a second as nodes come
+      // and go, so a tree that gains its tenth node settles back to 1 instead
+      // of popping; motion Off moves it at once.
+      const target = state.view !== "2d" && state.mapFill !== false ? fillCeiling(live.length) : 1;
+      let fill = target;
+      if (state.view !== "2d" && Number.isFinite(state.fillNow) && state.fillNow !== target && !still && Number.isFinite(animationTime) && Number.isFinite(state.overviewAt)) {
+        const dt = Math.max(0, Math.min(0.1, (animationTime - state.overviewAt) / 1000));
+        fill = state.fillNow + (target - state.fillNow) * (1 - Math.exp(-dt / 0.12));
+        if (Math.abs(target - fill) < 0.002) fill = target;
+      }
+      state.fillNow = fill;
       let scale = fill;
       if (state.view !== "2d") scale = orbitEnvelope(live, state.orbitFrame, halfW, halfH, fill) * (groove?.frame ?? 1);
       const roomX = Math.max(1, halfW - Math.abs(swayX)), roomY = Math.max(1, halfH - Math.abs(swayY));
@@ -9344,7 +9359,7 @@
       // Needs you, Review, Done) round every work orb, so the Map reads like
       // its legend in every theme. Under the work orbit and the done badge;
       // labels and callouts keep clear of it.
-      const ring = stateRingOf(node, active, hold);
+      const ring = state.mapRings !== false ? stateRingOf(node, active, hold) : null;
       if (ring) {
         drawStateRing(ctx, node, p, radius, ring, motion, time, still, Math.max(0.35, factor));
         node._styleReach = Math.max(node._styleReach ?? 0, radius + 6);
