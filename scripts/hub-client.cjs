@@ -110,6 +110,10 @@ const SHOP_STATUSES = Object.freeze(["listed", "unlisted", "removed"]);
 const STUDIO_ITEM = /^studio:[a-z0-9-]{1,40}$/;
 const PACK_ID = /^pack_[A-Za-z0-9_-]{16}$/;
 const SHOP_CURSOR = /^[A-Za-z0-9_-]{1,32}$/;
+// The Shop's rotation (relay/src/shop-drops.mjs, feature "shop.drops"): a drop's id, its UTC times and its colours.
+const SHOP_DROP_ID = /^\d{4}-(?:0[1-9]|1[0-2])$/;
+const SHOP_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+const SHOP_DROP_COLOURS = Object.freeze(["accent", "accent2", "background"]);
 const PACK_COLOUR = /^#[0-9a-fA-F]{6}$/;
 const PACK_PALETTE = Object.freeze(["accent", "background", "surface", "text"]);
 const PACK_NODE_STYLES = Object.freeze(["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]);
@@ -515,8 +519,12 @@ function packData(value) {
     ...(PACK_FONTS.includes(value.font) ? { font: value.font } : {}),
   };
 }
+// A UTC ISO time as the relay writes a drop's (shop-drops.mjs DROP_TIME), or null.
+const shopTime = (value) => (typeof value === "string" && SHOP_TIME.test(value) && Number.isFinite(Date.parse(value)) ? value : null);
 // A Shop item from the relay, or null: only the known fields, strings and
-// numbers capped. A pack whose data is not a pack is left out.
+// numbers capped. A pack whose data is not a pack is left out. Its place in
+// the rotation: its drop, whether it is on sale (a relay from before drops
+// says nothing, and everything it lists is) and when it leaves.
 function itemCard(value) {
   if (!object(value) || !shopItemId(value.id) || !SHOP_ITEM_KINDS.includes(value.kind)) return null;
   const name = line(value.name, 40);
@@ -529,7 +537,23 @@ function itemCard(value) {
     data, sales: count(value.sales, 1e9) ?? 0, owned: value.owned === true,
     status: SHOP_STATUSES.includes(value.status) ? value.status : "listed",
     createdAt: timeOf(value.createdAt), updatedAt: timeOf(value.updatedAt),
+    drop: SHOP_DROP_ID.test(String(value.drop ?? "")) ? value.drop : null, available: value.available !== false, leaves: shopTime(value.leaves),
   };
+}
+// A drop as the relay lists it (shop-drops.mjs dropsAt): its id, name, line, times and banner colours (a colour that is
+// not #rrggbb is left out, and the banner uses the theme's), and for the current drop the ids of its items on sale.
+function dropCard(value, { items = false } = {}) {
+  if (!object(value) || !SHOP_DROP_ID.test(String(value.id ?? ""))) return null;
+  const name = line(value.name, 40), from = shopTime(value.from), until = shopTime(value.until);
+  if (!name || !from || !until || !(Date.parse(from) < Date.parse(until))) return null;
+  const colors = {};
+  for (const key of SHOP_DROP_COLOURS) if (typeof value.colors?.[key] === "string" && PACK_COLOUR.test(value.colors[key])) colors[key] = value.colors[key].toLowerCase();
+  return { id: value.id, name, blurb: line(value.blurb, 160) ?? "", from, until, colors, ...(items ? { items: Array.isArray(value.items) ? value.items.filter(shopItemId).slice(0, 48) : [] } : {}) };
+}
+// The drops a list carries: the current one, the next (a teaser) and the last that ended; null from a relay without them.
+function shopDrops(value) {
+  if (!object(value)) return null;
+  return { current: dropCard(value.current, { items: true }), next: dropCard(value.next), last: dropCard(value.last) };
 }
 // What a member typed for a pack: { name, blurb, price, data, listed } as the
 // relay takes them, the ones given only; null when one is wrong. The pack's
@@ -1046,7 +1070,8 @@ function createHubClient(options = {}) {
   }
   const refused = (answer) => ({ ok: false, error: answer.error, ...(answer.reason ? { reason: answer.reason } : {}), ...(answer.retryAfter != null ? { retryAfter: answer.retryAfter } : {}) });
   // A Shop refusal also keeps what Studio needs to say why: the item to get first (needs), the price now, the
-  // balance (and the tip that made it short), and why this member cannot sell yet (hold, until).
+  // balance (and the tip that made it short), why this member cannot sell yet (hold, until), and the drop of an item
+  // that has rotated out (not-available).
   const shopRefused = (answer) => {
     const data = object(answer.data) ? answer.data : {};
     return {
@@ -1057,6 +1082,7 @@ function createHubClient(options = {}) {
       ...(count(data.tip, PACK_TIP_MAX) ? { tip: data.tip } : {}),
       ...(CREDIT_HOLDS.includes(data.hold) ? { hold: data.hold } : {}),
       ...(Number.isFinite(data.until) ? { until: data.until } : {}),
+      ...(SHOP_DROP_ID.test(String(data.drop ?? "")) ? { drop: data.drop } : {}),
     };
   };
   const bad = () => Promise.resolve({ ok: false, error: "bad-request" });
@@ -1465,6 +1491,10 @@ function createHubClient(options = {}) {
         next: typeof data.next === "string" && SHOP_CURSOR.test(data.next) ? data.next : null,
         balance: count(data.balance, 1e12) ?? 0, canEarn: data.canEarn === true,
         hold: object(data.hold) && CREDIT_HOLDS.includes(data.hold.reason) ? { reason: data.hold.reason, until: timeOf(data.hold.until) } : null,
+        // The rotation (feature "shop.drops"): the drops, and the week's Featured shelf and when it changes.
+        drops: shopDrops(data.drops),
+        featured: Array.isArray(data.featured) ? data.featured.filter(shopItemId).slice(0, 8) : [],
+        featuredUntil: shopTime(data.featuredUntil),
       };
     },
     // Everything this member owns, to put back on a new PC: { items: [{ id, kind, name, data, updatedAt }] }.
@@ -1723,6 +1753,6 @@ module.exports = {
   PC_KINDS, pcKeys, pcHello, pcView, pcViews,
   KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,
   eventsPage, eventsFront,
-  SHOP_VIEWS, SHOP_ITEM_KINDS, itemCard, packData, packFields,
+  SHOP_VIEWS, SHOP_ITEM_KINDS, itemCard, packData, packFields, dropCard, shopDrops,
   PET_KINDS, PET_SKINS, petLook, roomPetsOf,
 };

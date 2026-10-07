@@ -35,7 +35,15 @@
 // report resolved with "remove", or POST /v1/admin/shop/:id/remove) takes it
 // from everyone for good. Forget me removes the member's packs, with nothing
 // of theirs left in them, and what they owned.
+//
+// Studio's items rotate (shop-drops.mjs, feature "shop.drops"): an item that
+// names a monthly drop is listed and sold only while that drop (or a later
+// one that brings it back) runs, and refused as "not-available" after it;
+// everyone who got it keeps it. Every item says so (`drop`, `available`,
+// `leaves`), and each list carries the drops (the current one with its items,
+// the next as a teaser, the last that ended) and the week's Featured shelf.
 
+import { DROPS, dropsAt, featuredAt, saleOf } from './shop-drops.mjs';
 import { PACK_LIMITS, checkPack } from './shop-pack.mjs';
 import { DAY_MS, HOUR_MS, cleanLine, keyedBuckets, newId } from './util.mjs';
 
@@ -63,14 +71,16 @@ export const ITEM_PARAM = 'studio:[a-z0-9-]{1,40}|[A-Za-z0-9_-]{1,64}';
 
 // When the catalog's items were last changed: Studio compares it with what it keeps.
 const CATALOG_AT = Date.UTC(2026, 9, 6);
-const studioItem = (id, kind, name, price, blurb, { requires = null, data = null } = {}) => Object.freeze({ id, kind, name, price, requires, blurb, data, at: CATALOG_AT });
+// `drop`: the monthly drop an item comes out in (shop-drops.mjs DROPS); none for a classic item, always on sale.
+const studioItem = (id, kind, name, price, blurb, { requires = null, data = null, drop = null } = {}) => Object.freeze({ id, kind, name, price, requires, blurb, data, drop, at: CATALOG_AT });
 const studioPack = ({ accent, accent2, background, surface, text, nodeStyle, material, font }) =>
   Object.freeze({ v: 1, palette: Object.freeze({ accent, background, surface, text, accent2 }), nodeStyle, material, font });
 
 /**
  * Studio's own items. Studio knows how to show each one by its id; the packs carry their data, as members' do.
  * Ember the dragon is free in every Studio, so it is not sold here and its scales need nothing first. An item may
- * still name another it needs (`requires`, refused as "needs" until that one is owned); none does today.
+ * still name another it needs (`requires`, refused as "needs" until that one is owned); none does today. An item of a
+ * monthly drop says so (`drop: '2026-10'`); main.cjs SHOP_STUDIO_ITEMS mirrors this list (tests/shop_host.test.mjs).
  */
 export const CATALOG = Object.freeze([
   studioItem('studio:skin-frost', 'skin', 'Frost scales', 40, 'Ember in icy blue.'),
@@ -96,12 +106,13 @@ export const CATALOG = Object.freeze([
 const isPackId = (value) => typeof value === 'string' && PACK_ID.test(value);
 
 /**
- * createShop({ store, now, credits, catalog })
+ * createShop({ store, now, credits, catalog, drops })
  *   credits: createCredits(...) (account, standing, heldUntil, spend, sale, tell)
  *   catalog: Studio's items, CATALOG unless a test gives its own
+ *   drops: the monthly drops, shop-drops.mjs DROPS unless a test gives its own
  * -> { routes(route), remove(packId, modId, reason), forget(uid), upkeep(), owns(uid, itemId) }
  */
-export function createShop({ store, now, credits, catalog = CATALOG }) {
+export function createShop({ store, now, credits, catalog = CATALOG, drops = DROPS }) {
   const studioItems = new Map(catalog.map((item) => [item.id, item]));
   const publishes = keyedBuckets({ capacity: SHOP.publishesPerDay, refillPerSec: SHOP.publishesPerDay / (DAY_MS / 1000), now });
   const reportTaps = keyedBuckets({ capacity: SHOP.reportsPerHour, refillPerSec: SHOP.reportsPerHour / (HOUR_MS / 1000), now });
@@ -127,10 +138,13 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
   /** How many members own each Studio item. */
   const studioSales = () => new Map(store.all(`SELECT item_id, COUNT(*) AS n FROM shop_owned WHERE item_id LIKE 'studio:%' GROUP BY item_id`).map((row) => [row.item_id, Number(row.n)]));
 
-  function studioView(item, owned, sales) {
+  // A Studio item with its place in the rotation: its drop, whether it is on sale now and, for a drop's item, when it leaves.
+  function studioView(item, owned, sales, at = now()) {
+    const sale = saleOf(item, at, drops);
     return {
       id: item.id, kind: item.kind, name: item.name, blurb: item.blurb, price: item.price, requires: item.requires, maker: null,
       data: item.data, sales: sales.get(item.id) ?? 0, owned: owned.has(item.id), status: 'listed', createdAt: item.at, updatedAt: item.at,
+      drop: item.drop ?? null, available: sale.available, leaves: sale.leaves,
     };
   }
 
@@ -139,6 +153,7 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
       id: row.id, kind: 'pack', name: row.name, blurb: row.blurb, price: row.price, requires: null,
       maker: row.maker_id ? { id: row.maker_id, name: nameOf(row.maker_id) } : null,
       data: JSON.parse(row.data), sales: row.sales, owned: owned.has(row.id), status: row.status, createdAt: row.created_at, updatedAt: row.updated_at,
+      drop: null, available: row.status === 'listed', leaves: null,
     };
   }
 
@@ -224,18 +239,21 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
     const fail = (status, error, extra = {}) => reply(status, { ok: false, error, ...extra });
     const standingOf = async (uid) => credits.standing(uid, await credits.heldUntil(uid));
 
-    // The Shop's lists: Studio's items, members' packs newest or best-selling first (30 a page), what this member
-    // owns, and their own packs (unlisted ones too). With the balance and whether they may earn, as /v1/me says it.
+    // The Shop's lists: Studio's items on sale now, members' packs newest or best-selling first (30 a page), what this
+    // member owns, and their own packs (unlisted ones too). With the balance and whether they may earn, as /v1/me says
+    // it, and the rotation: the drops (current, next, last) and the week's Featured shelf.
     route('GET', '/v1/shop', async ({ actor, query }) => {
       const view = String(query?.get?.('view') ?? 'studio');
       if (!SHOP_VIEWS.includes(view)) return fail(400, 'bad-request', { reason: 'view' });
       const offset = cursorAt(query?.get?.('cursor'));
       const owned = ownedIds(actor.uid);
+      const at = now();
       let items = [];
       let next = null;
       if (view === 'studio') {
         const sales = studioSales();
-        items = catalog.map((item) => studioView(item, owned, sales));
+        // An item of a drop that has not started, or that has rotated out, is not listed.
+        items = catalog.filter((item) => saleOf(item, at, drops).available).map((item) => studioView(item, owned, sales, at));
       } else if (view === 'owned') {
         const all = ownedList(actor.uid);
         items = all.slice(offset, offset + SHOP.pageSize);
@@ -249,15 +267,20 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
         next = nextAfter(offset, rows.length > SHOP.pageSize);
       }
       const stand = await standingOf(actor.uid);
-      return reply(200, { ok: true, view, items, next, balance: credits.account(actor.uid).balance, canEarn: stand.ok, hold: stand.ok ? null : { reason: stand.reason, until: stand.until } });
+      const featured = featuredAt(catalog, at);
+      return reply(200, {
+        ok: true, view, items, next, balance: credits.account(actor.uid).balance, canEarn: stand.ok, hold: stand.ok ? null : { reason: stand.reason, until: stand.until },
+        drops: dropsAt(at, drops, catalog), featured: featured.items, featuredUntil: featured.until,
+      });
     });
 
     // What a member owns, for a new PC to put back: removed packs left out, a pack's data always its newest.
     route('GET', '/v1/shop/owned', ({ actor }) => reply(200, { ok: true, items: ownedList(actor.uid).map(({ id, kind, name, data, updatedAt }) => ({ id, kind, name, data, updatedAt })) }));
 
     // Buying, or getting a free pack, with a tip for its maker if the member likes. Refusals say what Studio needs to
-    // explain them: the item to get first (needs), the price now, the balance (and the tip that made it short).
-    // The answer says what was paid, the tip included.
+    // explain them: the item to get first (needs), the price now, the balance (and the tip that made it short), and a
+    // Studio item whose drop has rotated out or not started (not-available, with its drop). The answer says what was
+    // paid, the tip included.
     route(
       'POST',
       '/v1/shop/:id/buy',
@@ -277,6 +300,7 @@ export function createShop({ store, now, credits, catalog = CATALOG }) {
           const price = item ? item.price : pack.price;
           if (pack && pack.maker_id === actor.uid) return { error: fail(409, 'own') };
           if (hasRow(actor.uid, params.id)) return { error: fail(409, 'owned') };
+          if (item && !saleOf(item, now(), drops).available) return { error: fail(409, 'not-available', item.drop ? { drop: item.drop } : {}) };
           if (item?.requires && !hasRow(actor.uid, item.requires)) return { error: fail(409, 'needs', { needs: item.requires }) };
           if (body.price !== price) return { error: fail(409, 'price-changed', { price }) };
           const paid = price + tip;
