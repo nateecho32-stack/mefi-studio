@@ -2407,6 +2407,8 @@ html:not([data-starting]) #boot-layer { display: none; }
 .boot-project-icon { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--tint-gold-3); color: var(--gold-bright); font: 600 14px/1 var(--font-display); }
 .boot-row:hover:not(:has(> .boot-project:disabled)) .boot-project-icon { background: color-mix(in srgb, var(--gold) 22%, transparent); }
 .boot-row:has(> .boot-project.selected) .boot-project-icon { background: color-mix(in srgb, var(--gold) 30%, transparent); }
+/* On a light page the chosen row's tint stacks under the badge's: a lighter badge keeps its initial at 4.5:1. */
+:root[data-studio-theme-tone="light"] .boot-row:has(> .boot-project.selected) .boot-project-icon { background: color-mix(in srgb, var(--gold) 18%, transparent); }
 .boot-project-text { display: grid; flex: 1; min-width: 0; gap: 1px; }
 .boot-project-name { font: 500 13px/1.3 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The drive and the folder name stay; the middle of a long path gives way. */
