@@ -3,7 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { GUARD, createCredits } from "../relay/src/credits.mjs";
 import { CREDIT_REASONS, FEATURES } from "../relay/src/protocol.mjs";
-import { CATALOG, PACK_ID, SHOP, createShop } from "../relay/src/shop.mjs";
+import { CATALOG, ITEM_KINDS, PACK_ID, SHOP, createShop } from "../relay/src/shop.mjs";
 import { MIGRATIONS, SCHEMA_VERSION, createStore } from "../relay/src/store.mjs";
 import { hmacKey, randomBytes } from "../relay/src/util.mjs";
 import { ALICE, BOB, CARA, MOD, makeRelay, member, connectAll, rawSocket, until } from "./fixtures/relay-harness.mjs";
@@ -77,7 +77,7 @@ async function connected(relay, token) {
   return raw;
 }
 
-test("the Studio catalog: ten items as the spec lists them (Ember is free, so not sold), the packs with their data, nothing owned yet", async () => {
+test("the Studio catalog: twelve items as the spec lists them (Ember is free, so not sold), the packs with their data, nothing owned yet", async () => {
   const clock = morning();
   const relay = makeRelay({ now: () => clock });
   const as = api(relay);
@@ -91,6 +91,8 @@ test("the Studio catalog: ten items as the spec lists them (Ember is free, so no
     ["studio:fx-dissolve", "effect", "Dissolve", 60, null],
     ["studio:fx-embers", "effect", "Burn away", 90, null],
     ["studio:fx-stardust", "effect", "Stardust", 90, null],
+    ["studio:style-dragonscale", "nodestyle", "Dragon scales", 80, null],
+    ["studio:style-constellation", "nodestyle", "Constellation", 80, null],
     ["studio:pack-synthwave", "pack", "Synthwave", 50, null],
     ["studio:pack-deep-sea", "pack", "Deep sea", 50, null],
     ["studio:pack-sakura", "pack", "Sakura (light)", 50, null],
@@ -101,10 +103,12 @@ test("the Studio catalog: ten items as the spec lists them (Ember is free, so no
     assert.ok(item.blurb.endsWith("."), item.id);
   }
   assert.deepEqual(shop.items.map((item) => item.blurb).slice(0, 4), ["Ember in icy blue.", "Ember in green and gold.", "Ember in black with a violet glow.", "Ember in shining gold."]);
+  assert.deepEqual(shop.items.filter((item) => item.kind === "nodestyle").map((item) => item.blurb), ["Nodes covered in shimmering dragon scales, with ember sparks along the wires.", "Nodes as bright stars joined by star-chart lines, with shooting stars."], "the two node styles, sold like the other Studio items (no data, no tip)");
+  assert.deepEqual([...ITEM_KINDS], ["pet", "skin", "effect", "nodestyle", "pack"]);
   assert.ok(!shop.items.some((item) => item.id === "studio:pet-dragon"), "Ember the dragon is free in every Studio");
   assert.deepEqual(shop.items.find((item) => item.id === "studio:pack-sakura").data, { v: 1, palette: { accent: "#b8325f", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" });
   assert.deepEqual([shop.view, shop.next, shop.balance, shop.canEarn, shop.hold], ["studio", null, 0, true, null]);
-  assert.equal((await as("tok-alice", "GET", "/v1/shop")).items.length, 10, "the catalog is the default list");
+  assert.equal((await as("tok-alice", "GET", "/v1/shop")).items.length, 12, "the catalog is the default list");
   assert.equal((await as("tok-alice", "GET", "/v1/shop?view=everything")).status, 400);
   assert.equal((await as("tok-newbie", "GET", "/v1/shop")).hold.reason, "new-member", "the list says why a member cannot earn yet");
   assert.ok(Object.isFrozen(CATALOG) && CATALOG.every((item) => Object.isFrozen(item)), "the catalog is fixed in code");
@@ -132,6 +136,21 @@ test("buying a Studio item takes the credits in one go, owns it on every PC, and
   assert.deepEqual(relay.sql("SELECT user_id, item_id, price, at FROM shop_owned").map((row) => ({ ...row })), [{ user_id: ALICE.id, item_id: "studio:fx-embers", price: 90, at: clock }]);
   assert.equal(balanceOf(relay, ALICE.id), 110);
   studio.socket.close();
+});
+
+test("a node style is bought like any Studio item: its price, no tip, owned on every PC with no data", async () => {
+  const clock = morning();
+  const relay = makeRelay({ now: () => clock });
+  const as = api(relay);
+  give(relay, ALICE.id, 100);
+  const tipped = await as("tok-alice", "POST", "/v1/shop/studio:style-constellation/buy", { price: 80, tip: 5 });
+  assert.deepEqual([tipped.status, tipped.error], [400, "no-tip"], "Studio's own items have nobody to thank");
+  const bought = await as("tok-alice", "POST", "/v1/shop/studio:style-constellation/buy", { price: 80 });
+  assert.equal(bought.status, 200, JSON.stringify(bought));
+  assert.deepEqual([bought.balance, bought.item.kind, bought.item.owned, bought.item.data], [20, "nodestyle", true, null]);
+  assert.deepEqual((await as("tok-alice", "GET", "/v1/shop/owned")).items, [{ id: "studio:style-constellation", kind: "nodestyle", name: "Constellation", data: null, updatedAt: studioItem("studio:style-constellation").at }]);
+  const short = await as("tok-alice", "POST", "/v1/shop/studio:style-dragonscale/buy", { price: 80 });
+  assert.deepEqual([short.status, short.error, short.balance, short.price], [409, "short", 20, 80]);
 });
 
 test("a purchase is refused, and nothing moves, when the price changed or the balance is short", async () => {
@@ -544,7 +563,8 @@ test("Studio's client: the Shop's lists, a price that changed, a pack published,
   assert.equal(alice.client.status().shop, true, "the relay lists the Shop in ready.features");
   give(relay, BOB.id, 300);
   const studio = await bob.client.shop("studio");
-  assert.deepEqual([studio.ok, studio.view, studio.items.length, studio.balance, studio.canEarn, studio.hold, studio.next], [true, "studio", 10, 300, true, null, null]);
+  assert.deepEqual([studio.ok, studio.view, studio.items.length, studio.balance, studio.canEarn, studio.hold, studio.next], [true, "studio", 12, 300, true, null, null]);
+  assert.deepEqual(studio.items.filter((item) => item.kind === "nodestyle").map((item) => [item.id, item.price, item.data]), [["studio:style-dragonscale", 80, null], ["studio:style-constellation", 80, null]], "the node styles reach Studio through its own client");
   assert.deepEqual(studio.items.find((item) => item.id === "studio:pack-synthwave").data.palette, studioItem("studio:pack-synthwave").data.palette);
   assert.deepEqual(await bob.client.shopBuy("studio:fx-embers", 80), { ok: false, error: "price-changed", price: 90 });
   const gold = await bob.client.shopBuy("studio:skin-gold", 60);

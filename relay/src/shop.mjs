@@ -3,8 +3,8 @@
 //
 // Two kinds of item. Studio's own (CATALOG below, ids "studio:<slug>"):
 // scales for Ember (the dragon that flies around every Studio, free and built
-// in), menu effects and three style packs, defined here in code and shown by
-// Studio by id. And community
+// in), menu effects, two node styles and three style packs, defined here in
+// code and shown by Studio by id. And community
 // packs: a member's own style pack, data only (shop-pack.mjs checks it: a few
 // colours and keys from Studio's lists, never CSS, links or images), free or
 // priced from 10 to 250 credits. Everything free in Studio today stays free:
@@ -53,7 +53,7 @@ export const SHOP = Object.freeze({
 });
 
 export const SHOP_VIEWS = Object.freeze(['studio', 'new', 'top', 'owned', 'mine']);
-export const ITEM_KINDS = Object.freeze(['pet', 'skin', 'effect', 'pack']);
+export const ITEM_KINDS = Object.freeze(['pet', 'skin', 'effect', 'nodestyle', 'pack']);
 export const PACK_STATUSES = Object.freeze(['listed', 'unlisted', 'removed']);
 /** A Studio item's id; a community pack's is the relay's own id (newId('pack')). */
 export const STUDIO_ITEM = /^studio:[a-z0-9-]{1,40}$/;
@@ -80,6 +80,8 @@ export const CATALOG = Object.freeze([
   studioItem('studio:fx-dissolve', 'effect', 'Dissolve', 60, 'Menus crumble into pixels when they close.'),
   studioItem('studio:fx-embers', 'effect', 'Burn away', 90, 'Menus burn away from the edges with glowing embers.'),
   studioItem('studio:fx-stardust', 'effect', 'Stardust', 90, 'Menus scatter into drifting stars.'),
+  studioItem('studio:style-dragonscale', 'nodestyle', 'Dragon scales', 80, 'Nodes covered in shimmering dragon scales, with ember sparks along the wires.'),
+  studioItem('studio:style-constellation', 'nodestyle', 'Constellation', 80, 'Nodes as bright stars joined by star-chart lines, with shooting stars.'),
   studioItem('studio:pack-synthwave', 'pack', 'Synthwave', 50, 'Hot pink and violet on midnight blue.', {
     data: studioPack({ accent: '#ff4fa3', accent2: '#8b5cff', background: '#0d0b1f', surface: '#17132e', text: '#f3ecff', nodeStyle: 'halo', material: 'atmosphere', font: 'display' }),
   }),

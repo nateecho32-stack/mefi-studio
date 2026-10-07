@@ -105,7 +105,7 @@ const CREDIT_HOLDS = Object.freeze(["unknown", "read-only", "new-account", "new-
 const RANK_KEY = /^[a-z_]{1,20}$/;
 // The Shop's shapes (relay/src/shop.mjs and shop-pack.mjs).
 const SHOP_VIEWS = Object.freeze(["studio", "new", "top", "owned", "mine"]);
-const SHOP_ITEM_KINDS = Object.freeze(["pet", "skin", "effect", "pack"]);
+const SHOP_ITEM_KINDS = Object.freeze(["pet", "skin", "effect", "nodestyle", "pack"]);
 const SHOP_STATUSES = Object.freeze(["listed", "unlisted", "removed"]);
 const STUDIO_ITEM = /^studio:[a-z0-9-]{1,40}$/;
 const PACK_ID = /^pack_[A-Za-z0-9_-]{16}$/;
