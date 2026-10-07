@@ -6,6 +6,31 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 The Social/Studio names, the scroll fix, the social polish and the models page land while the PCs are offline
+
+Landed by the planning chat (cloud, Linux, Node 24.21.0) after the owner's PC became unreachable at 02:35 UTC. Each
+branch's tip had green Windows CI: ui/social-studio-names 2ee0106 (merge e2d2034); fix/doc-scroll ace7d22 (efec563,
+plus bf0d0ce: the rule split so every selector starts with html[data-frame], the one pin its CI failed);
+wip/social-polish a676b05 (1e54cc5; tabs.js keeps main's agents block and takes "lobby"); wip/models bc490ff (6c9126b;
+both sides kept in main.cjs, executor-core.cjs, agents.js and build-booklet.mjs, the teamLayout() calls dropped since the
+classic layout is gone; d9dad85 updates cli_deadline_host's pin). booklet.html rebuilt after each merge. Hosted Windows
+CI green on 1e54cc5 and d9dad85; main fast-forwarded to d9dad85.
+
+Here, as a non-root user under xvfb: npm run check ok, lint 0 errors (47 warnings, as before), audit 0/0, test:fast ok.
+Every real-window suite, one at a time, before the merges (55494c6) and after them: agent_setup_render, sessions_render
+and today_render failed only after them, each on a fixture that described the old state. Agent setup opened Seats and
+models without a target, and the seat rows now fold under More settings (c385a65 names the row, as an old way in does).
+Sessions pinned " · Vibe" and "Build · task" (c385a65, 15bfec3). Today asserted that Tab never leaves the document,
+which held only because the order walked into the Model catalog's 28 controls under the frame's layers; with
+fix/doc-scroll the order wraps once through the document and back to the frame, which 15bfec3 allows, pinning that no
+stop lands under the layers. After the fixes all three pass; sessions_render's "the keyboard starts on the open
+project" failed once and passed twice, the known flake. Failing on Linux both before and after, and ok on Windows per
+the ui/v2-only row: team_render (Providers sideways at 600x560@1.5), unified_studio_render and project_map_render (the
+map at 600x560@1.5), settings_render (Report a problem's panels at 600x560@1.5), workflow_render (the authoring layout
+at 600) and command_render (task pixels): Linux fonts and software rendering. friends_render and friends_two_render
+pass; their screenshots show the open room as a chat app, rooms as cards, each place's own icon, two Studios catching
+up after one was away, and no scroll arrow over the status bar.
+
 ## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
 
 Branch `wip/social-polish` in `C:\wt\polish` (bea5ec9 an open room like a chat app, rooms as cards, Friends icons,
