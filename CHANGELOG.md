@@ -30,15 +30,16 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   a firefly to chase. None of it happens with motion Off, and Calm keeps it
   small. Settings › Appearance › Interface's pet card now shows your pet
   moving, has **Pet**, **Name** and **Colours** picks (each pet keeps its own
-  name) and a **Plays with your pointer** switch. Three more pets are coming
-  to the Shop: a **Cloud dragon** that swims through the air with a flowing
-  mane, a **Phoenix** with a long tail of flame feathers and a
+  name) and a **Plays with your pointer** switch. Three more pets are in the
+  Shop: a **Cloud dragon** that swims through the air with a flowing mane, a
+  **Phoenix** with a long tail of flame feathers and, for October, a
   **Will-o'-wisp**, a little ghostly flame that trails sparks. Every skin
   fits every pet, any of them can be tried for two minutes first, and
   friends' pets visit as themselves. Ember stays free, and a pet a friend's
   older Studio does not know yet shows there as Ember. The first run's
-  **Your dragon** row has a tiny Ember beside it, and the Shop's pet cards
-  fly at their proper calm pace again (they were spinning far too fast).
+  **Your dragon** row has a tiny Ember beside it, a pet's name sits on a
+  small nameplate that reads on light and dark pages, and the Shop's pet
+  cards fly at their proper calm pace again (they were spinning far too fast).
 - **Four more menu effects, and they play in more places.** The Shop gets
   **Blown away** (the menu drifts aside like sand in the wind, its grains
   streaming off), **Shatter** (it cracks like glass and falls away in
@@ -64,17 +65,18 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   and Aurora, Needs you toward rose on Studio gold and Eclipse and toward
   yellow on Ember and Paper), and on Daylight and Paper the rings, legend
   dots and coloured card text hold 4.5:1.
-
-- **Two new node styles in the Shop: Lanterns and Neon.** **Lanterns** (part
+- **Two new node styles and eight new themes in the Shop.** **Lanterns** (part
   of October's drop) turns every node on the Map into a glowing paper lantern
   that sways on its cord; its candle flickers while a job runs, its lines are
   strings of festival lights, a small lantern floats along them to bring
   news, and fireflies circle the one you chose. **Neon** draws each node as a
   bright neon tube with a soft glow that buzzes on when a job starts; its
   lines are lit tubes with current running along them. Both are in Settings ›
-  Appearance under **From the Shop** and can be tried for two minutes first;
-  every node style Studio already had stays free.
-
+  Appearance under **From the Shop** and can be tried for two minutes first.
+  New themes: **Pumpkin Spice**, **Haunted** and **Candlelight** (light) for
+  October, and **Midnight Neon**, **Forest Glade**, **Ocean Breeze** (light),
+  **Rose Gold** (light) and **Frost**. Every theme and node style Studio
+  already had stays free.
 - **Social uses a wide window.** Home no longer sits in a narrow column with
   empty sides. On a wide window it has a column at the right: **Friends** at
   the top, now compact (one line a row, smaller faces), and the conversation
