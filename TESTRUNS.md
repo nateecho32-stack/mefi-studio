@@ -39,6 +39,37 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-07 The Shop's season, put together: five helper branches, 29 catalog items with October's drop, the Shop page seen in the real app
+
+Branch `feat/shop-season` (C:\wt\style, off main c513838, main merged in twice: de5490d and c679461). The owner, after
+the first Shop: "add more, polish more, improve more", then "add more pets, styles, effects, themes, make the viewing
+easier to see for the shop, make the shop its own whole page, make it clean, nice, like discords shop almost, lets have
+the shop rotate in and out styles" and "every month we will make new styles". Five helpers worked in their own
+worktrees (feat/shop-showroom, feat/pets-more, feat/effects-more, feat/styles-more, feat/map-glance; each has its own
+row below); every merge was resolved file by file with both sides kept, renderer/booklet.html rebuilt, TESTRUNS rows
+united and rotated. Caught while merging: the Shop page passed MefiPets.paintPreview milliseconds where pets count
+seconds (a card's pet spun about a thousand times too fast); two tests written for the old card layout were rewritten
+for the page's detail view. The catalog: 17 new items in relay/src/shop.mjs CATALOG and main.cjs's mirror (29 in all),
+October's drop "2026-10" (Haunted Hollow) holding the Will-o'-wisp, Spirits, Lanterns, Pumpkin Spice, Haunted and
+Candlelight. relay_shop's catalog test listed the day's twelve items and its client test counted them; with the drop
+in the catalog both failed, and the failed client test left the relay harness open, so the run held the suites lane
+for 11 minutes until stopped: both now pin the catalog in code and check each day's list against shop-drops.mjs
+saleOf, so they mean the same in October and after it. Polish from the real app: a pet's name sits on a nameplate in
+the page's own tone (it was white words in a heavy outline on Daylight), and the signed-out Shop's Friends sign-in
+card waits out of sight until a Sign in calls it (it sat under every view).
+
+The real app on a fresh profile, signed out (the showroom: main's catalog, nothing owned), 1920x1080: Home with the
+drop's banner ("October drop · Leaves in 24 days", its wisp, lanterns and Pumpkin Spice live), its six pieces "On sale
+until October 31", Featured this week and every category, 40 cards; Pets 8 (Ember, four scales, three pets), Menu
+effects 7, Node styles 4, Themes 11; the Phoenix's detail (large live preview, 150 credits, Try for 2 minutes, Sign in
+to get it); its Try (the phoenix flies the window, "Trying Phoenix · 1:57 left"); Studio mode and Daylight; no page
+errors. Window suites on the merged tree, one at a time: friends_render (83 s), settings_render, setup_helper_render,
+map_render, node_paint_cache, node_views_render, command_render, shell_render, tabs_render pass; today_render failed
+once while main was being merged under it and passes alone. Node: the Shop, relay, pets, effects, music and node
+style suites 338/338, then the credits merge's overlap 139/139; check ok; lint 47 warnings (as main); audit 0
+findings; Python contracts 248 OK (1 skipped). Not deployed: the relay (drops, Shop pets' generations and the credits
+hardening go out together in one deploy from main, the owner asked first).
+
 ## 2026-10-07 Menu effects: Blown away, Shatter, Glitch and Spirits; right-click menus, Search and popovers leave in style
 
 Branch `feat/effects-more` (6e84e14, 02c6146, 03cc92e on c513838), worktree C:\wt\s-fx on the owner's laptop (Node
@@ -520,28 +551,6 @@ missed heartbeat stopped aborting at once). paired_worker_render captures the St
 3a4c7be (7 min 23 s) and the landed 7718e36; after the last rebase 52/52 again here (hub_host,
 paired_worker_lifecycle, paired_reconnect, link_compat, hub_client), since main.cjs moved under it. Not run here: the
 full `npm test` (CI is the full gate) and a real two-PC test (owner).
-
-## 2026-10-06 The release workflow's hosted gate, smoke launch, signing switch and Rust-host switch; the 0.5 scope refreshed
-
-Cloud session, branch `claude/funny-einstein-19ljkq` (436fd2c, a45cc38) on main fa672de. `release.yml` now holds
-`docs/release-workflow-signpath.yml` (removed) and the PC's patch 575579f from `wip/release-yml-host-switch`, joined
-where they meet: every package-release call passes the resolved host, the folder lookup matches it, and the smoke
-launch gives the Rust host MEFI_STUDIO_USER_DATA and reads its stderr. Nothing ran: the workflow starts only on a
-`v*` tag or a dispatch, and neither was made.
-
-Why the hosted gate matters, measured: `ci.yml`'s `npm test` on main 4ce5657 (run 37476474394) skipped 46
-real-window tests (the Electron lane's 43 of 69 and 3 serialized), because `scripts/fetch-electron.mjs` leaves the
-binary out when CI=true. `release.yml` fetches it before `npm test`, so its full gate runs them on the hosted runner.
-
-Here (Linux, Node 24.21.0): PyYAML parses the workflow (22 steps, in order); `tests/release_workflow.test.mjs` 6/6
-through `npm run test:one`, and six mutations of the workflow (TAG_HOST, a signing step's if, --skip-build, the
-test:fast step, the smoke pattern, a branch trigger) each fail it; `npm run check` ok (296 targets, 609 specs);
-`npm run lint` 47 warnings, as on main, none in the new file; `npm run audit` 0 findings; `npm run test:fast` 7422
-tests, 7364 pass, 58 skipped, 0 fail (2 min 38 s); Python contracts 248 OK (3 skipped); the normalized-path lock ok.
-Not checked: the workflow on a runner, and the Rust host's smoke launch there (WebView2 on the runner, and
-Start-Process -Wait on its child processes); the first `host: tauri` dispatch shows both.
-
-My merge of `ui/social-studio-names` 0fc3043 was dropped before pushing: main's 0f5076a carries the same change.
 
 ## Read Before Any Tests
 

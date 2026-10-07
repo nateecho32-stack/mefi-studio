@@ -6,6 +6,28 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 The release workflow's hosted gate, smoke launch, signing switch and Rust-host switch; the 0.5 scope refreshed
+
+Cloud session, branch `claude/funny-einstein-19ljkq` (436fd2c, a45cc38) on main fa672de. `release.yml` now holds
+`docs/release-workflow-signpath.yml` (removed) and the PC's patch 575579f from `wip/release-yml-host-switch`, joined
+where they meet: every package-release call passes the resolved host, the folder lookup matches it, and the smoke
+launch gives the Rust host MEFI_STUDIO_USER_DATA and reads its stderr. Nothing ran: the workflow starts only on a
+`v*` tag or a dispatch, and neither was made.
+
+Why the hosted gate matters, measured: `ci.yml`'s `npm test` on main 4ce5657 (run 37476474394) skipped 46
+real-window tests (the Electron lane's 43 of 69 and 3 serialized), because `scripts/fetch-electron.mjs` leaves the
+binary out when CI=true. `release.yml` fetches it before `npm test`, so its full gate runs them on the hosted runner.
+
+Here (Linux, Node 24.21.0): PyYAML parses the workflow (22 steps, in order); `tests/release_workflow.test.mjs` 6/6
+through `npm run test:one`, and six mutations of the workflow (TAG_HOST, a signing step's if, --skip-build, the
+test:fast step, the smoke pattern, a branch trigger) each fail it; `npm run check` ok (296 targets, 609 specs);
+`npm run lint` 47 warnings, as on main, none in the new file; `npm run audit` 0 findings; `npm run test:fast` 7422
+tests, 7364 pass, 58 skipped, 0 fail (2 min 38 s); Python contracts 248 OK (3 skipped); the normalized-path lock ok.
+Not checked: the workflow on a runner, and the Rust host's smoke launch there (WebView2 on the runner, and
+Start-Process -Wait on its child processes); the first `host: tauri` dispatch shows both.
+
+My merge of `ui/social-studio-names` 0fc3043 was dropped before pushing: main's 0f5076a carries the same change.
+
 ## 2026-10-06 Background git leaves no fsmonitor daemons, and Claude workers start only the desk's MCP servers
 
 Branch `fix/git-fsmonitor-worker-mcp` in `C:\wt\fsmon`: the 2026-10-03 commit c575fd3 (left on one PC in `C:\wt\mem`,
