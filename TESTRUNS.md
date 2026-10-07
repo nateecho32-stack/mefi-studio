@@ -39,6 +39,17 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-07 Projects shows whole names again: the Friends card's one-line rows stay the card's own
+
+Branch `ui/projects-names` in C:\wt\sw-capture, off main f02381e. Capturing Social for the owner showed Projects cutting
+its names to "Notes..." beside their folders: 565c068 turned the shared `.social-row-text` into a one-line row for the
+Friends card, and Projects' rows use the same class. The base rule is the name over what it is again; the Friends card
+keeps one line (`.social-people .social-row-text`), and a project card is 320 px wide at least. Checked in offscreen
+captures at 1920x1080 and 1440x900 (Projects, Home with its Friends card). Node through `npm run test:one`: social,
+layout_contract_css, shell_frame_css, today_page and friends_front_ui 65/65; Windows: friends_render passes. check ok,
+lint 47 warnings (as main), audit 0 findings. The change is CSS only (renderer/social.css and the rebuilt booklet); the
+full test:fast ran on its parent's content earlier today (7741 of 7756, 14 skipped, its one sync failure passes alone).
+
 ## 2026-10-07 The Shop's season, put together: five helper branches, 29 catalog items with October's drop, the Shop page seen in the real app
 
 Branch `feat/shop-season` (C:\wt\style, off main c513838, main merged in twice: de5490d and c679461). The owner, after
@@ -528,29 +539,6 @@ carries its `selected`/`checked` attribute (MefiPatch keeps choices by markup, s
 option), and the search box no longer stretches across the tools row.
 
 Not run: the full `npm test` (the Electron lane apart from shell_render).
-
-## 2026-10-06 Your PCs and Friends reconnect by themselves; only a Studio that is really behind must update
-
-Branch `wip/auto-reconnect` (C:\wt\reconnect), landed on main as 7718e36 (rebased three times as main moved; the
-CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged). New `scripts/link-compat.cjs`
-(protocol windows for paired PCs and the relay); paired checks start again by themselves after a restart, update or
-crash and back off while the coordinator is away; Friends gets "Reconnect by itself", a retry on wake, and the relay's
-hello window. The relay change is not deployed by this landing: the live relay drops the new `oldest` field (checked
-against HEAD's protocol.mjs), so today's Studio and this one both connect until it is redeployed.
-
-`npm run check` ok, eslint on the changed files 0 problems (main.cjs keeps its 5 older warnings), `npm run audit` 0
-findings, booklet byte-identical to a fresh build. Through `npm run test:one` on the rebased tree: the affected and
-overlapping suites 135/135 (link_compat, paired_reconnect, paired_worker, paired_worker_lifecycle, paired_worker_ui,
-hub_client, hub_host, relay_core, relay_e2e, friends_front_ui, rooms_ui, project_hub_ui, playlists, friends_render);
-before the playlists rebase 177/179 across 26 suites incl. paired_worker_render, friends_render, friends_two_render
-and companion_hub_render, the 2 failures being paired_reconnect's own fixed-sleep waits under load, rewritten to wait
-for the poll, start and abort (then 6/6 on every run that got a lease turn; 3 of 5 back-to-back tries timed out
-waiting for the lease, not in the suite). paired_worker's heartbeat test now uses a 40 ms lease (it took 30 s once a
-missed heartbeat stopped aborting at once). paired_worker_render captures the Start by itself switches and "Studio
-0.4.6 (older, still connects)" fitting a 600 px window. Hosted CI (ci.yml, Windows) green on 6445219 (7 min 10 s),
-3a4c7be (7 min 23 s) and the landed 7718e36; after the last rebase 52/52 again here (hub_host,
-paired_worker_lifecycle, paired_reconnect, link_compat, hub_client), since main.cjs moved under it. Not run here: the
-full `npm test` (CI is the full gate) and a real two-PC test (owner).
 
 ## Read Before Any Tests
 
