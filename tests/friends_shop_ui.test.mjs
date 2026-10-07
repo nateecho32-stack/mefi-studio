@@ -84,7 +84,7 @@ function environment({ hub = { configured: true, linked: true, state: "ready", u
   document.createElementNS = (_namespace, tag) => document.createElement(tag);
   dom.documentElement.dataset.motion = motion;
   before?.(document);
-  const calls = [], shown = [], went = [], fired = [], timers = [], registered = [], claimed = [], released = [];
+  const calls = [], shown = [], went = [], fired = [], timers = [], registered = [], claimed = [], released = [], signIns = [];
   let hear = null;
   // The relay: views by name, purchases that land in what you own, and refusals given per method.
   const relay = { owned: clone(owned) };
@@ -126,7 +126,17 @@ function environment({ hub = { configured: true, linked: true, state: "ready", u
     mefiStudio: api,
     MefiNav: { go: (...args) => went.push(clone(args)), register: (dest) => registered.push(dest), claim: (id) => claimed.push(id), release: (id) => released.push(id) },
     MefiFriendsMod: { isMod: () => moderator, subscribe: () => {} },
-    MefiFriendsFront: { gate: () => { const el = document.createElement("section"); el.id = "friends-gate"; el.className = "friends-gate"; return el; }, ...(popups ? { popups } : {}) },
+    // Friends' sign-in card, with its own Sign in with Discord (renderer/friends-front.js gate()), which records its presses.
+    MefiFriendsFront: {
+      gate: () => {
+        const el = document.createElement("section"); el.id = "friends-gate"; el.className = "friends-gate";
+        const signIn = document.createElement("button"); signIn.id = "friends-gate-signin"; signIn.textContent = "Sign in with Discord";
+        signIn.addEventListener("click", () => signIns.push("signin"));
+        el.append(signIn);
+        return el;
+      },
+      ...(popups ? { popups } : {}),
+    },
     addEventListener: () => {},
     dispatchEvent: (event) => { fired.push(event.type); return true; },
   };
@@ -187,7 +197,7 @@ function environment({ hub = { configured: true, linked: true, state: "ready", u
   if (painters) vm.runInContext(NODE_STYLES_SOURCE, context);
   vm.runInContext(source, context);
   return {
-    window, document, shop: window.MefiShop, calls, shown, went, fired, storage, relay, pet, registered, claimed, released,
+    window, document, shop: window.MefiShop, calls, shown, went, fired, storage, relay, pet, registered, claimed, released, signIns,
     hear: (event) => hear?.(event),
     // Runs the animation frame that is due, at `ms`.
     frame: (ms) => { const due = [...rafs.values()]; rafs.clear(); for (const fn of due) fn(ms); },
@@ -751,10 +761,15 @@ test("signed out, the same page is a showroom: Studio's items from this PC's cop
   assert.deepEqual(env.shown.find(([what]) => what === "pets.preview"), ["pets.preview", { kind: "dragon", skin: "frost" }, 120000], "Try works signed out");
   assert.deepEqual(banner(card).querySelectorAll("button").map((control) => control.textContent), ["Sign in to get it", "Stop"]);
   await one(banner(card), "Stop").click();
+  assert.deepEqual(env.signIns, [], "nothing signs in by itself");
   await one(await detail(card, "studio:skin-frost", "home"), "Sign in to get it").click();
   assert.equal(detailOf(card).open, false, "the detail steps aside for the sign-in");
-  assert.equal(gate.focused, true, "Friends' sign-in card takes the keyboard");
+  assert.deepEqual(env.signIns, ["signin"], "one press starts Friends' own sign-in");
+  assert.equal(gate.querySelector("#friends-gate-signin").focused, true, "its card takes the keyboard");
   assert.ok(gate.classList.contains("is-called"), "and says it is the one");
+  gate.querySelector("#friends-gate-signin").disabled = true;
+  await one(card.querySelector("#friends-shop-notice"), "Sign in").click();
+  assert.deepEqual(env.signIns, ["signin"], "a sign-in already on its way is only brought into view");
   // What you own keeps working: Studio's items say Owned with Use; a member's pack is under Owned.
   assert.match(item(card, "studio:fx-dissolve", "home").textContent, /^DissolveOwned$/);
   await one(await detail(card, "studio:fx-dissolve", "home"), "Use").click();

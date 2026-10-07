@@ -655,9 +655,10 @@ settings and per-model work-kind summaries for the shared controls.
   the rest of Studio). Signed out or out of reach, the same page is a
   **showroom**: Studio's own items from this PC's copy of the catalog (main's
   `hub:shop` shopCatalog, no relay asked), each with its preview and Try, and
-  in place of Buy the one thing that helps (**Sign in to get it**, which brings
-  Friends' sign-in card at the page's foot to the keyboard; **Connect to get
-  it**; **Join the Discord to get it**); members' packs say they need sign-in,
+  in place of Buy the one thing that helps (**Sign in to get it**, which starts
+  Friends' own sign-in, its card at the page's foot coming into view to say
+  each step; **Connect to get it**; **Join the Discord to get it**); members'
+  packs say they need sign-in,
   and what you own keeps working. A part not in the build says "Comes with
   the next Studio update." Kill switches per device: `localStorage`
   `mefiStudio.shop.page` = "off" shows the Shop as a Friends place again,
