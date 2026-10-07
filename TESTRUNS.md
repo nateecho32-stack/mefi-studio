@@ -39,6 +39,38 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-07 The Map at a glance: state ripples, a legend that points at its nodes, a hover card, the four states apart in every theme
+
+Branch `feat/map-glance` (4d923fa and ec3784a, from origin/main c513838), worktree C:\wt\s-map on the owner's laptop
+(Node 24.15, 170 MB to 1.6 GB free, other sessions gating beside it). Asked: make the Map easier to read at a glance: a
+ripple when a task's state changes, legend pills that count and point at their nodes (hover, click to hold, Esc), a
+hover card with the title, the state and how long, and a polish pass at 1920x1080 and 1440x900 in Chrome and Daylight;
+the coordinator added that Daylight's Running and Review dots were the same blue. Built: noteGlance/drawStateRipple
+(0.8 s, none on first sight, the quiet entry, motion Off, rings off or Home's scenery), the legend pills with counts,
+stepLegendPoint's eased dim and aria-pressed/#cmd-announce, nav.js's Escape letting go of a held state before it opens
+the companion (which took Esc on the Map before), the #cmd-tip hover card ("Running · for 40 min", kept off the legend),
+and glancePalette: the four states at least 40 degrees of hue apart in every built-in theme (Review violet on Daylight
+and Midnight, Done lime on Forest and Aurora, Needs you rose on Studio gold and Eclipse, yellow on Ember and Paper;
+Chrome's grey accent exempt), light-page inks at 4.5:1, and coloured canvas words (callout numbers, status lines, work
+labels) at 4.5:1 on the page and on a number chip. Kill switches mefiStudio.mapRipple, mapLegendPoint, mapHoverCard and
+mapStateHues, each pinned by a test. Frame cost (tools/profile_studio.mjs command-150-3d, interleaved pairs against
+c513838): 6 pairs, command.frame mean 5.94 -> 5.81 ms (paired median -0.17), p95 9.2 -> 8.2; with the legend holding
+Running lit, 5 pairs, 5.11 -> 4.96 ms (-0.37), p95 6.9 -> 6.2; the added per-frame JavaScript timed alone for the
+288-node board about 0.09 ms. Node: command_graph and command_toolbar 132/132, every suite that loads idle.js 1077/1077,
+every suite that loads nav.js 677/677; check ok; lint 47 warnings (as main); audit 0 findings; Python contracts 248 OK
+(1 skipped). Electron, one at a time, each run under a 600 s tree kill (GNU timeout in Git Bash ends only npm, not the
+lease or Electron under it) with a free-memory guard: node_paint_cache 1/1 (1.7 s); map_render passed in 26 s
+(electron.exe 1.0-1.4 GB, flat); command_render first stopped at its 120 s limit after the fixture had passed every
+check in 80 s (exit code null, free memory down to 197 MB), then passed alone in 97 s; node_views_render first stopped
+at its 150 s limit with no report while the PC was starved (the memory sampler itself got no answer for 147 s), then
+passed alone in 115 s with all 48 captures. An earlier map_render held the Electron lane for 2 h 44 min until a
+watchdog stopped it: its waiter had been orphaned by GNU timeout, waited 124 min, and the lease's escape hatch then ran
+it beside three holders that were each "running 0 min", four Electron runs at once with 38 MB free; it had reached its
+last capture. The same code alone takes 26 s, and no loop or promise in the new code can spin. Not run here: the full
+`npm test`. Left open: the canvas's own 9 to 11 px callout and label type predates this work and still reads under 12
+px; dimmed labels and cards (search, Running only, the legend's dim) fall under 4.5:1 on a light page by design; the
+lease's running-anyway escape should not admit a waiter beside holders that have only just started.
+
 ## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
 
 Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
@@ -485,39 +517,6 @@ Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tes
 fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
 `layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
 forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
-
-## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
-
-Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
-hand with both sides kept; d1344bc puts the Playlists entry back to once after an earlier merge took 0e9f37f, not
-d55269f as its message says). Relay: `relay/src/economy.mjs` (a daily community budget, 200 + 25 per member seen this
-week who is old enough to earn) and `relay/src/events.mjs` (the weekly Build Jam, co-work hours at 02:00, 10:00 and
-18:00 UTC, building together), run on the relay's alarm; schema v5; credits.mjs gains together, cowork and jam kinds
-paid through award(). Studio: hub-client events calls, main.cjs HUB_EVENT_METHODS, preload hubEvents,
-renderer/friends-events.js + .css as Friends › Events.
-
-A read-only review of the social side found, in this branch, an alarm that would have woken the relay every second
-before each co-work hour and through a pause, a listed co-work room nobody could approve requests for, prizes two
-votes could win, and Forget me leaving names in results; all fixed in 113ca61 with tests. Its findings in other
-files went to the social session, which landed them on main (711ceb5).
-
-Gate on 132132d (main f1934aa merged): the parallel stage at 4 suites at a time, 7227 tests, 7210 pass, 3 fail, all a
-git time limit hit under load (29 to 780 MB free while other sessions ran): git_actions "a listener that throws does
-not stop a publish half-way", rust_parity_git "the actions answer like the JavaScript" and rust_parity_snapshots
-"the same attempt on two identical repositories". Python contracts 248 OK (1 skipped), normalized-path lock OK,
-`npm run audit` 0 findings. The Electron lane did not finish: media_window_render and layout_contract_render each
-kept an Electron window alive all night (their kill timers never landed at that memory) and held the machine-wide
-lane about nine hours until killed at 06:11 (a stage limit for exactly this is on wip/test-speed). The Electron
-suites were then run one at a time on the merged tree 0d82a1a through the lease with a 12-minute guard each:
-42 of 47 pass on the first pass (layout_contract_render left out: it fails on clean main here and retires with
-ui/v2-only). Of the five: shell_render is the known display-scaling failure on clean main; agent_setup_render and
-unified_studio_render fail on main's own renderer too (a control run in C:\wt\speed, at other assertions:
-load-sensitive); today_render and tree_dynamics_render, which had run 10 and 15 minutes under load, pass alone
-(101 s and 14 s). friends_render, companion_hub_render and friends_two_render pass. The three git time-limit
-suites pass alone: git_actions, rust_parity_git and rust_parity_snapshots, 72/72 in 2 min 41 s through `npm run
-test:one`.
-
-After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
 
 ## Read Before Any Tests
 
