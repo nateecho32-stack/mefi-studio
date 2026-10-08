@@ -115,6 +115,7 @@ export const BOOKLET_INPUTS = {
     "builder.js",
     "worktrees.js",
     "resources.js",
+    "scratch.js",
     "review.js",
     "skills.js",
     "shell.js",

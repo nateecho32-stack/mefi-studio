@@ -91,6 +91,8 @@
 .resources-about p, .resources-about li { max-width: 78ch; }
 .resources-about p { margin: 6px 0 0; }
 .resources-about ul { margin: 6px 0 0; padding-left: 18px; }
+.resources-scratch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 6px 0 0; color: var(--dim); font-size: 13px; }
+.resources-scratch[hidden] { display: none; }
 @media (max-width: 980px) {
   .resources-row { grid-template-columns: minmax(0, 1fr) 130px; }
   .resources-side { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }

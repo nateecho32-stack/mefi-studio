@@ -242,6 +242,24 @@ const FACTORIES = Object.freeze({
       probe: (root) => call("probe", root ?? null),
     });
   },
+  // Scratch, the slower memory tier (scripts/scratch-host.cjs createScratch;
+  // docs/plans/scratch-tier.md): Rust keeps the project's arena, its index and
+  // the BM25 postings. The folder and the cap cross first with every call, as
+  // the collaborators; nothing is called back. Like the JavaScript, every
+  // method answers { ok, ... } and none throws; a host failure answers
+  // { ok: false, reason: "error" } with the folder's path kept out of the words.
+  // MEFI_STUDIO_RUST_OFF=scratch keeps the JavaScript host.
+  "scratch": (collaborators, host) => {
+    const sent = { dir: String(collaborators?.dir ?? ""), capMB: Number.isInteger(collaborators?.capMB) ? collaborators.capMB : 512 };
+    const failed = (error) => ({ ok: false, reason: "error", error: String(error?.message ?? error).split(sent.dir || "\u0000").join("<scratch>").slice(0, 120) });
+    const call = (name, request = {}) => host.callWithFunctions(`core.scratch.${name}`, [sent, request && typeof request === "object" ? request : {}]).catch(failed);
+    const method = (name) => (request = {}) => call(name, request);
+    return Object.freeze({
+      host: "rust", dir: sent.dir, capBytes: sent.capMB * 1024 * 1024,
+      open: () => call("open"), put: method("put"), get: method("get"), has: method("has"), list: method("list"), search: method("search"),
+      stats: () => call("stats"), compact: () => call("compact"), evict: method("evict"), close: () => call("close"),
+    });
+  },
   // Before and after shots (scripts/evidence-window.cjs createEvidenceWindow):
   // the host opens its own hidden window (src-tauri/src/views.rs
   // evidence.capture) and keeps the same request rule in Rust. Like the

@@ -22,7 +22,7 @@
   const TOAST_GAP_MS = 8000;
   const state = {
     view: null, error: "", reading: null, busy: new Set(), notes: new Map(), armed: null,
-    all: false, filter: "", sort: "memory", lease: 0, toasts: [], toastTimer: 0,
+    all: false, filter: "", sort: "memory", lease: 0, toasts: [], toastTimer: 0, scratch: null,
   };
   let initialized = false;
 
@@ -202,6 +202,40 @@
     }
     item.append(main, numbers, side);
     return item;
+  }
+
+  // ---- Scratch, the slower memory tier -----------------------------------------------------
+  // One line under the meters: the open project's Scratch store (main.cjs
+  // "Scratch tier") and Compact. Read when the page opens (which opens the
+  // store on its first look), repainted on scratch:state. A build without the
+  // bridge, or a store that is off, hides the line.
+  function scratchLine(view) {
+    const line = $("scratch");
+    if (!line) return;
+    if (!view?.ok || !view.enabled) { line.hidden = true; return; }
+    line.hidden = false;
+    const text = $("scratch-text");
+    if (text) text.textContent = view.line ?? "";
+    const compact = $("scratch-compact");
+    if (compact) compact.disabled = state.busy.has("scratch") || !view.stats;
+  }
+  async function scratchRead() {
+    if (typeof api()?.scratchStats !== "function") { state.scratch = null; scratchLine(null); return; }
+    try { state.scratch = await api().scratchStats({ open: true }); }
+    catch { state.scratch = null; }
+    scratchLine(state.scratch);
+  }
+  async function scratchCompact() {
+    if (typeof api()?.scratchCompact !== "function" || state.busy.has("scratch")) return;
+    state.busy.add("scratch");
+    scratchLine(state.scratch);
+    let result;
+    try { result = await api().scratchCompact(); }
+    catch (error) { result = { ok: false, error: say(error, "The store could not be compacted.") }; }
+    state.busy.delete("scratch");
+    if (result?.ok) toast(result.removed ? `Compacted: ${plural(result.removed, "unused blob")} dropped.` : "Compacted: nothing was unused.", "good");
+    else toast(say(result?.error, "The store could not be compacted."), "bad");
+    await scratchRead();
   }
 
   // ---- painting --------------------------------------------------------------------------
@@ -483,6 +517,7 @@
     void lease(true);
     renew();
     void read({ quiet: Boolean(state.view) });
+    void scratchRead();
     render();
     if (params?.focus !== false) requestAnimationFrame(() => $(`mode-${state.view?.mode ?? "manual"}`)?.focus?.({ preventScroll: true }));
   }
@@ -538,6 +573,8 @@
       void setPref({ [pref]: target.type === "checkbox" ? target.checked === true : Number(target.value) });
     });
     api()?.onResources?.((view) => onPush(view));
+    $("scratch-compact")?.addEventListener("click", () => { void scratchCompact(); });
+    api()?.onScratchState?.((view) => { state.scratch = view; if (isOpen()) scratchLine(view); });
     document.addEventListener("visibilitychange", () => { if (!document.hidden && isOpen()) { void lease(true); void read({ quiet: true }); } });
   }
 

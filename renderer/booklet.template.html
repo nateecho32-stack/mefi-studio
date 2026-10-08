@@ -1225,6 +1225,26 @@
           </div>
           </div>
         </details>
+<!-- renderer/scratch.js: Settings › System › Storage, this PC's own folder and the Scratch store (the slower memory tier; docs/plans/scratch-tier.md). -->
+<details class="settings-optional settings-card" id="settings-storage" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Storage</b><span>This PC's own files and the Scratch store agents park work in</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <div class="settings-place-group">
+          <p class="settings-eyebrow">This PC's folder</p>
+          <p class="muted" id="scratch-local-note">Logs, archives, journals and the Scratch store live in this PC's own folder, never inside OneDrive. <code id="scratch-local-dir">Studio's local folder</code></p>
+          </div>
+          <div class="settings-place-group">
+          <p class="settings-eyebrow">Scratch</p>
+          <p class="muted">Agents park long outputs and notes here between attempts instead of carrying them in memory, and Studio keeps its indexes here. It is a cache on this PC: compacting or turning it off loses nothing you cannot make again.</p>
+          <label class="switch" title="Agents and Studio may park work in the Scratch store on this PC"><input type="checkbox" id="scratch-enabled" checked><span class="track"></span><span>Keep a Scratch store on this PC</span></label>
+          <label class="switch" title="Builders get scratch_put, scratch_get and scratch_search tools at the desk"><input type="checkbox" id="scratch-agent-tools" checked><span class="track"></span><span>Give agents the scratch tools</span></label>
+          <label class="pop-row" title="How much disk the store may use per project before the least recently used run scratch leaves it"><span class="grow">Room per project</span><select id="scratch-cap"><option value="256">256 MB</option><option value="512" selected>512 MB</option><option value="1024">1 GB</option><option value="2048">2 GB</option><option value="4096">4 GB</option></select></label>
+          <label class="pop-row" title="Task history bodies move out of the board into the store. Auto waits until every paired PC runs a Studio that reads them there."><span class="grow">Task history bodies in Scratch</span><select id="scratch-history"><option value="auto" selected>Auto (when every PC is ready)</option><option value="on">On</option><option value="off">Off</option></select></label>
+          <div class="row tight update-row">
+            <button id="scratch-compact" class="ghost" type="button" title="Drop what no key uses any more and write a fresh index">Compact now</button>
+            <span class="eyes-status" id="scratch-status" role="status">Scratch: not open yet</span>
+          </div>
+          <p class="muted" id="scratch-note" role="status" hidden></p>
+          </div>
+        </details>
 <details class="settings-optional settings-card" id="settings-styler" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Discord Server Styler</b><span>Bot and local dashboard</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Run the bot and its local dashboard from this desktop. Bot credentials stay in the separate Server Styler project's <code>.env</code>.</p><div class="row studio-actions" id="server-styler-actions"><button class="primary" data-styler-action="start">Start Server Styler</button><button data-styler-action="open">Open dashboard</button><button data-styler-action="folder">Open bot folder</button><button data-styler-action="stop">Stop</button></div><p class="eyes-status" id="server-styler-status" role="status">Checking Server Styler…</p></details>
 <details class="settings-optional settings-card" id="settings-log"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-legend"/></svg></span><span class="settings-summary-text"><b>Connection log</b><span>Provider, tool and probe activity</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><pre class="log" id="studio-log" aria-label="Connection log">No activity yet.</pre></details>
 </section>
@@ -1955,6 +1975,8 @@
         <p id="resources-headline" class="resources-headline" role="status" aria-live="polite">Looking at this PC…</p>
         <p id="resources-problem" class="resources-problem" role="alert" hidden></p>
         <div id="resources-meters" class="resources-meters" role="group" aria-label="This PC's load"></div>
+        <!-- renderer/resources.js scratchLine: the open project's Scratch store (the slower memory tier) and Compact. -->
+        <p id="resources-scratch" class="resources-scratch" role="status" hidden><span id="resources-scratch-text"></span><button id="resources-scratch-compact" class="ghost mini" type="button" title="Drop what no key uses any more and write a fresh index. Nothing you can still read is lost.">Compact</button></p>
         <div class="resources-tools" id="resources-tools">
           <button id="resources-focus" class="mini" type="button" title="One round of what auto mode does while agents build: slow heavy apps you are not using, and give memory back if building is short of it">Make room now</button>
           <button id="resources-restore" class="ghost mini" type="button" title="Every app Studio slowed or paused goes back to how it was">Restore all</button>

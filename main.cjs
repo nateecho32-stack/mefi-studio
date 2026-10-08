@@ -17404,6 +17404,149 @@ function resourceHostGet() {
   }
   return resourceHostLoaded;
 }
+// ---- Scratch tier ----
+// Scratch, the slower memory tier (docs/plans/scratch-tier.md): a per-project
+// store of text on this PC's own disk (local-dirs.cjs scratchDir, never
+// OneDrive) that agents and the engine lean on instead of the heap. The rules
+// are scripts/scratch-rules.cjs; the store is the Rust arena under the Rust
+// host (rust-modules.cjs "scratch") or the plain-file host
+// (scripts/scratch-host.cjs). A store is opened on first use, per project,
+// never at launch; MEFI_STUDIO_NO_SCRATCH=1 or settings.scratch.enabled off
+// keeps every store closed, and a scratch failure never fails anything else:
+// every caller gets null or { ok: false, reason }. The page's channels are
+// scratch:stats and scratch:compact (invokes) and scratch:state (a push after
+// a compaction), registered by scratchRegisterIpc inside registerIpc.
+const scratchStores = new Map(); // projectId -> { store, dir, host, opening }
+let scratchRulesLoaded;
+function scratchRules() {
+  if (scratchRulesLoaded !== undefined) return scratchRulesLoaded;
+  try { scratchRulesLoaded = require("./scripts/scratch-rules.cjs"); }
+  catch (error) { console.error(`[scratch] disabled: ${error.message}`); scratchRulesLoaded = null; }
+  return scratchRulesLoaded;
+}
+async function scratchPrefs() {
+  const rules = scratchRules();
+  if (!rules) return null;
+  const settings = await readSettings().catch(() => ({}));
+  return rules.prefs(settings ?? {}, process.env, { platform: process.platform });
+}
+// The store's folder: MEFI_SCRATCH_DIR when it passed the OneDrive rule, else
+// scratch/<projectId> under this PC's local folder.
+async function scratchFolder(projectId, prefs) {
+  const dirs = optionalHelper("./scripts/local-dirs.cjs", () => require("./scripts/local-dirs.cjs"), null);
+  if (!dirs) return null;
+  if (prefs?.dir) return path.join(prefs.dir, dirs.LAYOUT.scratch, String(projectId).replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 96) || "_");
+  const settings = await readSettings().catch(() => ({}));
+  const userData = app.getPath("userData");
+  const chosen = SMOKE || CAPTURE ? path.join(userData, "local") : typeof settings?.storage?.localDir === "string" ? settings.storage.localDir : null;
+  return dirs.localRoot({ platform: process.platform, env: process.env, homedir: os.homedir(), userData, chosen }).scratchDir(projectId);
+}
+// The open project's store, or null when Scratch is off or could not open.
+// Memoised per project; the first caller opens it and the others wait.
+async function scratchFor(projectId = projects.active().id) {
+  const id = String(projectId ?? "");
+  if (!id) return null;
+  const known = scratchStores.get(id);
+  if (known) return known.opening ? known.opening : known.store;
+  const entry = { store: null, dir: null, host: null, opening: null };
+  scratchStores.set(id, entry);
+  entry.opening = (async () => {
+    try {
+      const prefs = await scratchPrefs();
+      if (!prefs || !prefs.enabled) return null;
+      const dir = await scratchFolder(id, prefs);
+      if (!dir) return null;
+      const collaborators = { dir, capMB: prefs.capMB };
+      const inRust = typeof rustModules !== "undefined" && rustModules ? rustModules.factory("scratch", collaborators) : null;
+      const store = inRust || require("./scripts/scratch-host.cjs").createScratch({ ...collaborators, fs: require("node:fs/promises"), now: Date.now, log: (line) => logLine(line) });
+      const opened = await store.open();
+      if (!opened?.ok) {
+        logLine(`[scratch] the store for project ${id.slice(0, 40)} did not open (${String(opened?.reason ?? "unknown").slice(0, 40)})`);
+        return null;
+      }
+      entry.store = store;
+      entry.dir = dir;
+      entry.host = store.host ?? (inRust ? "rust" : "js");
+      logLine(`[scratch] open for project ${id.slice(0, 40)} on the ${entry.host} host: ${opened.keys ?? 0} keys`);
+      return store;
+    } catch (error) {
+      logLine(`[scratch] the store could not open: ${String(error?.message ?? error).slice(0, 120)}`);
+      return null;
+    } finally {
+      entry.opening = null;
+    }
+  })();
+  return entry.opening;
+}
+// The page's picture of a project's store: its settings, its numbers and the
+// line Team › Resources shows. `open` is false for a look that must not open
+// a store that is not open yet (Settings › Storage at launch).
+async function scratchView(projectId, { open = false } = {}) {
+  const rules = scratchRules();
+  const prefs = await scratchPrefs();
+  if (!rules || !prefs) return { ok: false, error: "Scratch is not in this build." };
+  const id = String(projectId ?? "");
+  const store = prefs.enabled && id ? (scratchStores.get(id)?.store ?? (open ? await scratchFor(id) : null)) : null;
+  const known = scratchStores.get(id);
+  const stats = store ? await store.stats().catch(() => null) : null;
+  const settings = await readSettings().catch(() => ({}));
+  return {
+    ok: true,
+    projectId: id,
+    enabled: prefs.enabled,
+    prefs: { enabled: prefs.enabled, capMB: prefs.capMB, historyBodies: prefs.historyBodies, agentTools: prefs.agentTools, saved: prefs.saved, forced: prefs.forced, refused: prefs.refused },
+    host: known?.host ?? null,
+    dir: known?.dir ?? null,
+    localDir: typeof settings?.storage?.localDir === "string" ? settings.storage.localDir : null,
+    stats: stats?.ok ? stats : null,
+    line: !prefs.enabled ? (prefs.forced ? "Scratch: off for this launch (MEFI_STUDIO_NO_SCRATCH=1)" : "Scratch: off") : stats?.ok ? rules.statsLine(stats, Date.now()) : "Scratch: not open yet",
+  };
+}
+function scratchPush(view) {
+  try { send("scratch:state", view); } catch { /* the page may be gone */ }
+}
+async function scratchCloseAll() {
+  const open = [...scratchStores.values()].filter((entry) => entry.store);
+  scratchStores.clear();
+  await Promise.all(open.map((entry) => Promise.resolve(entry.store.close?.()).catch(() => {})));
+}
+function scratchRegisterIpc() {
+  ipcMain.handle("scratch:stats", async (_event, payload) => {
+    try { return await scratchView(projects.active().id, { open: payload?.open === true }); }
+    catch (error) { return { ok: false, error: String(error?.message ?? error).slice(0, 120) }; }
+  });
+  ipcMain.handle("scratch:compact", async () => {
+    try {
+      const id = projects.active().id;
+      const store = await scratchFor(id);
+      if (!store) return { ok: false, error: "Scratch is off, so there is nothing to compact." };
+      const result = await store.compact();
+      if (!result?.ok) return { ok: false, error: `The store could not be compacted (${String(result?.reason ?? "unknown").slice(0, 40)}).` };
+      const view = await scratchView(id);
+      scratchPush(view);
+      return { ok: true, removed: result.removed ?? 0, line: view.line };
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error).slice(0, 120) };
+    }
+  });
+  // Settings › Storage: the switches and the cap. They take effect on the next
+  // open; a store already open keeps running until Studio restarts.
+  ipcMain.handle("scratch:set", async (_event, payload) => {
+    const rules = scratchRules();
+    if (!rules) return { ok: false, error: "Scratch is not in this build." };
+    const checked = rules.patchFrom(payload ?? {});
+    if (!checked.ok) return checked;
+    try {
+      await updateSettings((saved) => { saved.scratch = { ...(saved.scratch ?? {}), ...checked.patch }; });
+      const view = await scratchView(projects.active().id);
+      scratchPush(view);
+      return { ok: true, prefs: view.prefs, line: view.line };
+    } catch (error) {
+      return { ok: false, error: String(error?.message ?? error).slice(0, 120) };
+    }
+  });
+}
+// ---- end of the scratch tier ----
 const agentBrain = (() => {
   try {
     return require("./scripts/agent-brain-host.cjs").createAgentBrain({
@@ -27431,6 +27574,8 @@ function registerIpc() {
   });
   ipcMain.handle("resources:restore-all", async () => resourceHostGet()?.restoreAll() ?? resourcesOff);
   ipcMain.handle("resources:set", async (_event, payload) => resourceHostGet()?.setPrefs(payload ?? {}) ?? resourcesOff);
+  // Scratch, the slower memory tier (the "Scratch tier" block): scratch:stats, scratch:compact and scratch:set.
+  if (typeof scratchRegisterIpc === "function") scratchRegisterIpc();
 
   // ---- machine coordination + resource manager ----------------------------
   // A failed scan must reach the panel as a degraded result, not a rejected
@@ -28687,6 +28832,8 @@ app.on("before-quit", (event) => {
   if (typeof outsideWorkQuit === "function") outsideWorkQuit();
   // Every app the resource manager slowed or paused goes back as Studio leaves.
   if (typeof resourceHostLoaded !== "undefined" && resourceHostLoaded) resourceHostLoaded.quit();
+  // Each open Scratch store writes its checkpoint and gives its lock back.
+  if (typeof scratchCloseAll === "function") { try { scratchCloseAll().catch(() => {}); } catch { /* never holds the quit */ } }
   executorClosing = true;
   performanceProfiler.stop();
   for (const pending of jevProjectQueues.values()) pending.then((queue) => queue.stop()).catch(() => {});

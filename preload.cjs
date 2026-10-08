@@ -524,10 +524,21 @@ const api = {
   resourcesAct: (key, op) => ipcRenderer.invoke("resources:act", { key: typeof key === "string" ? key.slice(0, 64) : "", op: typeof op === "string" ? op.slice(0, 16) : "" }),
   resourcesRestoreAll: () => ipcRenderer.invoke("resources:restore-all"),
   resourcesSet: (patch) => ipcRenderer.invoke("resources:set", patch && typeof patch === "object" ? patch : {}),
+  // Scratch, the slower memory tier (main.cjs "Scratch tier"): the open project's store, read on the page's
+  // first look (`open`), compacted on request, and its settings as plain values (Settings › Storage).
+  scratchStats: (options) => ipcRenderer.invoke("scratch:stats", { open: options?.open === true }),
+  scratchCompact: () => ipcRenderer.invoke("scratch:compact"),
+  scratchSet: (patch) => ipcRenderer.invoke("scratch:set", {
+    ...(typeof patch?.enabled === "boolean" ? { enabled: patch.enabled } : {}),
+    ...(typeof patch?.agentTools === "boolean" ? { agentTools: patch.agentTools } : {}),
+    ...(Number.isInteger(patch?.capMB) ? { capMB: patch.capMB } : {}),
+    ...(patch?.historyBodies === "auto" || typeof patch?.historyBodies === "boolean" ? { historyBodies: patch.historyBodies } : {}),
+  }),
   onAssistantStatus: (callback) => ipcRenderer.on("assistant:status", (_event, status) => callback(status)),
   onMachineStatus: (callback) => ipcRenderer.on("machine:status", (_event, status) => callback(status)),
   onResources: (callback) => ipcRenderer.on("resources:update", (_event, view) => callback(view)),
   onResourcesActed: (callback) => ipcRenderer.on("resources:acted", (_event, entry) => callback(entry)),
+  onScratchState: (callback) => ipcRenderer.on("scratch:state", (_event, state) => callback(state)),
   onTasks: (callback) => ipcRenderer.on("eyes:tasks", (_event, tasks) => callback(tasks)),
   // A running card's newest runProgress, { projectId, byTask: { id: runProgress } }
   // (main.cjs persistExecutorCheckpoint), instead of the whole board.

@@ -110,6 +110,8 @@ const PROMISES = [
   // My PCs (docs/my-pcs.md): the keys and envelopes, and the rules for moving work; main.cjs "My PCs" owns the relay, the boards and the clock.
   { file: "scripts/pc-trust.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/pc-fleet.cjs", says: "Pure module: no Electron, no filesystem, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // Scratch, the slower memory tier (docs/plans/scratch-tier.md): keys, kinds, quotas, BM25 and the eviction choice; scratch-host.cjs and main.cjs "Scratch tier" own the files and the clock.
+  { file: "scripts/scratch-rules.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
 ];
 
 const CLOCK = /\bDate\.now\s*\(|new\s+Date\s*\(\s*\)|\bperformance\.now\s*\(/;

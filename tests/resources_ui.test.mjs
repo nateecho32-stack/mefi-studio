@@ -78,7 +78,7 @@ class Node {
 let doc = null;
 
 // The page's fixed elements, as the template has them (checked against the template below).
-const IDS = ["overlay", "close", "body", "modes", "mode-manual", "mode-auto", "mode-note", "headline", "problem", "meters", "tools", "focus", "restore", "filter", "sort-memory", "sort-cpu", "sort-name", "suggest", "list", "more", "left", "settings", "settings-body", "log-box", "log"];
+const IDS = ["overlay", "close", "body", "modes", "mode-manual", "mode-auto", "mode-note", "headline", "problem", "meters", "scratch", "scratch-text", "scratch-compact", "tools", "focus", "restore", "filter", "sort-memory", "sort-cpu", "sort-name", "suggest", "list", "more", "left", "settings", "settings-body", "log-box", "log"];
 
 function page() {
   const nodes = new Map();
@@ -97,7 +97,10 @@ function page() {
   settings.append(make("settings-body"));
   const logBox = make("log-box", "details");
   logBox.append(make("log", "ol"));
-  body.append(modes, make("mode-note", "p"), make("headline", "p"), make("problem", "p"), make("meters"), tools, make("suggest"), make("list", "ol"), make("more", "button"), make("left", "section"), settings, logBox);
+  const scratch = make("scratch", "p");
+  scratch.hidden = true;
+  scratch.append(make("scratch-text", "span"), make("scratch-compact", "button"));
+  body.append(modes, make("mode-note", "p"), make("headline", "p"), make("problem", "p"), make("meters"), scratch, tools, make("suggest"), make("list", "ol"), make("more", "button"), make("left", "section"), settings, logBox);
   return nodes;
 }
 
@@ -127,7 +130,9 @@ function view(extra = {}) {
   };
 }
 
-function environment({ state = view(), answers = {} } = {}) {
+const scratchView = (extra = {}) => ({ ok: true, projectId: "p1", enabled: true, host: "js", stats: { keys: 1204 }, line: "Scratch: 61 MB of 512 MB, 1,204 keys, 94% hits, compacted 2 h ago", ...extra });
+
+function environment({ state = view(), answers = {}, scratch = scratchView() } = {}) {
   const nodes = page();
   const calls = [];
   const toasts = [];
@@ -150,6 +155,12 @@ function environment({ state = view(), answers = {} } = {}) {
     resourcesSet: async (patch) => { calls.push(["set", plain(patch)]); return { ok: true, prefs: {} }; },
     onResources: (fn) => { listeners.update = fn; },
     onResourcesActed: (fn) => { listeners.acted = fn; },
+    // The Scratch line (main.cjs "Scratch tier"); `scratch: false` is a build without it.
+    ...(scratch === false ? {} : {
+      scratchStats: async (options) => { calls.push(["scratch-stats", plain(options)]); return scratch; },
+      scratchCompact: async () => { calls.push(["scratch-compact"]); return answers.compact ?? { ok: true, removed: 3, line: scratch.line }; },
+      onScratchState: (fn) => { listeners.scratch = fn; },
+    }),
   };
   const window = {
     mefiStudio: api,
@@ -369,6 +380,43 @@ test("closing gives the lease back; a PC where it does not run hides the control
   assert.equal(mac.$("headline").textContent, "The resource manager works on Windows for now.");
   assert.equal(mac.$("tools").hidden, true);
   assert.equal(mac.$("settings").hidden, true);
+});
+
+test("the Scratch line: opening reads the store (its first look opens it), Compact compacts and re-reads, a push repaints, and off or absent hides it", async () => {
+  const env = environment();
+  env.resources.open();
+  await flush();
+  assert.deepEqual(env.calls.find((call) => call[0] === "scratch-stats"), ["scratch-stats", { open: true }]);
+  assert.equal(env.$("scratch").hidden, false);
+  assert.equal(env.$("scratch-text").textContent, "Scratch: 61 MB of 512 MB, 1,204 keys, 94% hits, compacted 2 h ago");
+  assert.equal(env.$("scratch-compact").disabled, false);
+  env.$("scratch-compact").click();
+  await flush();
+  assert.ok(env.calls.some((call) => call[0] === "scratch-compact"));
+  assert.equal(env.calls.filter((call) => call[0] === "scratch-stats").length, 2, "re-read after compacting");
+  assert.equal(env.toasts.at(-1).text, "Compacted: 3 unused blobs dropped.");
+  env.listeners.scratch(scratchView({ line: "Scratch: 2 MB of 512 MB, 40 keys, 100% hits, compacted just now" }));
+  assert.equal(env.$("scratch-text").textContent, "Scratch: 2 MB of 512 MB, 40 keys, 100% hits, compacted just now");
+  // Not open yet: the line shows, Compact waits for a store.
+  const waiting = environment({ scratch: scratchView({ stats: null, line: "Scratch: not open yet" }) });
+  waiting.resources.open();
+  await flush();
+  assert.equal(waiting.$("scratch-compact").disabled, true);
+  const off = environment({ scratch: scratchView({ enabled: false, stats: null, line: "Scratch: off" }) });
+  off.resources.open();
+  await flush();
+  assert.equal(off.$("scratch").hidden, true, "a store that is off has no line");
+  const absent = environment({ scratch: false });
+  absent.resources.open();
+  await flush();
+  assert.equal(absent.$("scratch").hidden, true, "a build without the bridge method has no line");
+  assert.ok(!absent.calls.some((call) => call[0].startsWith("scratch")));
+  const failed = environment({ answers: { compact: { ok: false, error: "Scratch is off, so there is nothing to compact." } } });
+  failed.resources.open();
+  await flush();
+  failed.$("scratch-compact").click();
+  await flush();
+  assert.equal(failed.toasts.at(-1).text, "Scratch is off, so there is nothing to compact.");
 });
 
 // ---- the wiring around the page --------------------------------------------------------
