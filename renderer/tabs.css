@@ -158,3 +158,17 @@
 @media (prefers-reduced-motion: reduce) {
   .ts-item, .ts-close, .ts-item[data-fresh] { animation: none; transition: none; }
 }
+
+/* ---- window tabs (the OS frame, 2026-10-08) ----
+   In the frame the strip is a sunk band and the open tab is a window tab: the page's own fill, square at its foot,
+   joined to the page across the strip's line (the line is the strip's ::after, under the list's own layer, and the
+   open tab stands on it). The other tabs stay quiet shapes that round only at the top. */
+html[data-frame] .shell-tabs, html[data-frame] .ts-strip { background: color-mix(in srgb, var(--bg-deep) 46%, var(--bg)); }
+html[data-frame] .ts-strip { border-bottom: 0; }
+html[data-frame] .ts-strip::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--hairline); }
+html[data-frame] .ts-list { z-index: 1; align-items: flex-end; padding: 0; }
+html[data-frame] .ts-item { height: calc(var(--ts-h) - 7px); border-radius: 8px 8px 0 0; }
+html[data-frame] .ts-item[data-active] { background: var(--bg); box-shadow: inset 1px 0 var(--hairline-strong), inset -1px 0 var(--hairline-strong), inset 0 1px var(--hairline-strong); }
+html[data-frame] .ts-item[data-dragging] { border-radius: 8px; }
+html[data-frame] .ts-strip .ts-tab { border-radius: 8px 8px 0 0; }
+html[data-frame] .ts-flag { box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-deep) 46%, var(--bg)); }

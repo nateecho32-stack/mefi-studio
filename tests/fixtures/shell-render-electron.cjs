@@ -293,7 +293,9 @@ app.whenReady().then(async () => {
       }
     }
     if (b.list) { assert.ok(near(b.list[0], state.rest), `${tag}: the list starts where the rail ends (${b.list[0]} vs ${state.rest})`); assert.ok(near(b.list[1] + b.list[3], H - state.contract.used.status), `${tag}: and stops above the status bar`); }
-    if (b.list && state.info.list.docked) assert.ok(near(b.top[0], b.list[0] + b.list[2]) || near(b.top[0], state.rest), `${tag}: the top bar starts where the list ends`);
+    // The OS frame (2026-10-08): one bar across the window, over the rail and the list, which start under its foot.
+    assert.ok(near(b.top[0], 0) && near(b.top[2], W), `${tag}: the top bar spans the window ${JSON.stringify(b.top)}`);
+    if (b.list && state.info.list.docked) assert.ok(near(b.list[1], b.top[3]), `${tag}: the list starts under the bar (${b.list[1]} vs ${b.top[3]})`);
     if (b.inspector && state.info.inspector.docked) { assert.ok(near(b.inspector[0] + b.inspector[2], W), `${tag}: the inspector is at the right edge`); assert.ok(near(b.inspector[1], state.vars.y0), `${tag}: under the bar (and the strip): ${b.inspector[1]} vs ${state.vars.y0}, bar ${JSON.stringify(b.top)}, vars ${JSON.stringify(state.vars)}`); }
     assert.ok(state.usable[0] >= (state.info.list.docked ? b.list[0] + b.list[2] : 0) - 1 && state.usable[2] <= W - (state.info.inspector.docked ? b.inspector[2] : 0) + 1 && near(state.usable[3], H - state.contract.used.status), `${tag}: usable() is clear of the columns and the status bar ${JSON.stringify(state.usable)}`);
     assert.ok(state.usable[1] >= b.top[3] - 1, `${tag}: and of the bar (${state.usable[1]} vs ${b.top[3]})`);
@@ -328,7 +330,7 @@ app.whenReady().then(async () => {
         // It sits on its column's edge, centred on it, and is a control of its own: nothing else of the frame is under it.
         const edge = name === "list" ? b.list[0] + b.list[2] : b.inspector[0];
         assert.ok(near(split.box[0] + split.box[2] / 2, edge, 1), `${tag}: the ${name} separator is on its column's edge (${split.box[0] + split.box[2] / 2} vs ${edge})`);
-        assert.ok(split.box[1] <= 1 && near(split.box[1] + split.box[3], H - state.contract.used.status, 1) || name === "inspector", `${tag}: and runs the column's height`);
+        assert.ok(near(split.box[1], b.top[3], 1) && near(split.box[1] + split.box[3], H - state.contract.used.status, 1) || name === "inspector", `${tag}: and runs the column's height, from the bar's foot (${split.box[1]} vs ${b.top[3]}) to the status bar`);
       } else assert.equal(split, null, `${tag}: no ${name} separator while it is not docked`);
     }
     // The rail's edge: on the rail's right edge, and clear of the bar's controls.

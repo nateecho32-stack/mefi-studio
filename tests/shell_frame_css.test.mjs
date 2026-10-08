@@ -108,8 +108,8 @@ test("geometry comes from the contract's derived edges only, and the layers are 
   assert.equal(decl("html[data-frame] .shell-region", "--frame-rail-w"), "calc(var(--shell-x0) - var(--shell-list-w))");
   assert.equal(decl("html[data-frame] .shell-region", "--frame-top-h"), "calc(var(--shell-y0) - var(--shell-tabs-h))");
   assert.equal(decl("html[data-frame] .shell-top", "height"), "var(--frame-top-h)");
-  assert.equal(decl("html[data-frame] .shell-top", "left"), "var(--frame-x0)");
-  assert.equal(decl("html[data-frame] .shell-top", "z-index"), "calc(var(--z-shell) - 1)");
+  assert.equal(decl("html[data-frame] .shell-top", "left"), "0", "the OS frame: one bar across the window, over the rail and the list");
+  assert.equal(decl("html[data-frame] .shell-top", "z-index"), "calc(var(--z-shell) + 1)", "over the rail, as the status bar is");
   assert.equal(decl("html[data-frame] .shell-status", "height"), "var(--shell-status-h)");
   assert.equal(decl("html[data-frame] .shell-tabs", "height"), "var(--shell-tabs-h)");
   assert.equal(decl("html[data-frame] .shell-main", "right"), "var(--shell-x1)");

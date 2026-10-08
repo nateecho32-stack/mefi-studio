@@ -7,6 +7,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **The window reads like a desktop.** One bar runs across the whole top of
+  the window, with the Social | Studio switch, the trail and Search in it; the
+  menu rail, the session list and the project panel start under it, the same
+  height on every page (Team's bar was 4 px taller than the rest). The tab
+  strip is a sunk band and the open tab joins the page like a window tab. On
+  Social's Home, Your work, Friends and the conversation are solid panes over
+  the tree instead of glass it shows through, and the project row sits closer
+  to the tabs. Nothing moved to another menu; every button is where it was.
+
 - **Opening or starting a project no longer dead-ends while work is still
   running.** If Studio refuses to switch because the assistant is still
   finishing work in the open project, the launch screen now shows **Stop the

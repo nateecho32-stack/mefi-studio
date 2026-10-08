@@ -204,7 +204,6 @@ const RAW = [
   ["styles.css", "#workspace-sidebar-panel { left: var(--shell-rail-w);", "the project panel slides out of the rail's edge, over whatever is beside the rail (and stops above the status bar, as the rail does)"],
   ["styles.css", "clip-path: inset(0 0 0 var(--shell-rail-open))", "the open rail covers the floats layer's left strip"],
   ["styles.css", "max(var(--shell-rail-open), var(--shell-x0))", "toasts step aside to the open rail's edge, or past the list when that is further"],
-  ["agents.css", "body[data-nav-section=agents] { --shell-local-h: 60px; }", "the agents section's bar is taller: an input"],
   ["builder.css", "--shell-rail-open: 272px;", "Build's sessions layout opens the rail wider: an input"],
   ["vibe.css", "{ --shell-rail-w: 72px; }", "Vibe's rail is 72px: an input"],
   ["vibe.css", "width: var(--shell-rail-w, 72px);", "Vibe's own rail's width"],

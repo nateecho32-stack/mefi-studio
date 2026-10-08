@@ -8501,7 +8501,6 @@ html[data-motion="off"] .companion-orb, html[data-motion="off"] .companion-orb .
 }
 html[data-density=compact] .agents-model-row { padding-block: 6px; }
 html[data-density=compact] .agents-model-settings .studio-field { padding-block: 0; }
-body[data-nav-section=agents] { --shell-local-h: 60px; }
 body[data-nav-section=agents] #app-task-context { display: none; }
 @media (max-width: 1100px) { .agents-overview-grid { grid-template-columns: 1fr; } .agents-role-grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) {
@@ -13743,7 +13742,7 @@ html[data-frame] .shell-region .primary kbd {
 
 /* ---- the top bar: the local navigation's row, with a breadcrumb in its middle ---- */
 html[data-frame] .shell-top {
-  position: fixed; top: 0; left: var(--frame-x0); right: 0; height: var(--frame-top-h); z-index: calc(var(--z-shell) - 1);
+  position: fixed; top: 0; left: 0; right: 0; height: var(--frame-top-h); z-index: calc(var(--z-shell) + 1);
   display: flex; align-items: center; gap: 8px; padding: 0 12px 0 10px;
   background: var(--bg); border-bottom: 1px solid var(--hairline);
   container: shell-top / inline-size;
@@ -13879,7 +13878,7 @@ html[data-frame] #app-rail .app-rail-head .count { min-width: 18px; height: 18px
 html[data-frame] #app-rail .app-rail-brand .app-rail-text::after { font-size: max(12px, calc(12px * var(--text-scale, 1))); }
 
 /* ---- the columns ---- */
-html[data-frame] .shell-column { position: fixed; top: 0; bottom: var(--shell-y1); z-index: calc(var(--z-shell) - 1); display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-rail); outline: none; }
+html[data-frame] .shell-column { position: fixed; top: var(--frame-top-h); bottom: var(--shell-y1); z-index: calc(var(--z-shell) - 1); display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--surface-rail); outline: none; }
 html[data-frame] .shell-list { left: var(--frame-rail-w); width: var(--shell-list-w); border-right: 1px solid var(--hairline); }
 html[data-frame] .shell-inspector { right: 0; top: var(--shell-y0); width: var(--shell-inspector-w); border-left: 1px solid var(--hairline); }
 html[data-frame][data-ui-mode="vibe"] .shell-column { background: var(--studio-menu-fill, var(--surface-rail)); backdrop-filter: var(--studio-menu-blur, none); }
@@ -13986,8 +13985,8 @@ html[data-frame] .shell-split::after { content: ""; position: absolute; top: 0; 
 html[data-frame] .shell-split:hover::after, html[data-frame] .shell-split.is-drag::after { left: 4px; width: 3px; background: color-mix(in srgb, var(--gold) 75%, transparent); }
 html[data-frame] .shell-split:focus-visible::after { left: 4px; width: 3px; background: var(--gold-bright); }
 html[data-frame] .shell-split:focus-visible::before { content: ""; position: absolute; top: 50%; left: 1px; width: 9px; height: 36px; margin-top: -18px; border-radius: 5px; background: var(--panel-solid); box-shadow: 0 0 0 2px var(--gold-bright); }
-html[data-frame] .shell-split-rail { top: 0; left: calc(var(--frame-rail-w) - 5px); }
-html[data-frame] .shell-split-list { top: 0; left: calc(var(--frame-rail-w) + var(--shell-list-w) - 5px); }
+html[data-frame] .shell-split-rail { top: var(--frame-top-h); left: calc(var(--frame-rail-w) - 5px); }
+html[data-frame] .shell-split-list { top: var(--frame-top-h); left: calc(var(--frame-rail-w) + var(--shell-list-w) - 5px); }
 html[data-frame] .shell-split-inspector { top: var(--shell-y0); right: calc(var(--shell-inspector-w) - 5px); }
 html[data-frame] .shell-frame.is-dragging, html[data-frame] .shell-frame.is-dragging * { cursor: col-resize !important; user-select: none !important; }
 
@@ -14093,6 +14092,25 @@ html[data-motion="off"][data-frame] .shell-column[data-state="drawer"], html[dat
 html[data-frame] body:is(.workspace-active, .vibe-active, .command-active):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head),
 html[data-frame] body:has(.workspace-page:not([hidden])):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head),
 html[data-frame] body:has(#friends-overlay:not([hidden])):not(.appearance-settings-active):not(.music-preview-active) > :is(main, header.page-head) { display: none; }
+
+/* ---- the OS frame (2026-10-08): the window reads as a desktop ----
+   One system bar across the whole window; the rail, the list and the page all start under it, so the top edge is
+   one band and not a ragged row of column heads. The bar sits over the rail (z-shell + 1, as the status bar does),
+   and the rail opens under it. The tab strip is a row of window tabs joined to the page (tabs.css), the page's boxes
+   are opaque panes over the tree (the sky is the wallpaper), and the bar is the same height on every page. */
+/* The rails are not frame regions (the contract's own, and Social's): they read the bar's foot the way the regions do, and their first
+   rows sit 8 px under its line rather than 12 px under the window's edge. */
+html[data-frame] #app-rail, html[data-frame] .vibe-rail { top: calc(var(--shell-y0) - var(--shell-tabs-h)); padding-top: 8px; }
+/* The project panel slides out of the rail's edge under the bar, as the rail does (it had covered the breadcrumb). */
+html[data-frame][data-shell="rail"]:not([data-ui-mode="vibe"]) #workspace-sidebar-panel { top: calc(var(--shell-y0) - var(--shell-tabs-h)); height: calc(100% - var(--shell-y1) - (var(--shell-y0) - var(--shell-tabs-h))); }
+/* Panes: one radius, one edge, one opaque fill for the page's boxes (Your work and Friends on Social's Home, the docked
+   conversation, the inspector's cards), so they read as windows over the sky and the tree never shows through text. */
+html[data-frame] { --os-r: 12px; --os-edge: color-mix(in srgb, var(--ivory) 11%, transparent); --os-fill: color-mix(in srgb, var(--panel-solid) 88%, var(--bg)); }
+html[data-frame] .social-card, html[data-frame] #vibe-layer[data-dock="chat"] > #vibe-chat { border-radius: var(--os-r); border-color: var(--os-edge); background: var(--os-fill); backdrop-filter: none; }
+html[data-frame] .today-group { background: color-mix(in srgb, var(--bg-deep) 26%, transparent); backdrop-filter: none; }
+html[data-frame] .sx-icard { border-radius: var(--os-r); border-color: var(--os-edge); background: var(--os-fill); }
+/* Social's project row is a toolbar under the strip, not a third band: as tall as its buttons, close to the line above. */
+html[data-frame] #vibe-layer[data-today="on"] > .vibe-top { padding-top: 6px; }
 
 /* Tabs (renderer/tabs.js): the strip under the local navigation, its menus and the Tab behaviour card.
    Layout v2 only: nothing draws these until the script starts. Every colour is a theme token, every text size is
@@ -14254,6 +14272,20 @@ html[data-frame] body:has(#friends-overlay:not([hidden])):not(.appearance-settin
 @media (prefers-reduced-motion: reduce) {
   .ts-item, .ts-close, .ts-item[data-fresh] { animation: none; transition: none; }
 }
+
+/* ---- window tabs (the OS frame, 2026-10-08) ----
+   In the frame the strip is a sunk band and the open tab is a window tab: the page's own fill, square at its foot,
+   joined to the page across the strip's line (the line is the strip's ::after, under the list's own layer, and the
+   open tab stands on it). The other tabs stay quiet shapes that round only at the top. */
+html[data-frame] .shell-tabs, html[data-frame] .ts-strip { background: color-mix(in srgb, var(--bg-deep) 46%, var(--bg)); }
+html[data-frame] .ts-strip { border-bottom: 0; }
+html[data-frame] .ts-strip::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: var(--hairline); }
+html[data-frame] .ts-list { z-index: 1; align-items: flex-end; padding: 0; }
+html[data-frame] .ts-item { height: calc(var(--ts-h) - 7px); border-radius: 8px 8px 0 0; }
+html[data-frame] .ts-item[data-active] { background: var(--bg); box-shadow: inset 1px 0 var(--hairline-strong), inset -1px 0 var(--hairline-strong), inset 0 1px var(--hairline-strong); }
+html[data-frame] .ts-item[data-dragging] { border-radius: 8px; }
+html[data-frame] .ts-strip .ts-tab { border-radius: 8px 8px 0 0; }
+html[data-frame] .ts-flag { box-shadow: 0 0 0 2px color-mix(in srgb, var(--bg-deep) 46%, var(--bg)); }
 
 /* Build's desktop inside the 0.5 frame: the session list, the thread and the inspector (renderer/sessions.js).
    Nothing here matches anything until sessions.js draws its panels, and it draws them only when html[data-layout="v2"]

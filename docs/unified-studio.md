@@ -241,10 +241,18 @@ edges and nothing else (`--shell-rail-w` and `--shell-local-h` are read back
 from them, so the ledger in `tests/layout_contract_css.test.mjs` does not
 grow): the **top bar**, the **list**, the **inspector**, the **tab strip**'s
 row, the **status bar**, and **main**, a host over the free area that
-transparent pages are not drawn into but other modules may mount into. They sit
-in the same layer as the local navigation (`--z-shell` minus one), the rail
-opens over them, the status bar sits above them, and the Layout menu above
-the sheets. Each region's size is reported through `MefiNav.layout.set`
+transparent pages are not drawn into but other modules may mount into. The top
+bar spans the window and sits over the rail (`--z-shell` plus one, as the
+status bar does), and the rail, the list, the splitters and the project panel
+start under its foot, so the window has one band at the top and one at the
+bottom, the way a desktop does. The other regions sit in the same layer as
+the local navigation (`--z-shell` minus one), the rail opens over them, and
+the Layout menu sits above the sheets. The tab strip is a sunk band whose open
+tab takes the page's fill and joins it (`tabs.css`), and the page's boxes
+(Social's Your work and Friends, the docked conversation, the inspector's
+cards) share one radius, edge and opaque fill (`--os-r`, `--os-edge`,
+`--os-fill`), so they read as windows over the tree rather than glass it
+shows through. Each region's size is reported through `MefiNav.layout.set`
 only when it changes from what was asked last, and a column the window has
 folded is left to the contract, which remembers what was asked.
 
