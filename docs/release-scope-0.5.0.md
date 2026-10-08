@@ -1,6 +1,6 @@
 # 0.5.0 release scope
 
-Updated on the evening of 6 October 2026. The published Windows download is
+Updated on 8 October 2026. The published Windows download is
 still 0.4.4. This records the scope of the next release; it does not announce a
 release date or replace the packaging and release checks. **0.4.5 and 0.4.6 are
 skipped:** what was planned for them ships in 0.5.0. The plan is
@@ -228,11 +228,10 @@ decision, and each has an owner-side default already in the code.
   `team_render`, `unified_studio_render`, `workflow_render` and `command_render`
   fail at the small window sizes before and after the 5 and 6 October work
   (Linux fonts); judge them on Windows.
-- Check that the live relay runs `main`'s relay code: Friends › Events and the
-  community budget (`relay/src/events.mjs`, `economy.mjs`, store schema 5)
-  came after its first deploy on 5 October, and the reconnect work's version
-  window (the hello's `oldest` field) is not deployed yet; both Studios connect
-  meanwhile. Redeploy it ([relay/README.md](../relay/README.md), "Deploying").
+- Check that the live relay runs `main`'s relay code. The Shop and the credits
+  checks (`c679461`) are live since 7 October; credits on hold for a newcomer
+  wave (`798aeca`, store schema 7) came after that deploy. Redeploy it before
+  the release ([relay/README.md](../relay/README.md), "Deploying").
 - To try `main` on another PC without packaging a release: download the newest
   beta zip from a green "Studio checks" run on `main` (the
   `mefi-studio-development-win32-x64` artifact), then Settings › System ›
