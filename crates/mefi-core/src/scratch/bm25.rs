@@ -63,16 +63,45 @@ pub fn query_terms(query: &str) -> Vec<String> {
     seen
 }
 
+/// Where the first query term starts in the text, in characters.
+fn first_hit(text: &str, terms: &[String]) -> Option<usize> {
+    let mut current = String::new();
+    let mut start = 0usize;
+    let mut count = 0usize;
+    let mut index = 0usize;
+    for c in text.chars().chain(std::iter::once(' ')) {
+        if c.is_alphanumeric() {
+            if count == 0 {
+                start = index;
+            }
+            current.extend(c.to_lowercase());
+            count += 1;
+        } else if count > 0 {
+            if count >= MIN_TOKEN && terms.contains(&current) {
+                return Some(start);
+            }
+            current.clear();
+            count = 0;
+        }
+        index += 1;
+    }
+    None
+}
+
 /// A window of the text around its first query term, whitespace folded.
 pub fn snippet(text: &str, terms: &[String]) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    let hit = tokens_at(text).into_iter().find(|(token, _)| terms.contains(token)).map(|(_, at)| at).unwrap_or(0);
-    let mut start = hit.saturating_sub(SNIPPET_LEAD);
-    while start > 0 && start < hit && !chars[start - 1].is_whitespace() {
-        start += 1;
+    let hit = first_hit(text, terms).unwrap_or(0);
+    let start = hit.saturating_sub(SNIPPET_LEAD);
+    let window: Vec<char> = text.chars().skip(start).take(SNIPPET_CHARS + SNIPPET_LEAD).collect();
+    // Begin on a whole word: a word the window cut in two is left out.
+    let mut skip = 0usize;
+    if start > 0 && text.chars().nth(start - 1).is_some_and(|c| !c.is_whitespace()) {
+        while skip < window.len() && start + skip < hit && !window[skip].is_whitespace() {
+            skip += 1;
+        }
     }
-    let window: String = chars.iter().skip(start).take(SNIPPET_CHARS).collect();
-    window.split_whitespace().collect::<Vec<_>>().join(" ")
+    let text: String = window.iter().skip(skip).take(SNIPPET_CHARS).collect();
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 struct Doc {
@@ -282,10 +311,12 @@ impl Postings {
             let term = std::str::from_utf8(body.get(at..at + term_len)?).ok()?.to_string();
             at += term_len;
             let count = u32_at(&mut at)? as usize;
+            let pairs = body.get(at..at + count * 8)?;
+            at += count * 8;
             let mut list = Vec::with_capacity(count);
-            for _ in 0..count {
-                let id = u32_at(&mut at)?;
-                let tf = u32_at(&mut at)?;
+            for pair in pairs.chunks_exact(8) {
+                let id = u32::from_le_bytes([pair[0], pair[1], pair[2], pair[3]]);
+                let tf = u32::from_le_bytes([pair[4], pair[5], pair[6], pair[7]]);
                 if id as usize >= docs {
                     return None;
                 }

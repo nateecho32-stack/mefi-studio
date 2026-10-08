@@ -190,6 +190,40 @@ the Electron build until stage 3.
 | Attempt review: the before and after pictures, Changed files, one file's diff, Revert and its undo, pruning and dropping | `scripts/attempt-snapshots-host.cjs` with all of `attempt-snapshots.cjs`'s rules (ref names, the commit message, what a snapshot leaves out, git's raw, numstat and diff output, the revert plan) | `crates/mefi-core/src/snapshots/` | `main.cjs`'s `attemptSnapshotsHost()` takes a Rust-backed `attempt-snapshots` factory; git runs from Rust on the engine's environment (sent with each call), the kill switch and the log line are called back, and a revert's or an undo's `busy(root)` crosses with its request. One writer per folder and three folder reads at once, as in the JavaScript | `tests/rust_parity_snapshots.test.mjs` (the same attempt on twin repositories with a fixed clock gives the same commits) |
 | Settings, keys and projects: settings.json and auth.json (the merged view, the legacy keys' move to auth.json, a broken file copied aside once, the last good copy, saves held while nothing good was ever read), the credential fields and their environment variables, and a project's identity and the saved project list | `main.cjs` `readSettings`, `writeSettings` and `settingsFromDisk` with `scripts/auth-store.cjs`; `scripts/credentials.cjs`; `scripts/projects.cjs`'s `projectFromPath`, list, add, select, remove, `saved()` and `dataPath` | `crates/mefi-core/src/settings/` (`keys.rs`, `projects.rs`); `js::stringify` writes JSON as JavaScript spells it | `main.cjs`'s `readSettings()` and `writeSettings()` take a Rust-backed `settings-store` factory: each call names the two files and carries `projects.saved()`, the startup read's health goes as a seed until a call has gone through, and the log line is called back. `updateSettings`' queue and the startup read stay the engine's. The engine's live project registry stays JavaScript (every caller reads it synchronously, and `current()` follows the operation's async context); Rust modules build the same list from the saved block | `tests/rust_parity_settings.test.mjs` (main.cjs's own settings code, run from its text, against Rust on twin userData folders: views, both files' bytes, broken copies and log lines) |
 | The Git chip's host layer: which project a call is for, one writer at a time, push through sync or through a branch push with the project's check, each project's last sync, refusal and outcome, the account as last asked, the launch list's chips; and git-link's `describe` and `chip` (the state table and every sentence the chip says) | `scripts/git-host.cjs`; `scripts/git-link.cjs` `STATES`, `describe`, `chip` | `crates/mefi-core/src/git/host.rs`, `describe.rs` | `main.cjs`'s `gitHost()` takes a Rust-backed `git-host` factory, and the Git actions then run in-process under it instead of through `core.git.*`. The engine's context, project list, `syncProject`, `send` and `pcSetup` are called back; a project check (a function, which cannot cross back) is asked for and run on the engine's side; the "Done" state's expiry stays the engine's timer, which asks Rust to `settle` | `tests/rust_parity_git.test.mjs` (describe and chip on about 830 sets of facts; 28 host steps on two boxes with a fake gh give the same answers, the same models sent and the same commits) |
+| The Scratch tier's arena: the drive as a slower tier of memory for agents and the engine (put, get, has, list, search, stats, compact, evict) | `scripts/scratch-host.cjs` (the plain-file fallback the Electron build uses) with the `scripts/scratch-rules.cjs` tokenizer and BM25 scorer, both WP2 of `docs/plans/scratch-tier.md` | `crates/mefi-core/src/scratch/` (`arena.rs`, `buddy.rs`, `index.rs`, `journal.rs`, `bm25.rs`) | `scripts/rust-modules.cjs` factory `scratch`: `core.scratch.<fn>` with the collaborators `{ dir, capMB, now? }` first, then the request; the kinds table, the key grammar and the settings stay JavaScript and travel with each put (`kind`, `searchable`, `ttlMs`). One arena per folder per process; `scratch.lock` refuses a second process (`{ ok: false, reason: "locked" }`) | `tests/rust_parity_scratch.test.mjs` (the same put, get, search, stats, compact and evict sequence on twin folders; the cap, a torn `index.log`, a bad header, malformed requests and the lock on the Rust side alone) |
+
+### The Scratch arena
+
+`crates/mefi-core/src/scratch/` is the first module that is not a port of a
+JavaScript original but a twin built beside one: `scripts/scratch-host.cjs`
+is the bounded plain-file fallback, and the Rust arena is what the host
+build runs. `arena.bin` is memory-mapped (`memmap2`), so a blob's pages are
+clean file-backed pages the OS drops under pressure and reads back from the
+drive, never the pagefile. Page 0 is the header (`MFSC` v1, with its own
+sha256); blobs sit in buddy blocks of 4 KiB pages (`buddy.rs`, a complete
+binary tree of per-node largest-free-order bytes: O(log n) allocate and free,
+the lower address first). The index (`index.rs`) is content-addressed with
+sha256, so the same bytes under a second key add a key and not a copy; `at`
+bumps on `get` in memory and flushes with the snapshot. A put writes the
+block, appends a crc32'd line to `index.log` (a hand-rolled table, no crate),
+then flushes that block; open loads `index.snap`, replays the log past it,
+drops any record whose bytes do not hash to its hash (a torn write) and
+rebuilds the buddy tree from the live blobs. The file grows from 16 MiB by
+doubling up to `capMB`; over the cap, evictable kinds leave least recently
+touched first (expired run scratch before the rest, never `history`), and a
+put that still cannot fit answers `{ ok: false, reason: "full" }`. Compaction
+(on `compact`, or when the free holes under the high-water mark pass a
+quarter of it and 32 MiB) copies the live blobs into `arena.bin.next`, writes
+`index.snap.next`, renames both and bumps the generation; a crash between the
+two renames is finished at the next open. Search is BM25 (`bm25.rs`: lowercase,
+split on non-alphanumerics, tokens longer than two characters, no stemming,
+k1 1.2, b 0.75; score, then last touch, then key), with the postings held
+under 32 MB of heap and written as `postings.bin` at snapshot time. The put
+storm of 8 October 2026 (1,000 puts of 100 KB through `repo-batch`, 10%
+searchable, debug build) ran at 8.7 ms a put including the 100 MB of JSON
+parsed from stdin, 0.7 ms a get and 2 ms a search once the cold open
+(0.9 s for 1,000 keys) is taken out, and compaction freed 13 MB after
+evicting 100 keys.
 
 ### Two seams
 
