@@ -39,6 +39,24 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-08 The 0.5.0 release commit brought up to main b640d29 and gated: CI green, every window suite passes
+
+Branch `wip/release-0.5.0` (C:\wt\rel05, local `release/0.5.0-prep`), 7aa3894 on top of the held release commit
+c537621. The owner chose "Get it ready now": update the release commit to today's main, redo the changelog, run the full
+tests, then stop for the owner's tag. Merged origin/main b640d29 (116 commits since 6 October): CHANGELOG keeps the
+release's header and six highlights and puts main's entries since 6 October at the top of "Everything in 0.5.0"; the
+Friends highlight adds the Shop; README keeps the release's 0.5 Friends wording with main's line on free themes and the
+Shop's extras; placeholder date 2026-10-08. Release notes and the Discord draft name the Shop (not Ember, which every
+Studio has free); release-scope's relay line says 798aeca (store schema 7) is not deployed yet. whats-new.json already
+current (release-notes.mjs --check passes). check ok. ci.yml on 7aa3894 (Windows: check:specs, check, npm test, audit):
+success, 9 min 40 s (run 37769635053; c6bba70 also green). Window suites here, one at a time under the lease at 0.4-0.7
+GB free (another session's cargo build ran meanwhile): 41/46 in one pass; command_render (null for 0),
+companion_hub_render (140 s timeout), map_render (running task not on the Map), occlusion_probe and sessions_render
+failed and all five passed alone right after (54, 43, 25, 15 and 105 s). Before this, a check of the goal's "Done when"
+on main b640d29: 20 suites (Studio Daily, front page, shell frame, nav, palette, today_model, first run, rust_modules,
+five rust_parity suites with a rebuilt mefi-core) 244/246, the two git-heavy parity tests passing alone. Not done: no
+tag, no package, no merge to main (the HOLD rule: main would link a v0.5.0 that does not exist yet).
+
 ## 2026-10-07 A newcomer wave cannot farm credits for someone: credits on hold, a moderator's Pay or Drop, the Studio bot's message
 
 Branch `fix/credits-wave` (C:\wt\credits-wave, off main cde77af). The owner, through the Studio UI/UX session: if more
@@ -510,26 +528,6 @@ suites ran 25-70 min each and failed on time limits under that load (the known p
 sides' blocks kept, and 327/330 (3 skipped, 0 failed) here across app_wide_ipc, preload_fanout, module_purity,
 booklet_build, the pc_* and pcs_host suites, hub_host, remote_host/admission/gate, studio_api_*, resource_*,
 resources_ui, settings_nav, backlog_engine and attempt_snapshots_host. Not run here: a real two-PC or laptop-battery test (owner).
-
-## 2026-10-06 Other apps: the Studio API, MCP server and skill, and the setup prompt
-
-Branch `feat/studio-api` (C:\wt\apilink), merged with main twice (the CHANGELOG kept from both sides,
-`renderer/booklet.html` rebuilt, not merged). New `scripts/studio-api.cjs` (pure rules),
-`scripts/studio-api-server.cjs` (127.0.0.1 endpoint and key file), `scripts/studio-link.mjs` (the MCP server and command
-line apps run), `renderer/studio-api.js` (Settings › Other apps) and main.cjs "Other apps"; work an app files carries
-`origin.via = "app"` and waits for the owner's OK in every mode.
-
-`npm run check` ok, eslint on the changed files no new warnings, `npm run audit` 0 findings, booklet byte-identical to
-a fresh build. Through `npm run test:one` on the final tree: studio_api_rules 8, studio_api_server 9, studio_api_host 8,
-remote_gate, remote_admission, remote_host, module_purity, settings_nav, app_wide_ipc, preload_fanout, booklet_build and
-setup_helper, 191/191; settings_render (the new place at four window sizes, every theme) 1/1. Hosted Windows CI green on
-e35b1db. The full `npm test` here, run while other sessions held the PC, failed only in suites that fail under load or
-on clean main: the git-heavy attempt_review_host, attempt_snapshots_host and board_store passed alone (220/220 with the
-rest); shell_render and performance_render passed alone; task_overview_render and unified_studio_render fail the same
-way on clean main 593633a (C:\wt\apimain); rust_parity_git and the Python `electron . --smoke` launcher test (a 120 s
-timeout, clean main timed out too) and the real-OpenCode routing test (OpenCode itself timed out) are load. Live: the
-MCP server under `ELECTRON_RUN_AS_NODE=1` with Studio's own electron.exe answered initialize and tools/call; the
-card was checked in the browser pane (switch, five connect rows, Copy setup prompt, Show it, a note's toast).
 
 ## Read Before Any Tests
 

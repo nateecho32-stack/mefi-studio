@@ -6,6 +6,26 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Other apps: the Studio API, MCP server and skill, and the setup prompt
+
+Branch `feat/studio-api` (C:\wt\apilink), merged with main twice (the CHANGELOG kept from both sides,
+`renderer/booklet.html` rebuilt, not merged). New `scripts/studio-api.cjs` (pure rules),
+`scripts/studio-api-server.cjs` (127.0.0.1 endpoint and key file), `scripts/studio-link.mjs` (the MCP server and command
+line apps run), `renderer/studio-api.js` (Settings › Other apps) and main.cjs "Other apps"; work an app files carries
+`origin.via = "app"` and waits for the owner's OK in every mode.
+
+`npm run check` ok, eslint on the changed files no new warnings, `npm run audit` 0 findings, booklet byte-identical to
+a fresh build. Through `npm run test:one` on the final tree: studio_api_rules 8, studio_api_server 9, studio_api_host 8,
+remote_gate, remote_admission, remote_host, module_purity, settings_nav, app_wide_ipc, preload_fanout, booklet_build and
+setup_helper, 191/191; settings_render (the new place at four window sizes, every theme) 1/1. Hosted Windows CI green on
+e35b1db. The full `npm test` here, run while other sessions held the PC, failed only in suites that fail under load or
+on clean main: the git-heavy attempt_review_host, attempt_snapshots_host and board_store passed alone (220/220 with the
+rest); shell_render and performance_render passed alone; task_overview_render and unified_studio_render fail the same
+way on clean main 593633a (C:\wt\apimain); rust_parity_git and the Python `electron . --smoke` launcher test (a 120 s
+timeout, clean main timed out too) and the real-OpenCode routing test (OpenCode itself timed out) are load. Live: the
+MCP server under `ELECTRON_RUN_AS_NODE=1` with Studio's own electron.exe answered initialize and tools/call; the
+card was checked in the browser pane (switch, five connect rows, Copy setup prompt, Show it, a note's toast).
+
 ## 2026-10-06 Resources: the resource manager for other apps, manual and auto, gated in C:\wt\resmgr
 
 Branch `feat/resource-manager` (C:\wt\resmgr) off 4b150b3, main merged in up to 86cfa93 (one CHANGELOG conflict,
