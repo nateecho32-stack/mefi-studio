@@ -89,6 +89,7 @@ export const BOOKLET_INPUTS = {
     "friends-front.js",
     "friends-mod.js",
     "friends-events.js",
+    "friends-shop.js",
     "planning.js",
     "onboarding.js",
     "community.js",
@@ -107,6 +108,7 @@ export const BOOKLET_INPUTS = {
     "vibe-panels.js",
     "vibe.js",
     "today.js",
+    "social.js",
     "key-tips.js",
     "patch.js",
     "panes.js",
@@ -118,6 +120,8 @@ export const BOOKLET_INPUTS = {
     "shell.js",
     "tabs.js",
     "sessions.js",
+    "effects.js",
+    "pets.js",
     "booklet.js"
   ],
   "styles": [
@@ -139,8 +143,10 @@ export const BOOKLET_INPUTS = {
     "project-hub.css",
     "friends-front.css",
     "friends-events.css",
+    "friends-shop.css",
     "vibe.css",
     "today.css",
+    "social.css",
     "setup-helper.css",
     "git-sync.css",
     "builder.css",
@@ -157,6 +163,7 @@ export const BOOKLET_INPUTS = {
     "chat-tools.css",
     "connectors.css",
     "daily-paper.css",
+    "effects.css",
     "chrome.css"
   ]
 };

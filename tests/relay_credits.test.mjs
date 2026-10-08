@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { GUARD, accountCreatedAt, rankFor, specialRanks, projectLink } from "../relay/src/credits.mjs";
-import { ALICE, BOB, CARA, MOD, makeRelay } from "./fixtures/relay-harness.mjs";
+import { DatabaseSync } from "node:sqlite";
+import { MIGRATIONS, SCHEMA_VERSION, createStore } from "../relay/src/store.mjs";
+import { ALICE, BOB, CARA, MOD, connectAll, makeRelay, member } from "./fixtures/relay-harness.mjs";
 
 // Credits, ranks and the project hub on the relay (relay/src/credits.mjs):
 // sharing is free and pays nothing; a play of someone else's project pays
@@ -82,7 +84,7 @@ test("sharing pays nothing; a two-minute play pays maker and player; a star pays
   assert.equal(restar.project.stars, 1);
 
   const alice = await as("tok-alice", "GET", "/v1/me");
-  assert.deepEqual(alice.credits, { balance: 8, lifetime: 8, today: 8, todayCap: 60 }, "5 played + 3 starred; sharing and the re-star paid nothing");
+  assert.deepEqual(alice.credits, { balance: 8, lifetime: 8, today: 8, todayCap: 60, held: 0 }, "5 played + 3 starred; sharing and the re-star paid nothing");
   assert.equal(alice.rank.key, "spark");
   assert.equal(alice.streak.days, 1);
   const bob = await as("tok-bob", "GET", "/v1/me");
@@ -244,8 +246,12 @@ test("Forget me cannot reset a limit: the account is held for 30 days and what i
   relay.sql("UPDATE meta SET value = '0' WHERE key = 'upkeep_at'");
   await relay.runAlarm();
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM credit_holds")[0].n, 0, "the hold goes after 30 days");
-  assert.equal(relay.sql(`SELECT COUNT(*) AS n FROM credit_events WHERE actor_id LIKE 'gone:%'`)[0].n, 0, "and so do the fingerprinted rows, after a week");
+  assert.equal(relay.sql(`SELECT COUNT(*) AS n FROM credit_events WHERE actor_id LIKE 'gone:%'`)[0].n, 1, "what Bob gave stays, under an id that names nobody");
   assert.equal((await playOnce()).credited.owner, 5, "after the hold, Bob counts again");
+  clock += 150 * DAY;
+  relay.sql("UPDATE meta SET value = '0' WHERE key = 'upkeep_at'");
+  await relay.runAlarm();
+  assert.equal(relay.sql(`SELECT COUNT(*) AS n FROM credit_events WHERE actor_id LIKE 'gone:%'`)[0].n, 0, "and goes after the 180 days every credit row is kept");
 });
 
 test("moderators see where a member's credits came from and take back farmed ones for good", async () => {
@@ -366,4 +372,236 @@ test("forget me removes credits, projects and stars; idle projects leave after 9
   relay.sql("UPDATE meta SET value = '0' WHERE key = 'upkeep_at'");
   await relay.runAlarm();
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM projects")[0].n, 0, "a project nobody played for 90 days leaves the hub");
+});
+
+test("what a member who used Forget me gave stays for moderators: flagged, reviewed and taken back, under an id that names nobody", async () => {
+  let clock = morning();
+  const ALT = { id: "200000000000000031", username: "alt", global_name: "Alt" };
+  const relay = makeRelay({ now: () => clock, discord: { "tok-alt": { user: ALT } } });
+  const as = api(relay);
+  const id = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const playOnce = async (token) => {
+    const play = await as(token, "POST", `/v1/projects/${id}/play`);
+    clock += 2 * 60_000 + 1;
+    return as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
+  };
+  // A second account pays Alice the 15 a week the pair limit allows, two weeks running; Bob plays once.
+  for (let week = 0; week < 2; week += 1) {
+    for (let day = 0; day < 3; day += 1) {
+      await playOnce("tok-alt");
+      clock += DAY;
+    }
+    clock += 6 * DAY;
+  }
+  await playOnce("tok-bob");
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.lifetime, 35);
+  await as("tok-alt", "POST", "/v1/me/forget");
+  // Long past the week the old rule kept them.
+  clock += 9 * DAY;
+  relay.sql("UPDATE meta SET value = '0' WHERE key = 'upkeep_at'");
+  await relay.runAlarm();
+  const flag = (await as("tok-mod", "GET", "/v1/admin/credits/flags")).flags.find((item) => item.id === ALICE.id);
+  assert.deepEqual([flag?.why, flag?.top.id, flag?.top.name, flag?.top.forgotten, flag?.top.amount], ["one-giver", null, "a member who used Forget me", true, 30]);
+  const review = await as("tok-mod", "GET", `/v1/admin/credits/${ALICE.id}`);
+  const gone = review.givers.find((giver) => giver.forgotten);
+  assert.match(gone.id, /^gone:[A-Za-z0-9_-]{16}$/);
+  assert.deepEqual([gone.name, gone.amount, gone.accountCreatedAt], ["a member who used Forget me", 30, null]);
+  assert.ok(!JSON.stringify(review).includes(ALT.id), "nothing in the review names them");
+  assert.equal(relay.sql(`SELECT COUNT(*) AS n FROM credit_events WHERE actor_id LIKE 'gone:%' AND ref IS NOT NULL`)[0].n, 0, "nor which project it was");
+  const taken = await as("tok-mod", "POST", `/v1/admin/credits/${ALICE.id}/revoke`, { from: gone.id });
+  assert.deepEqual([taken.revoked, taken.credits.lifetime], [30, 5], "only what the forgotten member gave");
+  assert.equal((await as("tok-mod", "POST", `/v1/admin/credits/${ALICE.id}/revoke`, { from: "gone:x" })).status, 400);
+});
+
+test("moderators switch a kind of reward off and back on: nothing pays for what happened meanwhile, other kinds go on, featuring waits", async () => {
+  let clock = morning();
+  const relay = makeRelay({ now: () => clock });
+  const as = api(relay);
+  const switches = (key, on) => as("tok-mod", "POST", "/v1/admin/credits/switches", { key, on });
+  assert.equal((await as("tok-bob", "GET", "/v1/admin/credits/switches")).status, 403, "moderators only");
+  assert.equal((await as("tok-bob", "POST", "/v1/admin/credits/switches", { key: "plays", on: false })).status, 403);
+  assert.deepEqual((await as("tok-mod", "GET", "/v1/admin/credits/switches")).switches, ["plays", "stars", "together", "cowork", "jam", "sales", "featuring", "review", "batches"]);
+  assert.deepEqual([(await switches("nope", false)).status, (await switches("plays", "no")).status], [400, 400]);
+  assert.deepEqual((await switches("plays", false)).off, ["plays"]);
+  const id = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const playOnce = async (token) => {
+    const play = await as(token, "POST", `/v1/projects/${id}/play`);
+    clock += 2 * 60_000 + 1;
+    return as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
+  };
+  const paused = await playOnce("tok-bob");
+  assert.deepEqual([paused.credited, paused.counted, paused.why], [{ owner: 0, you: 0 }, true, "paused"], "the play still counts toward Top");
+  await as("tok-bob", "POST", `/v1/projects/${id}/star`);
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.balance, 3, "stars still pay");
+  assert.deepEqual((await switches("plays", true)).off, []);
+  assert.deepEqual((await playOnce("tok-bob")).credited, { owner: 0, you: 0 }, "Bob's play while plays were off used up his day with Alice");
+  assert.deepEqual((await playOnce("tok-cara")).credited, { owner: 5, you: 2 }, "a new play pays");
+
+  relay.sql("UPDATE accounts SET balance = 200 WHERE user_id = ?", ALICE.id);
+  await switches("featuring", false);
+  const refused = await as("tok-alice", "POST", `/v1/projects/${id}/feature`);
+  assert.deepEqual([refused.status, refused.reason], [409, "featuring-paused"]);
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.balance, 200, "nothing was spent");
+  // A paused relay refuses every write, never a moderator's switch.
+  await as("tok-mod", "POST", "/v1/admin/pause", { paused: true });
+  assert.equal((await switches("featuring", true)).status, 200);
+  await as("tok-mod", "POST", "/v1/admin/pause", { paused: false });
+  assert.equal((await as("tok-alice", "POST", `/v1/projects/${id}/feature`)).status, 200);
+  assert.deepEqual(relay.sql(`SELECT actor_id, detail FROM audit WHERE kind = 'credits-switch' ORDER BY id`).map((row) => [row.actor_id, JSON.parse(row.detail)]),
+    [[MOD.id, { key: "plays", on: false }], [MOD.id, { key: "plays", on: true }], [MOD.id, { key: "featuring", on: false }], [MOD.id, { key: "featuring", on: true }]]);
+});
+
+test("Top counts each member once a week per project, however often they play it", async () => {
+  let clock = morning();
+  const relay = makeRelay({ now: () => clock });
+  const as = api(relay);
+  const id = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const playOnce = async (token) => {
+    const play = await as(token, "POST", `/v1/projects/${id}/play`);
+    clock += 2 * 60_000 + 1;
+    return as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
+  };
+  const plays = () => relay.sql("SELECT plays FROM projects WHERE id = ?", id)[0].plays;
+  for (let day = 0; day < 4; day += 1) {
+    assert.equal((await playOnce("tok-bob")).counted, true, "every day's play is still logged (the jam's votes read it)");
+    clock += DAY;
+  }
+  assert.equal(plays(), 1, "four days of Bob's plays count once");
+  await playOnce("tok-cara");
+  assert.equal(plays(), 2);
+  const front = await as("tok-alice", "GET", "/v1/front");
+  assert.deepEqual([front.top.id, front.top.weekPlays, front.you.week.plays], [id, 2, 2], "the Lobby's week counts players, not days played");
+  clock += 7 * DAY;
+  await playOnce("tok-bob");
+  assert.equal(plays(), 3, "a new week, a new count");
+});
+
+// A newcomer wave: members in their first 30 days in the server (here 10 days in, so they may give) with old Discord ids.
+const WEBHOOK = "https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz_ABCDEFGH";
+const BOT = `${"a".repeat(24)}.bcdefg.${"c".repeat(27)}`;
+const newcomers = (count) => Array.from({ length: count }, (_, n) => ({ token: `tok-n${n}`, user: { id: `2000000000000002${String(n).padStart(2, "0")}`, username: `n${n}`, global_name: `N${n}` } }));
+const newcomerDiscord = (list) => Object.fromEntries(list.map((one) => [one.token, { user: one.user, member: { joined_at: new Date(Date.now() - 10 * DAY).toISOString() } }]));
+
+test("a newcomer wave: the first 3 newcomers in a week to pay a member are paid, the rest is held for a moderator who pays or drops it; the moderators hear about it", async () => {
+  let clock = morning();
+  const calls = [];
+  const wave = newcomers(5);
+  const relay = makeRelay({ now: () => clock, fetchCalls: calls, env: { MOD_ALERT_WEBHOOK: WEBHOOK, MOD_ALERT_BOT_TOKEN: BOT, OWNER_IDS: MOD.id }, discord: newcomerDiscord(wave) });
+  const as = api(relay);
+  const id = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const playOnce = async (token) => {
+    const play = await as(token, "POST", `/v1/projects/${id}/play`);
+    clock += 2 * 60_000 + 1;
+    return as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
+  };
+  for (const one of wave.slice(0, 3)) assert.deepEqual((await playOnce(one.token)).credited, { owner: 5, you: 2 }, `${one.user.global_name} is one of the first three`);
+  for (const one of wave.slice(3)) assert.deepEqual((await playOnce(one.token)).credited, { owner: 0, you: 2 }, `${one.user.global_name}: what they would pay Alice waits; their own play still pays them`);
+  assert.deepEqual((await playOnce("tok-bob")).credited, { owner: 5, you: 2 }, "a member who has been around longer is untouched");
+  const mine = (await as("tok-alice", "GET", "/v1/me")).credits;
+  assert.deepEqual([mine.balance, mine.held], [20, 10], "Alice sees what waits for a quick check");
+
+  // The moderators hear about it in their channel and from the Studio bot, naming nobody, once until it is decided.
+  await relay.runAlarm();
+  const line = calls.find((call) => call.webhook?.content?.includes("on hold"))?.webhook.content ?? "";
+  assert.match(line, /credits for 1 more member are on hold: more than 3 members who joined the server in the last 30 days paid the same member this week/);
+  assert.ok(!line.includes("Alice") && !line.includes(ALICE.id));
+  const dm = calls.find((call) => call.dm?.content?.includes("on hold"))?.dm;
+  assert.deepEqual([dm?.bot, dm?.channel, dm?.content], [BOT, `9${MOD.id.slice(1)}`, line], "the bot messages the owner with the same line");
+  await relay.runAlarm();
+  assert.equal(calls.filter((call) => call.webhook?.content?.includes("on hold")).length, 1, "told once until decided");
+
+  // Studio's client: the list, then pay one newcomer's credits and drop the rest.
+  const mod = member(relay, "tok-mod");
+  const alice = member(relay, "tok-alice");
+  await connectAll(mod, alice);
+  assert.equal((await alice.client.modHeld()).ok, false, "moderators only");
+  const list = await mod.client.modHeld();
+  assert.deepEqual(list.holds.map((hold) => [hold.member.id, hold.total, hold.givers.map((giver) => [giver.name, giver.amount])]), [[ALICE.id, 10, [["N3", 5], ["N4", 5]]]]);
+  assert.ok(list.holds[0].givers.every((giver) => Number.isFinite(giver.joinedAt) && Number.isFinite(giver.accountCreatedAt)), "with how old each account is and when it joined");
+  assert.equal(list.holds[0].dropsAt, list.holds[0].since + 30 * DAY);
+  assert.equal((await alice.client.me()).credits.held, 10);
+  const paid = await mod.client.modHeldDecide(ALICE.id, "release", wave[3].user.id);
+  assert.deepEqual([paid.ok, paid.total, paid.holds[0].total], [true, 5, 5]);
+  assert.deepEqual([(await alice.client.me()).credits.balance, (await alice.client.me()).credits.held], [25, 5]);
+  const dropped = await mod.client.modHeldDecide(ALICE.id, "drop");
+  assert.deepEqual([dropped.total, dropped.holds], [5, []]);
+  assert.deepEqual(await mod.client.modHeldDecide(ALICE.id, "nope"), { ok: false, error: "bad-request" });
+  assert.equal((await as("tok-mod", "POST", `/v1/admin/credits/held/${ALICE.id}`, { action: "release", from: "x" })).status, 400);
+  assert.deepEqual(relay.sql(`SELECT kind, actor_id, detail FROM audit WHERE kind LIKE 'credits-%' ORDER BY id`).map((row) => [row.kind, row.actor_id, JSON.parse(row.detail).total]), [["credits-release", MOD.id, 5], ["credits-drop", MOD.id, 5]]);
+  for (const one of [mod, alice]) await one.client.disconnect();
+
+  // A newcomer a moderator paid counts as one of the paid ones from then on; one whose credits were dropped waits again.
+  clock += DAY;
+  assert.equal((await playOnce(wave[3].token)).credited.owner, 5);
+  assert.equal((await playOnce(wave[4].token)).credited.owner, 0);
+});
+
+test("credits on hold count toward the caps, drop after 30 days, and go with a revoke or Forget me", async () => {
+  let clock = morning();
+  const wave = newcomers(5);
+  const relay = makeRelay({ now: () => clock, discord: newcomerDiscord(wave) });
+  const as = api(relay);
+  const id = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const playOnce = async (token) => {
+    const play = await as(token, "POST", `/v1/projects/${id}/play`);
+    clock += 2 * 60_000 + 1;
+    return as(token, "POST", `/v1/projects/${id}/played`, { token: play.token });
+  };
+  for (const one of wave.slice(0, 3)) await playOnce(one.token);
+  const held = (uid = null) => relay.sql(`SELECT COALESCE(SUM(amount), 0) AS n FROM credit_held${uid ? " WHERE actor_id = ?" : ""}`, ...(uid ? [uid] : []))[0].n;
+  // N3 every day: held as it would be paid, up to the 15 a week one member can make another earn.
+  for (let day = 0; day < 4; day += 1) {
+    await playOnce(wave[3].token);
+    clock += DAY;
+  }
+  assert.equal(held(wave[3].user.id), 15, "held counts toward the pair limit, as paid credits do");
+  // A revoke of what N3 gave Alice takes what is held from them too.
+  assert.equal((await as("tok-mod", "POST", `/v1/admin/credits/${ALICE.id}/revoke`, { from: wave[3].user.id })).status, 200);
+  assert.equal(held(wave[3].user.id), 0);
+  // Forget me takes what is held from or for the member.
+  await playOnce(wave[4].token);
+  assert.equal(held(wave[4].user.id), 5);
+  await as(wave[4].token, "POST", "/v1/me/forget");
+  assert.equal(held(wave[4].user.id), 0);
+  // Nobody deciding: a hold drops after 30 days.
+  relay.sql("INSERT INTO credit_held (event_id, actor_id, target_id, kind, day, amount, counted, at) VALUES (999999, ?, ?, 'played', 0, 5, 5, ?)", wave[2].user.id, ALICE.id, clock);
+  assert.equal(held(), 5);
+  clock += 31 * DAY;
+  relay.sql("UPDATE meta SET value = '0' WHERE key = 'upkeep_at'");
+  await relay.runAlarm();
+  assert.equal(held(), 0, "dropped after 30 days with no decision");
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.held, 0);
+});
+
+test("schema v7: a v6 database gains credit_held and keeps every row it had", () => {
+  const db = new DatabaseSync(":memory:");
+  const sql = {
+    exec: (query, ...bindings) => db.prepare(query).all(...bindings),
+    transaction: (fn) => {
+      db.exec("BEGIN");
+      try {
+        const out = fn();
+        db.exec("COMMIT");
+        return out;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    },
+  };
+  for (const step of MIGRATIONS.filter((item) => item.version <= 6)) for (const statement of step.statements) sql.exec(statement);
+  sql.exec(`INSERT INTO meta (key, value) VALUES ('schema_version', '6')`);
+  sql.exec("INSERT INTO accounts (user_id, balance, lifetime) VALUES (?, 120, 300)", ALICE.id);
+  sql.exec("INSERT INTO credit_events (actor_id, target_id, kind, ref, uniq, day, amount, at) VALUES (?, ?, 'played', NULL, 'd1', 1, 5, 1)", BOB.id, ALICE.id);
+  const tables = () => sql.exec(`SELECT name FROM sqlite_master WHERE type = 'table'`).map((row) => row.name);
+  assert.ok(!tables().includes("credit_held"));
+  const store = createStore(sql);
+  assert.equal(store.migrate(), SCHEMA_VERSION);
+  assert.ok(SCHEMA_VERSION >= 7);
+  assert.deepEqual(sql.exec("PRAGMA table_info(credit_held)").map((row) => row.name), ["event_id", "actor_id", "target_id", "kind", "day", "amount", "counted", "at"]);
+  assert.deepEqual(sql.exec(`SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'credit_held%' ORDER BY name`).map((row) => row.name), ["credit_held_pair", "credit_held_target"]);
+  assert.deepEqual({ ...sql.exec("SELECT balance, lifetime FROM accounts WHERE user_id = ?", ALICE.id)[0] }, { balance: 120, lifetime: 300 });
+  assert.equal(sql.exec("SELECT COUNT(*) AS n FROM credit_events")[0].n, 1);
+  assert.equal(store.migrate(), SCHEMA_VERSION, "running it again changes nothing");
+  db.close();
 });

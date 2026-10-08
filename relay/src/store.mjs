@@ -10,7 +10,7 @@
 // What is kept, and why, is listed in relay/README.md. Chat text, files, IP
 // addresses and Discord tokens are never written here.
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 7;
 
 // One statement per entry: Cloudflare's exec runs a single statement when it has bindings.
 const V1 = [
@@ -224,12 +224,56 @@ const V5 = [
   `CREATE INDEX IF NOT EXISTS credit_events_day_kind ON credit_events (day, kind)`,
 ];
 
+// v6: the Shop (shop.mjs). Members' style packs, data only (colours and a few
+// keys from Studio's lists, checked by shop-pack.mjs), and who owns what,
+// Studio's own items and packs alike. A purchase is kept here as the item and
+// what the member paid (a tip included), never as a negative credit row.
+const V6 = [
+  `CREATE TABLE IF NOT EXISTS shop_packs (
+     id TEXT PRIMARY KEY,
+     maker_id TEXT NOT NULL,
+     name TEXT NOT NULL,
+     blurb TEXT NOT NULL DEFAULT '',
+     price INTEGER NOT NULL,
+     data TEXT NOT NULL,
+     status TEXT NOT NULL DEFAULT 'listed',
+     sales INTEGER NOT NULL DEFAULT 0,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS shop_packs_listed ON shop_packs (status, created_at)`,
+  `CREATE INDEX IF NOT EXISTS shop_packs_maker ON shop_packs (maker_id)`,
+  `CREATE TABLE IF NOT EXISTS shop_owned (user_id TEXT NOT NULL, item_id TEXT NOT NULL, price INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, item_id)) STRICT, WITHOUT ROWID`,
+  `CREATE INDEX IF NOT EXISTS shop_owned_item ON shop_owned (item_id)`,
+];
+
+// v7: credits on hold (credits.mjs). What a newcomer wave would have paid one
+// member waits here for a moderator's look: each row is a credit_events row kept
+// at 0 until a moderator pays it (released) or drops it, and it goes after 30
+// days if nobody does. `counted` is what of it the day's earning cap counts.
+const V7 = [
+  `CREATE TABLE IF NOT EXISTS credit_held (
+     event_id INTEGER PRIMARY KEY,
+     actor_id TEXT NOT NULL,
+     target_id TEXT NOT NULL,
+     kind TEXT NOT NULL,
+     day INTEGER NOT NULL,
+     amount INTEGER NOT NULL,
+     counted INTEGER NOT NULL,
+     at INTEGER NOT NULL
+   ) STRICT`,
+  `CREATE INDEX IF NOT EXISTS credit_held_target ON credit_held (target_id, at)`,
+  `CREATE INDEX IF NOT EXISTS credit_held_pair ON credit_held (actor_id, target_id, at)`,
+];
+
 export const MIGRATIONS = Object.freeze([
   { version: 1, statements: V1 },
   { version: 2, statements: V2 },
   { version: 3, statements: V3 },
   { version: 4, statements: V4 },
   { version: 5, statements: V5 },
+  { version: 6, statements: V6 },
+  { version: 7, statements: V7 },
 ]);
 
 const bindValue = (value) => (value === undefined ? null : value === true ? 1 : value === false ? 0 : value);

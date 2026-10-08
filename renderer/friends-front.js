@@ -24,7 +24,8 @@
 //
 // Pop-ups (popups.hear, on the module's one hub listener, Friends open or
 // not): a friend you share a room with opened Studio, someone invited you to
-// a room or asks to join yours, and someone played or starred your project.
+// a room or asks to join yours, someone played or starred your project, and
+// a member got one of your style packs in the Shop (credits reason "sale").
 // Each is a toast (window.MefiToast) with a way to the right Friends place;
 // several friends coming online at once are one toast. "Pop-ups from
 // friends" at The Lobby's foot turns them off (localStorage
@@ -149,9 +150,10 @@
     set(on) { try { globalThis.localStorage?.setItem(POPUPS_KEY, on ? "1" : "0"); } catch { /* this window only */ } },
     online: [], // names waiting to be said together
     timer: null,
-    show(text, label, place, extra = {}) {
+    // run: where the toast's button goes, when that is not a Friends place (the Shop's own page).
+    show(text, label, place, extra = {}, run = null) {
       if (!popups.on() || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
-      window.MefiToast?.(text, "info", { action: { label, run: () => goPlace(place, extra) } });
+      window.MefiToast?.(text, "info", { action: { label, run: run ?? (() => goPlace(place, extra)) } });
     },
     hear(event) {
       switch (event?.type) {
@@ -178,6 +180,8 @@
           if (event.delta > 0 && event.reason === "played") popups.show(`Someone played your project: +${event.delta} credits`, "Project hub", "hub");
           else if (event.delta > 0 && event.reason === "starred") popups.show(`Someone starred your project: +${event.delta} credits`, "Project hub", "hub");
           else if (event.delta > 0 && EVENT_CREDITS[event.reason]) popups.show(`+${event.delta} credits ${EVENT_CREDITS[event.reason]}`, "Events", "events");
+          // The relay pays a pack's maker 75% of what was paid (relay/src/shop.mjs): Your packs is in Make a style.
+          else if (event.delta > 0 && event.reason === "sale") popups.show(`A member got one of your style packs: +${plural(event.delta, "credit")}`, "Your packs", "shop", {}, () => (window.MefiShop?.open ? window.MefiShop.open("make") : goPlace("shop")));
           return;
         default:
       }

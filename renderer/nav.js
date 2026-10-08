@@ -133,7 +133,7 @@
   // A rail place for a record whose kind alone would keep it out of the rail:
   // community.js registers "community" as a palette action at DOMContentLoaded,
   // and the foot (Help & community) is its home.
-  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends" });
+  const RAIL_SLOTS = Object.freeze({ community: "foot", friends: "friends", "the-lobby": "friends", rooms: "friends", "your-pcs": "friends", playground: "friends", "project-hub": "friends", "friends-events": "friends", "friends-shop": "friends" });
   // Sections for records other modules register without one. The assistant's
   // commands and Command view's key rows name theirs in `group`.
   const ACTION_SECTIONS = Object.freeze({ community: "community" });
@@ -208,9 +208,11 @@
       ["playground", "Playground", "g-ambience", "Companion playdates, sharing rules and practice with Pip", "playground"],
       ["project-hub", "Project hub", "g-spark", "Share and play members' projects, credits and ranks", "hub"],
       ["friends-events", "Events", "g-bolt", "This week's Build Jam, co-work hours and building together", "events"],
-    ].map(([id, label, glyph, desc, target]) => ({
+      // renderer/friends-shop.js, a page of its own (route "shop", go() below); Settings › Appearance's Theme section has a way in too.
+      ["friends-shop", "Shop", "g-shop", "Scales for Ember, menu effects and style packs for the credits you earn", "shop", "shop store buy credits pet dragon effects dissolve style pack theme make sell scales tip"],
+    ].map(([id, label, glyph, desc, target, terms]) => ({
       id, label, short: label, glyph, desc, kind: "action", layer: null, section: "friends", group: "tools", key: null,
-      searchTerms: `friends ${label} ${desc}`,
+      searchTerms: `friends ${label} ${desc}${terms ? ` ${terms}` : ""}`,
       showIn: showIn({ palette: true }),
       run: () => { closeAll(); window.MefiCompanionHub?.open?.({ section: "friends", target }); },
     })),
@@ -224,7 +226,7 @@
       // The 0.5 layout's Friends place (renderer/companion-hub.js openPlace): The Lobby, Rooms, Your PCs, Playground or the Project hub, one at a time.
       // go("friends") and its five ways in land here (friendsPages in go()); Search lists them.
       id: "friends-page", label: "Friends", short: "Friends", kind: "overlay", layer: "sheet", section: "friends", group: "tools",
-      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends lobby rooms chat invite code online pcs playground project hub credits ranks events moderation",
+      glyph: "g-orbit", badge: null, desc: "Rooms, your PCs and companion playdates", searchTerms: "friends lobby rooms chat invite code online pcs playground project hub credits ranks events shop moderation",
       showIn: showIn({}), element: "friends-overlay", focus: "#friends-place-title",
       open: (params) => window.MefiCompanionHub?.openPlace?.(params), close: () => window.MefiCompanionHub?.closePlace?.(), isOpen: () => overlayOpen("friends-overlay"),
     },
@@ -891,6 +893,11 @@
   const isWorkspacePage = (dest) => WORKSPACE_PAGES.has(dest?.id);
   // Settings' Size and density page (renderer/size.js, registered only in layout v2) is a page of the workspace too.
   WORKSPACE_PAGES.add("size");
+  // So are Social's own Activity (renderer/today.js) and Projects (renderer/social.js).
+  WORKSPACE_PAGES.add("activity");
+  WORKSPACE_PAGES.add("projects");
+  // And the Shop (renderer/friends-shop.js registers the route "shop"; Friends lists it among its places).
+  WORKSPACE_PAGES.add("shop");
   function syncPageInert() {
     const page = isWorkspacePage(get(state.sheet));
     for (const node of document.querySelectorAll?.("body > header, #tab-booklet, #tab-graph, #tab-eyes, #tab-studio, #workspace-layer, #vibe-layer, #idle-layer, #idle-hud, #tree-rail") ?? []) {
@@ -1150,8 +1157,8 @@
       // it goes there instead of stopping on Build's section home.
       if (vibeMode()) return go("vibe");
       // A page of Settings (Size and density) has no history when it was opened from Configuration or Search: back to Settings.
-      // Fleet and the live pipelines are pages of the Map, so the Map is what is behind them.
-      const home = placeOf(get(id)) === "map" ? "command" : sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : "tasks";
+      // Fleet and the live pipelines are pages of the Map, so the Map is what is behind them; a page of Friends' (the Shop) has Friends.
+      const home = placeOf(get(id)) === "map" ? "command" : sectionOf(get(id)) === "agents" ? "agents" : sectionOf(get(id)) === "settings" ? "studio" : sectionOf(get(id)) === "friends" ? "friends-page" : "tasks";
       if (id !== home) return go(home);
       return;
     }
@@ -1182,10 +1189,16 @@
     else if (id === "map") id = "command";
     // Friends is one page of five places (renderer/companion-hub.js openPlace): Friends opens it at The Lobby and each
     // way in at its own place. (Spelled out here, not shared: suites run go() on its own.)
-    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub", "friends-events": "events" };
+    const friendsPages = { friends: null, "the-lobby": "lobby", rooms: "rooms", "your-pcs": "pcs", playground: "playground", "project-hub": "hub", "friends-events": "events", "friends-shop": "shop" };
     if (Object.hasOwn(friendsPages, id)) {
       params = { place: friendsPages[id] || params.place || params.target || "lobby" };
       id = "friends-page";
+    }
+    // The Shop is a page of its own (renderer/friends-shop.js, route "shop"): Friends' place, its Search row and every
+    // older way in land there, unless "mefiStudio.shop.page" = "off" keeps it a Friends place (MefiShop.pageOn).
+    if (id === "friends-page" && params?.place === "shop" && window.MefiShop?.pageOn?.() === true && get("shop")) {
+      params = typeof params.view === "string" ? { view: params.view } : {};
+      id = "shop";
     }
     const redirected = window.MefiAgents?.redirect?.(id, params);
     if (redirected) return go(redirected.id, redirected.params, options);
@@ -1195,6 +1208,10 @@
     const sessionRoute = window.MefiSessions?.redirect?.(id, params);
     if (sessionRoute) return go(sessionRoute.id, sessionRoute.params, options);
     // ---- end of sessions ----
+    // Social keeps to its own places (renderer/social.js): a page of Studio's (the Map, the boards, Team, Fleet, Trace,
+    // Worktrees, a session) asked for while Social is the mode opens in Studio. The mode switches first, then the page opens
+    // with what it was asked for, so nothing of the way in is lost.
+    if (window.MefiSocial?.studioOnly?.(id, params)) window.MefiSocial.toStudio?.();
     // In Vibe mode, Home is Vibe: every Home button, H and Esc out of Command land there.
     if (id === "workspace" && window.MefiVibe?.mode?.() === "vibe") id = "vibe";
     closeHelpMenu();
@@ -1482,8 +1499,8 @@
     // "inbox" is the 0.5 layout's Work › Inbox (renderer/today.js registers it there only); a route nobody registered is skipped.
     work: ["tasks", "plans", "ideas", "inbox", "analyzer", "worktrees"],
     agents: ["agents", "command", "fleet", "resources", "eyes", "trace", "explorer", "overhead", "agent-brain", "skills", "brains", "context", "booklet", "graph", "usage"],
-    // The Friends page (its places are drawn by renderer/shell.js friendsModel).
-    friends: ["friends-page"],
+    // The Friends page (its places are drawn by renderer/shell.js friendsModel), and the Shop, a place of Friends' with a page of its own.
+    friends: ["friends-page", "shop"],
     settings: ["studio"],
   });
 
@@ -1563,7 +1580,7 @@
         const children = document.createElement("div");
         children.className = "app-rail-children app-rail-friends";
         children.setAttribute("role", "group"); children.setAttribute("aria-label", "Friends tools");
-        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events"]) { const dest = get(id); if (dest) children.append(navButton(dest, "app-rail-item", { key: false })); }
+        for (const id of ["the-lobby", "rooms", "your-pcs", "playground", "project-hub", "friends-events", "friends-shop"]) { const dest = get(id); if (dest) children.append(navButton(dest, "app-rail-item", { key: false })); }
         group.append(children);
       }
       sections.append(group);
@@ -2304,6 +2321,8 @@
     if (event.altKey || event.ctrlKey || event.metaKey) return;
     if (typeInto(event)) return;
     if (event.key === "Escape") {
+      // A state the Map's legend holds lit lets go before Escape opens the companion (renderer/idle.js pinLegend).
+      if (!state.transient && state.sheet === null && idleActive() && window.MefiIdle?.releaseLegendPin?.()) { event.preventDefault(); return; }
       if (!state.transient && window.MefiCompanionHub?.open()) { event.preventDefault(); return; }
       closeTop();
       return;

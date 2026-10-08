@@ -108,13 +108,21 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .agent-hub-extra h3 { margin: 0; font-size: 18px; font-weight: 500; }
 .agent-hub-extra p { font-size: 12px; line-height: 1.7; margin: 0; }
 .agent-hub-action { text-align: left; white-space: normal; border: 1px solid var(--hairline); padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--gold) 4%, transparent); }
-/* Friends › Your PCs (renderer/pc-sync.js). */
-.pc-sync { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--hairline); border-left: 3px solid var(--hairline); border-radius: 14px; }
-.pc-sync[data-state=clean] { border-left-color: var(--good); }
-.pc-sync[data-state=pending] { border-left-color: var(--warn); }
-.pc-sync[data-state=problem] { border-left-color: var(--bad); }
-.pc-sync[data-state=offline] { border-left-color: var(--muted); }
+/* Friends › Your PCs (renderer/pc-sync.js): Connect another PC and My PCs first (pc-fleet.js), then the folded groups, then
+   Share projects (pc-vault.js). */
+.pc-sync { display: grid; gap: 10px; min-width: 0; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; }
 .pc-sync-title { margin: 0; font-size: 13px; font-weight: 600; }
+/* Keep this PC in step with GitHub: the status line and Sync this PC, marked by how this PC stands against GitHub. The line
+   and its buttons show while the group is folded only when something needs the owner (pc-sync.js needsYou). */
+.pc-sync-group { display: grid; gap: 8px; }
+.pc-sync-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; padding: 4px 0 4px 10px; border-left: 3px solid var(--hairline); }
+.pc-sync[data-state=clean] .pc-sync-head { border-left-color: var(--good); }
+.pc-sync[data-state=pending] .pc-sync-head { border-left-color: var(--warn); }
+.pc-sync[data-state=problem] .pc-sync-head { border-left-color: var(--bad); }
+.pc-sync[data-state=offline] .pc-sync-head { border-left-color: var(--muted); }
+.pc-sync-status { flex: 0 1 auto; min-width: 0; margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.pc-sync-body { display: grid; gap: 8px; min-width: 0; }
+.pc-sync-body > p { margin: 0; }
 .pc-sync-list, .pc-sync-brief { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .pc-sync-toggle { justify-self: start; }
 .pc-sync-actions { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -142,7 +150,51 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-vault > :not(summary), .pc-vault-linked > *, .pc-vault-setup > *, .pc-vault-keys > :not(summary) { margin-top: 8px; }
 .pc-vault-heading { margin: 12px 0 0; font-size: 12px; font-weight: 600; }
 .pc-vault-label { display: block; font-size: 12px; color: var(--muted); }
+/* Every folded group in the card has one look: a row with a marker that turns when it opens. Keep this PC in step with
+   GitHub folds with a button of its own; the others are <details>. */
+.pc-group { min-width: 0; border-top: 1px solid var(--hairline); padding-top: 8px; }
+.pc-group-title { margin: 0; }
+.pc-group > summary, .pc-group-toggle { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; min-height: 28px; padding: 2px 0; border: 0; border-radius: 6px; background: none; box-shadow: none; color: var(--ivory); font-size: 13px; font-weight: 600; line-height: 1.35; text-align: left; white-space: normal; list-style: none; cursor: pointer; }
+.pc-group > summary::-webkit-details-marker { display: none; }
+.pc-group > summary::before, .pc-group-toggle::before { content: ""; flex: none; width: 0; height: 0; border-block: 4px solid transparent; border-left: 6px solid var(--muted); transition: rotate var(--motion-fast, 120ms) var(--ease-out, ease); }
+.pc-group[open] > summary::before, .pc-group-toggle[aria-expanded=true]::before { rotate: 90deg; }
+.pc-group > summary:hover, .pc-group-toggle:hover { background: none; color: var(--gold-bright); }
+.pc-group-note { font-size: 12px; font-weight: 400; }
+.pc-fleet-group .pc-sync-actions { align-items: center; }
+/* Connect another PC (renderer/pc-fleet.js): three numbered steps on a soft panel; folded, one button. */
+.pc-fleet { display: grid; gap: 12px; min-width: 0; }
+.pc-walk { min-width: 0; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--gold) 28%, var(--hairline)); border-radius: 12px; background: color-mix(in srgb, var(--gold) 5%, transparent); }
+.pc-walk-head { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; color: var(--ivory); font-size: 15px; font-weight: 650; line-height: 1.3; }
+.pc-walk-head::-webkit-details-marker { display: none; }
+.pc-walk[open] > .pc-walk-head::after { content: ""; flex: none; width: 7px; height: 7px; margin-left: auto; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); rotate: -135deg; translate: 0 2px; }
+.pc-walk:not([open]) { justify-self: start; padding: 0; border: 0; background: none; }
+.pc-walk:not([open]) > .pc-walk-head { min-height: 34px; padding: 0 14px; border: 1px solid var(--hairline-strong); border-radius: 8px; font-size: 13px; font-weight: 600; }
+.pc-walk:not([open]) > .pc-walk-head::before { content: "+"; color: var(--gold-bright); font-size: 16px; line-height: 1; }
+.pc-walk:not([open]) > .pc-walk-head:hover { background: var(--tint-gold-2); }
+.pc-walk-steps { display: grid; gap: 12px; margin: 12px 0 0; padding: 0; list-style: none; }
+.pc-walk-step { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: start; }
+.pc-walk-num { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--hairline-strong); border-radius: 50%; color: var(--muted); font-size: 12px; font-weight: 700; }
+.pc-walk-step[data-state=now] .pc-walk-num { border-color: var(--gold-bright); color: var(--gold-bright); }
+.pc-walk-step[data-state=done] .pc-walk-num { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--ivory); }
+.pc-walk-text, .pc-walk-now, .pc-walk-live { display: grid; gap: 6px; min-width: 0; }
+.pc-walk-what { margin: 3px 0 0; font-size: 13px; font-weight: 600; line-height: 1.45; }
+.pc-walk-now { font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.pc-walk-now p { margin: 0; }
+.pc-walk-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+/* The six numbers two PCs compare while pairing, set apart from the sentence around them. */
+.pc-fleet-numbers { color: var(--ivory); font-size: 15px; font-weight: 700; letter-spacing: .08em; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pc-walk-copied:empty { display: none; }
+.pc-walk-note { margin: 12px 0 0; font-size: 12px; line-height: 1.5; }
 /* Friends › Your PCs › My PCs (renderer/pc-fleet.js): one row per PC, its readings and why it is not taking work. */
+.pc-fleet-list { display: grid; gap: 8px; min-width: 0; }
+.pc-fleet-list > :is(p, h5, ul) { margin: 0; }
+.pc-fleet-title { font-size: 13px; font-weight: 600; }
+.pc-fleet-rename { align-items: center; font-size: 12px; }
+.pc-fleet-project, .pc-fleet-handoffs-box { display: grid; gap: 6px; min-width: 0; }
+.pc-fleet-project > p, .pc-fleet-handoffs-box > p { margin: 0; font-size: 12px; }
+.pc-fleet-handoffs-box > button { justify-self: start; }
+.pc-fleet-lately > summary { width: fit-content; color: var(--muted); font-size: 12px; cursor: pointer; }
+.pc-fleet-lately[open] > summary { margin-bottom: 6px; }
 .pc-fleet-rows, .pc-fleet-asks { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .pc-fleet-row { display: grid; gap: 4px; padding: 8px 10px; border: 1px solid var(--hairline); border-left: 3px solid var(--good); border-radius: 10px; font-size: 12px; min-width: 0; }
 .pc-fleet-row[data-state=busy] { border-left-color: var(--warn); }
@@ -178,6 +230,10 @@ html[data-no-blur] :is(.agent-hub, .agent-hub-node, .agent-hub-center, .agent-hu
 .pc-vault-preview > summary { cursor: pointer; font-size: 11px; color: var(--muted); }
 .pc-vault-preview pre, .pc-share-text { max-height: 180px; overflow: auto; margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, var(--gold) 3%, transparent); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .pc-share-out, .pc-share-in { display: grid; gap: 6px; }
+/* Share projects (pc-vault.js group): a group of its own, set apart from the PC sections above it. */
+.pc-share-group { display: grid; gap: 8px; min-width: 0; margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--hairline-strong); }
+.pc-share-group-title { margin: 0; font-size: 13px; font-weight: 600; }
+.pc-share-group-about { margin: 0; font-size: 12px; line-height: 1.5; }
 /* Friends › Rooms (renderer/rooms.js). */
 .rooms { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--hairline); border-radius: 14px; }
 .rooms-title { margin: 0; font-size: 13px; font-weight: 600; }
@@ -413,7 +469,8 @@ body:is(.no-motion, .ws-still) :is(.agent-hub, .agent-hub *, .agent-creature *, 
 /* The page's fill is the theme's glass (--studio-page-fill, mostly clear in Chrome), so what it stands over must not read
    through: the content under it steps aside while it shows, as under a workspace page (studio-ui.css). The frame stays. */
 body:has(#friends-overlay:not([hidden])) > :is(header, main, #tree-rail), body:has(#friends-overlay:not([hidden])) :is(#workspace-layer, #vibe-layer, #idle-hud) { visibility: hidden; pointer-events: none; }
-#friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1032px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px 16px 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+/* As wide as Social's other pages (social.css .social-sheet): a wide window fills with the place rather than empty sides. */
+#friends-overlay .friends-place-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1640px; max-height: none; overflow: visible; margin: 0 auto; padding: 22px clamp(16px, 2vw, 28px) 28px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 #friends-overlay .friends-place-head { display: block; padding: 0; border: 0; background: none; }
 #friends-overlay .friends-place-head h1 { margin: 0; font: 650 var(--f18, 18px)/1.3 var(--font-display); letter-spacing: -.01em; color: var(--ivory); }
 #friends-overlay .friends-place-about { margin: 4px 0 0; max-width: 70ch; font-size: var(--f135, 13.5px); line-height: 1.5; }

@@ -94,6 +94,7 @@
   --glow-live: 0 0 6px rgba(87, 255, 154, 0.6);
   --blur: blur(14px) saturate(1.05);
   --scrim: rgba(3, 4, 6, 0.74);           /* behind every modal sheet */
+  --scrim-dense: rgba(3, 3, 4, 0.94);      /* the same with nothing blurred under it */
   --scrim-blur: blur(12px);
   --blur-hard: blur(18px) saturate(1.1);
 
@@ -186,11 +187,28 @@ body {
   --hairline: var(--theme-hairline);
   --hairline-strong: var(--theme-hairline-strong);
 }
-/* music.js sets the tone from the theme's background. */
+/* music.js sets the tone from the theme's background. A light tone takes the
+   light native controls (checkboxes, pickers, the search field's clear button,
+   autofill), shadows that shade instead of blacken, a lighter scrim, and status
+   hues deep enough to read as text on a light page: the dark themes' pale ones
+   wash out there. Each holds 4.5:1 on the light themes' pages and panels, and
+   on its own 14% tint (a chip, a well). */
 :root[data-studio-theme-tone="light"] {
+  color-scheme: light;
   --on-ivory: var(--panel-solid);
-  /* The dark theme's pale red washes out on a light page (Delete, errors). */
-  --bad: #b42318;
+  --bad: #a51f16;
+  --warn: #7f4c00;
+  --good: #125f35;
+  --live: #075c2d;
+  --live-dim: rgba(7, 92, 45, 0.14);
+  --info: #2b52b4;
+  --idea: #64489c;
+  --shadow-1: 0 6px 16px rgba(20, 28, 40, 0.1);
+  --shadow-2: 0 18px 40px rgba(20, 28, 40, 0.14);
+  --shadow-3: 0 30px 70px rgba(20, 28, 40, 0.18);
+  --scrim: rgba(28, 34, 44, 0.34);
+  --scrim-dense: color-mix(in srgb, var(--bg) 92%, transparent);
+  --frost-lift: 0 18px 44px -24px rgba(20, 28, 40, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 h1 { font: 600 var(--fs-2xl)/var(--lh-tight) var(--font-display); letter-spacing: 0.01em; margin: 2px 0; }
@@ -1084,14 +1102,14 @@ table#table tr:hover td { background: color-mix(in srgb, var(--gold) 4%, transpa
 }
 .assistant-msg.user {
   align-self: flex-end;
-  background: #231e16;
+  background: color-mix(in srgb, var(--gold) 12%, var(--panel-solid));
   border: 1px solid var(--gold-dim);
   color: var(--gold-bright);
   border-bottom-right-radius: 3px;
 }
 .assistant-msg.assistant {
   align-self: flex-start;
-  background: #14151a;
+  background: var(--panel-solid);
   border: 1px solid var(--hairline);
   color: var(--ivory);
   border-bottom-left-radius: 3px;
@@ -1135,7 +1153,7 @@ table#table tr:hover td { background: color-mix(in srgb, var(--gold) 4%, transpa
 .cmd-card .assistant-thread {
   max-height: 200px; margin: 0;
   padding: var(--s2);
-  background: rgba(0, 0, 0, 0.22);
+  background: color-mix(in srgb, var(--bg-deep) 50%, transparent);
   border: 1px solid var(--hairline);
   border-radius: var(--r-sm);
   overscroll-behavior: contain;
@@ -1415,7 +1433,7 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
   display: grid; place-items: center;
 }
 #palette-overlay, #help-overlay, #walkthrough-overlay { z-index: var(--z-transient); }                                    
-.overlay.no-blur { backdrop-filter: none; background: rgba(3, 3, 4, 0.94); }
+.overlay.no-blur { backdrop-filter: none; background: var(--scrim-dense); }
 .overlay h2 { color: var(--ivory); }
 
 .overlay .sheet {
@@ -1925,6 +1943,9 @@ body:has(#tree-rail.pinned) { padding-right: calc(var(--rail-w-open) + var(--s4)
 }
 .cmd-tip .tip-title { display: block; color: var(--ivory); font-size: var(--fs-sm); font-weight: 600; }
 .tip-meta { display: block; color: var(--muted); font-size: var(--fs-2xs); margin-top: 2px; }
+/* a work orb's hover card: its state in the legend's colour and words, and how long (idle.js glanceLine) */
+.cmd-tip .tip-state { display: flex; align-items: center; gap: 6px; margin-top: 3px; color: var(--ivory); font-size: var(--fs-xs); }
+.cmd-tip .tip-state .sw { width: 9px; height: 9px; }
 
 /* --- dock items (the sheet links) --- */
 .dock-item {
@@ -2389,6 +2410,8 @@ html:not([data-starting]) #boot-layer { display: none; }
 .boot-project-icon { flex: 0 0 28px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: var(--tint-gold-3); color: var(--gold-bright); font: 600 14px/1 var(--font-display); }
 .boot-row:hover:not(:has(> .boot-project:disabled)) .boot-project-icon { background: color-mix(in srgb, var(--gold) 22%, transparent); }
 .boot-row:has(> .boot-project.selected) .boot-project-icon { background: color-mix(in srgb, var(--gold) 30%, transparent); }
+/* On a light page the chosen row's tint stacks under the badge's: a lighter badge keeps its initial at 4.5:1. */
+:root[data-studio-theme-tone="light"] .boot-row:has(> .boot-project.selected) .boot-project-icon { background: color-mix(in srgb, var(--gold) 18%, transparent); }
 .boot-project-text { display: grid; flex: 1; min-width: 0; gap: 1px; }
 .boot-project-name { font: 500 13px/1.3 var(--font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The drive and the folder name stay; the middle of a long path gives way. */
@@ -2550,13 +2573,13 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 .workspace button { transition: background .18s, border-color .18s, color .18s; }
 .workspace button:focus-visible, .workspace summary:focus-visible { outline: 2px solid var(--ws-accent); outline-offset: 3px; }
 .workspace .ghost { background: transparent; border-color: var(--hairline); color: var(--muted); }
-.workspace .ghost:hover { background: var(--tint-gold-2); color: #f6f3e9; border-color: var(--hairline-strong); }
+.workspace .ghost:hover { background: var(--tint-gold-2); color: var(--ivory); border-color: var(--hairline-strong); }
 .workspace .primary { color: #25251f; background: var(--ws-accent); border: 1px solid var(--ws-accent); box-shadow: none; font-weight: 650; }
 .workspace .primary:hover { filter: brightness(1.07); }
-.workspace kbd { font: 10px var(--font-ui); color: #91968d; border: 1px solid #3a3d36; background: transparent; padding: 1px 4px; }
+.workspace kbd { font: 10px var(--font-ui); color: var(--muted); border: 1px solid var(--hairline-strong); background: transparent; padding: 1px 4px; }
 .ws-sidebar { min-height: 0; display: flex; flex-direction: column; padding: 29px 18px 17px; background: var(--panel-solid); border-right: 1px solid var(--hairline); overflow-y: auto; }
-.ws-brand { display: flex; gap: 12px; align-items: center; color: #f0eee3; font: 600 17px var(--font-ui); text-decoration: none; margin: 0 6px 35px; }
-.ws-brand:hover { color: white; }
+.ws-brand { display: flex; gap: 12px; align-items: center; color: var(--ivory); font: 600 17px var(--font-ui); text-decoration: none; margin: 0 6px 35px; }
+.ws-brand:hover { color: var(--gold-bright); }
 .ws-brand-mark { color: var(--ws-accent); font: italic 37px Georgia, serif; letter-spacing: -5px; width: 37px; }
 .ws-brand-mark span { font: 16px var(--font-ui); vertical-align: top; margin-left: 5px; }
 .ws-brand small { display: block; color: var(--dim); font: 8px var(--font-ui); letter-spacing: 1.65px; margin-top: 8px; }
@@ -2578,8 +2601,8 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
 .ws-sidebar-bottom { margin-top: auto; padding-top: 16px; }
 .ws-tools > summary { display: flex; align-items: center; gap: 9px; list-style: none; cursor: pointer; color: var(--muted); font-size: 12px; }
 .ws-tools > summary::marker, .ws-tools > summary::-webkit-details-marker { content: ""; display: none; }
-.ws-local-note { display: block; font-size: 9.5px; line-height: 1.7; color: #7e8874; padding: 12px 8px 0; }
-.ws-local-note i { display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: #91a77d; margin-right: 4px; }
+.ws-local-note { display: block; font-size: 9.5px; line-height: 1.7; color: var(--dim); padding: 12px 8px 0; }
+.ws-local-note i { display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: var(--good); margin-right: 4px; }
 .ws-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 0 28px; background: var(--bg); overflow-y: auto; }
 .ws-topbar { height: 56px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--hairline); gap: 20px; }
 .ws-project-heading { display: flex; align-items: center; gap: 10px; overflow: hidden; white-space: nowrap; }
@@ -3014,6 +3037,9 @@ body.workspace-active > header, body.workspace-active > main, body.workspace-act
    dense and unfiltered. The ids outrank the theme rules in music.css on
    purpose: this is Home's one skin, in every theme. */
 body.home-backdrop :is(#idle-layer, #idle-layer-far) { z-index: calc(var(--z-workspace) - 1); pointer-events: none; }
+/* A light theme draws the tree's orbs in ink, as solid shapes rather than a glow,
+   so behind Home and Social's front door they step further back. */
+:root[data-studio-theme-tone="light"] body.home-backdrop :is(#idle-layer, #idle-layer-far):not([hidden]) { opacity: .42; }
 html[data-no-blur] {
   --frost: none;
   --frost-glass: color-mix(in srgb, var(--panel-solid) 94%, transparent);
@@ -3027,8 +3053,9 @@ html[data-no-blur] {
 /* The veil keeps the tree a backdrop: a little deeper behind the headline,
    lighter lower down where the panels already frost it. */
 #workspace-layer .ws-main { background: radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
-:root[data-studio-theme-tier="premium"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
+:root[data-studio-theme-tier="duo"] #workspace-layer .ws-main { background: radial-gradient(ellipse at 12% 100%, rgba(var(--accent-2-rgb), .07), transparent 46%), radial-gradient(ellipse at 65% 0, var(--tint-gold-2), transparent 54%), linear-gradient(180deg, color-mix(in srgb, var(--bg) 46%, transparent), var(--frost-veil) 260px); }
 #workspace-layer .ws-topbar { text-shadow: 0 1px 14px rgba(0, 0, 0, 0.6); }
+:root[data-studio-theme-tone="light"] #workspace-layer .ws-topbar { text-shadow: none; }
 #workspace-layer .ws-topbar { border-color: var(--frost-edge-soft); }
 
 /* top-level panels: the frost itself */
@@ -3513,7 +3540,7 @@ body:not(.command-zen) #idle-hud .chat-log-body:not([hidden]) { animation: comma
 /* Models > Community: the community feed and Studio's probes (renderer/model-community.js). */
 .mc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
 .mc-card { border: 1px solid var(--hairline); border-radius: var(--r-md); background: var(--panel-solid); padding: 16px; min-width: 0; }
-.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.mc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0; border: 0; } /* a <header>: not the page heading's spacing (section 7) */
 .mc-head h4 { margin: 0; font-size: 14px; color: var(--gold-bright); }
 .mc-actions { display: flex; gap: 6px; }
 .mc-summary { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; overflow-wrap: anywhere; }
@@ -3570,7 +3597,7 @@ html[data-motion="off"] {
   background: var(--scrim); backdrop-filter: var(--scrim-blur);
 }
 html[data-no-blur] :is(.overlay, .planning-overlay, .brains-overlay, .profiler-overlay):not(.music-overlay) {
-  background: rgba(3, 3, 4, 0.94); backdrop-filter: none;
+  background: var(--scrim-dense); backdrop-filter: none;
 }
 /* a sheet-to-sheet swap keeps one continuous scrim: nav marks both roots, the
    old one vanishes, the new one is simply there, and only its panel rises */
@@ -3720,7 +3747,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
    member theme's own pair while one is on. Frames are a gradient hairline over
    an opaque fill, so the border gradient never shows through. */
 .community-invitation, #settings-community { --void-a: 124, 108, 255; --void-b: 54, 209, 255; }
-:root[data-studio-theme-tier="premium"] :is(.community-invitation, #settings-community) { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
+:root[data-studio-theme-tier="duo"] :is(.community-invitation, #settings-community) { --void-a: var(--studio-accent-rgb); --void-b: var(--accent-2-rgb); }
 .community-invitation.community-enter { animation: pop-in var(--dur-3) var(--ease); }
 .walkthrough-invitation.community-invitation { justify-content: flex-start; gap: var(--s4); border-color: transparent; background: radial-gradient(90% 160% at 0 0, rgba(var(--void-a), 0.1), transparent 55%) padding-box, linear-gradient(color-mix(in srgb, var(--gold) 5%, var(--panel-solid)), color-mix(in srgb, var(--gold) 5%, var(--panel-solid))) padding-box, linear-gradient(115deg, rgba(var(--void-a), 0.6), rgba(var(--void-b), 0.35) 40%, var(--hairline-strong) 75%) border-box; }
 /* The emblem: the four themes' two-tone swatches (music.css .void-swatch). */
@@ -3825,7 +3852,7 @@ html[data-motion="off"]::view-transition-new(*) { animation: none !important; }
 .walkthrough-assist-list li[aria-current="step"] { color: var(--gold-bright); }
 @keyframes walkthrough-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
 .walkthrough-coach { position: fixed; right: calc(18px + var(--shell-x1)); bottom: calc(18px + var(--shell-y1)); z-index: var(--z-pop); display: flex; flex-direction: column; gap: 7px; width: min(340px, calc(100vw - 36px)); padding: 15px 16px; border: 1px solid var(--hairline-strong); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 92%, var(--gold) 8%); box-shadow: var(--shadow-3), var(--inset-hi); }
-.walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.walkthrough-coach-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0; border: 0; } /* a <header>: not the page heading's spacing (section 7) */
 .walkthrough-coach-tools { display: flex; flex-wrap: wrap; gap: 4px; }
 #walkthrough-coach-title { color: var(--ivory); font-size: 14px; }
 #walkthrough-coach-copy { margin: 0; color: var(--ivory); font-size: 12px; line-height: 1.65; }
@@ -3946,7 +3973,7 @@ body.command-active .walkthrough-coach { right: calc(392px + var(--shell-x1)); }
 .provider-tile:has(.provider-pill[data-state="ready"]) { border-color: color-mix(in srgb, var(--good) 28%, var(--hairline)); }
 
 .provider-tile-head { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; min-width: 0; }
-.provider-mark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), rgba(8, 8, 11, 0.6); color: var(--gold-bright); font: 700 12px/1 var(--font-display); letter-spacing: .02em; }
+.provider-mark { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--hairline-strong); background: radial-gradient(circle at 30% 25%, var(--tint-gold-3), transparent 60%), color-mix(in srgb, var(--bg-deep) 60%, transparent); color: var(--gold-bright); font: 700 12px/1 var(--font-display); letter-spacing: .02em; }
 .provider-title { flex: 1 1 auto; min-width: 0; display: grid; gap: 1px; }
 .provider-name { color: var(--ivory); font: 600 var(--fs-sm)/1.3 var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .provider-kind { color: var(--dim); font-size: var(--fs-2xs); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -4958,7 +4985,7 @@ body.command-zen :is(#app-rail) { opacity: 0; pointer-events: none; }
 .workspace .ws-top-actions { align-items: center; gap: 12px; }
 .workspace .ws-top-actions button:first-child { display: inline-flex; }
 .workspace .ws-project-actions > summary { min-height: 32px; border: 1px solid #ffffff16; border-radius: var(--r-xs); padding-inline: 10px 8px; font-size: 12px; }
-.workspace #workspace-activity-toggle[aria-expanded="true"] { color: var(--ivory); background: #ffffff10; border-color: #ffffff24; }
+.workspace #workspace-activity-toggle[aria-expanded="true"] { color: var(--ivory); background: color-mix(in srgb, var(--ivory) 6%, transparent); border-color: color-mix(in srgb, var(--ivory) 14%, transparent); }
 /* "N need you" is the one header control that asks for something. */
 .workspace #workspace-attention-shortcut { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 38%, transparent); background: color-mix(in srgb, var(--warn) 7%, transparent); }
 .workspace #workspace-attention-shortcut:hover { background: color-mix(in srgb, var(--warn) 13%, transparent); }
@@ -5220,6 +5247,19 @@ html[data-frame] #idle-hud #map-legend {
 }
 html[data-frame] #idle-hud .map-legend-row { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 html[data-frame] #idle-hud .map-legend-row .sw { width: 9px; height: 9px; }
+/* the pills that point at their nodes (idle.js renderMapLegend): hover or focus lights a state's orbs up, a click holds it */
+html[data-frame] #idle-hud #map-legend:has(> button) { gap: 2px; padding: 3px; }
+html[data-frame] #idle-hud button.map-legend-row {
+  min-height: 0; height: 26px; padding: 0 7px 0 9px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--muted); font: inherit; box-shadow: none;
+}
+html[data-frame] #idle-hud button.map-legend-row:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--ivory) 8%, transparent); color: var(--ivory); }
+html[data-frame] #idle-hud button.map-legend-row[aria-pressed="true"] { background: color-mix(in srgb, var(--ivory) 12%, var(--panel-solid)); color: var(--ivory); box-shadow: inset 0 0 0 1px var(--hairline-strong); }
+html[data-frame] #idle-hud .map-legend-count {
+  min-width: 18px; padding: 0 5px; border-radius: 9px; background: color-mix(in srgb, var(--ivory) 10%, transparent);
+  color: var(--ivory); font: 600 var(--f12, 12px)/18px var(--font-ui); text-align: center; font-variant-numeric: tabular-nums;
+}
+html[data-frame] #idle-hud .map-legend-row[data-count="0"] .map-legend-count { background: transparent; color: var(--muted); font-weight: 500; }
 html[data-frame] #idle-hud #idle-legend-toggle { min-height: 30px; font-size: var(--f12, 12px); }
 
 /* Fit and zoom, under the tree */

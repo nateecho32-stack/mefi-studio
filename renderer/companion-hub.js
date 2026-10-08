@@ -513,18 +513,21 @@
     // renderer/friends-front.js: Friends' front page, and the sign-in card for anyone not signed in yet.
     { id: "lobby", label: "The Lobby", glyph: "g-community", about: "Who's online, the rooms open now and what your friends are making." },
     { id: "rooms", label: "Rooms", glyph: "g-chat", about: "Hang out, cowork, listen together, or share what you are making. Rooms are optional and never see your projects unless you share them." },
-    { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Keep work in step across machines through GitHub. Studio only looks until you press Sync." },
+    { id: "pcs", label: "Your PCs", glyph: "g-explorer", about: "Connect another PC and see your PCs at a glance. Keeping work in step through GitHub, power, lending and sharing wait folded below." },
     { id: "playground", label: "Playground", glyph: "g-ambience", about: "Practice with your companion, and set what it may share." },
     // renderer/project-hub.js: members' shared projects, credits and ranks on the Mefi Studio relay.
     { id: "hub", label: "Project hub", glyph: "g-spark", about: "Share what you make and play what friends make. Playing someone else's project for two minutes earns you both credits." },
     // renderer/friends-events.js: the community events the relay runs by itself (the weekly Build Jam, co-work hours).
     { id: "events", label: "Events", glyph: "g-bolt", about: "This week's Build Jam, the co-work hours and building together. Credits come from making and playing things with friends." },
+    // renderer/friends-shop.js: scales for Ember (the dragon itself is free), menu effects and style packs for credits, and members' packs.
+    // A page of its own (the route "shop"): its row here opens that page, and is the current row while it shows.
+    { id: "shop", label: "Shop", glyph: "g-shop", about: "Scales for Ember, menu effects and style packs for the credits you earn, and style packs members make. Ember itself is free; credits are earned, never bought." },
     // renderer/friends-mod.js: shown only once the relay says this member is a moderator (it checks every action again).
     { id: "mod", label: "Moderation", glyph: "g-flag", about: "Reports, credits that look farmed, and suspensions. Only moderators see this place.", modOnly: true },
   ]);
   // The places this member sees: Moderation only for moderators.
   const shownPlaces = () => FRIENDS_PLACES.filter((place) => !place.modOnly || window.MefiFriendsMod?.isMod?.() === true);
-  // A way in may name its place by target (lobby, rooms, pcs, playground, hub, events, mod).
+  // A way in may name its place by target (lobby, rooms, pcs, playground, hub, events, shop, mod).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
   const friendsPage = { place: null, root: null, body: null, title: null, about: null, room: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
@@ -555,6 +558,7 @@
     else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
     else if (place.id === "mod") card = window.MefiFriendsMod?.card?.();
     else if (place.id === "events") card = window.MefiFriendsEvents?.card?.();
+    else if (place.id === "shop") card = window.MefiShop?.card?.();
     else if (place.id === "pcs") card = window.MefiPcSync?.card?.();
     else card = window.MefiCompanionFriends?.card?.({ name: name(), face: (look) => lookFace(look) });
     const parts = [card ?? node("p", "muted", "This part of Friends is not in this build.")];
@@ -569,6 +573,8 @@
     friendsPage.body.dataset.place = place.id;
   }
   function openPlace(params = {}) {
+    // The Shop is a page of its own (renderer/friends-shop.js); MefiNav.go sends Friends' "shop" there, and so does this.
+    if ((params.place === "shop" || params.target === "shop") && window.MefiShop?.pageOn?.() === true) return window.MefiNav?.go?.("shop") ?? false;
     mountFriendsPage();
     const place = friendsPlaceById(params.place) ?? friendsPlaceById(friendsPlaceOfTarget(params.target)) ?? friendsPlaceById(friendsPage.place) ?? FRIENDS_PLACES[0];
     window.MefiNav?.claim?.("friends-page");
@@ -602,7 +608,7 @@
   }
   // The places in order, for a list drawn elsewhere (renderer/shell.js): each with whether it shows and the way there.
   function friendsPlaces() {
-    const here = friendsOpen() ? friendsPage.place : null;
+    const here = friendsOpen() ? friendsPage.place : window.MefiNav?.current?.() === "shop" ? "shop" : null;
     return shownPlaces().map((place) => ({ id: place.id, label: place.label, glyph: place.glyph, current: place.id === here, run: () => window.MefiNav?.go?.("friends-page", { place: place.id }) }));
   }
   // Where you are in Friends ({ id, label }), for the breadcrumb and the tab; null when the page is not up.

@@ -7,7 +7,7 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
-## [0.5.0] - 2026-10-06
+## [0.5.0] - 2026-10-08
 
 ### Highlights
 
@@ -30,13 +30,207 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 - **Friends work with no setup.**
   Rooms, room chat, Listen together, the Lobby, Events and Your PCs run
   through Studio's own relay, and nothing of your projects is shared unless
-  you share it.
+  you share it. The Shop sells pets, menu effects, node styles and themes
+  for the credits you earn, with a new drop every month.
 - **Updates can be taken back, and Studio is yours to shape.**
   From 0.5 on, a broken update rolls itself back and Roll back in Settings ›
   Updates does it by hand. Twelve themes, interface scale from 70% to 150%,
   text size, density and panels you drag, fold and reset.
 
 ### Everything in 0.5.0
+
+- **A wave of new accounts can't farm credits for someone.** When more than
+  three members in their first 30 days in the server pay the same member in a
+  week (by playing their project, starring it or buying their pack), the
+  first three are paid as usual and what the rest would pay waits for a
+  moderator: the member sees "N credits waiting for a quick check" in the
+  Project hub, and **Friends › Moderation › Credits on hold** shows who it
+  came from, with each account's age and join date, and **Pay** or **Drop**
+  it (all of it, or one newcomer's). Held credits drop by themselves after 30
+  days. Members who have been around longer, and newcomers' own credits, work
+  as before. The room service can also tell you in Discord: in a private
+  channel through a webhook, and now as a direct message from the Studio bot.
+
+- **The Shop is a page of its own, with a new drop every month.** Friends ›
+  Shop (and Settings › Appearance's **Open the Shop**) now open a roomy,
+  storefront-like page: the month's drop as a banner with its pieces moving
+  inside it and how long it has left ("Leaves in 24 days"), **Featured this
+  week**, and **Pets**, **Menu effects**, **Node styles**, **Themes**,
+  **Community** and **Owned** along the top. Cards show each item large and
+  live, with its price and a **New**, **Leaving soon** or **In use** badge;
+  click one for its details, **Try for 2 minutes**, and **Buy** or **Use**.
+  A drop's pieces are on sale for their month and then rotate out; everyone
+  who got one keeps it, and a later drop may bring one back. Signed out, the
+  same page lets you look around and try anything, with **Sign in to get
+  it** in place of Buy. When a member gets one of your style packs, a pop-up
+  says what it brought you ("+12 credits"), and **Your packs** says how many
+  times each was got. In Social, the Shop stays in Social.
+- **Pet your dragon, and more pets.** Rest the pointer on Ember for half a
+  second and it stops, turns to look at the pointer and purrs, with a few
+  small hearts and its name above it; circle the pointer quickly near it and
+  it gives chase for a moment. Clicks still go through to whatever is under
+  it. Now and then it does a little thing of its own: a stretch and a yawn
+  as it wakes, a flick of the tail while it rests, a tiny sneeze of sparks,
+  a firefly to chase. None of it happens with motion Off, and Calm keeps it
+  small. Settings › Appearance › Interface's pet card now shows your pet
+  moving, has **Pet**, **Name** and **Colours** picks (each pet keeps its own
+  name) and a **Plays with your pointer** switch. Three more pets are in the
+  Shop: a **Cloud dragon** that swims through the air with a flowing mane, a
+  **Phoenix** with a long tail of flame feathers and, for October, a
+  **Will-o'-wisp**, a little ghostly flame that trails sparks. Every skin
+  fits every pet, any of them can be tried for two minutes first, and
+  friends' pets visit as themselves. Ember stays free, and a pet a friend's
+  older Studio does not know yet shows there as Ember. The first run's
+  **Your dragon** row has a tiny Ember beside it, a pet's name sits on a
+  small nameplate that reads on light and dark pages, and the Shop's pet
+  cards fly at their proper calm pace again (they were spinning far too fast).
+- **Four more menu effects, and they play in more places.** The Shop gets
+  **Blown away** (the menu drifts aside like sand in the wind, its grains
+  streaming off), **Shatter** (it cracks like glass and falls away in
+  pieces), **Glitch** (it tears into slices that jump with a colour split and
+  blink out) and, for October, **Spirits** (it fades into ghostly wisps of
+  smoke that rise and curl away). Whichever effect you use now also plays
+  when a right-click or tab menu, Search or a popover closes (permissions,
+  the chat's tools, the Inbox, Build's More, the session panel's menus, the
+  Layout card). A closing menu is out of the keyboard's and screen readers'
+  way at once, a menu you open again mid-effect is back at once, and motion
+  Off or **It fades out** still close every menu at once.
+- **The Map reads at a glance.** When a job changes state (it starts
+  running, needs you, goes to review or finishes), its ring sends out one
+  soft ripple in the new state's colour; with motion Off there is none. The
+  legend's four states are now buttons that count their jobs on the Map:
+  point at one and its jobs light up while everything else dims, click it
+  to keep them lit, and click it again or press Esc to show everything
+  (screen readers hear both). Hovering a job shows a small card with its
+  name, its state and how long it has been in it ("Running · for 12 min").
+  The four states keep clearly different colours in every theme: when a
+  theme's own colour comes close to one, that state turns within its family
+  (Review toward violet on Daylight and Midnight, Done toward lime on Forest
+  and Aurora, Needs you toward rose on Studio gold and Eclipse and toward
+  yellow on Ember and Paper), and on Daylight and Paper the rings, legend
+  dots and coloured card text hold 4.5:1.
+- **Two new node styles and eight new themes in the Shop.** **Lanterns** (part
+  of October's drop) turns every node on the Map into a glowing paper lantern
+  that sways on its cord; its candle flickers while a job runs, its lines are
+  strings of festival lights, a small lantern floats along them to bring
+  news, and fireflies circle the one you chose. **Neon** draws each node as a
+  bright neon tube with a soft glow that buzzes on when a job starts; its
+  lines are lit tubes with current running along them. Both are in Settings ›
+  Appearance under **From the Shop** and can be tried for two minutes first.
+  New themes: **Pumpkin Spice**, **Haunted** and **Candlelight** (light) for
+  October, and **Midnight Neon**, **Forest Glade**, **Ocean Breeze** (light),
+  **Rose Gold** (light) and **Frost**. Every theme and node style Studio
+  already had stays free.
+
+- **Credits are harder to farm, and moderators can act on it.** Nobody could
+  change a balance before either; what changed is how far extra Discord
+  accounts get. The Top list and the Lobby's project of the week count each
+  player once a week per project. The Shop's Top list counts sales only from
+  members who may earn credits, and publishing a style pack (a free one too)
+  or entering the Build Jam needs a member in good standing. What someone who
+  used **Forget me** had given others stays, under an id that names nobody,
+  so a moderator can still see it and take it back. The **Build Jam**'s
+  results now come a day after voting closes (Tuesday): votes from accounts
+  made and brought into the server together count once, and a moderator
+  first sees every vote, whether it counts and why, and each voter's account
+  age. **Friends › Moderation** gains that **Build Jam** review (Don't count a
+  voter, Remove an entry, Pay the prizes now, Hold the prizes) and
+  **Rewards** switches that turn plays, stars, co-work rewards, Shop sales,
+  featuring or the jam's prizes off for a while without pausing anything
+  else (the jam's review day and its one-vote-per-batch rule have switches
+  too). With an optional webhook, the room service also posts a one-line
+  heads-up, naming nobody, to a private moderators' Discord channel.
+
+- **Social uses a wide window.** Home no longer sits in a narrow column with
+  empty sides. On a wide window it has a column at the right: **Friends** at
+  the top, now compact (one line a row, smaller faces), and the conversation
+  with Mefi under it with the box at its foot, like a chat; your work takes
+  the rest of the page, its cards side by side. The conversation's close
+  button hands the box back to the page, and that is remembered until you
+  open it again; Friends keeps the column. A narrower window keeps the box on
+  the page, Friends beside your work and the conversation as a drawer.
+  **Activity**, **Projects** and every **Friends** place use the width too
+  (The Lobby sets its top story beside what friends are building).
+- **Menus without odd gaps.** Card titles, both What's new cards, the tab
+  settings, the walkthrough's coach, the Model Lab's cards and the Decided
+  for you panel lost the extra space above and between their parts;
+  the Layout menu's switches are switches again, not squares; the
+  permission choices in Social's Settings panel wrap instead of running off
+  its edge; the project button opens a short menu under it instead of a
+  tall drawer over the tabs; cards side by side keep their lines together;
+  and Friends no longer shows its places twice, as chips and as a picker.
+  What's new and the shortcut list say what Social's box does now (Send,
+  and Ctrl Enter to build right away).
+
+- **Sign in to GitHub can finish.** Its setup window opened blank: the
+  GitHub CLI never showed its one-time code or opened the browser, so the
+  sign-in behind the Git chip, Publish to GitHub, Link to a repository, the
+  launch screen and Your PCs could not complete. The window is now a real
+  console, titled *Mefi Studio: Sign in to GitHub*, where the code shows and
+  Enter opens GitHub. A coding CLI's **Install and sign in** window had the
+  same fault and is fixed too.
+
+- **Make it yours, Ember the dragon, menu effects and the Shop.** The first
+  run now starts with **Make it yours**: pick **Light**, **Dark** or
+  **Stylized** (glowing colour and bold headings), a colour within it, the
+  text size and how much things move, and see Studio change behind the card
+  as you pick. When the welcome closes, a small note by the Settings button
+  says all of it lives in **Settings › Appearance**. New light themes,
+  **Daylight** and **Paper**, hold 4.5:1 contrast on every page, and the
+  two-tone Void themes paint their second colour again. Every Studio comes
+  with **Ember**, a little dragon that flies around the window, naps on the
+  top and status bars, comes to look at your pointer, loops with a puff of
+  fire when a job finishes and flies to the Inbox when something needs you.
+  It stays on its perch while you type, sleeps when you step away and sits
+  still with motion Off. A new install starts with Ember on (the first run
+  has the switch); on an existing install, turn it on in Settings ›
+  Appearance › Interface. In a room, friends' dragons fly in and play with
+  yours. The new **Shop** (Friends › Shop, also from Settings › Appearance)
+  has skins for Ember, menu effects that make menus **Dissolve**, **Burn
+  away** or turn to **Stardust** when they close, two node styles for the
+  Map (**Dragon scales**, whose seams glow like fire while a job runs, and
+  **Star chart**, stars on dotted chart lines with shooting-star pulses) and
+  style packs, all for credits you earn on the social side; credits can't be
+  bought or cashed out. Every theme and node style Studio already had stays
+  free. Try anything free for two minutes first. Anyone can
+  make a style pack (colours, node style, font) and list it free or for
+  credits; buyers can add a tip, the maker gets three quarters, and the rest
+  is taken out of circulation.
+- **The Map shows each job's state at a glance.** Every task orb wears a
+  ring in the legend's colours: it breathes while the job runs, pulses when
+  it needs you, and holds still for Review and Done (on a light theme the
+  rings and the legend take deeper inks). Task orbs are a size bigger, and a
+  small tree spreads out to fill the 3D view instead of sitting in the
+  middle.
+
+- **Social is about people, rooms and a simple talk with Mefi.** Social's
+  rail (Home, Friends, Projects, Activity) is on its Home too. Home has one
+  box with one action, Send: Mefi offers to build what you describe, and
+  Ctrl Enter still builds right away. Under it, your work is a short list
+  beside who is online, the rooms open now and what friends shared this
+  week. Studio's pages (the Map, the boards, Team, Fleet, Trace, Worktrees)
+  and sessions open in Studio from Social, keeping where you were going, and
+  Social's status bar leaves usage, cost, the machine's load and the
+  permission mode to Studio. A task's state reads the same everywhere (needs
+  you, running, up next or paused, in review, done), so a column never says
+  Running 0 over queued work, and the line under the box clears once its
+  news is old. Fixed: the tab picker finds Friends' places (Friends, Lobby,
+  a laptop), a key tip no longer covers a control (one covered Resume), a
+  briefing about high CPU no longer files a "Fix:" task, a GitHub CLI
+  sign-in made while Studio is open counts for the updater within a minute,
+  the in-memory relay tests wait up to ten seconds on a slow PC, and a card
+  on Today that is redrawn while you tab through it (its "4 min" turning "5
+  min") keeps the keyboard on the same button.
+
+- **Friends › Your PCs starts with Connect another PC.** Three plain
+  steps (open Studio on the other PC, sign in to Friends with the same
+  Discord account on both, press Pair and check that both show the same six
+  numbers) follow what Studio sees as you go, and fold to one button once a
+  PC of yours is paired. Your PCs come next. Keeping this PC in step with
+  GitHub, power and battery, lending this PC, setting it up, paired workers
+  and reaching it from Discord are folded groups below, the GitHub line
+  still showing when this PC is behind, and sharing has its own heading,
+  Share projects.
 
 - **A more compact Studio: less empty space, more of your work on screen.**
   Today puts its board about 130 px higher. The line of keys under the box

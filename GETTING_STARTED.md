@@ -40,9 +40,20 @@ If something fails, a line on the card says why.
 
 ### 3. Pick the AI that builds for you
 
+A short welcome in four steps opens next. Step one, **Make it yours**, is
+how Studio looks: **Light**, **Dark** or **Stylized** (glowing colour and
+bold headings), then a colour from that look, the text size and how much
+things move. Each pick changes Studio behind the card straight away, so you
+see it before you go on. **Your dragon** is Ember, a little dragon that comes
+with every Studio: it flies around, naps on the bars and cheers when work is
+done. It is on for a new Studio; press **Off** if you would rather not. All of
+this changes again later in **Settings › Appearance**: when the welcome
+closes, a small note next to the Settings button says so, and that the
+**Shop** (on Friends) has more skins for Ember, menu effects and style packs.
+
 Studio has no AI of its own. It works through an AI coding tool you sign in to
-with your own account. A short welcome in three steps opens next. Step one,
-**Pick the AI that builds for you**, says which account each tool uses:
+with your own account. Step two, **Pick the AI that builds for you**, says
+which account each tool uses:
 **Claude Code** your Claude subscription, **Codex** your ChatGPT plan,
 **Grok** your Grok account, **Antigravity** your Google account. **OpenCode**
 has free models to start with. A subscription's work counts toward that
@@ -69,7 +80,7 @@ free with OpenCode**, then **Scan OpenCode** and **Use scanned setup**.
 
 ### 4. Choose the project
 
-The second step, **Choose a project**, shows the folder Studio builds in. Your
+The third step, **Choose a project**, shows the folder Studio builds in. Your
 new app is already open (**✓ Open**). Press **Continue**. No project yet?
 Choose **Start a new app…** or **Open a folder…** here.
 

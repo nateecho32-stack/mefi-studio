@@ -102,10 +102,14 @@
   <symbol id="g-spark" viewBox="0 0 16 16"><path d="M8 2.5 9.4 6.6 13.5 8l-4.1 1.4L8 13.5 6.6 9.4 2.5 8l4.1-1.4z"/></symbol>
   <symbol id="g-home" viewBox="0 0 16 16"><path d="M2.5 7.4 8 2.8l5.5 4.6"/><path d="M4 6.3v7h3v-3.8h2v3.8h3v-7"/></symbol>
   <symbol id="g-flag" viewBox="0 0 16 16"><path d="M3.75 14V2.25"/><path d="M3.75 2.75h8.5l-1.9 2.9 1.9 2.9h-8.5"/></symbol>
+  <symbol id="g-shop" viewBox="0 0 16 16"><path d="M4.6 3h6.8L14 6.2 8 13.5 2 6.2z"/><path d="M2 6.2h12M6.4 3 5.4 6.2 8 13.5l2.6-7.3L9.6 3"/></symbol>
   <symbol id="g-gauge" viewBox="0 0 16 16"><path d="M2.6 11.75a5.6 5.6 0 1 1 10.8 0"/><path d="M8 9.9 10.6 6.5M4.3 7.2l.9.55M8 4.4v1M11.7 7.2l-.9.55"/><circle cx="8" cy="9.9" r="1.05" fill="currentColor" stroke="none"/></symbol>
   <symbol id="g-bell" viewBox="0 0 16 16"><path d="M3.5 11.6c1-.95 1.45-2 1.45-3.4V6.9a3.05 3.05 0 0 1 6.1 0v1.3c0 1.4.45 2.45 1.45 3.4Z"/><path d="M8 2.1v1.7M6.6 13.4a1.5 1.5 0 0 0 2.8 0"/></symbol>
   <symbol id="g-clip" viewBox="0 0 16 16"><path d="M13.2 7.4 7.6 13a3.3 3.3 0 0 1-4.7-4.7L8.7 2.6a2.3 2.3 0 0 1 3.3 3.3l-5.7 5.7a1.3 1.3 0 0 1-1.9-1.9L9.3 4.8"/></symbol>
   <symbol id="g-chat" viewBox="0 0 16 16"><path d="M2.7 3.3h10.6v7.4H6l-3.3 2.6z"/></symbol>
+  <!-- Social's rail (renderer/social.js): Projects, and Activity, the open project's work in one list. -->
+  <symbol id="g-folder" viewBox="0 0 16 16"><path d="M2.25 4.25a1 1 0 0 1 1-1h3.1l1.3 1.5h5.1a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H3.25a1 1 0 0 1-1-1z"/><path d="M2.25 6.75h11.5"/></symbol>
+  <symbol id="g-activity" viewBox="0 0 16 16"><path d="M1.75 8.25h2.7l1.6-4.5 3.4 8.5 1.7-4h3.1"/></symbol>
 </svg>
 <!-- The one navigation rail (docs/ux-audit.md, Phase 3). Every destination in
      nav.js's registry, grouped Home / Work / Live / Models / Settings, built by
@@ -345,7 +349,7 @@
   <aside id="vibe-chat" class="vibe-chat" aria-labelledby="vibe-chat-title" hidden>
     <header class="vibe-chat-head"><div><small>Conversation</small><h2 id="vibe-chat-title">Mefi</h2></div><button id="vibe-chat-close" class="vibe-icon" type="button" aria-label="Close the conversation" title="Close (Esc)"><svg class="glyph" aria-hidden="true"><use href="#g-close"/></svg></button></header>
     <ol id="vibe-thread" class="vibe-thread"></ol>
-    <p class="vibe-chat-note">Reply in the box in the middle. Enter talks, Ctrl + Enter builds.</p>
+    <p class="vibe-chat-note">Reply in the box on the page. Enter sends, Ctrl + Enter builds right away.</p>
   </aside>
   <!-- A decision from Needs you, answered without leaving Vibe (vibe.js). -->
   <aside id="vibe-ask" data-type-scope class="vibe-chat vibe-ask" aria-labelledby="vibe-ask-title" hidden>
@@ -362,20 +366,15 @@
     <footer class="vibe-ask-foot vibe-panel-foot"><span id="vibe-panel-note" class="vibe-ask-note" role="status" aria-live="polite"></span><button id="vibe-panel-full" class="vibe-ask-link" type="button">Full view <span aria-hidden="true">↗</span></button></footer>
   </aside>
 </section>
-<!-- Vibe's frame for every other page (renderer/vibe.js). In Vibe mode this
-     rail stands in for Build's #app-rail on Tasks, Plans, Command, Settings
-     and the rest, so leaving the front door never lands in the Build view; the
-     spark at the top goes back to Vibe and only the switch at the foot leaves
-     the mode. Hidden in Build, and on the Vibe page itself, where the dock is. -->
+<!-- Social's rail (renderer/vibe.js, renderer/social.js): Home, Friends, Projects and Activity, on every Social page, Home
+     included. Studio's pages (the Map, the boards, Team and the rest) open in Studio, so the rail never leads out of the
+     mode without saying so; only the Studio switch at the foot leaves it. Hidden in Studio. -->
 <nav id="vibe-rail" class="vibe-rail" aria-label="Social" hidden>
-  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Back to Today (H)"><svg class="glyph" aria-hidden="true"><use href="#g-spark"/></svg><span>Today</span></button>
+  <button id="vibe-rail-home" class="vibe-rail-home" type="button" data-nav="vibe" title="Home: talk with Mefi, your friends and your work (H)"><svg class="glyph" aria-hidden="true"><use href="#g-home"/></svg><span>Home</span></button>
   <div class="vibe-rail-items">
-    <button type="button" data-nav="friends" data-vibe-place="friends" title="Friends: the Lobby, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
-    <button type="button" data-nav="command" data-vibe-place="map" title="The Map: your agents at work, live (D)"><svg class="glyph" aria-hidden="true"><use href="#g-command"/></svg><span>Map</span><span class="count warn" data-badge="questions" hidden></span></button>
-    <button type="button" data-nav="tasks" data-vibe-place="work" title="Your tasks and results (T)"><svg class="glyph" aria-hidden="true"><use href="#g-tasks"/></svg><span>Tasks</span><span class="count" data-badge="tasks" hidden></span></button>
-    <button type="button" data-nav="plans" title="Plan an idea before building it (P)"><svg class="glyph" aria-hidden="true"><use href="#g-plans"/></svg><span>Plans</span></button>
-    <button type="button" data-nav="ideas" title="Ideas the agents noticed (I)"><svg class="glyph" aria-hidden="true"><use href="#g-ideas"/></svg><span>Ideas</span><span class="count" data-badge="ideas" hidden></span></button>
-    <button type="button" data-nav="agents" data-vibe-place="team" title="Team: who builds, which AI it uses and how much it may decide"><svg class="glyph" aria-hidden="true"><use href="#g-community"/></svg><span>Team</span></button>
+    <button id="vibe-rail-friends" type="button" data-nav="friends" data-vibe-place="friends" title="Friends: who's online, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
+    <button id="vibe-rail-projects" type="button" data-nav="projects" title="Projects: your apps, and New app"><svg class="glyph" aria-hidden="true"><use href="#g-folder"/></svg><span>Projects</span></button>
+    <button id="vibe-rail-activity" type="button" data-nav="activity" title="Activity: what needs you, what's running and what's done"><svg class="glyph" aria-hidden="true"><use href="#g-activity"/></svg><span>Activity</span><span id="vibe-rail-needs" class="count warn" hidden></span></button>
     <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
   </div>
   <div class="vibe-rail-foot" id="vibe-rail-foot">
@@ -432,6 +431,33 @@
     </div>
   </div>
 </div>
+<!-- Social's Activity (renderer/today.js registers "activity"): the open project's work in one list, the board Social's Home
+     shows in short. What needs you answers in its row; anything deeper (a session, its changes and checks) opens in Studio. -->
+<div class="overlay explorer workspace-page" id="activity-overlay" hidden>
+  <div class="explorer-sheet today-sheet activity-sheet" role="dialog" aria-modal="true" aria-labelledby="activity-heading" tabindex="-1">
+    <header class="explorer-head sheet-head">
+      <button class="sheet-back ghost mini" data-nav-close="activity" title="Back (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-back"/></svg><span class="label">Back</span></button>
+      <div class="sheet-title">
+        <div class="eyebrow">Social</div>
+        <h2 id="activity-heading">Activity</h2>
+      </div>
+      <div class="sheet-actions">
+        <button id="activity-studio" class="ghost" type="button" title="Every session with its changes, checks and logs">Open in Studio</button>
+        <button id="activity-close" class="ghost sheet-close" title="Close (Esc)"><svg class="glyph" aria-hidden="true" focusable="false"><use href="#g-close"/></svg><span class="label">Close</span><kbd class="key">Esc</kbd></button>
+      </div>
+    </header>
+    <div class="today-page-body">
+      <div class="today-top">
+        <p class="today-page-lead">What needs you, what's running, what's next and what finished today, for the open project.</p>
+        <div id="activity-summary" class="today-summary" role="group" aria-label="What is happening"></div>
+      </div>
+      <p id="activity-quiet" class="today-quiet" role="status" hidden></p>
+      <div id="activity-board" class="today-board" data-style="list">
+        <div class="today-groups"></div>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- The one-time "what's new" card an existing user sees on the first launch
      with Vibe (renderer/vibe.js decides; it never shows on a first run). -->
 <div id="vibe-notes" class="vibe-notes" hidden>
@@ -440,13 +466,13 @@
     <h2 id="vibe-notes-title">Two ways to work: Social and Studio</h2>
     <p id="vibe-notes-lede" class="vibe-notes-lede">Mefi Studio opens in <b>Social</b>: friends, and a light eye on your agents. In-depth building lives in <b>Studio</b>, one click away.</p>
     <div class="vibe-notes-modes">
-      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Social</b><span>Say what you want, watch it build, answer what needs you.</span></figcaption></figure>
+      <figure class="vibe-notes-mode is-vibe"><div class="vibe-mini" aria-hidden="true"><i class="mini-orb"></i><i class="mini-box"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-lane"></i><i class="mini-dock"></i></div><figcaption><b>Social</b><span>Talk with Mefi, see who is online, answer what needs you.</span></figcaption></figure>
       <figure class="vibe-notes-mode is-build"><div class="build-mini" aria-hidden="true"><i class="mini-rail"></i><i class="mini-head"></i><i class="mini-panel"></i><i class="mini-side"></i></div><figcaption><b>Studio</b><span>In-depth building: the Map, boards, models and every setting.</span></figcaption></figure>
     </div>
     <ul class="vibe-notes-list">
       <li>Switch any time with the <b>Social / Studio</b> switch at the top, or from the menu and Search.</li>
-      <li>One box: <b>Talk it over</b> with Mefi, or <b>Build it</b> as a task.</li>
-      <li>Building now, Needs you and Freshly done share one screen.</li>
+      <li>One box: <b>Send</b> talks with Mefi, who offers to build what you describe; <b>Ctrl Enter</b> builds it right away.</li>
+      <li>Home shows your work, your friends and the conversation with Mefi side by side.</li>
     </ul>
     <footer class="vibe-notes-foot"><button id="vibe-notes-changelog" class="vibe-notes-link" type="button">Full changelog<svg class="glyph" aria-hidden="true"><use href="#g-external"/></svg></button><button id="vibe-notes-build" class="vibe-btn quiet" type="button">Keep Studio</button><button id="vibe-notes-ok" class="vibe-btn primary" type="button">Try Social</button></footer>
   </div>
@@ -693,7 +719,7 @@
           <div class="settings-you-fields">
             <label class="field"><span class="field-label">Your name</span><input id="workspace-person-name" type="text" maxlength="40" placeholder="What should I call you?" autocomplete="off"></label>
             <label class="field"><span class="field-label">Companion name</span><input id="workspace-agent-name" type="text" maxlength="30" placeholder="Mefi" autocomplete="off"></label>
-            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="chrome">Chrome</option><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Void collection"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
+            <div class="field settings-you-theme"><label class="field-label" for="workspace-accent">Studio theme</label><div class="settings-you-row"><select id="workspace-accent"><option value="chrome">Chrome</option><option value="aurora">Aurora</option><option value="gold">Studio gold</option><option value="midnight">Midnight</option><option value="sage">Forest</option><option value="violet">Violet</option><option value="ember">Ember</option><option value="rose">Rose</option><option value="custom">Custom colors</option><optgroup label="Light"><option value="daylight">Daylight</option><option value="paper">Paper</option></optgroup><optgroup label="Void collection"><option value="void">Void</option><option value="eclipse">Eclipse</option><option value="abyss">Abyss</option><option value="dusk">Neon Dusk</option></optgroup></select><button type="button" class="ghost mini" data-settings-nav="music" title="Themes, custom colors and node styles in Appearance">Appearance settings <span aria-hidden="true">↗</span></button></div></div>
           </div>
           <div class="field settings-you-motion">
             <span class="field-label" id="settings-motion-label">Motion</span>
@@ -1426,7 +1452,7 @@
       <button id="cmd-empty-assistant" class="ghost" title="Open your companion to ask or create a task" hidden>Ask your companion</button>
     </div>
   </div>
-  <div id="cmd-tip" class="cmd-tip tree-tip" role="tooltip" hidden><b class="tip-title"></b><span class="tip-meta"></span></div>
+  <div id="cmd-tip" class="cmd-tip tree-tip" role="tooltip" hidden><b class="tip-title"></b><span class="tip-state" hidden><i class="sw" aria-hidden="true"></i><span class="tip-state-text"></span></span><span class="tip-meta"></span></div>
 </div>
 <div class="overlay" id="palette-overlay" hidden>
   <div class="palette-sheet" role="dialog" aria-modal="true" aria-label="Search Studio">

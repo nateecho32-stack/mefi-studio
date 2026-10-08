@@ -36,3 +36,8 @@ ROLE_IDS_JSON = "{}"
 OWNER_IDS = "1502092064492617749"
 # "true" refuses every write (maintenance).
 PAUSED = "false"
+# Optional secrets, never written here: MOD_ALERT_WEBHOOK, a Discord webhook in a private moderators' channel
+# (`npx wrangler secret put MOD_ALERT_WEBHOOK`), and/or MOD_ALERT_BOT_TOKEN, the Studio bot's token, so the bot
+# messages each OWNER_IDS account directly (`npx wrangler secret put MOD_ALERT_BOT_TOKEN`). The relay posts one line,
+# naming nobody, when members newly look like farming credits, when credits go on hold for a newcomer wave, and when a
+# Build Jam waits for its day of review (src/alerts.mjs).

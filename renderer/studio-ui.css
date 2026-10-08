@@ -148,6 +148,9 @@ span.catalog-expand { width: 16px; height: 16px; }
 :root[data-studio-theme=violet] { --studio-secondary: #de9cb7; --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 145deg; }
 :root[data-studio-theme=ember] { --studio-secondary: #d2ba7b; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; --studio-gradient-angle: 115deg; }
 :root[data-studio-theme=rose] { --studio-secondary: #bba2de; --font-display: "Georgia", serif; --studio-title-tracking: -.025em; }
+/* The light themes: Daylight's sky blue drifts toward teal; Paper sets its headings like a printed page. */
+:root[data-studio-theme=daylight] { --studio-secondary: #3f9bc2; --studio-gradient-angle: 150deg; }
+:root[data-studio-theme=paper] { --studio-secondary: #b08a3e; --font-display: "Georgia", serif; --studio-title-tracking: -.02em; --studio-gradient-angle: 125deg; }
 :root[data-studio-theme-tier=duo] { --studio-secondary: var(--accent-2); }
 :root[data-studio-theme=eclipse] { --font-display: "Georgia", serif; --studio-gradient-angle: 110deg; }
 :root[data-studio-theme=dusk] { --font-display: "Trebuchet MS", "Segoe UI", sans-serif; --studio-gradient-angle: 160deg; }
@@ -600,9 +603,11 @@ html[data-studio-style] .catalog-model { border-radius: var(--r-lg); }
 /* Its rows are buttons, which keep to one line everywhere else: here they wrap inside the menu's own width. */
 .autonomy-popover { white-space: normal; grid-template-columns: minmax(0, 1fr); }
 .autonomy-popover .autonomy-button { min-width: 0; white-space: normal; }
-.autonomy-mode { text-align: left; display: block; width: 100%; }
-.autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: 11px; line-height: 1.4; opacity: .7; font-weight: 400; }
-.autonomy-modes { display: grid; gap: 7px; }
+/* A mode is a two-line button (its name, what it does): it wraps and grows, wherever it is listed. The global button's nowrap
+   and 36 px height pushed the list past a narrow panel (Social's Settings panel scrolled sideways, its lines cut off). */
+.autonomy-mode { text-align: left; display: block; width: 100%; min-width: 0; height: auto; min-height: 0; white-space: normal; }
+.autonomy-mode small, .autonomy-check small { display: block; margin-top: 4px; font-size: max(12px, 11px * var(--text-scale, 1)); line-height: 1.4; opacity: .7; font-weight: 400; }
+.autonomy-modes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 7px; }
 .autonomy-note { font-size: 12px; line-height: 1.4; margin: 8px 0; }
 .autonomy-note:empty { display: none; }
 .autonomy-note[data-tone="bad"] { color: var(--bad); }

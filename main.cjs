@@ -1247,6 +1247,10 @@ let releaseCheckInFlight = null;
 let releaseApplyInFlight = false;
 let releaseWatch = null;
 let ghTokenCache;
+// When the GitHub CLI last had no login: a miss is asked again after a while,
+// so a `gh auth login` made with Studio open counts at the next check.
+let ghTokenMissAt = 0;
+const GH_TOKEN_RETRY_MS = 60_000;
 let releaseChannel = "stable";
 let releaseChannelEpoch = 0;
 let releaseChannelSetting = false;
@@ -1313,14 +1317,16 @@ function publishRelease(patch = {}, { force = false } = {}) {
 
 // A private repository needs credentials. Order: a token the user saved in
 // Studio (DPAPI-encrypted like the other keys), the usual environment
-// variables, then the GitHub CLI's own login — cached for this boot.
+// variables, then the GitHub CLI's own login — cached for this boot once found
+// (a miss only for GH_TOKEN_RETRY_MS).
 async function resolveGithubToken(settings) {
   const stored = decryptKey(settings, "githubTokenEncrypted");
   if (stored) return stored;
   for (const name of ["MEFI_STUDIO_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"]) {
     if (process.env[name]) return process.env[name];
   }
-  if (ghTokenCache !== undefined) return ghTokenCache;
+  if (ghTokenCache) return ghTokenCache;
+  if (ghTokenCache === null && Date.now() - ghTokenMissAt < GH_TOKEN_RETRY_MS) return null;
   ghTokenCache = await new Promise((resolve) => {
     let settled = false;
     // Declared before finish: a synchronous spawn throw calls finish while a
@@ -1350,6 +1356,7 @@ async function resolveGithubToken(settings) {
     child.on("error", () => finish(null));
     child.on("close", (code) => finish(code === 0 && output.trim() ? output.trim() : null));
   });
+  if (!ghTokenCache) ghTokenMissAt = Date.now();
   return ghTokenCache;
 }
 
@@ -2537,6 +2544,14 @@ const hubSubscribe = (roomId, on, holder) => hubCall((client) => {
 });
 const hubListen = (payload) => hubCall((client) => client.listen(payload?.roomId, payload ?? {}));
 const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying(track) }));
+// This member's pet (renderer/pets.js) for the rooms they have open (relay
+// feature "pets"): { kind, skin, name } copied field by field, or null for
+// none, as is a pet that is off ({ on: false }, the way MefiPets.state() puts
+// it). The hub client keeps it and says it again after every reconnect; the
+// room's pets come back as hub:event { type: "roomPets", roomId, pets }.
+const hubPet = (pet) => hubCall((client) => ({
+  ok: client.setPet(pet && typeof pet === "object" && pet.on !== false ? { kind: String(pet.kind ?? ""), skin: String(pet.skin ?? ""), name: typeof pet.name === "string" ? pet.name : "" } : null),
+}));
 // Friends › Rooms (renderer/rooms.js): creating rooms, joining by request or
 // invite, deciding requests, and room chat. The renderer names a method from
 // this list and passes plain arguments; the client checks every argument
@@ -2547,6 +2562,7 @@ const HUB_ROOM_METHODS = Object.freeze({
   roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1, front: 0,
   // Friends › Moderation (renderer/friends-mod.js); the relay refuses anyone who is not a moderator.
   modFlags: 0, modReview: 1, modRevoke: 2, modReports: 0, modResolve: 1, modSuspend: 2,
+  modSwitches: 0, modSwitch: 2, modJam: 0, modJamVoid: 2, modJamRelease: 1, modHeld: 0, modHeldDecide: 3,
   // The Lobby's "Share what I'm building" switch (hubBuildingShare below), not a hub-client method.
   shareBuilding: 1,
   // The Lobby's "Reconnect by itself" switch (hubAutoConnect below), not a hub-client method either.
@@ -2612,6 +2628,152 @@ function hubEvents(method, args) {
   if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
   const plain = args.map((value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null));
   return hubCall((client) => client[method](...plain));
+}
+// Friends › Shop (renderer/friends-shop.js): Studio's own items and members'
+// style packs on the Mefi Studio relay (relay/src/shop.mjs), got with
+// credits. Same gate as Events, plus one object of fields: its values plain,
+// and a pack's `data` and its `palette` copied as plain values too, so
+// nothing but data crosses. Any other nested value becomes null and keeps its
+// key, so the relay's pack check refuses it instead of never seeing it.
+// MEFI_STUDIO_SHOP_ALL=1 (development and tests only) answers shopOwned with
+// every Studio item and no relay, so fixtures and screenshots can show
+// everything. SHOP_STUDIO_ITEMS mirrors the relay's CATALOG for that (the
+// packs with their data); tests/shop_host.test.mjs keeps the two the same.
+// shopCatalog never asks the relay either: it is the signed-out showroom's
+// list (Studio's items on sale now, with their prices and lines, the drops
+// and the week's Featured shelf), from SHOP_STUDIO_ITEMS and SHOP_DROPS.
+const HUB_SHOP_METHODS = Object.freeze({ shop: 2, shopOwned: 0, shopBuy: 3, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2, shopCatalog: 0 });
+// Read guarded: tests run slices of this file in a vm with no process.
+const SHOP_ALL = typeof process !== "undefined" && process.env.MEFI_STUDIO_SHOP_ALL === "1";
+// `drop` names the monthly drop an item comes out in (SHOP_DROPS); an item without one is classic, always on sale.
+const SHOP_STUDIO_ITEMS = Object.freeze([
+  { id: "studio:skin-frost", kind: "skin", name: "Frost scales", price: 40, blurb: "Ember in icy blue." },
+  { id: "studio:skin-jade", kind: "skin", name: "Jade scales", price: 40, blurb: "Ember in green and gold." },
+  { id: "studio:skin-void", kind: "skin", name: "Void scales", price: 60, blurb: "Ember in black with a violet glow." },
+  { id: "studio:skin-gold", kind: "skin", name: "Gold scales", price: 60, blurb: "Ember in shining gold." },
+  { id: "studio:pet-cloud", kind: "pet", name: "Cloud dragon", price: 120, blurb: "A long, wingless dragon that swims through the air in waves." },
+  { id: "studio:pet-phoenix", kind: "pet", name: "Phoenix", price: 150, blurb: "A firebird with a long, flowing tail of flame feathers." },
+  { id: "studio:pet-wisp", kind: "pet", name: "Will-o'-wisp", price: 90, blurb: "A small ghostly flame that trails drifting sparks.", drop: "2026-10" },
+  { id: "studio:fx-dissolve", kind: "effect", name: "Dissolve", price: 60, blurb: "Menus crumble into pixels when they close." },
+  { id: "studio:fx-embers", kind: "effect", name: "Burn away", price: 90, blurb: "Menus burn away from the edges with glowing embers." },
+  { id: "studio:fx-stardust", kind: "effect", name: "Stardust", price: 90, blurb: "Menus scatter into drifting stars." },
+  { id: "studio:fx-wind", kind: "effect", name: "Blown away", price: 60, blurb: "Menus drift aside like sand in the wind." },
+  { id: "studio:fx-shatter", kind: "effect", name: "Shatter", price: 90, blurb: "Menus crack like glass and fall away in shards." },
+  { id: "studio:fx-glitch", kind: "effect", name: "Glitch", price: 60, blurb: "Menus tear into flickering slices and blink out." },
+  { id: "studio:fx-spirits", kind: "effect", name: "Spirits", price: 90, blurb: "Menus fade into ghostly wisps that rise and curl away.", drop: "2026-10" },
+  { id: "studio:style-dragonscale", kind: "nodestyle", name: "Dragon scales", price: 80, blurb: "Nodes covered in shimmering dragon scales, with ember sparks along the wires." },
+  { id: "studio:style-constellation", kind: "nodestyle", name: "Star chart", price: 80, blurb: "Nodes as bright stars joined by star-chart lines, with shooting stars." },
+  { id: "studio:style-lantern", kind: "nodestyle", name: "Lanterns", price: 80, blurb: "Glowing paper lanterns that sway, their warm light flickering at work.", drop: "2026-10" },
+  { id: "studio:style-neon", kind: "nodestyle", name: "Neon", price: 80, blurb: "Bright neon tubes with a soft glow that buzz on when work starts." },
+  { id: "studio:pack-synthwave", kind: "pack", name: "Synthwave", price: 50, blurb: "Hot pink and violet on midnight blue.", data: { v: 1, palette: { accent: "#ff4fa3", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff", accent2: "#8b5cff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } },
+  { id: "studio:pack-deep-sea", kind: "pack", name: "Deep sea", price: 50, blurb: "Teal light on deep ocean blue.", data: { v: 1, palette: { accent: "#2fd6c3", background: "#04131c", surface: "#0a2230", text: "#e2f6f7", accent2: "#3a7bff" }, nodeStyle: "glass", material: "studio", font: "studio" } },
+  { id: "studio:pack-sakura", kind: "pack", name: "Sakura (light)", price: 50, blurb: "Soft pink on warm white, a light look.", data: { v: 1, palette: { accent: "#b8325f", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "studio" } },
+  { id: "studio:pack-pumpkin-spice", kind: "pack", name: "Pumpkin Spice", price: 45, blurb: "Warm pumpkin orange and spiced gold on deep brown.", drop: "2026-10", data: { v: 1, palette: { accent: "#ff8a3d", background: "#1b100a", surface: "#2a1a10", text: "#fbeedd", accent2: "#d4a245" }, nodeStyle: "orbs", material: "studio", font: "serif" } },
+  { id: "studio:pack-haunted", kind: "pack", name: "Haunted", price: 50, blurb: "Violet and ghostly green glowing on near-black.", drop: "2026-10", data: { v: 1, palette: { accent: "#b48cff", background: "#09080e", surface: "#15121c", text: "#ebe6f4", accent2: "#6ef2b0" }, nodeStyle: "sigil", material: "atmosphere", font: "display" } },
+  { id: "studio:pack-candlelight", kind: "pack", name: "Candlelight (light)", price: 45, blurb: "Warm cream lit by amber candlelight, a light look.", drop: "2026-10", data: { v: 1, palette: { accent: "#a05a00", background: "#fbf3e2", surface: "#fffaf0", text: "#2f2418", accent2: "#b0442a" }, nodeStyle: "halo", material: "focus", font: "serif" } },
+  { id: "studio:pack-midnight-neon", kind: "pack", name: "Midnight Neon", price: 50, blurb: "Electric cyan and magenta on midnight navy.", data: { v: 1, palette: { accent: "#2fe4ff", background: "#06071a", surface: "#10122b", text: "#eef0ff", accent2: "#ff3fb1" }, nodeStyle: "singularity", material: "atmosphere", font: "mono" } },
+  { id: "studio:pack-forest-glade", kind: "pack", name: "Forest Glade", price: 40, blurb: "Sunlit fern green and gold on deep forest.", data: { v: 1, palette: { accent: "#a5d46a", background: "#0b1510", surface: "#14231a", text: "#e7f2e3", accent2: "#e3c262" }, nodeStyle: "glass", material: "studio", font: "studio" } },
+  { id: "studio:pack-ocean-breeze", kind: "pack", name: "Ocean Breeze (light)", price: 40, blurb: "Sea blue and coral on a breezy white, a light look.", data: { v: 1, palette: { accent: "#0a6a86", background: "#edf6f8", surface: "#ffffff", text: "#11303a", accent2: "#c2502f" }, nodeStyle: "minimal", material: "focus", font: "studio" } },
+  { id: "studio:pack-rose-gold", kind: "pack", name: "Rose Gold (light)", price: 45, blurb: "Rose and soft gold on blush cream, a light look.", data: { v: 1, palette: { accent: "#a24b59", background: "#f9efea", surface: "#fffaf7", text: "#3b2328", accent2: "#9a7224" }, nodeStyle: "prism", material: "studio", font: "serif" } },
+  { id: "studio:pack-frost", kind: "pack", name: "Frost", price: 40, blurb: "Icy blue and pale lilac on cool slate grey.", data: { v: 1, palette: { accent: "#a7dcf3", background: "#1d2731", surface: "#27323e", text: "#e9f0f6", accent2: "#c7cfff" }, nodeStyle: "crystal", material: "atmosphere", font: "display" } },
+]);
+// The monthly drops (relay/src/shop-drops.mjs DROPS), oldest first, for the
+// showroom: a drop's items are shown only while it (or a later drop that
+// brings one back, `returning`) runs; the next drop is a teaser.
+const SHOP_DROPS = Object.freeze([
+  { id: "2026-10", name: "Haunted Hollow", blurb: "Pumpkins, lanterns and friendly spirits for October.", from: "2026-10-01T00:00:00Z", until: "2026-11-01T00:00:00Z", colors: { accent: "#ff8a3d", accent2: "#9b6bff", background: "#140d1c" }, returning: [] },
+]);
+// The relay's rotation rules (shop-drops.mjs windowsOf, saleOf, dropsAt,
+// isoWeek, featuredAt) in CommonJS; tests/shop_host.test.mjs runs both on the
+// same items, drops and times.
+const shopTime = (iso) => Date.parse(iso);
+function shopWindows(item, drops = SHOP_DROPS) {
+  if (!item?.drop) return [];
+  return drops.filter((entry) => entry.id === item.drop || entry.returning.includes(item.id)).map((entry) => ({ drop: entry.id, from: entry.from, until: entry.until })).sort((a, b) => shopTime(a.from) - shopTime(b.from));
+}
+function shopSaleOf(item, now, drops = SHOP_DROPS) {
+  if (!item?.drop) return { classic: true, released: true, available: true, leaves: null, current: null };
+  const windows = shopWindows(item, drops);
+  const open = windows.find((entry) => shopTime(entry.from) <= now && now < shopTime(entry.until)) ?? null;
+  return { classic: false, released: windows.some((entry) => shopTime(entry.from) <= now), available: Boolean(open), leaves: open?.until ?? null, current: open?.drop ?? null };
+}
+const shopDropView = (entry) => ({ id: entry.id, name: entry.name, blurb: entry.blurb, from: entry.from, until: entry.until, colors: { ...entry.colors } });
+function shopDropsAt(now, drops = SHOP_DROPS, catalog = SHOP_STUDIO_ITEMS) {
+  const sorted = [...drops].sort((a, b) => shopTime(a.from) - shopTime(b.from));
+  const current = sorted.find((entry) => shopTime(entry.from) <= now && now < shopTime(entry.until)) ?? null;
+  const next = sorted.find((entry) => shopTime(entry.from) > now) ?? null;
+  const last = sorted.filter((entry) => shopTime(entry.until) <= now).at(-1) ?? null;
+  return {
+    current: current ? { ...shopDropView(current), items: catalog.filter((item) => shopSaleOf(item, now, drops).current === current.id).map((item) => item.id) } : null,
+    next: next ? shopDropView(next) : null,
+    last: last ? shopDropView(last) : null,
+  };
+}
+function shopIsoWeek(now) {
+  const date = new Date(now);
+  const day = (date.getUTCDay() + 6) % 7;
+  const thursday = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - day + 3);
+  const year = new Date(thursday).getUTCFullYear();
+  return { year, week: 1 + Math.floor((thursday - Date.UTC(year, 0, 1)) / (7 * 86_400_000)) };
+}
+function shopFeaturedAt(catalog, now, count = 4) {
+  const { year, week } = shopIsoWeek(now);
+  let state = (year * 100 + week) >>> 0;
+  const random = () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const ids = catalog.filter((item) => !item.drop).map((item) => item.id).sort();
+  for (let index = ids.length - 1; index > 0; index -= 1) {
+    const other = Math.floor(random() * (index + 1));
+    [ids[index], ids[other]] = [ids[other], ids[index]];
+  }
+  const date = new Date(now);
+  const monday = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate() - ((date.getUTCDay() + 6) % 7) + 7);
+  return { items: ids.slice(0, count), until: new Date(monday).toISOString() };
+}
+// The showroom's list, shaped as the relay's Studio view: on sale now, nobody's yet (the Shop marks what this PC owns).
+function hubShopCatalog(now = Date.now(), catalog = SHOP_STUDIO_ITEMS, drops = SHOP_DROPS) {
+  const items = catalog.filter((item) => shopSaleOf(item, now, drops).available).map((item) => ({
+    id: item.id, kind: item.kind, name: item.name, blurb: item.blurb ?? "", price: item.price, requires: null, maker: null,
+    data: item.data ? JSON.parse(JSON.stringify(item.data)) : null, sales: null, owned: false, status: "listed",
+    drop: item.drop ?? null, available: true, leaves: shopSaleOf(item, now, drops).leaves,
+  }));
+  const featured = shopFeaturedAt(catalog, now);
+  return { ok: true, local: true, view: "studio", items, next: null, drops: shopDropsAt(now, drops, catalog), featured: featured.items, featuredUntil: featured.until };
+}
+const shopPlain = (value) => (value == null || ["string", "number", "boolean"].includes(typeof value) ? value : null);
+const shopObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+const shopLevel = (value) => Object.fromEntries(Object.entries(value).map(([key, item]) => [key, shopPlain(item)]));
+function hubShopArg(value) {
+  if (!shopObject(value)) return shopPlain(value);
+  const out = shopLevel(value);
+  if (shopObject(value.data)) {
+    out.data = shopLevel(value.data);
+    if (shopObject(value.data.palette)) out.data.palette = shopLevel(value.data.palette);
+  }
+  return out;
+}
+function hubShop(method, args) {
+  const arity = Object.hasOwn(HUB_SHOP_METHODS, method) ? HUB_SHOP_METHODS[method] : -1;
+  if (arity < 0 || !Array.isArray(args) || args.length > arity) return Promise.resolve({ ok: false, error: "bad-request" });
+  // One object at most: the fields of a pack, a report or a removal.
+  let objects = 0;
+  const plain = args.map((value) => {
+    if (!shopObject(value)) return shopPlain(value);
+    objects += 1;
+    return objects === 1 ? hubShopArg(value) : null;
+  });
+  if (method === "shopOwned" && SHOP_ALL) return hubShopAll();
+  if (method === "shopCatalog") return Promise.resolve(hubShopCatalog());
+  return hubCall((client) => client[method](...plain));
+}
+async function hubShopAll() {
+  const items = SHOP_STUDIO_ITEMS.map((item) => ({ id: item.id, kind: item.kind, name: item.name, data: item.data ? JSON.parse(JSON.stringify(item.data)) : null, updatedAt: null }));
+  return { ok: true, items, all: true, status: await hubStatus() };
 }
 // Online while Studio is open: a member signed in on this PC (a Discord link)
 // connects a few seconds after launch, so friends see them in Who's online
@@ -27424,11 +27586,14 @@ function registerIpc() {
   ipcMain.handle("hub:subscribe", async (_event, payload) => hubSubscribe(payload?.roomId, payload?.on !== false, payload?.holder));
   ipcMain.handle("hub:listen", async (_event, payload) => hubListen(payload));
   ipcMain.handle("hub:now-playing", async (_event, payload) => hubNowPlaying(payload?.track ?? null));
+  ipcMain.handle("hub:pet", async (_event, payload) => hubPet(payload?.pet ?? null));
   // Friends › Rooms: one channel, HUB_ROOM_METHODS decides what it may call.
   ipcMain.handle("hub:room", async (_event, payload) => hubRoom(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Friends › Project hub: one channel, HUB_PROJECT_METHODS decides what it may call.
   ipcMain.handle("hub:projects", async (_event, payload) => hubProjects(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   ipcMain.handle("hub:events", async (_event, payload) => hubEvents(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
+  // Friends › Shop: one channel, HUB_SHOP_METHODS decides what it may call.
+  ipcMain.handle("hub:shop", async (_event, payload) => hubShop(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Companion friends (the "Companion friends" block): what friends' companions
   // may see, the friends out now, and playdates.
   ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));
@@ -27513,7 +27678,13 @@ function registerIpc() {
     const result = await pcSetup.status(pcSetupRoot());
     return result?.ok ? { ...result, links: await pcSetupLinks().catch(() => []) } : result;
   });
-  ipcMain.handle("pc-setup:action", async (_event, payload) => pcSetup.action(String(payload?.action ?? ""), { cwd: pcSetupRoot() }));
+  // Logged, so a sign-in that never finished can be told from one never tried.
+  ipcMain.handle("pc-setup:action", async (_event, payload) => {
+    const name = String(payload?.action ?? "");
+    const result = await pcSetup.action(name, { cwd: pcSetupRoot() });
+    logLine(`[pc-setup] ${/^[a-z-]{1,20}$/.test(name) ? name : "unknown action"}: ${result?.ok ? "setup window opened" : String(result?.error ?? "failed").slice(0, 160)}`);
+    return result;
+  });
   ipcMain.handle("pc-setup:repos", async () => pcSetup.repos());
   ipcMain.handle("pc-setup:clone", async (_event, payload) => {
     const repo = String(payload?.repo ?? "");

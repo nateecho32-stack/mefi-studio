@@ -5,14 +5,18 @@ import vm from "node:vm";
 
 const source = await readFile(new URL("../renderer/music.js", import.meta.url), "utf8");
 const pure = vm.createContext({ URL });
-vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf("  let stored;"))}\nthis.api = {spotifyLink, mediaLink, playableLink, startSeconds, safePreferences, audioFile, nextIndex, timeLabel, hexColor, resolvePalette, contrast, THEMES, DEFAULT_THEME, isVoidTheme};`, pure);
+vm.runInContext(`${source.slice(source.indexOf("  const THEMES"), source.indexOf("  let stored;"))}\nthis.api = {spotifyLink, mediaLink, playableLink, startSeconds, safePreferences, audioFile, nextIndex, timeLabel, hexColor, resolvePalette, contrast, THEMES, DEFAULT_THEME, isVoidTheme, isLightTheme, FONTS, LOOKS, safePack};`, pure);
 const helpers = pure.api;
 const flush = async () => { for (let index = 0; index < 15; index += 1) await Promise.resolve(); };
 
 // mediaWindow: true stands in for renderer/media-window.js (env.player records
 // what the menu asks of it); intersection: true gives the feed an
 // IntersectionObserver that env.reach() fires, so paging needs no scrolling.
-function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = null, resume = null, saved = null, recommend, preview = false, previewRegistered = false, workspaceActive = false, audioLink = null, search = "", premiumSaved = null, hint = null, community = null, bridge = null, mediaWindow = false, intersection = false } = {}) {
+// appearance: true (or a stored appearance) gives the window a MefiAppearance
+// that merges presets the way renderer/studio-ui.js does; env.appearance
+// holds what it shows and what it last saved.
+// shop: a Set of the Shop item ids this PC owns (window.MefiShop.owns, as renderer/friends-shop.js answers it).
+function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = null, resume = null, saved = null, recommend, preview = false, previewRegistered = false, workspaceActive = false, audioLink = null, search = "", premiumSaved = null, hint = null, community = null, bridge = null, mediaWindow = false, intersection = false, appearance = null, shop = null } = {}) {
   const ids = new Map();
   const events = [];
   const revoked = [];
@@ -46,7 +50,7 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
   let blob = 0;
   let document;
   class Element {
-    constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attrs = {}; this.listeners = {}; this.style = { setProperty: (key, value) => styles.set(key, value) }; const classes = new Set(); this.classList = { add: (...values) => values.forEach(value => classes.add(value)), remove: (...values) => values.forEach(value => classes.delete(value)), contains: value => classes.has(value) }; this.hidden = false; this.disabled = false; this.value = ""; }
+    constructor(tag) { this.tagName = tag; this.children = []; this.dataset = {}; this.attrs = {}; this.listeners = {}; this.style = { setProperty: (key, value) => styles.set(key, value), removeProperty: (key) => styles.delete(key) }; const classes = new Set(); this.classList = { add: (...values) => values.forEach(value => classes.add(value)), remove: (...values) => values.forEach(value => classes.delete(value)), contains: value => classes.has(value) }; this.hidden = false; this.disabled = false; this.value = ""; }
     set id(value) { this._id = value; ids.set(value, this); }
     get id() { return this._id; }
     set textContent(value) { this.textWrites = (this.textWrites || 0) + 1; this.text = String(value); this.children = []; }
@@ -87,6 +91,17 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
     anchor.getBoundingClientRect = () => ({ width: 150, height: 36, top: 84, bottom: 120, right: 950 });
     document.body.append(anchor);
   }
+  // studio-ui.js's applyAppearance: a preset brings its values, the patch wins over them.
+  const PRESETS = { focus: { glass: 0, glow: 0, density: "compact" }, studio: { glass: 45, glow: 35, density: "comfortable" }, atmosphere: { glass: 85, glow: 80, density: "comfortable" } };
+  const appearanceState = { now: { preset: "studio", density: "comfortable", glass: 45, glow: 35, ...(appearance && typeof appearance === "object" ? appearance : {}) }, saved: appearance && typeof appearance === "object" ? { ...appearance } : null, applies: [] };
+  const appearanceApi = {
+    get: () => ({ ...appearanceState.now }),
+    apply: (patch = {}, save = true) => {
+      appearanceState.now = { ...appearanceState.now, ...(patch.preset ? PRESETS[patch.preset] : {}), ...patch };
+      appearanceState.applies.push([{ ...patch }, save]);
+      if (save) appearanceState.saved = { ...appearanceState.now };
+    },
+  };
   const context = vm.createContext({
     URL: RuntimeURL, document,
     localStorage: { removeItem: key => storage.delete(key), getItem: (key) => storage.get(key), setItem: (key, value) => { writes.push([key, value]); storage.set(key, value); } },
@@ -114,6 +129,8 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
       mefiStudio: { ...(recommend ? { musicRecommend: recommend } : {}), openExternal: (url) => { opened.push(url); return Promise.resolve(); }, ...bridge },
       MefiToast: (text, kind) => toasts.push([text, kind]),
       ...(community ? { MefiCommunity: community } : {}),
+      ...(appearance ? { MefiAppearance: appearanceApi } : {}),
+      ...(shop ? { MefiShop: { owns: (id) => shop.has(id), open: (view) => opened.push(`shop:${view}`) } } : {}),
     },
   });
   context.window.MefiMediaBrowser = { create: () => ({
@@ -152,7 +169,7 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
   vm.runInContext(source, context);
   const music = context.window.MefiMusic;
   music.init();
-  return { music, window: context.window, ids, events, revoked, opened, styles, storage, document, audio, audios, refused, lifecycle, writes, toasts, player, observers, typeScopes,
+  return { music, window: context.window, ids, events, revoked, opened, styles, storage, document, audio, audios, refused, lifecycle, writes, toasts, player, observers, typeScopes, appearance: appearanceState,
     // The list's end scrolls into view: every observer that watches something is told so.
     reach: () => { for (const observer of observers) if (observer.targets.length) observer.callback(observer.targets.map((target) => ({ target, isIntersecting: true }))); },
     // Intervals created after this tick no faster than `ms`, like a hidden window.
@@ -200,7 +217,7 @@ test("Saved music preferences are bounded and never contain local files or trans
   const value = helpers.safePreferences({ theme: "untrusted", volume: 8, spotify: [link, link, "blob:private", "https://evil.test"], tracks: ["C:/private.mp3"], selected: "blob:private" });
   assert.equal(value.theme, "chrome", "an unknown theme falls back to the default, Chrome"); assert.equal(value.volume, 1);
   assert.deepEqual(Array.from(value.links), [link], "the list saved before the Links tab is read into links");
-  assert.deepEqual(Object.keys(value).sort(), ["customColors", "extraGlow", "links", "nodeLayout", "nodeStyle", "orbitTrails", "radioOn", "source", "station", "theme", "volume"]);
+  assert.deepEqual(Object.keys(value).sort(), ["customColors", "extraGlow", "font", "links", "nodeLayout", "nodeStyle", "orbitTrails", "pack", "radioOn", "source", "station", "theme", "volume"]);
   assert.equal(helpers.safePreferences({ source: "spotify" }).source, "link", "the old Spotify tab comes back as Links");
   assert.equal(value.source, "local");
   assert.equal(value.radioOn, false);
@@ -282,7 +299,7 @@ test("Chrome is the first theme and a new install's default, and a saved theme s
   assert.equal(Object.keys(themes)[0], "chrome", "listed first");
   assert.deepEqual(themes.chrome, { name: "Chrome", accent: "#c3c8d0", bright: "#eef1f5", rgb: "195,200,208", bg: "#0a0a0c", panel: "#141418", muted: "#a4a9b2", text: "#edeff2" }, "the website's palette, solo, outside the Void collection");
   assert.equal(helpers.isVoidTheme("chrome"), false);
-  assert.deepEqual(Object.keys(themes), ["chrome", "gold", "midnight", "forest", "violet", "ember", "aurora", "rose", "void", "eclipse", "abyss", "dusk"], "twelve themes");
+  assert.deepEqual(Object.keys(themes), ["chrome", "gold", "midnight", "forest", "violet", "ember", "aurora", "rose", "daylight", "paper", "void", "eclipse", "abyss", "dusk"], "fourteen themes");
   assert.equal(helpers.DEFAULT_THEME, "chrome");
   assert.equal(helpers.safePreferences(null).theme, "chrome");
   const fresh = environment();
@@ -305,7 +322,7 @@ test("Chrome is the first theme and a new install's default, and a saved theme s
 
 test("every theme and the custom palette read at 4.5:1: text, muted, dim and bright on panels, the canvas, and the ink on the accent", () => {
   const palettes = [...Object.keys(helpers.THEMES).map((key) => [key, helpers.resolvePalette(key, {})]), ["custom", helpers.resolvePalette("custom", {})]];
-  assert.equal(palettes.length, 13, "twelve themes and the custom palette");
+  assert.equal(palettes.length, 15, "fourteen themes and the custom palette");
   for (const [key, palette] of palettes) {
     for (const ink of ["text", "muted", "dim", "bright"]) assert.ok(helpers.contrast(palette[ink], palette.surface) >= 4.5, `${key}: ${ink} on the panel`);
     for (const ink of ["text", "muted"]) assert.ok(helpers.contrast(palette[ink], palette.readingBackground) >= 4.5, `${key}: ${ink} on the page`);
@@ -375,7 +392,7 @@ test("Node preferences preserve color, volume, Spotify links and live playback a
   env.music.applyTheme("violet");
   assert.equal(env.events.filter((event) => event.type === "mefi-tree-preferences").length, treeEvents, "color changes cannot trigger a layout event");
   const saved = JSON.parse(env.storage.get("mefiStudio.music.v1"));
-  assert.deepEqual(saved, { theme: "violet", customColors: { ...env.music.customColors() }, volume: .35, links: [link], station: null, source: "local", radioOn: false, nodeStyle: "minimal", nodeLayout: "tree", orbitTrails: false, extraGlow: false });
+  assert.deepEqual(saved, { theme: "violet", pack: null, font: "studio", customColors: { ...env.music.customColors() }, volume: .35, links: [link], station: null, source: "local", radioOn: false, nodeStyle: "minimal", nodeLayout: "tree", orbitTrails: false, extraGlow: false });
   assert.equal(env.music.status().nodeStyle, "minimal");
   assert.equal(env.music.status().nodeLayout, "tree");
 });
@@ -430,7 +447,7 @@ test("Graph effects update independently, persist and never start playback or re
   assert.equal(env.audio.volume, .35);
   assert.equal(env.music.status().queueLength, 1);
   const saved = JSON.parse(env.storage.get("mefiStudio.music.v1"));
-  assert.deepEqual(saved, { theme: "forest", customColors: { ...env.music.customColors() }, volume: .35, links: [link], station: null, source: "local", radioOn: false, nodeStyle: "minimal", nodeLayout: "radial", orbitTrails: true, extraGlow: true });
+  assert.deepEqual(saved, { theme: "forest", pack: null, font: "studio", customColors: { ...env.music.customColors() }, volume: .35, links: [link], station: null, source: "local", radioOn: false, nodeStyle: "minimal", nodeLayout: "radial", orbitTrails: true, extraGlow: true });
   const restored = environment({ saved });
   assert.equal(restored.ids.get("music-orbit-trails").checked, true);
   assert.equal(restored.ids.get("music-extra-glow").checked, true);
@@ -583,7 +600,12 @@ test("glass reading surfaces and both action-gradient ends retain contrast for c
     for (const ink of [palette.text, palette.muted, palette.bright]) {
       assert.ok(helpers.contrast(ink, palette.readingBackground) >= 4.5);
     }
-    assert.ok(helpers.contrast(palette.onAccent, palette.accent) >= 4.5);
+    // The ink on the accent's fills reads on the accent and on bright, which fills the other end of many of them:
+    // the ink whose worse fill reads better, which is one at 4.5 on both whenever either ink gets there.
+    const worst = (ink) => Math.min(helpers.contrast(ink, palette.accent), helpers.contrast(ink, palette.bright));
+    const other = palette.onAccent === "#FFFFFF" ? "#000000" : "#FFFFFF";
+    assert.ok(worst(palette.onAccent) >= worst(other), `${colors.accent}: the ink with the better worst case`);
+    if (colors.accent === "#BA2460") assert.ok(worst(palette.onAccent) >= 4.5, "a light panel's deeper bright takes the same ink as its accent");
     assert.ok(helpers.contrast(palette.onAccent, palette.actionEnd) >= 4.5);
     assert.equal(env.styles.get("--studio-reading-bg"), palette.readingBackground);
     assert.equal(env.styles.get("--studio-action-end"), palette.actionEnd);
@@ -618,6 +640,307 @@ test("themePalette is resolved once per theme and custom palette, frozen, and fo
   env.music.applyTheme("aurora");
   assert.equal(env.music.themePalette().theme, "aurora");
   assert.equal(env.music.themePalette().background, first.background);
+});
+
+// ---- Light themes, looks and style packs ----
+const LIGHT_THEMES = ["daylight", "paper"];
+const musicSaves = (env) => env.writes.filter(([key]) => key === "mefiStudio.music.v1").map(([, value]) => JSON.parse(value));
+const SAKURA = { id: "studio:pack-sakura", name: "Sakura (light)", palette: { accent: "#D6457A", accent2: "#8a6bd1", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24" }, nodeStyle: "minimal", material: "focus", font: "serif" };
+const SYNTHWAVE = { id: "studio:pack-synthwave", name: "Synthwave", palette: { accent: "#ff4fa3", accent2: "#8b5cff", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff" }, nodeStyle: "halo", material: "atmosphere", font: "display" };
+const DEEP_SEA = { id: "studio:pack-deep-sea", name: "Deep sea", palette: { accent: "#2fd6c3", accent2: "#3a7bff", background: "#04131c", surface: "#0a2230", text: "#e2f6f7" }, nodeStyle: "glass" };
+
+test("Daylight and Paper are light themes whose every ink reads at 4.5:1 on the page and on the panels", () => {
+  assert.deepEqual(Object.keys(helpers.THEMES).filter((key) => helpers.isLightTheme(key)), LIGHT_THEMES);
+  for (const key of Object.keys(helpers.THEMES)) {
+    const palette = helpers.resolvePalette(key, {});
+    // Text, muted and dim are the reading inks; bright marks links and chosen tabs; the accent titles eyebrows.
+    for (const ink of ["text", "muted", "dim", "bright"]) {
+      for (const surface of ["surface", "readingBackground"]) assert.ok(helpers.contrast(palette[ink], palette[surface]) >= 4.5, `${key}: ${ink} on ${surface} at ${helpers.contrast(palette[ink], palette[surface]).toFixed(2)}`);
+    }
+    if (!helpers.isLightTheme(key)) continue;
+    assert.equal(palette.readingBackground, palette.background, `${key}: the page itself is a reading surface`);
+    for (const ink of ["text", "muted", "dim", "bright", "accent"]) {
+      for (const surface of ["surface", "background"]) assert.ok(helpers.contrast(palette[ink], palette[surface]) >= 4.5, `${key}: ${ink} on ${surface} at ${helpers.contrast(palette[ink], palette[surface]).toFixed(2)}`);
+    }
+    assert.ok(helpers.contrast(palette.text, palette.background) >= 7, `${key}: body text at AAA on the page`);
+    // Accent words sit on accent-tinted rows and chips too (the sweep found them under 4.5 at a lighter accent).
+    const tint = (base, amount) => `#${[1, 3, 5].map((at) => { const from = parseInt(base.slice(at, at + 2), 16), to = parseInt(palette.accent.slice(at, at + 2), 16); return Math.round(from + (to - from) * amount).toString(16).padStart(2, "0"); }).join("")}`;
+    assert.ok(helpers.contrast(palette.accent, tint(palette.background, .14)) >= 4.5, `${key}: the accent on its own 14% tint`);
+    assert.ok(helpers.contrast(palette.bright, tint(palette.surface, .3)) >= 4.5, `${key}: bright on a 30% accent tint`);
+    for (const fill of ["accent", "actionEnd"]) assert.ok(helpers.contrast(palette.onAccent, palette[fill]) >= 4.5, `${key}: the ink on ${fill}`);
+    assert.ok(helpers.contrast(palette.border, palette.surface) >= 3, `${key}: the strong hairline`);
+    for (const ink of ["text", "muted"]) assert.ok(helpers.contrast(palette.canvas[ink], palette.canvas.background) >= 4.5, `${key}: the Map's ${ink}`);
+    const env = environment({ saved: { theme: key } });
+    assert.equal(env.document.documentElement.dataset.studioThemeTone, "light", `${key}: the stylesheets' light tone`);
+    assert.equal(env.document.documentElement.dataset.studioThemeTier, "solo");
+    assert.equal(env.music.themes().find((theme) => theme.key === key).tone, "light");
+  }
+  assert.equal(environment().music.themes().find((theme) => theme.key === "chrome").tone, "dark");
+  // A light custom palette's deeper accent ink lets its own page be the reading surface.
+  const custom = helpers.resolvePalette("custom", { accent: "#8A5A00", background: "#F4F0E6", surface: "#FFFFFF", text: "#1D1B17" });
+  assert.equal(custom.readingBackground, "#F4F0E6");
+  for (const ink of ["text", "muted", "dim", "bright"]) assert.ok(helpers.contrast(custom[ink], custom.readingBackground) >= 4.5, `custom: ${ink} on its page`);
+});
+
+test("a light tone switches the native controls to light, and the status hues deepen to read on it", async () => {
+  const styles = (await readFile(new URL("../renderer/styles.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+  const block = styles.match(/\n:root\[data-studio-theme-tone="light"\] \{\n([\s\S]*?)\n\}/);
+  assert.ok(block, "styles.css has the light tone's own token block");
+  const tokens = Object.fromEntries(block[1].split(";").map((line) => line.replace(/\/\*[\s\S]*?\*\//g, "").trim()).filter(Boolean).map((line) => [line.slice(0, line.indexOf(":")).trim(), line.slice(line.indexOf(":") + 1).trim()]));
+  assert.equal(tokens["color-scheme"], "light");
+  assert.match(styles, /^ {2}color-scheme: dark;$/m, "dark stays the default");
+  for (const key of LIGHT_THEMES) {
+    const palette = helpers.resolvePalette(key, {});
+    for (const hue of ["--bad", "--warn", "--good", "--live", "--info", "--idea"]) {
+      for (const surface of [palette.background, palette.surface]) assert.ok(helpers.contrast(tokens[hue], surface) >= 4.5, `${key}: ${hue} ${tokens[hue]} on ${surface}`);
+    }
+  }
+});
+
+test("looks: Light, Dark and Stylized share every built-in theme out once, Chrome first in Dark, Stylized with its own extras", () => {
+  const env = environment();
+  // Plain copies across the vm boundary, so deepEqual compares values.
+  const looks = JSON.parse(JSON.stringify(env.music.looks()));
+  assert.deepEqual(looks.map((look) => look.id), ["light", "dark", "stylized"]);
+  assert.deepEqual(looks.map((look) => look.name), ["Light", "Dark", "Stylized"]);
+  assert.deepEqual(looks[0].themes, LIGHT_THEMES);
+  assert.equal(looks[1].themes[0], "chrome", "Dark opens on Chrome");
+  assert.deepEqual(looks[2].themes, ["aurora", "void", "eclipse", "abyss", "dusk"]);
+  const all = looks.flatMap((look) => look.themes);
+  assert.deepEqual([...all].sort(), Object.keys(helpers.THEMES).sort(), "each theme is in one look, once");
+  assert.ok(looks[1].themes.every((key) => !helpers.isLightTheme(key)), "Dark holds no light theme");
+  assert.deepEqual(looks.map((look) => [look.material, look.font]), [["studio", "studio"], ["studio", "studio"], ["atmosphere", "display"]]);
+  env.music.looks()[0].themes.push("chrome");
+  assert.deepEqual([...env.music.looks()[0].themes], LIGHT_THEMES, "callers get copies");
+});
+
+test("applyLook puts on the theme with its material and heading face, resets them for Light and Dark, and a restart brings it all back", () => {
+  const env = environment({ appearance: { preset: "studio", glass: 60, glow: 20, density: "compact" } });
+  const root = env.document.documentElement;
+  assert.equal(root.dataset.studioFont, "studio", "a new install keeps each theme's own headings");
+  assert.equal(env.styles.has("--font-display"), false);
+  assert.equal(env.music.applyLook("stylized", "void"), "void");
+  assert.equal(env.music.status().theme, "void");
+  assert.equal(env.music.look(), "stylized");
+  assert.equal(root.dataset.studioThemeTier, "duo");
+  assert.equal(root.dataset.studioFont, "display");
+  assert.equal(env.styles.get("--font-display"), helpers.FONTS.display.stack);
+  assert.deepEqual(env.window.MefiAppearance.get(), { preset: "atmosphere", glass: 85, glow: 80, density: "compact" }, "the material, and the person's own density");
+  assert.deepEqual([musicSaves(env).at(-1).theme, musicSaves(env).at(-1).font], ["void", "display"]);
+  // A restart: both stores come back as they were saved.
+  const restarted = environment({ saved: musicSaves(env).at(-1), appearance: env.appearance.saved });
+  assert.equal(restarted.music.status().theme, "void");
+  assert.equal(restarted.document.documentElement.dataset.studioFont, "display");
+  assert.equal(restarted.styles.get("--font-display"), helpers.FONTS.display.stack);
+  assert.equal(restarted.window.MefiAppearance.get().preset, "atmosphere");
+  assert.equal(restarted.music.look(), "stylized");
+  // Dark with a theme it does not list: its first theme, and the plain extras back.
+  assert.equal(restarted.music.applyLook("dark", "abyss"), "chrome");
+  assert.equal(restarted.document.documentElement.dataset.studioFont, "studio");
+  assert.equal(restarted.styles.has("--font-display"), false, "the theme's own face again");
+  assert.deepEqual(restarted.window.MefiAppearance.get(), { preset: "studio", glass: 45, glow: 35, density: "compact" });
+  assert.equal(restarted.music.applyLook("light", "paper"), "paper");
+  assert.equal(restarted.document.documentElement.dataset.studioThemeTone, "light");
+  assert.equal(restarted.music.look(), "light");
+  const before = restarted.storage.get("mefiStudio.music.v1");
+  assert.equal(restarted.music.applyLook("neon", "chrome"), null, "no such look");
+  assert.equal(restarted.music.applyLook("dark", "midnight", false), "midnight", "a look can be shown without saving");
+  assert.equal(restarted.storage.get("mefiStudio.music.v1"), before);
+  assert.equal(restarted.appearance.applies.at(-1)[1], false);
+  // Custom is in no look.
+  restarted.music.applyCustomColors({ accent: "#22bbaa" });
+  assert.equal(restarted.music.look(), null);
+});
+
+test("the heading faces are one table of system faces; Settings offers them, and a choice saves", async () => {
+  const fonts = helpers.FONTS;
+  assert.deepEqual(Object.keys(fonts), ["studio", "display", "serif", "mono"]);
+  assert.equal(fonts.studio.stack, null, "Studio keeps each theme's own face");
+  for (const key of ["display", "serif", "mono"]) {
+    assert.match(fonts[key].stack, /, (sans-serif|serif|monospace)$/, `${key} ends in a generic family`);
+    assert.doesNotMatch(fonts[key].stack, /url\(|https?:|@import/i, `${key}: no web font`);
+  }
+  for (const name of ["music.css", "studio-ui.css", "styles.css"]) assert.doesNotMatch(await readFile(new URL(`../renderer/${name}`, import.meta.url), "utf8"), /@font-face/, `${name} loads no font`);
+  const env = environment({ saved: { theme: "gold" } });
+  assert.deepEqual(env.ids.get("music-fonts").children.map((choice) => choice.dataset.font), Object.keys(fonts));
+  assert.equal(env.ids.get("music-font-label").textContent, "Headings");
+  assert.equal(env.ids.get("music-font-studio").attrs["aria-pressed"], "true");
+  env.ids.get("music-font-mono").click();
+  assert.equal(env.music.font(), "mono");
+  assert.equal(env.document.documentElement.dataset.studioFont, "mono");
+  assert.equal(env.styles.get("--font-display"), fonts.mono.stack);
+  assert.equal(env.styles.get("--studio-title-tracking"), fonts.mono.tracking);
+  assert.equal(env.ids.get("music-font-mono").attrs["aria-pressed"], "true");
+  assert.equal(env.ids.get("music-font-studio").attrs["aria-pressed"], "false");
+  assert.equal(musicSaves(env).at(-1).font, "mono");
+  assert.equal(env.music.status().theme, "gold", "a face changes no colour");
+  assert.deepEqual(Array.from(env.music.fonts(), (font) => font.key), Object.keys(fonts));
+  assert.equal(env.music.applyFont("comic-sans"), "studio", "an unknown face is the theme's own");
+  assert.equal(env.styles.has("--font-display"), false);
+  assert.equal(helpers.safePreferences({ font: "papyrus" }).font, "studio");
+});
+
+test("Settings lists the light themes under a heading of their own, apart from the dark ones", () => {
+  const env = environment();
+  assert.deepEqual(env.ids.get("music-light-themes").children.map((choice) => choice.dataset.theme), LIGHT_THEMES);
+  assert.equal(env.ids.get("music-light-theme-label").textContent, "Light");
+  const section = env.ids.get("music-light-themes").parentElement;
+  const main = section.children.find((child) => child.className === "music-themes" && !child.id);
+  assert.deepEqual(main.children.map((choice) => choice.dataset.theme), [...Object.keys(helpers.THEMES).filter((key) => !helpers.isVoidTheme(key) && !helpers.isLightTheme(key)), "custom"], "the first group keeps the dark themes and Custom");
+  assert.ok(section.children.indexOf(env.ids.get("music-light-themes")) < section.children.indexOf(env.ids.get("music-void-themes")), "Light sits above the Void collection");
+  env.ids.get("music-theme-paper").click();
+  assert.equal(env.music.status().theme, "paper");
+  assert.equal(env.ids.get("music-theme-paper").attrs["aria-pressed"], "true");
+  assert.equal(musicSaves(env).at(-1).theme, "paper");
+  assert.equal(env.document.documentElement.dataset.studioThemeTone, "light");
+  env.ids.get("music-theme-void").click();
+  assert.equal(env.ids.get("music-theme-paper").attrs["aria-pressed"], "false");
+  assert.equal(env.document.documentElement.dataset.studioThemeTone, "dark");
+});
+
+test("applyPack paints a pack the way Custom is painted, two-tone with its second hue, keeps it and brings it back at boot", () => {
+  const env = environment({ appearance: { preset: "studio", glass: 45, glow: 35, density: "spacious" } });
+  const root = env.document.documentElement;
+  assert.equal(env.music.packInfo(), null);
+  assert.equal(env.music.applyPack(SAKURA), true);
+  assert.equal(env.music.status().theme, "pack");
+  assert.equal(root.dataset.studioTheme, "pack");
+  assert.equal(root.dataset.studioThemeTier, "duo", "a second hue makes it two-tone");
+  assert.equal(root.dataset.studioThemeTone, "light");
+  assert.equal(env.styles.get("--accent-2"), "#8a6bd1");
+  assert.equal(env.styles.get("--gold"), "#d6457a", "colours are kept lower-case");
+  const palette = env.music.themePalette();
+  assert.equal(palette.theme, "pack");
+  assert.deepEqual(JSON.parse(JSON.stringify(palette)), JSON.parse(JSON.stringify({ theme: "pack", ...helpers.resolvePalette("pack", {}, helpers.safePack(SAKURA)) })));
+  for (const ink of ["text", "muted", "dim", "bright"]) assert.ok(helpers.contrast(palette[ink], palette.surface) >= 4.5, `the pack's ${ink}`);
+  // A light pack's bright is deeper than its accent, so the ink on its fills is white, and its second hue moves until white reads on it.
+  assert.equal(palette.onAccent, "#FFFFFF");
+  assert.equal(env.styles.get("--accent-2-fill"), palette.accent2Fill);
+  assert.ok(helpers.contrast("#FFFFFF", palette.accent2Fill) >= 4.5);
+  assert.equal(env.music.graphPreferences().nodeStyle, "minimal");
+  assert.equal(root.dataset.studioFont, "serif");
+  assert.deepEqual(env.window.MefiAppearance.get(), { preset: "focus", glass: 0, glow: 0, density: "spacious" });
+  const info = env.music.packInfo();
+  assert.deepEqual(JSON.parse(JSON.stringify(info)), { id: "studio:pack-sakura", name: "Sakura (light)", palette: { accent: "#d6457a", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24", accent2: "#8a6bd1" }, nodeStyle: "minimal", material: "focus", font: "serif" });
+  info.palette.accent = "#000000";
+  assert.equal(env.music.packInfo().palette.accent, "#d6457a", "callers get a copy");
+  const saved = musicSaves(env).at(-1);
+  assert.equal(saved.theme, "pack");
+  assert.deepEqual(saved.pack, JSON.parse(JSON.stringify(env.music.packInfo())));
+  // Boot: the pack, its face and its two hues come back with it.
+  const booted = environment({ saved, appearance: env.appearance.saved });
+  assert.equal(booted.music.status().theme, "pack");
+  assert.deepEqual(JSON.stringify(booted.music.packInfo()), JSON.stringify(env.music.packInfo()));
+  assert.equal(booted.document.documentElement.dataset.studioThemeTier, "duo");
+  assert.equal(booted.styles.get("--accent-2"), "#8a6bd1");
+  assert.equal(booted.document.documentElement.dataset.studioFont, "serif");
+  assert.equal(booted.music.graphPreferences().nodeStyle, "minimal");
+  assert.equal(booted.window.MefiAppearance.get().preset, "focus");
+  // Only data from the tables is painted or kept.
+  const writes = env.writes.length;
+  for (const bad of [
+    { ...SAKURA, palette: { ...SAKURA.palette, text: "red" } },
+    { ...SAKURA, palette: { ...SAKURA.palette, accent2: "url(x)" } },
+    { ...SAKURA, palette: { accent: "#ffffff" } },
+    { ...SAKURA, nodeStyle: "dragon" }, { ...SAKURA, material: "neon" }, { ...SAKURA, font: "papyrus" },
+    { name: "No palette" }, null, "studio:pack-sakura",
+  ]) assert.equal(env.music.applyPack(bad), false, JSON.stringify(bad));
+  assert.equal(env.writes.length, writes, "a refused pack changes nothing");
+  assert.equal(env.music.packInfo().name, "Sakura (light)");
+  assert.equal(env.music.applyPack({ ...DEEP_SEA, css: "body{display:none}", palette: { ...DEEP_SEA.palette, extra: "#123456" } }), true);
+  assert.deepEqual(Object.keys(env.music.packInfo()).sort(), ["id", "name", "nodeStyle", "palette"]);
+  assert.deepEqual(Object.keys(env.music.packInfo().palette).sort(), ["accent", "accent2", "background", "surface", "text"]);
+  assert.equal(root.dataset.studioFont, "studio", "a pack that names no face has the theme's own");
+  assert.equal(env.music.applyPack({ ...DEEP_SEA, palette: { ...DEEP_SEA.palette, accent2: undefined } }), true);
+  assert.equal(root.dataset.studioThemeTier, "solo", "no second hue, no two tones");
+  // Another theme puts the pack away.
+  env.music.applyTheme("chrome");
+  assert.equal(env.music.packInfo(), null);
+  assert.equal(musicSaves(env).at(-1).pack, null);
+  assert.equal(helpers.safePreferences({ theme: "pack" }).theme, "chrome", "no pack, no pack theme");
+  assert.equal(helpers.safePreferences({ theme: "chrome", pack: helpers.safePack(SAKURA) }).pack, null);
+  assert.equal(env.music.applyTheme("pack"), "chrome", "the pack theme needs a pack");
+});
+
+test("previewPack shows a pack for the Shop's Try without saving, and endPreview puts back exactly what was there", () => {
+  const appearance = { preset: "studio", glass: 60, glow: 20, density: "compact" };
+  const env = environment({ saved: { theme: "midnight", nodeStyle: "glass", font: "mono" }, appearance });
+  const root = env.document.documentElement;
+  const storedMusic = env.storage.get("mefiStudio.music.v1");
+  const before = { theme: root.dataset.studioTheme, tier: root.dataset.studioThemeTier, tone: root.dataset.studioThemeTone, font: root.dataset.studioFont, display: env.styles.get("--font-display"), gold: env.styles.get("--gold"), palette: env.music.themePalette(), nodeStyle: env.music.graphPreferences().nodeStyle, appearance: env.window.MefiAppearance.get() };
+  assert.equal(env.music.endPreview(), false, "nothing to end");
+  assert.equal(env.music.previewPack(SYNTHWAVE), true);
+  assert.equal(root.dataset.studioTheme, "pack");
+  assert.equal(root.dataset.studioThemeTier, "duo");
+  assert.equal(env.styles.get("--gold"), "#ff4fa3");
+  assert.equal(env.music.themePalette().theme, "pack", "the Map shows the try too");
+  assert.equal(env.music.graphPreferences().nodeStyle, "halo");
+  assert.equal(root.dataset.studioFont, "display");
+  assert.equal(env.window.MefiAppearance.get().preset, "atmosphere");
+  assert.equal(env.events.filter((event) => event.type === "mefi-theme-change").at(-1).detail.preview, true, "Workspace keeps its saved accent");
+  assert.equal(env.music.status().theme, "midnight", "the applied theme is still Midnight");
+  assert.equal(env.music.packInfo(), null, "nothing is applied");
+  // Trying another: a pack without a material puts the material back.
+  assert.equal(env.music.previewPack(DEEP_SEA), true);
+  assert.equal(env.styles.get("--gold"), "#2fd6c3");
+  assert.equal(env.music.graphPreferences().nodeStyle, "glass");
+  assert.equal(root.dataset.studioFont, "studio");
+  assert.deepEqual(env.window.MefiAppearance.get(), appearance);
+  assert.equal(env.music.previewPack({ palette: { accent: "nope" } }), false);
+  assert.equal(env.music.endPreview(), true);
+  assert.deepEqual({ theme: root.dataset.studioTheme, tier: root.dataset.studioThemeTier, tone: root.dataset.studioThemeTone, font: root.dataset.studioFont, display: env.styles.get("--font-display"), gold: env.styles.get("--gold"), palette: env.music.themePalette(), nodeStyle: env.music.graphPreferences().nodeStyle, appearance: env.window.MefiAppearance.get() }, before);
+  assert.equal(env.storage.get("mefiStudio.music.v1"), storedMusic, "a try writes nothing");
+  assert.equal(env.appearance.saved.glass, 60, "nor the material");
+  assert.ok(env.appearance.applies.every(([, save]) => save === false));
+  assert.equal(env.music.endPreview(), false);
+  // Choosing for real ends a try; a material chosen meanwhile in Settings stays.
+  env.music.previewPack(SYNTHWAVE);
+  env.window.MefiAppearance.apply({ preset: "focus" });
+  env.music.applyTheme("forest");
+  assert.equal(root.dataset.studioTheme, "forest");
+  assert.equal(env.music.graphPreferences().nodeStyle, "glass");
+  assert.equal(root.dataset.studioFont, "mono");
+  assert.equal(env.window.MefiAppearance.get().preset, "focus");
+  // Buying after a try: the pack goes on for real.
+  env.music.previewPack(SAKURA);
+  assert.equal(env.music.applyPack(SAKURA), true);
+  assert.equal(env.music.endPreview(), false, "the try ended when the pack went on");
+  assert.equal(env.music.packInfo().id, "studio:pack-sakura");
+  assert.equal(musicSaves(env).at(-1).theme, "pack");
+});
+
+test("two-tone themes and packs paint under tier duo: the stylesheets answer duo, and no old tier name is left", async () => {
+  for (const theme of ["void", "eclipse", "abyss", "dusk"]) assert.equal(environment({ saved: { theme } }).document.documentElement.dataset.studioThemeTier, "duo", theme);
+  for (const theme of ["chrome", "aurora", ...LIGHT_THEMES]) assert.equal(environment({ saved: { theme } }).document.documentElement.dataset.studioThemeTier, "solo", theme);
+  const css = Object.fromEntries(await Promise.all(["music.css", "styles.css", "studio-ui.css"].map(async (name) => [name, (await readFile(new URL(`../renderer/${name}`, import.meta.url), "utf8")).replace(/\/\*[\s\S]*?\*\//g, "")])));
+  for (const [name, text] of Object.entries(css)) {
+    assert.doesNotMatch(text, /data-studio-theme-tier="?premium|music-theme-premium/, `${name} paints no tier that music.js never sets`);
+    for (const tier of text.matchAll(/data-studio-theme-tier=["']?(\w+)/g)) assert.ok(["duo", "solo"].includes(tier[1]), `${name}: tier ${tier[1]}`);
+  }
+  // The two-tone primary outranks the shared one in studio-ui.css, at rest and under the pointer, and ends on the
+  // second hue as a fill the ink reads on.
+  assert.match(css["music.css"], /:root\[data-studio-theme\]\[data-studio-theme-tier="duo"\] :is\(\.primary:not\(#idle-hud \*, \.danger\), #workspace-layer \.primary, #idle-hud \.primary\) \{ background: linear-gradient\(120deg, var\(--gold-bright\), var\(--gold\) 52%, var\(--accent-2-fill, var\(--accent-2\)\)\); \}/);
+  // Its three stops under the ink: bright, the accent and the fill, for the Void themes and the Studio packs alike.
+  for (const [name, palette] of [...["void", "eclipse", "abyss", "dusk"].map((key) => [key, helpers.resolvePalette(key, {})]), ...[SAKURA, SYNTHWAVE, DEEP_SEA].map((pack) => [pack.name, helpers.resolvePalette("pack", {}, helpers.safePack(pack))])]) {
+    for (const stop of ["bright", "actionEnd", "accent2Fill"]) assert.ok(helpers.contrast(palette.onAccent, palette[stop]) >= 4.5, `${name}: the ink on ${stop} at ${helpers.contrast(palette.onAccent, palette[stop]).toFixed(2)}`);
+  }
+  for (const key of ["void", "eclipse", "abyss", "dusk"]) assert.equal(helpers.resolvePalette(key, {}).accent2Fill, helpers.THEMES[key].accent2, `${key} keeps its own second hue`);
+  assert.match(css["studio-ui.css"], /\.primary:not\(#idle-hud \*, \.danger\):not\(:disabled, \[aria-disabled=true\]\):is\(:hover, :focus-visible\),/, "the shared hover the two-tone fill must outrank");
+  assert.match(css["music.css"], /\.music-theme-duo::before, \.void-swatch \{/);
+  assert.match(css["styles.css"], /:root\[data-studio-theme-tier="duo"\] #workspace-layer \.ws-main \{/);
+  assert.match(css["styles.css"], /:root\[data-studio-theme-tier="duo"\] :is\(\.community-invitation, #settings-community\) \{/);
+  const env = environment();
+  assert.ok(env.ids.get("music-void-themes").children.every((choice) => choice.className === "music-theme music-theme-duo"));
+});
+
+test("every theme has a sky on the Map, and the light ones draw theirs in ink", async () => {
+  const idle = await readFile(new URL("../renderer/idle.js", import.meta.url), "utf8");
+  const table = idle.match(/const THEME_BACKDROP = (\{[\s\S]*?\});/);
+  assert.ok(table, "idle.js has the theme-to-sky table");
+  const skies = vm.runInNewContext(`(${table[1]})`);
+  for (const key of [...Object.keys(helpers.THEMES), "custom"]) assert.ok(Object.hasOwn(skies, key), `${key} has a sky`);
+  // Aurora ribbons and soft bokeh add light, which a pale sky cannot show.
+  for (const key of LIGHT_THEMES) assert.ok(!["aurora", "bokeh", "fireflies"].includes(skies[key]), `${key}: ${skies[key]}`);
 });
 
 test("live preview view controls change the real tree and follow external view changes", () => {
@@ -1413,6 +1736,148 @@ test("MefiMusic exports what other modules read: isNodeStyle for the tree painte
   assert.deepEqual([...catalog.nodeStyles.map((style) => style.key)], VOID_STYLES);
   assert.ok(catalog.themes.every((theme) => /^#[0-9a-f]{6}$/i.test(theme.accent) && /^#[0-9a-f]{6}$/i.test(theme.accent2)), "both hues of every two-tone swatch");
   assert.match(source.slice(0, 400), /^\/\/ Style & sound: Studio's color themes, node styles and layouts \(the two-tone\r?\n\/\/ Void collection among them, free like the rest\)/);
+});
+
+// The node styles the Shop sells (renderer/node-styles.js paints them; relay/src/shop.mjs sells them).
+const SHOP_STYLES = { dragonscale: "studio:style-dragonscale", constellation: "studio:style-constellation", lantern: "studio:style-lantern", neon: "studio:style-neon" };
+const treeEvents = (env) => env.events.filter((event) => event.type === "mefi-tree-preferences");
+
+test("the Shop's node styles are listed in Settings, said to be in the Shop and off until owned; every other style stays free", () => {
+  const env = environment({ shop: new Set() });
+  const group = env.ids.get("music-shop-styles");
+  assert.equal(env.ids.get("music-shop-style-label").text, "From the Shop");
+  assert.deepEqual(group.children.map((choice) => choice.dataset.nodeStyle), ["dragonscale", "constellation", "lantern", "neon"]);
+  assert.deepEqual(group.children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [true, "Star chart (in the Shop)"], [true, "Lanterns (in the Shop)"], [true, "Neon (in the Shop)"]]);
+  assert.deepEqual(env.ids.get("music-node-styles").children.map((choice) => choice.dataset.nodeStyle), ["orbs", "glass", "minimal", "halo", "crystal"], "the free styles keep their own group");
+  assert.ok([...env.ids.get("music-node-styles").children, ...env.ids.get("music-void-styles").children].every((choice) => !choice.disabled), "every other style stays free to choose");
+  assert.equal(env.ids.get("music-shop-line").hidden, false, "a way to the Shop while one is still there to get");
+  env.ids.get("music-shop-open").click();
+  assert.deepEqual(env.opened.at(-1), "shop:studio");
+  // A disabled choice does nothing; asked for in code, an unowned style is refused and nothing changes.
+  env.ids.get("music-node-style-dragonscale").click();
+  const before = treeEvents(env).length, saves = musicWrites(env).length;
+  assert.equal(env.music.applyNodeStyle("dragonscale"), "orbs", "refused: the style still worn comes back");
+  assert.equal(env.music.graphPreferences().nodeStyle, "orbs");
+  assert.equal(treeEvents(env).length, before, "the tree is not told anything");
+  assert.equal(musicWrites(env).length, saves, "nothing is saved");
+  assert.deepEqual([...env.music.nodeStyles().map((style) => style.key)], ["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"], "the setup helper is offered only what this PC can wear");
+  assert.deepEqual(JSON.parse(JSON.stringify(env.music.shopStyles())), [
+    { key: "dragonscale", item: "studio:style-dragonscale", name: "Dragon scales", detail: "Scaled gems with ember sparks", owned: false },
+    { key: "constellation", item: "studio:style-constellation", name: "Star chart", detail: "Bright stars and shooting stars", owned: false },
+    { key: "lantern", item: "studio:style-lantern", name: "Lanterns", detail: "Paper lanterns that sway and glow", owned: false },
+    { key: "neon", item: "studio:style-neon", name: "Neon", detail: "Glowing tubes that buzz on at work", owned: false },
+  ]);
+  for (const key of Object.keys(SHOP_STYLES)) assert.equal(env.music.isNodeStyle(key), true, `the tree painters know ${key}`);
+  // A style pack never carries a Shop style (the relay's pack check allows the free ones only).
+  for (const key of Object.keys(SHOP_STYLES)) assert.equal(helpers.safePack({ palette: SYNTHWAVE.palette, nodeStyle: key }), null, key);
+  assert.equal(helpers.safePack({ palette: SYNTHWAVE.palette, nodeStyle: "sigil" }).nodeStyle, "sigil");
+});
+
+test("an owned Shop style is chosen and saved like any other, and the Shop hearing of one later puts it on", () => {
+  const owned = new Set([SHOP_STYLES.constellation]);
+  const env = environment({ shop: owned });
+  assert.deepEqual(env.ids.get("music-shop-styles").children.map((choice) => [choice.disabled, choice.children[1].text]), [[true, "Dragon scales (in the Shop)"], [false, "Star chart"], [true, "Lanterns (in the Shop)"], [true, "Neon (in the Shop)"]]);
+  env.ids.get("music-node-style-constellation").click();
+  assert.equal(env.music.graphPreferences().nodeStyle, "constellation");
+  assert.equal(env.music.nodeStyle(), "constellation");
+  assert.equal(env.ids.get("music-node-style-constellation").attrs["aria-pressed"], "true");
+  assert.equal(musicWrites(env).at(-1).nodeStyle, "constellation");
+  assert.equal(treeEvents(env).at(-1).detail.nodeStyle, "constellation");
+  assert.deepEqual([...env.music.nodeStyles().map((style) => style.key).slice(-1)], ["constellation"], "an owned one is offered everywhere");
+  // Bought later (friends-shop.js fires mefi-shop-owned): the pickers follow at once.
+  owned.add(SHOP_STYLES.dragonscale);
+  env.emit("mefi-shop-owned", { ids: [...owned] });
+  assert.equal(env.ids.get("music-node-style-dragonscale").disabled, false);
+  assert.equal(env.ids.get("music-node-style-dragonscale").children[1].text, "Dragon scales");
+  assert.equal(env.ids.get("music-shop-line").hidden, false, "Lanterns and Neon are still there to get");
+  owned.add(SHOP_STYLES.lantern); owned.add(SHOP_STYLES.neon);
+  env.emit("mefi-shop-owned", { ids: [...owned] });
+  assert.deepEqual(env.ids.get("music-shop-styles").children.map((choice) => [choice.disabled, choice.children[1].text]), [[false, "Dragon scales"], [false, "Star chart"], [false, "Lanterns"], [false, "Neon"]]);
+  assert.equal(env.ids.get("music-shop-line").hidden, true, "nothing left to get");
+  assert.equal(env.music.applyNodeStyle("lantern"), "lantern");
+  assert.equal(env.music.applyNodeStyle("neon"), "neon");
+  assert.equal(env.music.applyNodeStyle("dragonscale"), "dragonscale");
+  // No longer owned (the Shop says so): Classic orbs, quietly, and the choice stays saved for when it comes back.
+  owned.clear();
+  env.emit("mefi-shop-owned", { ids: [] });
+  assert.equal(env.music.graphPreferences().nodeStyle, "orbs");
+  assert.equal(JSON.parse(env.storage.get("mefiStudio.music.v1")).nodeStyle, "dragonscale");
+  owned.add(SHOP_STYLES.dragonscale);
+  env.emit("mefi-shop-owned", { ids: [...owned] });
+  assert.equal(env.music.graphPreferences().nodeStyle, "dragonscale");
+});
+
+test("a saved Shop style this PC does not own falls back to Classic orbs at boot, quietly, and comes back once it is owned", () => {
+  const saved = { theme: "forest", nodeStyle: "dragonscale" };
+  const lost = environment({ saved, shop: new Set() });
+  assert.equal(lost.music.graphPreferences().nodeStyle, "orbs");
+  assert.equal(lost.document.documentElement.dataset.nodeStyle, "orbs");
+  assert.equal(lost.ids.get("music-node-style-orbs").attrs["aria-pressed"], "true");
+  assert.equal(lost.toasts.length, 0, "quietly");
+  assert.equal(treeEvents(lost).length, 1, "the tree hears orbs once, at boot");
+  assert.equal(treeEvents(lost)[0].detail.nodeStyle, "orbs");
+  assert.equal(lost.storage.get("mefiStudio.music.v1"), JSON.stringify(saved), "the choice stays as it was saved");
+  // No Shop in this build at all: the same.
+  assert.equal(environment({ saved }).music.graphPreferences().nodeStyle, "orbs");
+  const kept = environment({ saved, shop: new Set([SHOP_STYLES.dragonscale]) });
+  assert.equal(kept.music.graphPreferences().nodeStyle, "dragonscale", "an owned style comes back with the rest");
+  const restored = environment({ saved, shop: new Set() });
+  restored.emit("mefi-shop-owned", { ids: [] });
+  assert.equal(restored.music.graphPreferences().nodeStyle, "orbs");
+});
+
+test("previewNodeStyle shows a Shop style on the tree for the Shop's Try, saves nothing, and endPreview or a real choice ends it", () => {
+  const env = environment({ saved: { theme: "midnight", nodeStyle: "glass" }, shop: new Set() });
+  const stored = env.storage.get("mefiStudio.music.v1");
+  const palette = env.music.themePalette();
+  assert.equal(env.music.previewNodeStyle("nope"), false);
+  assert.equal(env.music.previewNodeStyle("dragonscale"), true, "a style not owned may be tried");
+  assert.equal(env.music.graphPreferences().nodeStyle, "dragonscale");
+  assert.equal(treeEvents(env).at(-1).detail.nodeStyle, "dragonscale", "the tree shows it");
+  assert.equal(env.document.documentElement.dataset.nodeStyle, "dragonscale");
+  assert.equal(env.music.nodeStyle(), "glass", "the style worn is still Glass");
+  assert.equal(env.music.themePalette(), palette, "a style's try leaves the colours alone");
+  assert.equal(env.music.status().theme, "midnight");
+  assert.equal(env.music.previewNodeStyle("constellation"), true, "one try at a time: the next replaces it");
+  assert.equal(env.music.graphPreferences().nodeStyle, "constellation");
+  for (const key of ["lantern", "neon"]) {
+    assert.equal(env.music.previewNodeStyle(key), true, `${key} may be tried too`);
+    assert.equal(treeEvents(env).at(-1).detail.nodeStyle, key);
+  }
+  assert.equal(env.music.endPreview(), true);
+  assert.equal(env.music.graphPreferences().nodeStyle, "glass");
+  assert.equal(treeEvents(env).at(-1).detail.nodeStyle, "glass");
+  assert.equal(env.music.endPreview(), false, "nothing left to end");
+  assert.equal(env.storage.get("mefiStudio.music.v1"), stored, "a try writes nothing");
+  // A pack's try and a style's try take turns.
+  env.music.previewNodeStyle("constellation");
+  assert.equal(env.music.previewPack(SYNTHWAVE), true);
+  assert.equal(env.music.graphPreferences().nodeStyle, "halo", "the pack's own style");
+  assert.equal(env.music.themePalette().theme, "pack");
+  assert.equal(env.music.previewNodeStyle("dragonscale"), true);
+  assert.equal(env.music.themePalette().theme, "midnight", "the pack's try ended first");
+  assert.equal(env.music.graphPreferences().nodeStyle, "dragonscale");
+  // Choosing for real ends the try (a refused choice does not).
+  assert.equal(env.music.applyNodeStyle("constellation"), "glass");
+  assert.equal(env.music.graphPreferences().nodeStyle, "dragonscale", "a refused choice leaves the try on");
+  env.music.applyNodeStyle("minimal");
+  assert.equal(env.music.graphPreferences().nodeStyle, "minimal");
+  assert.equal(env.music.endPreview(), false);
+});
+
+test("Settings shows the Shop's styles with their own thumbnails, which move only when motion is allowed", async () => {
+  const css = await readFile(new URL("../renderer/music.css", import.meta.url), "utf8");
+  for (const key of Object.keys(SHOP_STYLES)) {
+    assert.ok(css.includes(`/* node style: ${key} */`), `${key}: a carved block of its own`);
+    assert.ok(css.includes(`.music-preview-${key} i:first-child`), `${key}: its own gem`);
+  }
+  // The Constellation layout's tile carries the same class as the style's: every rule for it names its tile.
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "").match(/[^{}]*\.music-preview-constellation[^{}]*(?=\{)/g) ?? [];
+  assert.ok(rules.length >= 10, "the style's and the layout's rules");
+  for (const part of rules.flatMap((selector) => selector.split(",")).filter((part) => part.includes(".music-preview-constellation"))) {
+    assert.match(part.trim(), /^\.music-node-(style|layout)[[ ]/, `${part.trim()} names the tile it is for`);
+  }
+  assert.match(css, /\.music-node-choice:disabled \{[^}]*cursor: default/, "a style still in the Shop looks off");
 });
 
 test("Settings mounts appearance controls while the players stay in the dropdown", () => {

@@ -43,7 +43,7 @@ const PLACES = [
   ["Updates and help", "Updates"], ["Updates and help", "Report a problem"], ["Updates and help", "Other apps"], ["Advanced", "System"],
 ];
 const PAGES = [["general", "General"], ["notifications", "Notifications"], ["appearance", "Appearance"], ["looks", "Map look"], ["audio", "Sound and music"], ["updates", "Updates"], ["problem", "Report a problem"], ["apps", "Other apps"], ["system", "System"]];
-const THEMES = ["chrome", "aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "void", "eclipse", "abyss", "dusk", "custom"];
+const THEMES = ["chrome", "aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "daylight", "paper", "void", "eclipse", "abyss", "dusk", "custom"];
 
 async function bridgeNames() {
   const source = fs.readFileSync(path.join(studio, "preload.cjs"), "utf8");

@@ -320,15 +320,16 @@ test("N starts a New task and S opens Search, as the prototype's Map keys do, wi
   assert.ok(!/mapMenu|mapPop/.test(handleKey), "the canvas shortcuts are untouched by the menu");
 });
 
-test("Esc closes what opened last: the Map's View ▾, then the Legend, before the search, the node or Command", () => {
+test("Esc closes what opened last: the Map's View ▾, then the Legend and a state it holds lit, before the search, the node or Command", async () => {
   const calls = [];
   const shown = (visible) => ({ hidden: false, checkVisibility: () => visible });
   const el = { mapPop: { hidden: false }, legendList: shown(true) };
-  const state = { active: true, legendOpen: true, query: "task", focusMode: false, focus: null, selected: { id: "n" } };
+  const state = { active: true, legendOpen: true, legendPin: "held", query: "task", focusMode: false, focus: null, selected: { id: "n" } };
   const env = vm.createContext({
     el, state,
     closeMapMenu: (options) => { calls.push(["map", options]); el.mapPop.hidden = true; },
     setLegend: (open) => { calls.push(["legend", open]); state.legendOpen = open; },
+    pinLegend: (key) => { calls.push(["pin", key]); state.legendPin = key; },
     clearSearch: () => { calls.push(["search"]); state.query = ""; },
     setFocusMode() {},
     releaseNode: () => { calls.push(["node"]); state.selected = null; },
@@ -339,6 +340,12 @@ test("Esc closes what opened last: the Map's View ▾, then the Legend, before t
   assert.equal(env.escape(), true);
   assert.deepEqual(JSON.parse(JSON.stringify(calls.splice(0))), [["map", { focus: true }]], "one Esc, one popover");
   env.escape(); assert.deepEqual(calls.splice(0), [["legend", false]], "then the Legend");
+  env.escape(); assert.deepEqual(calls.splice(0), [["pin", null]], "then the state the legend holds lit");
+  // nav.js's Escape asks the Map to let go of a held state before it opens the companion, which takes Esc otherwise.
+  const nav = await source("nav.js");
+  const branch = nav.slice(nav.indexOf('    if (event.key === "Escape") {\n      // A state the Map'), nav.indexOf("      closeTop();\n", nav.indexOf('    if (event.key === "Escape") {\n      // A state the Map')));
+  assert.ok(branch.indexOf("window.MefiIdle?.releaseLegendPin?.()") > 0 && branch.indexOf("window.MefiIdle?.releaseLegendPin?.()") < branch.indexOf("window.MefiCompanionHub?.open()"), "the held state lets go first");
+  assert.match(idle, /releaseLegendPin: \(\) => \(state\.active && state\.legendPin \? pinLegend\(null\) : false\),/);
   env.escape(); assert.deepEqual(calls.splice(0), [["search"]]);
   env.escape(); assert.deepEqual(calls.splice(0), [["node"]]);
   env.escape(); assert.deepEqual(calls.splice(0), [["leave"]], "Command goes last");
@@ -350,16 +357,86 @@ test("Esc closes what opened last: the Map's View ▾, then the Legend, before t
   assert.equal(state.legendOpen, true);
 });
 
-test("the Map's legend names the four states in the colours of their legend rows", () => {
-  const made = [];
-  const node = (tag) => { const item = { tag, className: "", dataset: {}, style: { props: {}, setProperty(key, value) { this.props[key] = value; } }, children: [], textContent: "", append(...items) { this.children.push(...items); } }; made.push(item); return item; };
-  const host = { children: [], get childElementCount() { return this.children.length; }, append(...items) { this.children.push(...items); } };
+// The legend's pills (renderMapLegend, paintLegendCounts, pointLegend, pinLegend) against small fakes.
+function legendFixture({ pointing = true } = {}) {
+  const writes = [];
+  const node = (tag) => ({
+    tag, className: "", type: "", title: "", dataset: {}, attrs: {}, children: [], textContent: "",
+    style: { props: {}, setProperty(key, value) { this.props[key] = value; } },
+    setAttribute(key, value) { writes.push([key, String(value)]); this.attrs[key] = String(value); },
+    append(...items) { this.children.push(...items); },
+  });
+  const host = { children: [], attrs: {}, setAttribute(key, value) { this.attrs[key] = value; }, get childElementCount() { return this.children.length; }, append(...items) { this.children.push(...items); } };
   const LEGEND = [{ key: "active", sw: "rgb(1, 1, 1)" }, { key: "verify", sw: "rgb(2, 2, 2)" }, { key: "done", sw: "rgb(3, 3, 3)" }, { key: "held", sw: "rgb(4, 4, 4)" }];
-  const env = vm.createContext({ el: { mapLegend: host }, LEGEND, document: { createElement: node } });
+  const state = { mapLegendPoint: pointing, legendHover: null, legendPin: null, styleBurstUntil: 0, glanceCounts: { active: 3, held: 1, verify: 0, done: 0 }, glanceShown: { active: 0, held: 0, verify: 0, done: 0 } };
+  const el = { mapLegend: host, announce: { textContent: "" } };
+  let wakes = 0;
+  const env = vm.createContext({ el, state, LEGEND, LEGEND_KEYS: ["active", "held", "verify", "done"], document: { createElement: node }, wakeFrames: () => { wakes += 1; } });
   vm.runInContext(section("  // The Map's legend (layout v2)", "  function renderLegend() {"), env);
+  return { env, el, state, host, writes, wakes: () => wakes };
+}
+
+test("the Map's legend names the four states in the colours of their legend rows", () => {
+  const { env, host } = legendFixture();
   env.renderMapLegend();
   env.renderMapLegend();
   assert.deepEqual(host.children.map((row) => [row.children[1].textContent, row.children[0].dataset.sw, row.children[0].style.props["--sw"]]), [
     ["Running", "active", "rgb(1, 1, 1)"], ["Needs you", "held", "rgb(4, 4, 4)"], ["Review", "verify", "rgb(2, 2, 2)"], ["Done", "done", "rgb(3, 3, 3)"]], "drawn once, in the prototype's order");
   assert.match(idle, /el\.mapLegend\?\.querySelector\(`\[data-sw="\$\{key\}"\]`\)\?\.style\.setProperty\("--sw", rgb\(tint\)\);/, "a theme change recolours them with the Legend");
+});
+
+test("the legend's states are pills: each counts its nodes, says so to screen readers, and a click holds it lit until clicked again", () => {
+  const { env, el, state, host, writes, wakes } = legendFixture();
+  env.renderMapLegend();
+  assert.deepEqual(host.children.map((row) => [row.tag, row.type, row.dataset.state, row.attrs["aria-pressed"], row.children.length]), [
+    ["button", "button", "active", "false", 3], ["button", "button", "held", "false", 3], ["button", "button", "verify", "false", 3], ["button", "button", "done", "false", 3]]);
+  assert.equal(host.attrs["aria-label"], "Work on the Map by state");
+  // The counts: the frame's, written once, again only when one moves.
+  env.paintLegendCounts();
+  assert.deepEqual(host.children.map((row) => [row.children[2].textContent, row.attrs["aria-label"], row.dataset.count]), [
+    ["3", "Running: 3 on the Map", "3"], ["1", "Needs you: 1 on the Map", "1"], ["0", "Review: 0 on the Map", "0"], ["0", "Done: 0 on the Map", "0"]]);
+  assert.equal(host.children[0].children[2].attrs["aria-hidden"], "true", "the number is read once, in the pill's name");
+  assert.match(host.children[1].title, /^Needs you: 1 on the Map\. Point to light them up, click to keep them lit\.$/);
+  writes.length = 0;
+  env.paintLegendCounts();
+  assert.deepEqual(writes, [], "an unchanged frame writes nothing");
+  state.glanceCounts.verify = 2;
+  env.paintLegendCounts();
+  assert.deepEqual(writes, [["aria-label", "Review: 2 on the Map"]], "one count moved, one pill is written");
+  // Pointing: the hovered pill, a burst at the display's rate.
+  assert.equal(env.pointLegend("held"), true);
+  assert.equal(state.legendHover, "held");
+  assert.ok(state.styleBurstUntil > 0 && wakes() === 1, "the highlight eases in at the hot cadence");
+  assert.equal(env.pointLegend("held"), false, "the same pill is no change");
+  assert.equal(env.pointLegend("nonsense"), true); assert.equal(state.legendHover, null);
+  // Holding: aria-pressed on the one held, and a line for screen readers.
+  assert.equal(env.pinLegend("held"), true);
+  assert.equal(state.legendPin, "held");
+  assert.deepEqual(host.children.map((row) => row.attrs["aria-pressed"]), ["false", "true", "false", "false"]);
+  assert.equal(el.announce.textContent, "Showing Needs you: 1 on the Map. Press Esc or choose Needs you again to show everything.");
+  assert.equal(env.pinLegend("held"), false, "holding it again changes nothing");
+  assert.equal(env.pinLegend(null), true);
+  assert.deepEqual(host.children.map((row) => row.attrs["aria-pressed"]), ["false", "false", "false", "false"]);
+  assert.equal(el.announce.textContent, "Showing everything on the Map again.");
+  el.announce.textContent = "";
+  env.pinLegend("done", { announce: false });
+  assert.equal(el.announce.textContent, "", "letting go quietly (the Map closing) says nothing");
+  // A pill is a button that stays small: the page's `button` rule (36 px tall, 14 px padding, a border) is undone.
+  assert.match(styles, /html\[data-frame\] #idle-hud button\.map-legend-row \{\n  min-height: 0; height: 26px; padding: 0 7px 0 9px; border: 0;/);
+  // The click handler toggles: the same pill again lets go.
+  const click = section("  function init() {", "  // The broadcast carries the list");
+  assert.ok(click.includes('el.mapLegend?.addEventListener("click", (event) => { const pill = legendPillOf(event.target); if (pill) pinLegend(state.legendPin === pill.dataset.state ? null : pill.dataset.state); });'));
+  assert.ok(click.includes('el.mapLegend?.addEventListener("pointerleave", () => pointLegend(null));'), "leaving the row lets go of the hover");
+  assert.match(click, /addEventListener\("focusin", \(event\) => \{ const pill = legendPillOf\(event\.target\); if \(pill\?\.matches\?\.\(":focus-visible"\)\) pointLegend\(pill\.dataset\.state\); \}\);/, "a keyboard focus points as the pointer does");
+});
+
+test("with mefiStudio.mapLegendPoint off the legend is the plain colour keys it was", () => {
+  const { env, el, state, host } = legendFixture({ pointing: false });
+  env.renderMapLegend();
+  assert.deepEqual(host.children.map((row) => [row.tag, row.children.length, row.dataset.state]), [["span", 2, undefined], ["span", 2, undefined], ["span", 2, undefined], ["span", 2, undefined]]);
+  assert.equal(host.attrs["aria-label"], undefined, "the template's group label stays");
+  assert.equal(el.legendPills, null);
+  env.paintLegendCounts();
+  assert.equal(env.pinLegend("held"), false, "nothing can be held");
+  assert.equal(state.legendPin, null);
 });

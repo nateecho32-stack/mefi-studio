@@ -1,3 +1,5 @@
+> Autobuild plan, 2026-10-07: `docs/plans/0.5.0-autobuild.md` is the loop the Studio follows to finish the 0.5.0 status board and verify it (permissions, the loop, what counts as verified, stop rules, owner-only list). Session check on 2026-10-07: `npm run check` passes; the PC handoff, fleet, power, paired reconnect, paired worker, resource manager and friends/hub suites pass (4+12+7+6+7+26+1+8). Open for the owner: which model roles Studio uses (Sonnet tasks, Haiku quick work, Opus verifying and planning, as the chat log said, vs the roles in the memory notes); push of this commit is not yet approved.
+
 > Plan update, 2026-09-30: **0.4.5 and 0.4.6 are skipped and everything ships as
 > 0.5.0.** The plan is `docs/plans/0.5.0-plan.md` (the design source is
 > `docs/prototype/`). Read "0.4.5" and "0.4.6" below as "0.5.0": the work in

@@ -6,8 +6,14 @@
 // with a real pointer at 1920x1080 and measures: the list in the prototype's order, the current row, the breadcrumb
 // (Friends / <place>), the page's title and the line under it, the one card that shows, nothing wider than the page,
 // and no text under 12 px. The rail's Friends, Search's Rooms, Your PCs and Playground, and the companion's Friends
-// bubble land on the page; a tab per place. Screenshots are kept when the test is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main
-// process or live state is loaded; network, permissions and child processes are blocked.
+// bubble land on the page; a tab per place. Your PCs' Connect another PC walks through its states (signed out, waiting,
+// a PC found, paired and folded to its button, which a real press opens again) above My PCs and the folded groups.
+// The Shop is a page of its own (route "shop", renderer/friends-shop.js): its row opens it beside the list column
+// with its row current, at 1440x900 and 1920x1080 in Studio and in Social, signed out as a showroom, in a light palette and
+// at the small sizes, its cards evenly sized and filling the page (no narrow column with the rest of the page empty), its
+// drop's banner made from the drop's own data, and a card's detail with its tip picks. Screenshots are kept when the test
+// is given a capture folder (MEFI_FRIENDS_CAPTURE_DIR). No application main process or live state is loaded; network,
+// permissions and child processes are blocked.
 const { app, BrowserWindow, session } = require("electron");
 const assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path");
@@ -36,7 +42,7 @@ function finish(error) {
 process.on("uncaughtException", finish); process.on("unhandledRejection", finish);
 
 // The prototype's places, in its order, and the card each shows.
-const PLACES = [["lobby", "The Lobby", "friends-front"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pc-sync"], ["playground", "Playground", "friends-card"], ["hub", "Project hub", "project-hub"], ["events", "Events", "friends-events"]];
+const PLACES = [["lobby", "The Lobby", "friends-front"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pc-sync"], ["playground", "Playground", "friends-card"], ["hub", "Project hub", "project-hub"], ["events", "Events", "friends-events"], ["shop", "Shop", "friends-shop"]];
 
 async function bridgeNames() {
   const source = fs.readFileSync(path.join(studio, "preload.cjs"), "utf8");
@@ -80,10 +86,20 @@ app.whenReady().then(async () => {
     syncStatus: { ok: true, checkedAt: now, headline: "GitHub has 2 commits this PC has not pulled yet.", lines: ["GitHub has 2 commits this PC has not pulled yet."], pending: [{ kind: "github-branch" }], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 2 } },
     hubFriends: friendsView, hubSharingSet: friendsView,
     hubRooms: { ok: true, rooms: [{ id: "room_jam", name: "Friday jam", kind: "hangout", policy: "request", listed: true, status: "active", you: "owner", ownerId: "123456789012345678", memberCount: 2, maxMembers: 25 }] },
-    hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [], front: true, events: true } },
+    hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [], front: true, events: true, shop: true } },
     pcSetupStatus: { ok: true, ready: true, account: "fixture-owner", tools: [{ id: "git", name: "Git", installed: true, version: "2.47.1" }, { id: "gh", name: "GitHub CLI", installed: true, version: "2.63.0" }], project: { root: "C:/Notes app", github: "fixture-owner/notes-app", hook: true }, steps: [], notes: [] },
     vaultStatus: { ok: true, linked: false, pcs: [], shelves: [] },
   };
+  // Your PCs' My PCs as main's pcs:status hands it over (main.cjs pcsStatus): this PC, and the owner's laptop.
+  const pcState = { v: 1, cpu: 18, freeMB: 9216, totalMB: 32768, battery: null, stage: "ok", stayOn: "working", slots: { running: 1, max: 3, canStart: true, hold: null }, accepting: true, projects: [] };
+  const selfRow = { id: "pc-fixture", name: "DESKTOP-FIXTURE", kind: "desktop", self: true, mine: true, online: true, paired: true, relation: "mine", heard: { state: pcState, at: now }, why: null };
+  const laptopRow = (paired) => ({ id: "pc-laptop", name: "LAPTOP-FIXTURE", kind: "laptop", mine: true, online: true, paired, relation: "mine", heard: paired ? { state: { ...pcState, battery: { level: 64, plugged: false } }, at: now } : null, why: paired ? null : "Not answering yet" });
+  const pcsView = (rows, linked = true) => ({ ok: true, me: { id: "pc-fixture", name: "DESKTOP-FIXTURE" }, relay: linked ? { state: "ready", error: null, carries: true, linked: true } : { state: "off", error: null, carries: false, linked: false }, encryption: true,
+    power: { reading: null, stage: "ok", continuedAt: null, lines: { low: 20, stop: 10 }, words: "No battery" }, stayOn: "working", awake: true, rows, asks: [],
+    project: { id: projectId, name: "Notes app", github: true, share: true }, offers: [], movable: [], moved: [], waiting: [], held: 0, sent: [],
+    handoffs: { at: now, error: null, list: [] }, lend: [], notes: [], limits: { movedPerProject: 2, parkedPerProject: 3 } });
+  const PCS_STATES = [["signin", pcsView([selfRow], false), "signin", true], ["waiting", pcsView([selfRow]), "waiting", true], ["found", pcsView([selfRow, laptopRow(false)]), "found", true], ["paired", pcsView([selfRow, laptopRow(true)]), "waiting", false]];
+  responses.pcsStatus = PCS_STATES[2][1];
   // The Lobby's front page as hub-client hands it over (scripts/hub-client.cjs frontPage).
   const front = {
     ok: true,
@@ -122,9 +138,45 @@ app.whenReady().then(async () => {
     { id: "500000000000000005", author: { id: "200000000000000002", name: "Jabilee", viaStudio: true }, text: "See you at 8.", createdAt: now - 10 * 60_000, editedAt: null, mentions: [], attachments: [] },
   ];
   const roomReplies = { requests: { ok: true, requests: [] }, invites: { ok: true, invites: [] }, messages: { ok: true, hasMore: true, messages: chat }, front, roomCode: { ok: true, code: "KQ7M-2PXD", link: "https://mefi-relay.mefi-studio.workers.dev/join/KQ7M2PXD" } };
+  // The Shop as main's hub:shop hands it over (the relay's Studio catalog, members' packs, the rotation): scales for Ember
+  // (Ember itself is free with every Studio and has a card of its own), effects, node styles and packs; a test drop of
+  // existing items (the new drop's own items come at merge) with its banner colours, the next drop and the Featured shelf.
+  const shopItem = (id, kind, name, price, blurb, extra = {}) => ({ id, kind, name, blurb, price, requires: null, maker: null, data: null, sales: 0, owned: false, status: "listed", createdAt: now, updatedAt: now, drop: null, available: true, leaves: null, ...extra });
+  const dropLeaves = new Date(now + 24 * 86_400_000 + 3_600_000).toISOString();
+  const inDrop = { drop: "2026-10", leaves: dropLeaves };
+  const studioItems = [
+    shopItem("studio:skin-frost", "skin", "Frost scales", 40, "Ember in icy blue."),
+    shopItem("studio:skin-void", "skin", "Void scales", 60, "Ember in black with a violet glow.", inDrop),
+    shopItem("studio:fx-dissolve", "effect", "Dissolve", 60, "Menus crumble into pixels when they close."),
+    shopItem("studio:fx-embers", "effect", "Burn away", 90, "Menus burn away from the edges with glowing embers.", inDrop),
+    shopItem("studio:style-dragonscale", "nodestyle", "Dragon scales", 80, "Nodes covered in shimmering dragon scales, with ember sparks along the wires."),
+    shopItem("studio:style-constellation", "nodestyle", "Star chart", 80, "Nodes as bright stars joined by star-chart lines, with shooting stars.", inDrop),
+    shopItem("studio:pack-synthwave", "pack", "Synthwave", 50, "Hot pink and violet on midnight blue.", { ...inDrop, data: { v: 1, palette: { accent: "#ff4fa3", accent2: "#8b5cff", background: "#0d0b1f", surface: "#17132e", text: "#f3ecff" }, nodeStyle: "halo", material: "atmosphere", font: "display" } }),
+    shopItem("studio:pack-sakura", "pack", "Sakura (light)", 50, "Soft pink on warm white, a light look.", { data: { v: 1, palette: { accent: "#b8325f", accent2: "#8a6bd1", background: "#fbf6f4", surface: "#ffffff", text: "#2b1f24" }, nodeStyle: "minimal", material: "focus", font: "studio" } }),
+  ];
+  const rotation = {
+    drops: {
+      current: { id: "2026-10", name: "Haunted Hollow", blurb: "Pumpkins, lanterns and friendly spirits for October.", from: "2026-10-01T00:00:00Z", until: dropLeaves, colors: { accent: "#ff8a3d", accent2: "#9b6bff", background: "#140d1c" }, items: ["studio:skin-void", "studio:fx-embers", "studio:style-constellation", "studio:pack-synthwave"] },
+      next: { id: "2026-11", name: "Frost Fair", blurb: "Ice lanterns.", from: dropLeaves, until: new Date(Date.parse(dropLeaves) + 30 * 86_400_000).toISOString(), colors: { accent: "#7fd3ff", accent2: "#c3a6ff", background: "#0b1622" } },
+      last: null,
+    },
+    featured: ["studio:skin-frost", "studio:fx-dissolve", "studio:style-dragonscale", "studio:pack-sakura"], featuredUntil: new Date(now + 3 * 86_400_000 + 3_600_000).toISOString(),
+  };
+  const shopReplies = {
+    studio: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: studioItems, ...rotation },
+    // main's own copy of the catalog for the signed-out showroom (main.cjs hubShopCatalog).
+    shopCatalog: { ok: true, local: true, view: "studio", next: null, items: studioItems, ...rotation },
+    new: { ok: true, next: null, balance: 240, canEarn: true, hold: null, ...rotation, items: [
+      shopItem("pack_nightmarket0001", "pack", "Night market with a rather long name", 30, "Neon on wet streets.", { maker: { id: "200000000000000001", name: "Maxwell" }, sales: 12, data: { v: 1, palette: { accent: "#ffb347", accent2: "#7f5af0", background: "#101014", surface: "#1b1b22", text: "#f4f1ea" }, nodeStyle: "glass", material: "studio", font: "serif" } }),
+      shopItem("pack_paper000000001", "pack", "Paper", 0, "", { maker: { id: "200000000000000004", name: "Tess" }, sales: 3, data: { v: 1, palette: { accent: "#9b3d12", background: "#fbf6ee", surface: "#ffffff", text: "#2b2118" }, nodeStyle: "minimal", material: "focus", font: "serif" } }),
+    ] },
+    owned: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [], ...rotation },
+    mine: { ok: true, next: null, balance: 240, canEarn: true, hold: null, items: [], ...rotation },
+    shopOwned: { ok: true, items: [] },
+  };
   const names = await bridgeNames();
   const preload = path.join(root, "friends-preload.cjs");
-  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const roomReplies=${JSON.stringify(roomReplies)};const eventReplies=${JSON.stringify(eventReplies)};const names=${JSON.stringify(names)};const calls=[];
+  fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const roomReplies=${JSON.stringify(roomReplies)};const eventReplies=${JSON.stringify(eventReplies)};const shopReplies=${JSON.stringify(shopReplies)};const names=${JSON.stringify(names)};const calls=[];
     const bridge={};
     for(const name of names){
       if(/^on[A-Z]/.test(name))bridge[name]=()=>()=>{};
@@ -132,8 +184,9 @@ app.whenReady().then(async () => {
     }
     bridge.hubRoom=async(method)=>{calls.push('hubRoom:'+method);return roomReplies[method]??{ok:true};};
     bridge.hubEvents=async(method)=>{calls.push('hubEvents:'+method);return eventReplies[method]??{ok:true};};
+    bridge.hubShop=async(method,view)=>{calls.push('hubShop:'+method);return (method==='shop'?shopReplies[view]:shopReplies[method])??{ok:true,items:[]};};
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
-    contextBridge.exposeInMainWorld('friendsFixture',{calls:()=>calls.slice(),signedIn:(on)=>{responses.hubStatus.status.linked=on===true;}});
+    contextBridge.exposeInMainWorld('friendsFixture',{calls:()=>calls.slice(),signedIn:(on)=>{responses.hubStatus.status.linked=on===true;},pcsView:(view)=>{responses.pcsStatus=view;}});
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));localStorage.setItem('mefiStudio.whatsNew.seen','vibe-build-1');localStorage.setItem('mefiStudio.setupHelper.seen','setup-helper-1');
   `);
   const window = new BrowserWindow({ show: false, width: 1920, height: 1080, useContentSize: true, frame: false, enableLargerThanScreen: true, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
@@ -205,11 +258,62 @@ app.whenReady().then(async () => {
   const found = [];
   const go = (id, params) => run(`window.MefiNav.go(${JSON.stringify(id)}${params ? `, ${JSON.stringify(params)}` : ""});`);
   const placeIs = (place) => `document.getElementById('friends-overlay')?.hidden === false && document.getElementById('friends-overlay').dataset.place === ${JSON.stringify(place)} && window.MefiNav.current() === 'friends-page'`;
+  // The Shop's own page: open, read (or the showroom) and painted.
+  const shopIs = (state = "ready") => `document.getElementById('friends-shop-page')?.hidden === false && window.MefiNav.current() === 'shop' && document.getElementById('friends-shop')?.dataset.state === ${JSON.stringify(state)} && document.querySelector('#friends-shop-body .friends-shop-item')`;
+  // The Shop's page measured as a page: beside the list column (or Social's rail), the sheet filling it up to its own
+  // width, its cards in at least `columns` even columns, nothing past its right edge, no text under 12 px.
+  const shopMeasure = `
+    const page = document.getElementById('friends-shop-page'), sheet = page?.querySelector('.friends-shop-sheet');
+    const box = (node) => { if (!node) return null; const r = node.getBoundingClientRect(); return { x: Math.round(r.left), r: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height) }; };
+    const shown = (node) => { if (!node || !node.getClientRects().length) return false; for (let n = node; n && n !== document.documentElement; n = n.parentElement) { const s = getComputedStyle(n); if (s.display === 'none' || s.visibility === 'hidden') return false; } return true; };
+    const all = [...(page?.querySelectorAll('*') ?? [])].filter(shown);
+    const own = (node) => [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.trim());
+    const small = all.filter((node) => own(node) && !node.closest('[aria-hidden="true"]') && parseFloat(getComputedStyle(node).fontSize) > 0 && parseFloat(getComputedStyle(node).fontSize) < 11.95).map((node) => (node.id || String(node.className).slice(0, 40)) + ':' + getComputedStyle(node).fontSize);
+    const edge = page ? page.getBoundingClientRect().left + page.clientLeft + page.clientWidth : innerWidth;
+    const wide = all.filter((node) => !node.closest('dialog') && node.getBoundingClientRect().right > edge + 1.5).slice(0, 6).map((node) => (node.id || String(node.className).slice(0, 40)) + ' ' + Math.round(node.getBoundingClientRect().right) + '>' + Math.round(edge));
+    const grids = [...(page?.querySelectorAll('.friends-shop-grid') ?? [])].filter(shown).map((grid) => ({ columns: getComputedStyle(grid).gridTemplateColumns.split(' ').length, widths: [...grid.children].map((child) => Math.round(child.getBoundingClientRect().width)) }));
+    const pages = document.getElementById('shell-pages');
+    return {
+      route: window.MefiNav?.current?.() ?? null, mode: window.MefiVibe?.mode?.() ?? null, state: document.getElementById('friends-shop')?.dataset.state ?? null,
+      page: box(page), sheet: box(sheet), list: pages && pages.hidden === false ? box(pages) : null, grids,
+      current: [...document.querySelectorAll('#shell-pages-list [aria-current]')].map((node) => node.textContent.trim()),
+      crumbs: [...document.querySelectorAll('.shell-trail .shell-crumb')].map((node) => node.textContent.trim()),
+      hero: Boolean(document.getElementById('friends-shop-hero')), detail: document.getElementById('friends-shop-detail')?.open === true,
+      pageOverflow: document.documentElement.scrollWidth > innerWidth + 1, sideways: page ? page.scrollWidth > page.clientWidth + 1 : false, small, wide,
+    };`;
+  const shopProblems = (m, tag, columns = 1) => [
+    ...(m.route !== "shop" ? [`${tag}: the route is ${m.route}, not shop`] : []),
+    ...(m.pageOverflow ? [`${tag}: the page overflows the window`] : []),
+    ...(m.sideways ? [`${tag}: the Shop's page scrolls sideways ${JSON.stringify(m.wide)}`] : []),
+    ...m.small.map((line) => `${tag}: text under 12 px: ${line}`),
+    ...m.wide.map((line) => `${tag}: past the page's right edge: ${line}`),
+    ...(m.page && m.sheet && m.sheet.w < Math.min(m.page.w, 1320) - 4 ? [`${tag}: the Shop's column is ${m.sheet.w} px of a ${m.page.w} px page`] : []),
+    ...m.grids.filter((grid) => grid.columns < columns).map((grid) => `${tag}: a grid of ${grid.columns} columns (wanted ${columns})`),
+    ...m.grids.filter((grid) => grid.widths.length && Math.max(...grid.widths) - Math.min(...grid.widths) > 2).map((grid) => `${tag}: cards of uneven widths ${JSON.stringify(grid.widths)}`),
+  ];
+  // The Shop at one size and mode: its page, measured, and a screenshot.
+  const shopShot = async (tag, name, columns = 1) => {
+    await go("shop");
+    await until(shopIs(), `the Shop (${tag})`);
+    await sleep(600);
+    const m = await run(shopMeasure);
+    m.tag = tag;
+    report.shopPages.push(m);
+    found.push(...shopProblems(m, tag, columns));
+    await capture(name);
+    return m;
+  };
+  report.shopPages = [];
 
   // ---- v2 ------------------------------------------------------------------------------------------
   await window.loadFile(path.join(root, "renderer", "booklet.html"), { query: { capture: "1", layout: "v2" } });
   await until("window.MefiNav && window.MefiCompanionHub && window.MefiShell && window.MefiShell.active() && !window.MefiBoot?.isActive?.()", "studio ready (v2)");
   await run("window.MefiVibe?.setMode?.('build', { go: false }); window.MefiNav.setRailPinned?.(false, { save: false });");
+  // The Shop shows an item's controls only when the module that shows it is in the build (pets.js, effects.js, music.js's
+  // packs): stand in for any that is not, so the Shop is measured with the controls it will have.
+  await run(`const music = window.MefiMusic; music.applyPack ??= () => true; music.previewPack ??= () => {}; music.endPreview ??= () => {}; music.packInfo ??= () => null;
+    window.MefiPets ??= { kinds: () => [{ id: 'dragon', item: 'studio:pet-dragon', name: 'Ember' }], skins: () => [{ id: 'theme', item: null, name: "Your theme's colours" }], state: () => ({ on: false, kind: 'dragon', skin: 'theme', name: 'Ember' }), set() {}, preview() {}, endPreview() {}, paintPreview() {} };
+    window.MefiEffects ??= { list: () => [], current: () => 'none', use() {}, preview() {}, endPreview() {}, demo() {} };`);
   await resize(1920, 1080);
   // The rail's Friends opens the page on its first place.
   // (A press, not a pointer: the rail widens under a hovering pointer, so a release can land on the row beneath.)
@@ -219,9 +323,23 @@ app.whenReady().then(async () => {
   const first = await run(measure);
   assert.equal(first.hub, false, "the companion's bubbles stay closed");
   assert.equal(first.listTitle, "Friends", "the list column is Friends'");
-  assert.deepEqual(first.list, ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub", "Events"], "the list column holds The Lobby, the prototype's three places, the Project hub and Events, The Lobby current");
+  assert.deepEqual(first.list, ["The Lobby *", "Rooms", "Your PCs", "Playground", "Project hub", "Events", "Shop"], "the list column holds The Lobby, the prototype's three places, the Project hub, Events and the Shop, The Lobby current");
   for (const [id, title, card] of PLACES) {
     await click(`#shell-pages-list [data-page="friends:${id}"]`);
+    // The Shop's row opens the Shop's own page (route "shop"), beside the same list with its row current.
+    if (id === "shop") {
+      await until(shopIs(), "the Shop's row opens the Shop's own page");
+      await sleep(600);
+      const m = await run(shopMeasure);
+      m.id = id; report.places.push(m);
+      assert.deepEqual(m.current, ["Shop"], "shop: its row is the current one");
+      assert.deepEqual(m.crumbs.slice(-2), ["Friends", "Shop"], "shop: the breadcrumb says Friends / Shop");
+      assert.ok(m.list && m.page.x >= m.list.r - 1, `shop: the page is beside the list ${JSON.stringify({ page: m.page, list: m.list })}`);
+      assert.ok(m.hero, "shop: the month's drop as a banner");
+      found.push(...shopProblems(m, "Shop at 1920x1080", 5));
+      await capture("friends-shop-1920x1080.png");
+      continue;
+    }
     await until(placeIs(id), `${title} is the place`);
     await sleep(600);
     const m = await run(measure);
@@ -252,7 +370,7 @@ app.whenReady().then(async () => {
   assert.equal(await run("return document.getElementById('agent-hub')?.hidden !== false;"), true, "the bubble did not stay open over the page");
   // A tab per place.
   report.tabs = await run("return (window.MefiTabs?.list?.() ?? []).filter((tab) => tab.route.id === 'friends-page').map((tab) => tab.title).sort();");
-  assert.ok(report.tabs.length >= 1 && report.tabs.every((title) => ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events"].includes(title)), `Friends tabs are named by their place: ${JSON.stringify(report.tabs)}`);
+  assert.ok(report.tabs.length >= 1 && report.tabs.every((title) => ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events", "Shop"].includes(title)), `Friends tabs are named by their place: ${JSON.stringify(report.tabs)}`);
   report.steps.push("ways in land");
   // The Lobby, read once: the front page's parts, its invite code, and a person or room that opens Rooms there.
   await go("friends-page", { place: "lobby" });
@@ -308,6 +426,8 @@ app.whenReady().then(async () => {
   for (const [width, height, zoom] of [[1440, 900, 1], [1100, 720, 1], [600, 560, 1.5]]) {
     await resize(width, height, zoom);
     for (const [id] of PLACES) {
+      // The Shop's own page: at 1440 its column fills the page beside the list in four even columns.
+      if (id === "shop") { await shopShot(`the Shop at ${width}x${height}@${zoom}`, `friends-shop-${width}x${height}@${zoom}.png`, width === 1440 ? 4 : 1); continue; }
       await go("friends-page", { place: id });
       await until(placeIs(id), `${id} at ${width}x${height}@${zoom}`);
       await sleep(400);
@@ -317,12 +437,145 @@ app.whenReady().then(async () => {
       if (id === "pcs" || wrong.length) await capture(`friends-${id}-${width}x${height}@${zoom}.png`);
     }
   }
+  // The Shop's other views at the two small sizes: Make a style (the editor beside its preview), and a member's pack's
+  // detail with the Buy question and its tip picks.
+  report.shop = [];
+  for (const [width, height, zoom] of [[1100, 720, 1], [600, 560, 1.5]]) {
+    await resize(width, height, zoom);
+    await go("shop");
+    await until(shopIs(), `the Shop at ${width}x${height}@${zoom}`);
+    for (const [view, ready] of [["make", "document.getElementById('friends-shop-form')"], ["packs", "document.getElementById('friends-shop-open-packs-pack_nightmarket0001')"]]) {
+      await run(`document.getElementById('friends-shop-view-${view}').click();`);
+      await until(ready, `the Shop's ${view} view at ${width}x${height}@${zoom}`);
+      if (view === "packs") {
+        await run("document.getElementById('friends-shop-open-packs-pack_nightmarket0001').click();");
+        await until("document.getElementById('friends-shop-detail')?.open && document.getElementById('friends-shop-buy-pack_nightmarket0001')", "the pack's detail");
+        await run("document.getElementById('friends-shop-buy-pack_nightmarket0001').click();");
+        await until("document.querySelector('#friends-shop-detail .friends-shop-tips')", "the tip picks");
+      }
+      await sleep(400);
+      const m = await run(shopMeasure);
+      const inDialog = await run(`const d = document.getElementById('friends-shop-detail'); if (!d?.open) return null; const r = d.getBoundingClientRect(); return { x: Math.round(r.left), r: Math.round(r.right), t: Math.round(r.top), b: Math.round(r.bottom), w: innerWidth, h: innerHeight, scroll: d.scrollHeight > d.clientHeight + 1 };`);
+      report.shop.push({ view, size: `${width}x${height}@${zoom}`, small: m.small, wide: m.wide, sideways: m.sideways, dialog: inDialog });
+      found.push(...shopProblems(m, `the Shop's ${view} view at ${width}x${height}@${zoom}`));
+      if (inDialog && (inDialog.x < 0 || inDialog.r > inDialog.w + 1 || inDialog.t < 0 || inDialog.b > inDialog.h + 1)) found.push(`the Shop's detail at ${width}x${height}@${zoom} is off screen ${JSON.stringify(inDialog)}`);
+      await capture(`friends-shop-${view}-${width}x${height}@${zoom}.png`);
+      if (inDialog) await run("document.getElementById('friends-shop-detail-close').click();");
+    }
+    await run("document.getElementById('friends-shop-view-studio').click();");
+  }
+  report.steps.push("the Shop's editor and tips fit");
+  // The Shop in Social at the owner's two sizes: still Social, the page beside Social's rail, Friends' places as a row.
+  await run("window.MefiVibe?.setMode?.('vibe', { go: false });");
+  for (const [width, height] of [[1440, 900], [1920, 1080]]) {
+    await resize(width, height);
+    const m = await shopShot(`the Shop in Social at ${width}x${height}`, `friends-shop-social-${width}x${height}.png`, width === 1920 ? 5 : 4);
+    assert.equal(m.mode, "vibe", `${width}x${height}: opening the Shop keeps Social`);
+    assert.equal(await run("return document.querySelectorAll('#friends-shop-page .shell-place-bar:not([hidden]) .shell-place-chip').length;"), 7, `${width}x${height}: Friends' places as a row on the page`);
+    assert.equal(await run("return [...document.querySelectorAll('#friends-shop-page .shell-place-bar .studio-select')].filter((node) => node.getClientRects().length).length;"), 0, `${width}x${height}: the row's picker stays folded while the chips fit`);
+  }
+  await run("window.MefiVibe?.setMode?.('build', { go: false }); window.MefiNav.setRailPinned?.(false, { save: false });");
+  // Studio at 1440: the column fills the page beside the list (an earlier capture had about 500 px with the right half empty).
+  await resize(1440, 900);
+  const studio1440 = await shopShot("the Shop in Studio at 1440x900", "friends-shop-studio-1440x900.png", 4);
+  assert.ok(studio1440.list && studio1440.sheet.w >= studio1440.page.w - 4, `1440: the Shop's column fills its page ${JSON.stringify({ page: studio1440.page, sheet: studio1440.sheet })}`);
+  // Signed out, the same page is a showroom: Studio's items from this PC's copy, Try, and Sign in to get it.
+  await run("window.friendsFixture.signedIn(false);");
+  await go("friends-page", { place: "lobby" });
+  await go("shop");
+  await until(shopIs("not-linked") + " && document.getElementById('friends-shop-notice')", "the signed-out showroom");
+  await sleep(600);
+  const showroom = await run(shopMeasure);
+  report.shopPages.push({ ...showroom, tag: "showroom" });
+  found.push(...shopProblems(showroom, "the signed-out showroom at 1440x900", 4));
+  assert.ok(showroom.hero && (await run("return Boolean(document.querySelector('#friends-shop-body > #friends-gate'));")), "the showroom has the drop's banner, and Friends' sign-in card at its foot");
+  await capture("friends-shop-showroom-1440x900.png");
+  await run("document.getElementById('friends-shop-open-home-studio-skin-frost').click();");
+  await until("document.getElementById('friends-shop-detail')?.open && document.getElementById('friends-shop-way-studio-skin-frost')", "a showroom detail with Sign in to get it");
+  await sleep(500);
+  await capture("friends-shop-showroom-detail-1440x900.png");
+  await run("document.getElementById('friends-shop-detail-close').click(); window.friendsFixture.signedIn(true);");
+  await go("friends-page", { place: "lobby" });
+  report.steps.push("the Shop's own page in Studio and Social, and the showroom");
+  // The Shop's node styles: their own section, each card a little board its own style paints (renderer/node-styles.js)
+  // in the theme's sky. A board is painted when much of it differs from its sky's corner.
+  const boards = async (what) => {
+    await go("shop");
+    await until(shopIs() + " && document.getElementById('friends-shop-group-home-nodestyles')", `the Shop's node styles (${what})`);
+    await run("document.getElementById('friends-shop-group-home-nodestyles').scrollIntoView({ block: 'center' });");
+    await sleep(700);
+    const painted = await run(`return [...document.querySelectorAll('#friends-shop-group-home-nodestyles canvas[data-node-style]')].map((canvas) => {
+      const { width, height } = canvas, data = canvas.getContext('2d').getImageData(0, 0, width, height).data;
+      let lit = 0;
+      for (let i = 0; i < data.length; i += 16) if (Math.abs(data[i] - data[0]) + Math.abs(data[i + 1] - data[1]) + Math.abs(data[i + 2] - data[2]) > 60) lit += 1;
+      return { style: canvas.dataset.nodeStyle, width, height, lit };
+    });`);
+    assert.deepEqual(painted.map((board) => board.style), ["dragonscale", "constellation"], `${what}: a board per node style`);
+    assert.ok(painted.every((board) => board.width >= 200 && board.lit > 40), `${what}: each board is painted: ${JSON.stringify(painted)}`);
+    return painted;
+  };
+  await resize(1440, 900);
+  report.boards = await boards("dark");
+  await capture("friends-shop-nodestyles-1440x900.png");
+  report.steps.push("the Shop's node styles paint their boards");
+  // Your PCs: Connect another PC through its states at the smallest window and a large one, My PCs under it, the folded
+  // groups in order, and Share projects last. The card is built again for each state (the place is left and opened again).
+  const pcsFacts = `
+    const shown = (node) => Boolean(node) && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden';
+    const reach = (node) => { if (!shown(node)) return false; node.scrollIntoView({ block: 'nearest' }); const r = node.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return Boolean(hit) && (hit === node || node.contains(hit)); };
+    const walk = document.getElementById('pc-walk'), card = document.querySelector('#friends-place-body .pc-sync');
+    const groups = [...card.querySelectorAll(':scope > .pc-group, :scope > .pc-share-group > .pc-group')].map((node) => {
+      const head = node.matches('details') ? node.querySelector(':scope > summary') : node.querySelector('.pc-group-toggle');
+      return { name: head.firstChild.textContent.trim(), open: node.matches('details') ? node.open : head.getAttribute('aria-expanded') === 'true' };
+    });
+    const facts = {
+      stage: walk?.dataset.stage, open: walk?.open, head: walk?.querySelector(':scope > summary')?.textContent,
+      steps: [...(walk?.querySelectorAll('.pc-walk-what') ?? [])].map((node) => node.textContent), marks: [...(walk?.querySelectorAll('.pc-walk-step') ?? [])].map((node) => node.dataset.state),
+      signed: document.getElementById('pc-walk-signed')?.textContent, live: document.getElementById('pc-walk-status')?.textContent, signIn: shown(document.getElementById('pc-walk-signin')),
+      parts: [...card.children].filter(shown).map((node) => node.id || String(node.className).split(' ')[0]), groups, share: document.getElementById('pc-share-group-title')?.textContent,
+      rows: document.querySelectorAll('#pc-fleet-rows > li').length, syncLine: shown(document.getElementById('pc-sync-head')),
+      pair: reach(walk?.querySelector('#pc-walk-status button')), headReach: reach(walk?.querySelector(':scope > summary')), syncRun: reach(document.getElementById('pc-sync-run')),
+    };
+    document.getElementById('friends-overlay').scrollTop = 0;
+    return facts;`;
+  const GROUPS = ["Keep this PC in step with GitHub", "Power and battery", "Lend this PC to a friend", "Set up this PC", "Paired workers", "Reach this PC from Discord", "Share between my PCs", "Share with friends"];
+  report.walk = [];
+  for (const [width, height, zoom] of [[600, 560, 1.5], [1920, 1080, 1]]) {
+    await resize(width, height, zoom);
+    for (const [name, view, stage, open] of PCS_STATES) {
+      await run(`window.friendsFixture.pcsView(${JSON.stringify(view)});`);
+      await go("friends-page", { place: "rooms" });
+      await until(placeIs("rooms"), `Rooms before Your PCs (${name})`);
+      await go("friends-page", { place: "pcs" });
+      const ready = name === "waiting" ? " && document.getElementById('pc-walk-signed')?.textContent.includes('as Mefi')" : "";
+      await until(placeIs("pcs") + ` && document.getElementById('pc-walk')?.dataset.stage === ${JSON.stringify(stage)} && document.querySelector('#friends-overlay .pc-sync')?.dataset.state === 'pending'${ready}`, `Your PCs, ${name}, at ${width}x${height}@${zoom}`);
+      await sleep(400);
+      const size = `${width}x${height}@${zoom}`;
+      found.push(...problems(await run(measure), `Your PCs (${name}) at ${size}`));
+      const facts = await run(pcsFacts);
+      facts.state = name; facts.size = size;
+      report.walk.push(facts);
+      assert.equal(facts.open, open, `${name} at ${size}: the steps are ${open ? "out" : "folded"} ${JSON.stringify(facts)}`);
+      assert.deepEqual(facts.steps, ["Open Studio on your other PC.", "Sign in to Friends with the same Discord account on both PCs.", "When your other PC shows up, press Pair and check that both screens show the same six numbers."]);
+      assert.deepEqual(facts.parts, ["pc-fleet", "pc-sync-group", "pc-fleet-power", "pc-fleet-lending", "pc-setup", "pc-paired-workers", "pc-remote", "pc-share-group"], `${name} at ${size}: the card's order`);
+      assert.deepEqual(facts.groups, GROUPS.map((group) => ({ name: group, open: false })), `${name} at ${size}: every group folded, in order`);
+      assert.equal(facts.share, "Share projects");
+      assert.ok(facts.syncLine && facts.syncRun, `${name} at ${size}: GitHub is behind, so its line and Sync this PC are out and reachable`);
+      if (name === "signin") assert.ok(facts.signIn && facts.signed === "This PC is not signed in yet." && facts.live === "Your other PC shows up here once both PCs are signed in.", JSON.stringify(facts));
+      if (name === "waiting") assert.ok(facts.signed === "✓ This PC is signed in as Mefi." && facts.live === "Waiting for your other PC to sign in…" && !facts.signIn, JSON.stringify(facts));
+      if (name === "found") assert.ok(facts.live === "Found LAPTOP-FIXTURE:Pair" && facts.pair && facts.rows === 2, `found at ${size}: a pointer reaches Pair ${JSON.stringify(facts)}`);
+      if (name === "paired") assert.ok(facts.head === "Connect another PC" && facts.headReach, `paired at ${size}: one Connect another PC button ${JSON.stringify(facts)}`);
+      await capture(`friends-pcs-${name}-${size}.png`);
+    }
+  }
+  report.steps.push("Connect another PC");
   // A light palette (the app's own custom colours): every place, and an open room, still fit with no text under 12 px.
   await resize(1440, 900);
   assert.equal(await run("return window.MefiMusic.applyCustomColors({ accent: '#8A5A00', background: '#F4F0E6', surface: '#FFFFFF', text: '#1D1B17' });"), true);
   await sleep(1800); // the colours glide in
   assert.equal(await run("return document.documentElement.dataset.studioThemeTone;"), "light");
   for (const [id] of PLACES) {
+    if (id === "shop") { await shopShot("the Shop in a light palette", "friends-light-shop-1440x900.png", 4); continue; }
     await go("friends-page", { place: id });
     await until(placeIs(id), `${id} in a light palette`);
     await sleep(400);
@@ -334,7 +587,21 @@ app.whenReady().then(async () => {
   await sleep(400);
   found.push(...problems(await run(measure), "an open room in a light palette"));
   await capture("friends-light-room-1440x900.png");
+  report.lightBoards = await boards("a light palette");
+  await capture("friends-light-shop-nodestyles-1440x900.png");
   report.steps.push("a light palette");
+  // Folded once a PC is paired, Connect another PC opens again with a real press, and says who is paired.
+  await run(`window.friendsFixture.pcsView(${JSON.stringify(PCS_STATES[3][1])});`);
+  await go("friends-page", { place: "rooms" });
+  await until(placeIs("rooms"), "Rooms before Your PCs, paired");
+  await go("friends-page", { place: "pcs" });
+  await until(placeIs("pcs") + " && document.getElementById('pc-walk')?.open === false", "Your PCs, paired: the steps folded");
+  await click("#pc-walk > summary");
+  await until("document.getElementById('pc-walk')?.open === true && document.getElementById('pc-walk-status')?.textContent === 'Paired with LAPTOP-FIXTURE. Waiting for another PC to sign in…'", "a press opens Connect another PC again");
+  await sleep(300);
+  found.push(...problems(await run(measure), "Connect another PC opened again in a light palette"));
+  await capture("friends-light-pcs-reopened-1440x900.png");
+  report.steps.push("Connect another PC opens again");
   assert.deepEqual(found, [], "every Friends place fits at every size, with no text under 12 px");
   await resize(1920, 1080);
   report.complete = true;

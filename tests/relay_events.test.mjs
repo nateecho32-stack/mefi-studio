@@ -3,7 +3,7 @@ import test from "node:test";
 import { ECONOMY } from "../relay/src/economy.mjs";
 import { COWORK, FIRST_MONDAY, JAM, THEMES, TOGETHER, WEEK_MS, coworkSlot, jamWindow, nextCoworkStart, splitPool, themeFor, weekOf } from "../relay/src/events.mjs";
 import { CREDIT_REASONS, hubFrame } from "../relay/src/protocol.mjs";
-import { ALICE, BOB, CARA, MOD, NEWBIE, makeRelay, rawSocket, until } from "./fixtures/relay-harness.mjs";
+import { ALICE, BOB, CARA, MOD, NEWBIE, connectAll, makeRelay, member, rawSocket, until } from "./fixtures/relay-harness.mjs";
 
 // Community events the relay runs by itself (relay/src/events.mjs) and the
 // daily community budget they draw on (relay/src/economy.mjs): the weekly
@@ -131,7 +131,7 @@ test("the community budget grows with the members seen this week, and plays and 
   assert.equal(hubFrame("credits", { balance: 1, lifetime: 1, today: 1, delta: 4, reason: "together", rank: "spark" }).reason, "together");
 });
 
-test("the Build Jam: enter until Saturday, vote only for what you played, hidden votes, prizes on Monday", async () => {
+test("the Build Jam: enter until Saturday, vote only for what you played, hidden votes, prizes a day after voting closes", async () => {
   const clock = { at: mondayMorning() };
   const relay = makeRelay({ now: () => clock.at });
   const as = api(relay);
@@ -174,11 +174,20 @@ test("the Build Jam: enter until Saturday, vote only for what you played, hidden
   assert.equal((await as("tok-alice", "GET", "/v1/events")).jam.phase, "voting");
 
   const before = Object.fromEntries(await Promise.all(["tok-alice", "tok-bob"].map(async (token) => [token, (await as(token, "GET", "/v1/me")).credits.balance])));
-  // Next Monday: the alarm pays the results.
-  clock.at = jamWindow(weekOf(clock.at)).endsAt + MINUTE;
+  // Next Monday: voting closes, and the results wait a day for a moderator's look.
+  const ends = jamWindow(weekOf(clock.at)).endsAt;
+  clock.at = ends + MINUTE;
+  await relay.runAlarm();
+  const waiting = await as("tok-alice", "GET", "/v1/events");
+  assert.notEqual(waiting.jam.id, jamId, "next week's jam is open");
+  assert.equal(waiting.jam.resultsAt, waiting.jam.endsAt + JAM.reviewMs, "and says when its own results come");
+  assert.deepEqual([waiting.lastJam, waiting.reviewing], [null, { id: jamId, theme: listed.jam.theme, resultsAt: ends + JAM.reviewMs }]);
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.balance, before["tok-alice"], "nothing is paid during the review");
+  // Tuesday: the alarm pays the results.
+  clock.at = ends + JAM.reviewMs + MINUTE;
   await relay.runAlarm();
   const after = await as("tok-alice", "GET", "/v1/events");
-  assert.notEqual(after.jam.id, jamId, "next week's jam is open");
+  assert.equal(after.reviewing, null);
   assert.equal(after.lastJam.id, jamId);
   const results = Object.fromEntries(after.lastJam.results.map((payout) => [payout.userId, payout]));
   const pool = after.lastJam.pool;
@@ -339,4 +348,195 @@ test("Forget me takes a member's entries, votes and ticks with it", async () => 
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM event_entries WHERE user_id = ?", CARA.id)[0].n, 0);
   assert.equal(relay.sql("SELECT COUNT(*) AS n FROM together_ticks WHERE user_id = ?", CARA.id)[0].n, 0);
   assert.ok(NEWBIE.id && BOB.id);
+});
+
+// Discord ids made `daysAgo` days ago (a snowflake carries its own time), and a join date that many days back.
+const idFrom = (daysAgo, n = 1) => (((BigInt(Date.now() - daysAgo * DAY) - 1_420_070_400_000n) << 22n) + BigInt(n)).toString();
+const joined = (daysAgo, hours = 0) => ({ joined_at: new Date(Date.now() - daysAgo * DAY + hours * HOUR).toISOString() });
+const WEBHOOK = "https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz_ABCDEFGH";
+
+test("a jam's votes from one batch of accounts count once, so three of them cannot buy a place; moderators see every vote, take a voter out and pay", async () => {
+  const clock = { at: mondayMorning() };
+  const calls = [];
+  // Three accounts made a day apart that joined the server two hours apart: most likely one person's.
+  const batch = [0, 1, 2].map((n) => ({ token: `tok-x${n}`, user: { id: idFrom(400 - n, n + 1), username: `x${n}`, global_name: `X${n}` }, member: joined(20, 2 * n) }));
+  const DAN = { id: "200000000000000021", username: "dan", global_name: "Dan" };
+  const EVE = { id: "200000000000000022", username: "eve", global_name: "Eve" };
+  const relay = makeRelay({
+    now: () => clock.at, fetchCalls: calls, env: { MOD_ALERT_WEBHOOK: WEBHOOK },
+    discord: { ...Object.fromEntries(batch.map((one) => [one.token, { user: one.user, member: one.member }])), "tok-dan": { user: DAN }, "tok-eve": { user: EVE } },
+  });
+  const as = api(relay);
+  const jamId = (await as("tok-alice", "GET", "/v1/events")).jam.id;
+  const alice = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const bob = (await as("tok-bob", "POST", "/v1/projects", { url: "https://bob.itch.io/tiny-farm", title: "Tiny Farm" })).project.id;
+  await as("tok-alice", "POST", `/v1/events/${jamId}/entry`, { projectId: alice });
+  await as("tok-bob", "POST", `/v1/events/${jamId}/entry`, { projectId: bob });
+  for (const token of ["tok-cara", "tok-mod", "tok-dan"]) {
+    await playFor(as, clock, token, alice);
+    assert.equal((await as(token, "POST", `/v1/events/${jamId}/votes`, { userId: ALICE.id })).status, 200);
+  }
+  for (const token of [...batch.map((one) => one.token), "tok-eve"]) {
+    await playFor(as, clock, token, bob);
+    assert.equal((await as(token, "POST", `/v1/events/${jamId}/votes`, { userId: BOB.id })).status, 200, `${token} votes for Bob`);
+  }
+  assert.equal((await as("tok-bob", "GET", "/v1/admin/jam")).status, 403, "moderators only");
+  const look = (await as("tok-mod", "GET", "/v1/admin/jam")).jam;
+  assert.deepEqual([look.id, look.status, look.entries.map((entry) => [entry.user.id, entry.votes])], [jamId, "entries", [[ALICE.id, 3], [BOB.id, 2]]], "Bob's four votes count as two");
+  const bobVoters = look.entries[1].voters;
+  assert.deepEqual(bobVoters.map((voter) => [voter.name, voter.batch, voter.counted, voter.why]), [["X0", "A", true, null], ["X1", "A", false, "same-batch"], ["X2", "A", false, "same-batch"], ["Eve", null, true, null]]);
+  assert.ok(bobVoters.every((voter) => Number.isFinite(voter.accountCreatedAt) && Number.isFinite(voter.joinedAt)), "with when each account was made and joined");
+  assert.deepEqual(look.payouts.filter((payout) => payout.place).map((payout) => [payout.userId, payout.place]), [[ALICE.id, 1]], "no place for Bob: two votes");
+
+  // A moderator takes Eve's votes out, and she cannot vote in this jam again.
+  assert.equal((await as("tok-mod", "DELETE", `/v1/admin/jam/${jamId}/votes/${EVE.id}`)).removed, 1);
+  assert.equal((await as("tok-eve", "POST", `/v1/events/${jamId}/votes`, { userId: BOB.id })).reason, "barred");
+  assert.equal(relay.sql(`SELECT COUNT(*) AS n FROM audit WHERE kind = 'event-votes-void' AND target_id = ? AND room_id = ?`, EVE.id, jamId)[0].n, 1);
+
+  // Voting closes: the jam waits a day for a look, and the moderators' channel hears about it, naming nobody.
+  const ends = jamWindow(weekOf(clock.at)).endsAt;
+  clock.at = ends + MINUTE;
+  await relay.runAlarm();
+  const line = calls.find((call) => call.webhook)?.webhook;
+  assert.ok(line, "a line went to the webhook");
+  assert.match(line.content, /voting closed for the Build Jam ".+": 2 entries, 4 votes that count\. 2 votes came from accounts made and joined together/);
+  assert.deepEqual(line.allowed_mentions, { parse: [] });
+  assert.ok(!line.content.includes(ALICE.id) && !line.content.includes("X0"), "no names, no ids");
+  const waiting = (await as("tok-mod", "GET", "/v1/admin/jam")).jam;
+  assert.deepEqual([waiting.id, waiting.status, waiting.resultsAt], [jamId, "review", ends + JAM.reviewMs]);
+  assert.equal((await as("tok-cara", "POST", `/v1/admin/jam/${jamId}/release`)).status, 403);
+  const before = (await as("tok-alice", "GET", "/v1/me")).credits.balance;
+  assert.equal((await as("tok-mod", "POST", `/v1/admin/jam/${jamId}/release`)).status, 200);
+  await relay.runAlarm();
+  const after = await as("tok-alice", "GET", "/v1/events");
+  assert.equal(after.lastJam.id, jamId, "paid before its day was out");
+  assert.deepEqual(after.lastJam.results.filter((payout) => payout.place).map((payout) => [payout.userId, payout.place]), [[ALICE.id, 1]]);
+  assert.ok((await as("tok-alice", "GET", "/v1/me")).credits.balance > before);
+  assert.equal((await as("tok-mod", "POST", `/v1/admin/jam/${jamId}/release`)).reason, "closed");
+});
+
+test("the jam switch holds a closed jam's prizes past its day of review; back on, they pay", async () => {
+  const clock = { at: mondayMorning() };
+  const DAN = { id: "200000000000000021", username: "dan", global_name: "Dan" };
+  const relay = makeRelay({ now: () => clock.at, discord: { "tok-dan": { user: DAN } } });
+  const as = api(relay);
+  const jamId = (await as("tok-alice", "GET", "/v1/events")).jam.id;
+  const alice = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  await as("tok-alice", "POST", `/v1/events/${jamId}/entry`, { projectId: alice });
+  for (const token of ["tok-bob", "tok-cara", "tok-dan"]) await playFor(as, clock, token, alice);
+  const before = (await as("tok-alice", "GET", "/v1/me")).credits.balance;
+  await as("tok-mod", "POST", "/v1/admin/credits/switches", { key: "jam", on: false });
+  const ends = jamWindow(weekOf(clock.at)).endsAt;
+  clock.at = ends + MINUTE;
+  await relay.runAlarm();
+  clock.at = ends + JAM.reviewMs + HOUR;
+  await relay.runAlarm();
+  const held = await as("tok-alice", "GET", "/v1/events");
+  assert.deepEqual([held.lastJam, held.reviewing], [null, { id: jamId, theme: held.reviewing.theme, resultsAt: null }], "past its day, still held, with no time to promise");
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.balance, before);
+  assert.equal((await as("tok-mod", "POST", `/v1/admin/jam/${jamId}/release`)).reason, "held");
+  assert.equal((await as("tok-mod", "GET", "/v1/admin/jam")).jam.held, true);
+  await as("tok-mod", "POST", "/v1/admin/credits/switches", { key: "jam", on: true });
+  assert.ok(relay.alarmAt() <= clock.at + MINUTE, "switching it back on wakes the relay soon");
+  await relay.runAlarm();
+  const paid = await as("tok-alice", "GET", "/v1/events");
+  assert.equal(paid.lastJam.id, jamId);
+  assert.equal(paid.lastJam.results[0].why, "showcase", "played by three: the showcase reward");
+  assert.equal((await as("tok-alice", "GET", "/v1/me")).credits.balance, before + paid.lastJam.results[0].paid);
+});
+
+test("only members in good standing may enter the jam", async () => {
+  const clock = { at: mondayMorning() };
+  const YOUNG = { id: idFrom(10, 7), username: "young", global_name: "Young" };
+  const relay = makeRelay({ now: () => clock.at, discord: { "tok-young": { user: YOUNG } } });
+  const as = api(relay);
+  const jamId = (await as("tok-young", "GET", "/v1/events")).jam.id;
+  const project = (await as("tok-young", "POST", "/v1/projects", { url: "https://young.itch.io/first", title: "First" })).project.id;
+  const refused = await as("tok-young", "POST", `/v1/events/${jamId}/entry`, { projectId: project });
+  assert.deepEqual([refused.status, refused.reason, refused.hold], [403, "standing", "new-account"]);
+  assert.equal(relay.sql("SELECT COUNT(*) AS n FROM event_entries")[0].n, 0);
+});
+
+test("Studio's client: a moderator's switches and jam review, a forgotten giver taken back, and when a jam's results come", async () => {
+  const clock = { at: mondayMorning() };
+  const ALT = { id: "200000000000000031", username: "alt", global_name: "Alt" };
+  const relay = makeRelay({ now: () => clock.at, discord: { "tok-alt": { user: ALT } } });
+  const as = api(relay);
+  const mod = member(relay, "tok-mod");
+  const alice = member(relay, "tok-alice");
+  await connectAll(mod, alice);
+  // The switches.
+  assert.deepEqual(await mod.client.modSwitches(), { ok: true, off: [] });
+  assert.deepEqual(await mod.client.modSwitch("plays", false), { ok: true, off: ["plays"] });
+  assert.deepEqual(await mod.client.modSwitch("nope", false), { ok: false, error: "bad-request" });
+  assert.equal((await alice.client.modSwitches()).ok, false, "a member gets nothing");
+  const project = (await as("tok-alice", "POST", "/v1/projects", { url: "https://alice.itch.io/void-runner", title: "Void Runner" })).project.id;
+  const play = await as("tok-bob", "POST", `/v1/projects/${project}/play`);
+  clock.at += 2 * MINUTE + 1;
+  assert.equal((await as("tok-bob", "POST", `/v1/projects/${project}/played`, { token: play.token })).why, "paused");
+  await mod.client.modSwitch("plays", true);
+
+  // A jam: an entry, three votes, and the moderator's look while it runs.
+  const jamId = (await as("tok-alice", "GET", "/v1/events")).jam.id;
+  await as("tok-alice", "POST", `/v1/events/${jamId}/entry`, { projectId: project });
+  for (const token of ["tok-bob", "tok-cara", "tok-alt"]) {
+    await playFor(as, clock, token, project);
+    await as(token, "POST", `/v1/events/${jamId}/votes`, { userId: ALICE.id });
+  }
+  const look = await mod.client.modJam();
+  assert.deepEqual([look.ok, look.jam.id, look.jam.status, look.jam.held, look.jam.entries[0].votes, look.jam.entries[0].voters.length], [true, jamId, "entries", false, 3, 3]);
+  assert.deepEqual(look.jam.entries[0].voters.map((voter) => [voter.name, voter.counted, voter.why, voter.batch]), [["Bob", true, null, null], ["Cara", true, null, null], ["Alt", true, null, null]]);
+  assert.equal(look.jam.entries[0].project.title, "Void Runner");
+  assert.deepEqual(await mod.client.modJamVoid(jamId, CARA.id), { ok: true });
+  assert.equal((await mod.client.modJam()).jam.entries[0].votes, 2);
+  assert.deepEqual(await mod.client.modJamVoid("jam w", CARA.id), { ok: false, error: "bad-request" });
+
+  // Voting closes: the client says when the results come; the moderator pays them now.
+  const ends = jamWindow(weekOf(clock.at)).endsAt;
+  clock.at = ends + MINUTE;
+  await relay.runAlarm();
+  // A week on the relay's clock: their sessions ran out and the alarm closed the sockets, so Studio connects again.
+  await connectAll(mod, alice);
+  const page = await alice.client.events();
+  assert.equal(page.ok, true, JSON.stringify(page));
+  assert.deepEqual(page.reviewing, { id: jamId, theme: page.reviewing.theme, resultsAt: ends + JAM.reviewMs });
+  assert.equal(page.jam.resultsAt, page.jam.endsAt + JAM.reviewMs);
+  assert.equal((await mod.client.modJam()).jam.status, "review");
+  assert.deepEqual(await mod.client.modJamRelease(jamId), { ok: true });
+  await relay.runAlarm();
+  assert.equal((await alice.client.events()).lastJam.id, jamId);
+
+  // A giver who used Forget me since: the review gives an id that names nobody, and taking back works with it.
+  await as("tok-alt", "POST", "/v1/me/forget");
+  const review = await mod.client.modReview(ALICE.id);
+  const gone = review.givers.find((giver) => giver.forgotten);
+  assert.match(gone?.id ?? "", /^gone:[A-Za-z0-9_-]{16}$/);
+  assert.equal(gone.name, "a member who used Forget me");
+  const taken = await mod.client.modRevoke(ALICE.id, { from: gone.id });
+  assert.deepEqual([taken.ok, taken.revoked], [true, gone.amount]);
+  assert.deepEqual(await mod.client.modRevoke(ALICE.id, { from: "gone:x" }), { ok: false, error: "bad-request" });
+  for (const one of [mod, alice]) await one.client.disconnect();
+});
+
+test("the jam's own rules can be switched off should one misfire: no day of review, and each vote of a batch counted", async () => {
+  const clock = { at: mondayMorning() };
+  const batch = [0, 1, 2].map((n) => ({ token: `tok-x${n}`, user: { id: idFrom(400 - n, n + 1), username: `x${n}`, global_name: `X${n}` }, member: joined(20, 2 * n) }));
+  const relay = makeRelay({ now: () => clock.at, discord: Object.fromEntries(batch.map((one) => [one.token, { user: one.user, member: one.member }])) });
+  const as = api(relay);
+  for (const key of ["batches", "review"]) assert.equal((await as("tok-mod", "POST", "/v1/admin/credits/switches", { key, on: false })).status, 200);
+  const jamId = (await as("tok-bob", "GET", "/v1/events")).jam.id;
+  const bob = (await as("tok-bob", "POST", "/v1/projects", { url: "https://bob.itch.io/tiny-farm", title: "Tiny Farm" })).project.id;
+  await as("tok-bob", "POST", `/v1/events/${jamId}/entry`, { projectId: bob });
+  for (const one of batch) {
+    await playFor(as, clock, one.token, bob);
+    await as(one.token, "POST", `/v1/events/${jamId}/votes`, { userId: BOB.id });
+  }
+  const look = (await as("tok-mod", "GET", "/v1/admin/jam")).jam;
+  assert.deepEqual([look.entries[0].votes, look.entries[0].voters.map((voter) => [voter.counted, voter.batch])], [3, [[true, null], [true, null], [true, null]]], "every vote counts, with no batch letters");
+  const page = await as("tok-bob", "GET", "/v1/events");
+  assert.equal(page.jam.resultsAt, page.jam.endsAt, "no day of review to wait for");
+  clock.at = jamWindow(weekOf(clock.at)).endsAt + MINUTE;
+  await relay.runAlarm();
+  const after = await as("tok-bob", "GET", "/v1/events");
+  assert.deepEqual([after.reviewing, after.lastJam?.id, after.lastJam?.results.find((payout) => payout.place)?.userId], [null, jamId, BOB.id], "paid when voting closed");
 });

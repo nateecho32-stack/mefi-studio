@@ -12,7 +12,9 @@
 // "companion.direct"), relayed and never stored, and the peer history frames
 // (feature "history.peer") that let a member's own Studio fill a gap in
 // another member's room history, since the relay keeps none. My PCs (feature
-// "pcs", docs/my-pcs.md) adds the pc* frames, also relayed and never stored.
+// "pcs", docs/my-pcs.md) adds the pc* frames, also relayed and never stored,
+// and Pets (feature "pets", with "pets.2" for the Shop's pets) the pet frame
+// and roomPets, kept on the socket only.
 //
 // Validators return normalised copies holding only known fields, so nothing
 // extra a client sends rides along into the hub. Strings are checked, never
@@ -80,6 +82,8 @@ export const LIMITS = Object.freeze({
   companionCardBytes: 8 * 1024, // a companion card as JSON
   historyMessages: 100, // messages in one historyReply
   historyReplyBytes: 15 * 1024, // a historyReply frame; under frameBytes
+  petNameChars: 24, // a member's pet's name (feature "pets")
+  roomPets: 12, // pets in one roomPets frame
 });
 
 /** ready.features this relay can list (the remote needs the Discord bot, so it is listed only when one is linked). */
@@ -99,6 +103,10 @@ export const FEATURES = Object.freeze({
   friendOnline: 'friend.online', // friendOnline: someone you share a room with just opened Studio (to clients that list it)
   building: 'building', // building: what a member is making right now, with their say-so (The Lobby's Building now)
   pcs: 'pcs', // My PCs: pcHello / pcState / pcSend, and the pcs / pcState / pcMsg frames (relay/src/pcs.mjs)
+  shop: 'shop', // GET /v1/shop: Studio's own items and members' style packs, bought with credits (relay/src/shop.mjs)
+  shopDrops: 'shop.drops', // GET /v1/shop also says each item's drop, whether it is on sale and when it leaves, the drops and the week's Featured shelf (relay/src/shop-drops.mjs)
+  pets: 'pets', // pet / roomPets: a member's pet visits the rooms they have open (relay/src/pets.mjs); also a hello feature
+  petsGeneration: 'pets.2', // the newest pets generation (PET_GENERATION) this relay knows; a hello names the Studio's own
 });
 
 /** listen{action}: a room's shared player. */
@@ -118,10 +126,36 @@ export const REMOTE_NOTICE_KINDS = Object.freeze(['needs-you', 'done', 'failed',
 export const REMOTE_BUTTON_STYLES = Object.freeze(['primary', 'secondary', 'success', 'danger']);
 /** pcHello{pc.kind}: My PCs tells a laptop (it has a battery to watch) from a desktop. */
 export const PC_KINDS = Object.freeze(['desktop', 'laptop']);
+/**
+ * pet{pet}: a member's pet (feature "pets"), as Studio's renderer/pets.js draws it; "theme" wears the theme's colours.
+ * Ember the dragon is every Studio's; the other kinds are Shop items ("studio:pet-<kind>"). Each kind came with a
+ * pets generation: a relay lists the newest it knows in ready.features ("pets.2", FEATURES.petsGeneration) and a
+ * Studio the newest it draws in hello.features, so neither side meets a kind newer than it knows. Studio says the
+ * dragon to an older relay (scripts/hub-client.cjs), and the relay shows an older Studio the dragon (pets.mjs).
+ */
+export const PET_KINDS = Object.freeze(['dragon', 'cloud', 'phoenix', 'wisp']);
+export const PET_GENERATION = Object.freeze({ dragon: 1, cloud: 2, phoenix: 2, wisp: 2 });
+export const PETS_GENERATION = 2;
+export const PET_SKINS = Object.freeze(['theme', 'frost', 'jade', 'void', 'gold']);
+/** The newest pets generation a features list names ("pets" alone is the first), or 0 for none. */
+export function petsGenerationOf(features) {
+  let newest = 0;
+  for (const name of Array.isArray(features) ? features : []) {
+    if (name === 'pets') newest = Math.max(newest, 1);
+    const match = /^pets\.(\d{1,3})$/.exec(String(name));
+    if (match) newest = Math.max(newest, Number(match[1]));
+  }
+  return newest;
+}
+/** A pet as a side of that generation may meet it: a kind newer than it knows comes as the dragon. */
+export function petForGeneration(pet, generation) {
+  if (!pet || (PET_GENERATION[pet.kind] ?? Infinity) <= Math.max(1, generation)) return pet;
+  return { ...pet, kind: 'dragon' };
+}
 
-/** Project cards (feature "projects") and why a credits frame was sent (feature "credits"). */
+/** Project cards (feature "projects") and why a credits frame was sent (feature "credits"; "shop" a purchase, "sale" a pack's maker paid). */
 export const PROJECT_KINDS = Object.freeze(['game', 'app', 'tool', 'art', 'music', 'other']);
-export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature', 'revoked', 'together', 'cowork', 'jam']);
+export const CREDIT_REASONS = Object.freeze(['played', 'play', 'starred', 'feature', 'revoked', 'together', 'cowork', 'jam', 'shop', 'sale']);
 
 export const ROOM_KINDS = Object.freeze(['hangout', 'cowork']);
 export const ROOM_POLICIES = Object.freeze(['request', 'invite']);
@@ -187,6 +221,18 @@ export const HTTP_ERRORS = Object.freeze([
   'rate-limited',
   'paused',
   'internal',
+  // The Shop (feature "shop"): a purchase refused, with what Studio needs to say why, and a style pack refused.
+  'owned',
+  'own',
+  'needs',
+  'price-changed',
+  'short',
+  'no-tip',
+  'not-available', // a Studio item whose drop has rotated out (or not started yet), with its drop
+  'hold',
+  'bad-pack',
+  'too-big',
+  'low-contrast',
 ]);
 
 /** WebSocket close codes the hub uses. */
@@ -431,6 +477,10 @@ const pcView = () =>
     since: timestamp(), // when it said pcHello on this connection
   });
 
+// A member's pet (feature "pets"): what it is, which skin, and its name. The
+// relay keeps it on the member's own connection only (relay/src/pets.mjs).
+const petLook = () => object({ kind: oneOf(PET_KINDS), skin: oneOf(PET_SKINS), name: line(0, LIMITS.petNameChars) });
+
 // ---- WebSocket frames ------------------------------------------------------------
 
 /** Client -> hub. Every frame is {type, ...fields}. */
@@ -476,6 +526,8 @@ export const CLIENT_FRAMES = Object.freeze({
   pcHello: { pc: object({ id: machineId(), name: pcName(), kind: oneOf(PC_KINDS) }), keys: pcKeys(), lendTo: list(snowflake(), LIMITS.pcLendTo) },
   pcState: { state: opaqueObject(LIMITS.pcStateBytes) },
   pcSend: { to: machineId(), env: opaqueObject(LIMITS.pcEnvBytes), nonce: optional(nonce()) },
+  // Pets (feature "pets"): this member's pet for the rooms this socket has open, or null for none.
+  pet: { pet: nullable(petLook()) },
 });
 
 /** Hub -> client. */
@@ -537,6 +589,9 @@ export const HUB_FRAMES = Object.freeze({
   pcs: { pcs: list(pcView(), LIMITS.pcsPerViewer) },
   pcState: { from: machineId(), state: opaqueObject(LIMITS.pcStateBytes) },
   pcMsg: { from: machineId(), fromUser: snowflake(), fromName: line(1, 100), keys: pcKeys(), env: opaqueObject(LIMITS.pcEnvBytes) },
+  // Pets (feature "pets", to Studios whose hello listed it): the pets of a room's members with Studio open on it,
+  // each member once, never one who hides from Who's online; `name` is the member's display name.
+  roomPets: { roomId: opaqueId(), pets: list(object({ userId: snowflake(), name: line(1, 100), pet: petLook() }), LIMITS.roomPets) },
 });
 
 function validateFrame(table, frame) {
@@ -678,6 +733,26 @@ export const HTTP_BODIES = Object.freeze({
   enterEvent: { projectId: opaqueId() },
   // POST /v1/events/:id/votes: a vote for an entrant, by their member id.
   voteEvent: { userId: snowflake() },
+  // POST /v1/admin/reports/:id/resolve: "remove" also takes a reported Shop pack off for good.
+  resolveReport: { action: optional(oneOf(['remove'])) },
+  // POST /v1/shop/:id/buy (feature "shop"): the price the member was shown, so a changed price is never paid by
+  // surprise, and a tip for a community pack's maker (credits, never money; Studio's own items take none).
+  shopBuy: { price: integer(0, 1_000_000), tip: optional(integer(0, 100)) },
+  // POST /v1/shop/packs: a style pack. `data` passes through whole (up to the body limit) so relay/src/shop-pack.mjs
+  // can refuse a key it does not name instead of it being dropped here, and say when a pack is too big.
+  shopPublish: { name: string(1, 40, { pattern: SINGLE_LINE, nonBlank: true }), blurb: optional(line(0, 160)), price: integer(0, 250), data: opaqueObject(LIMITS.bodyBytes) },
+  // PUT /v1/shop/packs/:id: any of them, and `listed` to take the pack off the Shop or put it back.
+  shopUpdate: {
+    name: optional(string(1, 40, { pattern: SINGLE_LINE, nonBlank: true })),
+    blurb: optional(line(0, 160)),
+    price: optional(integer(0, 250)),
+    data: optional(opaqueObject(LIMITS.bodyBytes)),
+    listed: optional(boolean()),
+  },
+  // POST /v1/shop/packs/:id/report: why, and a few words more if the reporter has them.
+  shopReport: { reason: string(1, LIMITS.reasonChars, { pattern: TEXT, nonBlank: true }), text: optional(string(0, 300, { pattern: TEXT })) },
+  // POST /v1/admin/shop/:id/remove (moderators).
+  shopRemove: { reason: optional(line(0, 200)) },
 });
 
 /** Query strings, by name. */

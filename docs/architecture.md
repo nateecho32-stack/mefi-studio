@@ -225,9 +225,9 @@ settings and per-model work-kind summaries for the shared controls.
 | Term | Meaning |
 | --- | --- |
 | **Menu** (the rail) | New task and Search sit above **Home**, **Work**, **Agents** and **Friends**, with one local row for the current group's views. Friends and its Rooms, Your PCs and Playground links open the existing companion menu at the matching card; Search finds them too. Recent tasks belong to the current project; Settings and Help stay at the foot. Help contains Start here, Shortcuts and Community. The project selector at the top opens the project panel. The registry in `renderer/nav.js` preserves existing shortcuts and destination IDs. |
-| **Social** and **Studio** | Studio's two modes (Ctrl M switches). **Social** is for vibing with friends and keeping a light eye on agents: Today's board, the box that talks or builds, Friends and the dock. **Studio** is for in-depth building with the social features still there: the session list, the thread, the inspector and every page. Until 0.5 they were called Vibe and Build; the code (`renderer/vibe.js`, `MefiVibe.mode()`) and the stored setting still say `vibe` and `build`, so settings, deep links and tests carry over. |
+| **Social** and **Studio** | Studio's two modes (Ctrl M switches). **Social** is for vibing with friends and keeping a light eye on agents: Home (one box that talks with Mefi, your work in short and who is online), Friends, Projects and Activity, in its own rail. **Studio** is for in-depth building with the social features still there: the session list, the thread, the inspector and every page. Until 0.5 they were called Vibe and Build; the code (`renderer/vibe.js`, `MefiVibe.mode()`) and the stored setting still say `vibe` and `build`, so settings, deep links and tests carry over. |
 | **Layout contract** | The room the shell keeps for a session list, an inspector, a tab strip and a status bar that are not built yet: four `--shell-*` sizes (all 0), four derived edges the pages read, `html[data-layout="v2"]` to turn them on, one setter (`MefiNav.layout.set`) and one free-area rectangle (`MefiNav.usable()`). See `docs/unified-studio.md`. |
-| **Today** | Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`), in both modes. In Social ("Today, the board"): the greeting and the box that builds or talks, then the prototype's board, four columns that each say when they are empty: **Needs you**, **Running**, **Review** and **Done** (what finished today). In Studio, with no session open: the greeting and "What's next for <project>?", Home's own box with **Add files or an image**, the permission mode, **Talk it over** and **Build it** (Ctrl Enter), the four ways to start and **Suggest a next step**, the first thing that **Needs you**, **Running now** and **Finished while you were away**. Studio's earlier Home (the conversation, the queue, Activity and the preview) is the **Chat** page of the same route. See Getting around. |
+| **Today** | Home in the 0.5 layout (`html[data-layout="v2"]`, `renderer/today.js`), in both modes. In Social (called **Home** there): the greeting and the box with one action, **Send** (Mefi offers to build what it hears; Ctrl Enter builds at once), then **Your work** as a short list, **Needs you** (results to review included, so it counts what the pill counts), **Running**, **Up next** (or **Paused**, **Agents off**, **No AI connected**), **In review** and **Done today**, a group only while it holds something, beside the **Friends** card. On a wide window Home has a column at the right: **Friends** at its top, compact, and the conversation with Mefi docked under it with the box at the foot of its thread; Your work takes the page, its rows side by side. Closing the conversation hands the box back to the page until it is opened again, and Friends keeps the column. Social's **Activity** page is the whole list. Studio's Today page draws the same board as the prototype's four columns, **Needs you**, **Running**, **Review** and **Done** (what finished today), each saying when it is empty. In Studio, with no session open: the greeting and "What's next for <project>?", Home's own box with **Add files or an image**, the permission mode, **Talk it over** and **Build it** (Ctrl Enter), the four ways to start and **Suggest a next step**, the first thing that **Needs you**, **Running now** and **Finished while you were away**. Studio's earlier Home (the conversation, the queue, Activity and the preview) is the **Chat** page of the same route. See Getting around. |
 | **Inbox** | Everything that waits on the owner in one list (`MefiToday.openInbox`): open questions and permissions, approvals, finished work to check and tasks that stopped. "N need you" is the digest the app already keeps (`assistantState.needsYou`, the list the taskbar count is read from), never a second counter: the pill, the status bar, Home's chip, the tabs and the session list's Needs you all read it. It opens as a popover under the top bar's pill (Ctrl J) or stays open as a page, **Work › Inbox**. See Getting around. |
 | **Frame (layout v2)** | What `renderer/shell.js` (`window.MefiShell`) draws in the contract's room in the 0.5 layout: a top bar (list toggle, Social and Studio switch, where you are, Search, "N need you", "N working", inspector toggle), the list and inspector columns with splitters and, in a small window, drawers, the tab strip's row, `main` for other modules' pages, and a status bar with the Layout menu. Social and Studio each keep their own widths. The only layout since 0.5.0: `renderer/nav.js` sets `html[data-layout="v2"]` at every launch, and the classic layout and its switches are gone. See `docs/unified-studio.md`. |
 | **Tab strip** (layout v2) | The row of tabs in the shell's tab region: Home pinned at the left, the pages and sessions you add, pins that stay, one italic preview tab, and Studio closing what you finished with (Undo, Recently closed, Ctrl+Shift+T). A tab is a remembered place, not a live page. Switches in Configuration › UI & Surfaces › Tab behaviour; see "Tabs you add and pin". |
@@ -270,10 +270,13 @@ settings and per-model work-kind summaries for the shared controls.
 | **Fleet / seat / pod / generation** | Live › Fleet (OpenRig's vocabulary, built natively): a **seat** is one agent's stable address on the team (`builder-2@project`), a **generation** is one run it took, and seats sit in four **pods** (Lead, Build, Check, Keep) wired by handoffs, checks and asks. A retry returns to the seat that last worked the task. |
 | **Companion** | The roaming character (named under General): click it to talk, see what it and the team are doing, handle its needs-you queue, suggest work or take its picks, meet friends' companions, or set its personality (Straight work, Balanced, Friendly & expressive). It also gives a welcome-back digest, can be petted, and covers this project or all of them. Its default model is GPT-6 Luna on Zen at medium reasoning and fast service when Zen is connected. |
 | **Orb, callout, absorb** | Command-view vocabulary: an orb is a node, a callout is its floating card, and absorb is a finished node collapsing into its host. |
-| **Node style / `MefiNodeStyles`** | How a node is drawn: one of eight looks (five classic, three in the two-tone Void collection), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, the finish beats (`done` at a step whose work came back, `absorb` at the lead taking an agent in), wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
+| **Node style / `MefiNodeStyles`** | How a node is drawn: one of twelve looks (five classic, three in the two-tone Void collection, and Dragon scales, Star chart, Lanterns and Neon, which the Shop sells for credits), painted on both the Command view and the tree rail by `renderer/node-styles.js`. Each look owns its body and may take over the agent ring, hub dress, work orbit, arrival, selection, the finish beats (`done` at a step whose work came back, `absorb` at the lead taking an agent in), wires, pulses and landing; per-node motion records keep every node animating, and reduced motion freezes each look to a still pose. |
 | **Ruins Runner** | The author's LÖVE game, an optional external project Studio can launch. A fresh clone works without it. |
 | **Discord Server Styler** | An optional separate bot and local dashboard. Settings can start it, open its dashboard or folder, show its status and stop a process Studio started. |
-| **Void collection** | Four two-tone themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil), free for everyone like every other look. Settings › Appearance lists them under their own small heading, and a choice saves like any other. A theme with a second hue sets `data-studio-theme-tier="duo"`, which the stylesheets paint with. |
+| **Void collection** | Four two-tone themes (Void, Eclipse, Abyss, Neon Dusk) and three node styles (Singularity, Prism, Sigil), free for everyone like every look Studio comes with. Settings › Appearance lists them under their own small heading, and a choice saves like any other. A theme with a second hue sets `data-studio-theme-tier="duo"`, which the stylesheets paint with. |
+| **Light themes / tone** | Daylight (cool neutral) and Paper (warm) are light themes: every ink holds 4.5:1 on their pages and panels. `renderer/music.js` sets `html[data-studio-theme-tone]` from the reading background (Custom palettes and packs included); a light tone switches `color-scheme` to light, deepens the status hues and softens shadows and the scrim (`styles.css`, section 2). |
+| **Look** | Light, Dark or Stylized: a set of themes plus a material (a `MefiAppearance` preset) and a heading face (`html[data-studio-font]`: Studio, Display, Serif or Mono, system faces only). `MefiMusic.looks()` lists them and `applyLook(lookId, themeKey)` puts one on and keeps it; Light and Dark put the plain material and each theme's own headings back, Stylized opens the glass and sets the display face. Settings › Appearance has the heading faces under **Headings**. |
+| **Style pack** | A small data-only look from the Shop: a palette (with an optional second hue), and optionally a node style (one Studio comes with, never one the Shop sells), material and heading face. `MefiMusic.applyPack` paints it as the theme `pack` the way Custom is painted and keeps it for the next launch; `previewPack` and `endPreview` are the Shop's Try, which saves nothing and puts back exactly what was there. |
 | **Community link** | An optional Discord login (Settings › Community, which **Community** at the menu foot opens) for Listen together and the rooms hub; it unlocks nothing. It lets Studio read your membership and roles in the Void Engine server: when you link, then every seven days (after a failed check, in an hour, six hours, then daily) and whenever you press **Check now**. The data is kept in `settings.community`, and the refresh token is encrypted in `community-auth.json`. |
 
 ## Highlights
@@ -401,11 +404,31 @@ settings and per-model work-kind summaries for the shared controls.
   them requires fresh build approval. Running, checking and finished tasks are
   read only. Unsaved details survive live updates and failed saves, and stale
   conflicting edits are refused by the host.
-- Nothing you click in Social mode leaves it. Every other page, whether opened
-  from Full view, Watch, Search, a key, the companion or a link inside
-  another page, opens inside Social's own narrow rail instead of Studio's menu:
-  the spark at its top returns to Social, and the Studio switch at its foot is
-  the only way out of the mode. Home is Social, so **H**, every Home button and
+- Social keeps to its own places (`renderer/social.js`, after a QA pass on
+  2026-10-06 found it reading as a development dashboard): Home, Friends,
+  Projects and Activity, in its rail on every Social page, Home included, with
+  Search, Settings, Help and the Studio switch; the Inbox, Settings and the
+  setup guide open there too. A page of Studio's (the Map, the boards, Team,
+  Fleet, Trace, Worktrees, the model pages) or a session, whether opened from
+  Search, a key, a link or **Open in Studio**, switches to Studio first and
+  opens there with what it was asked for (`nav.js` `go()` asks
+  `MefiSocial.studioOnly()`); the first time, a note says how to come back.
+  Social's box has one action, its status bar shows what runs and what waits
+  on you (usage, cost, the machine's load and the permission mode are
+  Studio's), and the line under the box clears itself once its news is old.
+  A wide window is used rather than left empty at the sides (2026-10-07): from
+  a layer 1440 px wide Home has a column at the right (`vibe.js` `syncDock`,
+  `#vibe-layer[data-side="on"]`) with the Friends card at its top
+  (`#today-side`) and the conversation docked under it (`data-dock="chat"`),
+  the box and its status line under its thread (`today.js` `placeBox`). The
+  conversation's close button keeps it away (`mefiStudio.social.chatDock`)
+  until it is opened again and Friends keeps the column; a narrower window
+  takes the column away without that choice, and a decision or a panel opens
+  over it. Narrower, Home lays itself out by its own width (the `today-page`
+  container): Friends beside Your work from 900 px, a column of its own at the
+  right from 1180 px. Activity, Projects and Friends' places run as wide as
+  1640 px, with their cards side by side.
+  Home is Social, so **H**, every Home button and
   a restored session land there. Leaving Command goes back to the page it was
   opened from, and **Back** on a Work page with nothing behind it returns to
   Social. Studio's classic-tabs choice is kept for Studio; Social always uses its rail.
@@ -567,6 +590,175 @@ settings and per-model work-kind summaries for the shared controls.
   clipped and shown as text, never sent to a model. Playdates need the rooms
   hub to relay `companion` frames (see [community.md](community.md)); until it
   does, Friends says so and Pip is there to practice.
+- **The Shop** (`renderer/friends-shop.js`, `window.MefiShop`; main's
+  `hub:shop` channel; the relay's `relay/src/shop.mjs` and
+  `relay/src/shop-drops.mjs`): scales for Ember, pets, menu effects, node
+  styles (**Dragon scales**, **Star chart**, **Lanterns** and **Neon**) and
+  themes (Studio's own style packs)
+  for the credits members earn (never bought with money), and the style packs
+  members make. Every theme and node style Studio comes with stays free: the
+  Shop sells new things only. It is a page of its own (route `shop`, a
+  workspace page; `openPage`/`closePage`): Friends' place **Shop**, its Search
+  row, Settings › Appearance's **Open the Shop** and every older way in land
+  there (`renderer/nav.js` `go()`), Friends' list column marks its row and the
+  breadcrumb reads Friends / Shop, and it stays in Social (`renderer/social.js`
+  PAGES), where Friends' places show as a row at its top. Roomy like a
+  storefront: the title, the balance and **How to earn credits** (Friends ›
+  Events), one row of views (**Home**, **Pets**, **Menu effects**, **Node
+  styles**, **Themes**, **Community**, **Owned**, **Make a style**), then on
+  Home the month's **drop** as a banner made from the drop's own data (a
+  gradient and a soft pattern from its colours, "October drop · Leaves in 24
+  days", its name and line, and up to three of its pieces live inside it: a
+  pet flying in the big tile, a node style lit on the drop's own colour, a
+  theme as a little window), the drop's items, the next drop as a teaser
+  ("Next drop: Frost Fair, in 24 days"), **Featured this week** (four
+  classic items, "New picks in 3 days") and every category. Drops rotate
+  monthly ([shop-drops.md](shop-drops.md)): a drop's items are on sale for its
+  month and then rotate out (everyone who got one keeps it); a later drop may
+  bring one back. Cards are evenly sized, the live preview filling most of
+  the card, with the name (the card's one button: the whole card opens it, and
+  the keyboard's ring goes round the whole card), the price with the gem or
+  **Owned**, and badges (**New**, **Leaving soon** in a drop's last week, **In
+  use**). A card opens its **detail**, a dialog with a large live preview,
+  what it is, **Try for 2 minutes** and **Buy** or **Get** (or **Use**), and
+  **Report** (and a moderator's **Remove**) on a member's pack; Esc, ×, or a
+  press on the page around it closes it. Ember the dragon itself comes free
+  with every Studio: its card says Free, and its detail has only a **Show
+  Ember** switch (`MefiPets.set({ on })`; On while Ember itself is out, so it
+  reads Off while a pet from the Shop flies instead). A pet the Shop lists
+  (kind `pet`, `studio:pet-<kind>`) flies in its card, is tried with
+  `MefiPets.preview({ kind })` and let out with `MefiPets.set({ on, kind })`.
+  Every preview is live: scales on a
+  flying Ember (`MefiPets.paintPreview`), an effect played on a little menu on
+  hover, focus or Try (`MefiEffects.demo`; by itself in the banner and a
+  detail), a node style as a little board of four of its nodes on their wires
+  with a pulse running one (`MefiNodeStyles`, in the theme's own sky), a theme
+  as a tiny Studio window painted from its own colours. Only what is on screen
+  moves, and only with motion on: one still frame with motion Off, and with
+  motion Calm the cards hold still while the banner and an open detail move.
+  **Try for 2 minutes** previews one item at a time (`MefiPets.preview`,
+  `MefiEffects.preview`, `MefiMusic.previewNodeStyle` on the real tree,
+  `MefiMusic.previewPack`); the detail steps aside so the item can be seen,
+  and a banner at the top has the time left, Buy and Stop; Stop, the clock and
+  leaving the Shop end it. **Buy for N** asks first, naming the item, the price
+  and the balance after. A member's pack can carry a tip for its maker (No tip, 5, 10,
+  25 or any amount up to 100; never on Studio's own items) and the question
+  shows the total; a member's free pack reads "Free · tips welcome" and its
+  **Get** asks the same way. Every refusal is a sentence: how many more
+  credits are needed and how to earn them, a changed price asked again, the
+  Project hub's words for a hold, an item no longer in the Shop, one that
+  rotated out with its drop ("This one has rotated out"). **Use** puts
+  what you own on (`MefiPets.set({ skin })`, `MefiEffects.use`,
+  `MefiMusic.applyNodeStyle(key)`, `MefiMusic.applyPack(pack, true)`).
+  Settings › Appearance lists the Shop's node styles under **From the Shop**,
+  "(in the Shop)" and not choosable until you own one, with **Open the Shop**
+  beside them; a saved one this PC no longer owns falls back to Classic orbs
+  at launch. **Make a style** has five colours with hex fields, a node style,
+  material and font, a big live preview and the WCAG contrast of text on the
+  background and on panels and of the accent (4.5:1 each: Studio sets text in
+  the accent too);
+  `MefiShop.checkPack` is the relay's own check and says what stops a pack
+  from publishing. **Use it myself** puts it on this PC only; **Publish**
+  lists it free or for 10 to 250 credits; **Your packs** has Edit, Unlist and
+  List again, how many times each was got ("Got 5 times") and credits earned.
+  When a member gets one of your packs, Friends' pop-up says so ("A member got
+  one of your style packs: +12 credits", with **Your packs**; off with **Pop-ups
+  from friends**), the Shop's balance moves and Your packs reads again. A
+  member's pack has **Report** (a reason and an optional line), a moderator
+  also sees **Remove**, and a reported pack shows in Friends › Moderation with
+  **Remove pack**. What you own is kept in
+  `localStorage["mefiStudio.shop.v1"]` and read again when the Shop opens,
+  after a purchase and when the room service connects (`mefi-shop-owned` tells
+  the rest of Studio). Signed out or out of reach, the same page is a
+  **showroom**: Studio's own items from this PC's copy of the catalog (main's
+  `hub:shop` shopCatalog, no relay asked), each with its preview and Try, and
+  in place of Buy the one thing that helps (**Sign in to get it**, which starts
+  Friends' own sign-in, its card at the page's foot coming into view to say
+  each step; **Connect to get it**; **Join the Discord to get it**); members'
+  packs say they need sign-in,
+  and what you own keeps working. A part not in the build says "Comes with
+  the next Studio update." Kill switches per device: `localStorage`
+  `mefiStudio.shop.page` = "off" shows the Shop as a Friends place again,
+  `mefiStudio.shop.showroom` = "off" shows a signed-out Shop only the sign-in
+  card and what you own.
+- **Friends › Moderation** (`renderer/friends-mod.js`, `window.MefiFriendsMod`;
+  main's `hub:room` mod* methods; the relay's `/v1/admin/*` routes, which check
+  the member is a moderator again). Shown only to moderators. **Looks like
+  farming** lists members whose last 30 days of credits came mostly from one
+  member, or two members trading (`credits.mjs farmingFlags`, a member who
+  used Forget me since counted under an id that names nobody), each with
+  **Review**: where the credits came from, account ages, **Take back** from
+  one giver (a forgotten one too) or all of them, and **Suspend**. **Build
+  Jam** shows the jam waiting for its day of review (else this week's): each
+  entry in its place now, every vote, whether it counts and why not, and each
+  voter's account age, join date and batch letter (accounts made within 3
+  days of each other that joined within 12 hours count once, `events.mjs`),
+  with **Don't count** a voter, **Remove from the jam**, **Pay the prizes
+  now** and **Hold the prizes**. **Reports** (messages, projects, Shop packs)
+  and **Look someone up** as before. **Rewards** turns plays, stars, building
+  together, co-work hours, Shop sales, featuring or the jam's prizes off for
+  everyone while a new trick is looked into (`credits.mjs SWITCHES`, audited):
+  a kind that is off pays nothing and never pays later for that time, and the
+  jam's prizes are held, not lost; the jam's day of review and its
+  one-vote-per-batch rule can be switched off too, should either misfire. The relay can also post a one-line heads-up
+  to a private moderators' Discord channel (`relay/src/alerts.mjs`, the
+  optional `MOD_ALERT_WEBHOOK` secret, and `MOD_ALERT_BOT_TOKEN` for a direct
+  message from the Studio bot to the `OWNER_IDS` accounts). **Credits on hold**
+  lists what a newcomer wave would have paid a member (more than 3 members in
+  their first 30 days in the server paying the same member in a week: the
+  first 3 are paid, the rest wait), by member and by newcomer with account
+  ages, with **Pay** and **Drop** for all of it or one newcomer's
+  (`credits.mjs` `credit_held`, schema v7); the member's Project hub line says
+  how many credits wait for a quick check.
+- **Ember and friends' pets** (`renderer/pets.js`, `window.MefiPets`; main's
+  `hub:pet`; the relay's `relay/src/pets.mjs`). Ember, the dragon every Studio
+  comes with, flies on its own small canvas above the page and never takes
+  the pointer (Settings › Appearance › Interface, **Pet and menu effects**;
+  a new profile's first run switches it on). The Shop's pets fly the same
+  flight with bodies and painters of their own: a **Cloud dragon**
+  (`studio:pet-cloud`), a **Phoenix** (`studio:pet-phoenix`) and a
+  **Will-o'-wisp** (`studio:pet-wisp`); every skin fits every pet, and a pet
+  or skin this PC does not own (`MefiShop.owns`) is Ember in the theme's
+  colours. Each pet keeps its own name. **Petting**: the pointer resting on
+  the pet's body for half a second (hit-tested against its spine and head;
+  clicks still go through) stops it, turns its head to the pointer and makes
+  it purr, with a few hearts and its name above it; quick circles near your
+  own pet start a short chase. Neither happens while you type or with the
+  card's **Plays with your pointer** off. **Little things**, minutes apart: a
+  stretch and a yawn on waking, a flick of the tail at rest, a tiny sneeze of
+  sparks, a firefly to chase (with Calm it drifts past and the pet only
+  watches). Nothing with motion Off; `localStorage["mefiStudio.pet.antics"] =
+  "off"` stops them on one PC. The card shows the pet moving
+  (`MefiPets.livePreview`, only while on screen with motion on;
+  `mefiStudio.pet.livePreview = "off"` keeps it still) with **Pet**,
+  **Name** and **Colours** and a two-minute Try for a pet or skin not owned.
+  Studio tells the relay which pet you have (`hubPet`: kind, skin and name,
+  or none) and the relay keeps it on your live connection only, showing a
+  Shop pet or skin only to its owner. While a room is open in Friends ›
+  Rooms, the relay's `roomPets` for that room brings the other members' pets
+  in (`MefiPets.guests`): each flies in from an edge with its owner's name
+  above it, plays with your pet, and flies out when its owner leaves or you
+  leave the room. Visitors come only while your own pet is on, never with
+  motion Off, five at most. Pets come in generations (the relay's
+  `PET_GENERATION`, `ready.features` "pets.2"): a relay or a friend's Studio
+  that does not know a kind yet is told, or shows, Ember instead.
+- **Menu effects** (`renderer/effects.js`, `window.MefiEffects`; Shop items,
+  picked in Settings › Appearance › Interface, **When a menu closes**):
+  **Dissolve**, **Burn away**, **Stardust**, **Blown away** (the menu drifts
+  aside while its grains stream off with the wind), **Shatter** (cracks run
+  out from a blow, then the pieces fall), **Glitch** (slices of the real menu
+  jump with a colour split and blink out) and **Spirits** (October's: it
+  fades into wisps of smoke that rise and curl). They play when a menu, a
+  popover (permissions, the chat's tools, the Inbox, Build's More, the
+  session panel's menus, the Layout card, info boxes), a dropdown, a
+  right-click or tab menu, or Search closes; Search's scrim fades as usual
+  while its sheet leaves. A leaving menu is inert and hidden from screen
+  readers at once, its closer sends focus back at once, the pointer passes
+  through it, and opening it again mid-effect brings it back whole. With
+  motion Off or **It fades out** every menu closes at once. The Shop's
+  previews call `MefiEffects.demo` (one play) or `MefiEffects.loop` (plays,
+  comes back gently and plays again, only while the sample is on screen and
+  motion is on; it returns `stop`).
 - **Share between my PCs** (renderer/pc-vault.js; main.cjs "Your PCs vault";
   scripts/pc-vault.cjs, vault-crypto.cjs, vault-shelves.cjs, share-review.cjs).
   A private `<account>/mefi-studio-vault` repository, every file sealed
@@ -709,8 +901,16 @@ settings and per-model work-kind summaries for the shared controls.
   close leaves it waiting as the Start here card (`MefiOnboarding.invite()`)
   with one toast to start it. When the helper has connected an AI, the
   walkthrough starts at Your project instead of its scan stop.
-- **The first run in the 0.5 layout** (`html[data-layout="v2"]`) is the 0.5
-  prototype's three-step welcome instead of the sheet: **Connect the AI you
+- **The first run in the 0.5 layout** (`html[data-layout="v2"]`) is a
+  four-step welcome instead of the sheet. **Make it yours** comes first:
+  Light, Dark or Stylized (families of music.js themes, `MefiMusic.looks()`,
+  applied through `applyLook`/`applyTheme` so they persist as an Appearance
+  pick would), a colour within the family, the text size (`MefiSize.apply`,
+  source `first-run`), motion (the Interface card's `#motion-toggle`) and
+  **Your dragon** (Ember, `renderer/pets.js`; switched on for a new profile
+  that has never chosen; a tiny Ember flies beside it, `MefiPets.livePreview`,
+  left out under 520 px). Every pick shows behind the card at once. Then
+  **Connect the AI you
   already use** (the coding tools `setup:cli-status` finds, each with its own
   Sign in or install, and **Other ways to connect**, which opens the sheet at
   Connect an AI), **Choose a project** (the projects, switched through the
@@ -718,7 +918,10 @@ settings and per-model work-kind summaries for the shared controls.
   it a first task** (`tasks:create`, then the workspace's own start). Skip,
   Escape and Start the task mark the revision seen and hand on exactly as the
   sheet's close does. An update still brings the sheet, and the classic layout
-  keeps it for a first run. `MefiSetupHelper.welcome()` opens it.
+  keeps it for a first run. `MefiSetupHelper.welcome()` opens it. Once the
+  welcome closes, a note beside the rail's Settings button
+  (`#setup-look-tip`, once: `mefiStudio.lookTip.v1`) says the look lives in
+  Settings › Appearance and that the Shop has more; key tips wait for it.
 - The menu stays open by default at widths of 1100px or more, with the page
   beside it. **Keep menu open** saves your choice across launches. When unpinned
   or narrower than 1100px, it opens over the page on hover or keyboard focus;
@@ -1566,7 +1769,62 @@ failed process stays an error and cannot produce briefing requests.
   halfway up its height) and sizes the frame once for the whole turn, so the
   tree spins in place at a steady size with every node in view.
   With the spin running, the camera also drifts inside that frame: a slow
-  pan and a gentle zoom that keep the whole tree in view.
+  pan and a gentle zoom that keep the whole tree in view. A small tree (fewer
+  than ten live nodes) may come in closer than its usual size, up to 1.7×
+  for one to three nodes, as far as the room allows. That ceiling eases over
+  about a third of a second as nodes come and go (at once with motion Off),
+  a frame that must shrink to keep a node in view does so at once, and the
+  flat map keeps its size. `mefiStudio.mapFill` saved as `off` in
+  localStorage keeps every tree at its usual size.
+- Every work orb shows its state as a ring in its legend colour (the
+  legend's Running, Needs you, Review and Done): a few pixels off the node
+  style's own outline, under the work orbit and the done badge. Running
+  breathes, Needs you pulses, Review and Done hold still (all still with
+  motion Off), and a light page draws it in the colour's deep ink. Agents,
+  the hub and quiet work wear none. Task orbs are a size up from the rest.
+  `mefiStudio.mapRings` saved as `off` in localStorage turns the rings off
+  (both switches are read when the Map loads).
+- **State changes at a glance.** When a work orb's state changes (it starts
+  running, needs you, goes to Review or is done), its ring sends out one
+  soft ripple in the new state's colour, about 0.8 s, at the hot cadence for
+  that long; only the node that changed does any work (`noteGlance` keeps the
+  state and when it began on the node's motion record). A node's first sight,
+  the first moment after the Map opens over a tree nobody was drawing
+  (`quietGlances`), motion Off, the rings off and Home's scenery send none.
+  `mefiStudio.mapRipple` saved as `off` turns the ripple off.
+- **The legend points at its nodes.** Running, Needs you, Review and Done
+  are pills in `#map-legend`, each with the count of its work orbs on the
+  Map (written only when a count moves). Pointing at one, or tabbing to it,
+  keeps that state's orbs at full strength and brightens their rings while
+  everything else dims toward a quarter; the dim eases in and out
+  (`stepLegendPoint`) and cross-fades from pill to pill. A click holds it
+  (`aria-pressed`, and `#cmd-announce` says how to let go) until the pill is
+  clicked again or Esc, which lets go of a held state before it opens the
+  companion; pointing at another pill meanwhile shows that one until the
+  pointer leaves. `mefiStudio.mapLegendPoint` saved as `off` puts back the
+  plain colour keys.
+- **A work orb's hover card.** Hovering a work orb shows the Map's tooltip
+  (`#cmd-tip`) as a small card, over its callout too: the title, the state in
+  the legend's words with its colour, and how long it has been so
+  ("Running · for 12 min"). The time is the run's own start for Running and
+  the finish for Done, else the change the Map saw; failing both it is a
+  lower bound ("for at least 5 min"). Quiet work says what it is doing in the
+  app's one vocabulary (Up next, Ready, Retry scheduled). Over the legend's
+  corner the card opens above the pointer. `mefiStudio.mapHoverCard` saved
+  as `off` keeps the old tooltip.
+- **The four states keep apart in every theme.** Running wears the theme's
+  accent; Needs you (amber), Review (blue) and Done (green) each keep at
+  least 40 degrees of hue from it and from one another as the Map draws
+  them, turning within their family when an accent comes close
+  (`glancePalette`, once per theme): Review toward violet on Daylight and
+  Midnight, Done toward lime on Forest and Aurora, Needs you toward rose on
+  Studio gold and Eclipse and toward yellow on Ember and Paper. A grey accent
+  (Chrome's silver) has no hue to meet. On a light page each state's colour
+  darkens only as far as 4.5:1 against the page needs, so its hue still
+  shows; words in a node's colour (a callout's number and status line, a
+  work label) take that colour's ink at 5.5:1. Bodies, badges, rings,
+  ripples, legend dots and the hover card share the colours.
+  `mefiStudio.mapStateHues` saved as `off` keeps the colours as they were.
 - The **Ambience** popover keeps the quick audio-source control beside the
   canvas and links to canonical **Appearance** and **Audio** settings.
   Appearance opens beside the live tree in a compact sidebar. **Theme**,
@@ -1625,11 +1883,15 @@ failed process stays an error and cannot produce briefing requests.
   workers. High CPU alone never limits builds.
 - **Follow** frames the active task; **Fit** repairs the layout. Pick node style
   (**Classic orbs**, **Soft glass**, **Minimal**, **Halo**, **Crystal**, plus
-  the Void collection's **Singularity**, **Prism** and **Sigil**) and
+  the Void collection's **Singularity**, **Prism** and **Sigil**, and once
+  bought in the Shop **Dragon scales**, **Star chart**, **Lanterns** and
+  **Neon**) and
   arrangement (**Constellation**, **Branches**, **Rings**,
   **Helix**, **Terraces**) per project, in 2D or real 3D. Every node style
   moves all the time and faster while its node works (a Sigil's hex cells
-  assemble, a Singularity's disc spins up, a Prism's shards orbit); a stale
+  assemble, a Singularity's disc spins up, a Prism's shards orbit, a
+  Dragon's seams glow with fire, a star's spikes reach further, a lantern's
+  candle flickers as it swings, a neon sign buzzes on); a stale
   session's rim is dashed and it moves at a slower pace; reduced motion holds
   each in a still pose. Wires stop at each node's edge.
 - The sky follows the colour theme — Aurora ribbons, Deep space, Nebula,
@@ -1680,7 +1942,8 @@ failed process stays an error and cannot produce briefing requests.
   records from the executor ledger. The absorb is the tree's: a finished node collapses
   into its host and its brief stays readable on that card under
   **Absorbed work**.
-- **Appearance** (`U`) groups colour themes, the Void collection, node style,
+- **Appearance** (`U`) groups colour themes (the light Daylight and Paper under
+  their own heading), the Void collection, the heading faces, node style,
   layout and effects. **Chrome** is listed first and is what a new install
   opens in: matte black panels, brushed-metal primary buttons and chosen
   segments, and a thin chrome edge on what is selected, with a sparing
@@ -2401,7 +2664,12 @@ button opens that dialog, and nothing is saved that you did not tick. **Publish
 to GitHub** and **Link to a repository** are dialogs too (`showPublish`,
 `showLink`, `showSignIn`, which New app and the launch screen can call).
 Sign-in uses the same setup window as Friends › Your PCs and is polled until an
-account appears; Studio never sees a password or a token. The launch screen's
+account appears; Studio never sees a password or a token. The window is a
+console of its own (`scripts/setup-window.cjs`, through `cmd /c start`), where
+`gh auth login --web` shows its one-time code and opens GitHub in the browser;
+without a console gh does neither. The release check asks gh for its token
+again a minute after it had none, so a sign-in reaches development updates
+without a restart. The launch screen's
 rows carry the same chips through `projects:glance` (local, no network, three
 at a time, a second and a half each).
 
@@ -2760,8 +3028,9 @@ handled here or anywhere else in the app (a status dot is colour plus words).
 
 The **Void Engine Discord** is where people share what they build with
 Studio, swap model setups and listen together. Nothing in Studio is locked
-behind it: every theme and node style, the two-tone Void collection included,
-is free for everyone. **Community** at the foot of the menu opens Settings ›
+behind it: every theme and node style Studio comes with, the two-tone Void
+collection included, is free for everyone (the Shop's extra node styles
+are for credits members earn, never for money). **Community** at the foot of the menu opens Settings ›
 Community, the card that holds the link. The full flow is in
 [community.md](community.md).
 

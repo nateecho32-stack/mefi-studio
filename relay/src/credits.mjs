@@ -6,7 +6,9 @@
 // someone else's project for two minutes, both of them earn (the maker 5, the
 // player 2), and a star earns the maker 3. Credits are never bought and never
 // cashed out; they are spent on featuring a project at the top of the hub for
-// a day.
+// a day, and in the Shop (shop.mjs), where a style pack's maker earns a share
+// of what it sold for (a tip included) through sale(), under that kind's own
+// caps.
 //
 // Ranks come in two kinds. Levels follow lifetime credits (Spark, Ember,
 // Flame, Comet, Star, Nova, Void) and are badges in Studio only. Special
@@ -23,9 +25,20 @@
 // played, a star once a week per member, and one member can make another
 // earn at most 15 credits a week, every kind together, under daily caps and
 // an overall 60 a day. A play token pays only for the day it started. Plays
-// and stars that count toward "Top" come from members in good standing only.
-// Moderators can read where a member's credits came from and take back the
-// ones that came from farming. Community events (events.mjs) add three
+// and stars that count toward "Top" come from members in good standing only,
+// and a member's plays count once a week per project there, however often
+// they play it (a few second accounts playing every day cannot outrun many
+// different players). A wave of newcomers (members in their first 30 days
+// in the server) paying one member is held, not paid: in any 7 days the
+// first 3 newcomers to pay a member are paid as anyone else, and from the
+// 4th on, what they would pay that member waits for a moderator's look
+// (Credits on hold), so a few new second accounts cannot farm for a main;
+// members who have been around longer, and newcomers' own credits, are
+// untouched. Moderators can read where a member's credits came
+// from, take back the ones that came from farming (also what a member who
+// later used Forget me gave, kept under an id that names nobody), and switch
+// off any kind of reward, the jam's prizes or featuring while they look into
+// a new trick (SWITCHES). Community events (events.mjs) add three
 // kinds paid only through award(): building together, co-work hours and the
 // weekly Build Jam's prizes, the first two under the day's community budget
 // (economy.mjs). There are no invite or referral rewards
@@ -34,7 +47,7 @@
 // here from lifetime credits, never sent by a Studio.
 
 import { publicLink, publicHost } from './media.mjs';
-import { DAY_MS, MINUTE_MS, b64url, cleanLine, hmac, isOpaqueId, isSnowflake, keyedBuckets, newId, sameBytes } from './util.mjs';
+import { DAY_MS, MINUTE_MS, b64url, cleanLine, hmac, isOpaqueId, isSnowflake, keyedBuckets, newId, randomBytes, sameBytes } from './util.mjs';
 
 export const RANKS = Object.freeze([
   Object.freeze({ key: 'spark', name: 'Spark', at: 0 }),
@@ -59,6 +72,11 @@ export const EARN = Object.freeze({
   together: Object.freeze({ amount: 4, perDay: 4, award: true }),
   cowork: Object.freeze({ amount: 4, perDay: 8, award: true }),
   jam: Object.freeze({ amount: 0, max: 450, perDay: 1000, award: true, prize: true }),
+  // A Shop sale (shop.mjs), paid only through sale(): a community pack's maker earns a share of what its buyer paid
+  // (the price and any tip). Prize-style, so the day's 60 and the 15-a-week pair limit do not stack on its own caps
+  // (300 a day, and GUARD.salePairWeek from one buyer to one maker in 7 days). A sale still counts toward that pair's
+  // 15 for every other kind, so after one, the buyer's plays and stars pay that maker nothing more that week.
+  sale: Object.freeze({ amount: 0, max: 100, perDay: 300, prize: true }),
   dayCap: 60,
 });
 
@@ -77,7 +95,44 @@ export const GUARD = Object.freeze({
   flagShare: 0.6,
   flagMutual: 10,
   projectReportsPerHour: 10,
+  salePairWeek: 100, // what one buyer's Shop purchases can make one maker earn in 7 days
+  // A "batch": two Discord accounts made within 3 days of each other that also joined the server within 12 hours of each
+  // other, most likely one person's (made and brought in together). A jam's votes from one batch count once
+  // (events.mjs). Narrow on purpose: two friends who signed up the same week and joined on different days are no batch.
+  batchMadeMs: 3 * DAY_MS,
+  batchJoinedMs: 12 * 60 * MINUTE_MS,
+  // A newcomer wave (WAVE_KINDS): members in their first 30 days in the server who pay one member. In any 7 days the
+  // first 3 newcomers to pay a member are paid; from the 4th on, what they would pay that member is held for a
+  // moderator, who pays it or drops it; a hold nobody decides on drops after 30 days.
+  newcomerMs: 30 * DAY_MS,
+  waveGivers: 3,
+  waveWindowMs: 7 * DAY_MS,
+  heldKeepMs: 30 * DAY_MS,
 });
+
+/** The kinds a newcomer wave's credits are held for: a member paying another by playing, starring or buying a pack. */
+export const WAVE_KINDS = Object.freeze(['played', 'starred', 'sale']);
+
+/**
+ * What a moderator can switch off while they look into a new trick (POST /v1/admin/credits/switches), without pausing
+ * the relay: each kind of reward (it pays nothing while off), the Build Jam's prizes (held, not lost: events.mjs pays
+ * them once they are back on) and featuring; and two of the jam's own rules, should one misfire: its day of review
+ * before the prizes pay, and one vote per batch of accounts (events.mjs). -> switch key: the EARN kinds it stops.
+ */
+export const SWITCHES = Object.freeze({
+  plays: Object.freeze(['played', 'play']),
+  stars: Object.freeze(['starred']),
+  together: Object.freeze(['together']),
+  cowork: Object.freeze(['cowork']),
+  jam: Object.freeze(['jam']),
+  sales: Object.freeze(['sale']),
+  featuring: Object.freeze([]),
+  review: Object.freeze([]),
+  batches: Object.freeze([]),
+});
+const SWITCH_OF = Object.freeze(Object.fromEntries(Object.entries(SWITCHES).flatMap(([key, kinds]) => kinds.map((kind) => [kind, key]))));
+/** A forgotten member's id in the credit rows they gave (forget below): random, so it names nobody. */
+export const GONE_ID = /^gone:[A-Za-z0-9_-]{16,22}$/;
 
 const DISCORD_EPOCH = 1_420_070_400_000n;
 /** When a Discord account was made, from its id (a snowflake), or null. */
@@ -138,13 +193,53 @@ export function projectLink(url) {
 /**
  * createCredits({ store, now, key, sendToUser, member })
  *   key: an HMAC key for play tokens; sendToUser(uid, type, fields); member(uid) -> describeMember()
- * -> { routes(route), forget(uid, fingerprint), fingerprint(uid), upkeep(), me(uid), card(uid), account(uid), front(uid), standing(uid, heldUntil) }
+ * -> { routes(route), forget(uid, fingerprint), fingerprint(uid), upkeep(), me(uid), card(uid), account(uid), front(uid), standing(uid, heldUntil),
+ *      spend(uid, amount), sale({ buyer, maker, itemId, amount, buyerHeld, makerHeld }), tell(uid, delta, reason),
+ *      farmingFlags(), isOff(switchKey), facts(uid) -> { accountCreatedAt, joinedAt }, heldList() }
  */
 export function createCredits({ store, now, key, sendToUser, member, economy = null }) {
   const accountRow = (uid) => store.get('SELECT * FROM accounts WHERE user_id = ?', uid);
   const playStarts = keyedBuckets({ capacity: GUARD.playStartsPerHour, refillPerSec: GUARD.playStartsPerHour / 3600, now });
   const starTaps = keyedBuckets({ capacity: GUARD.starsPerHour, refillPerSec: GUARD.starsPerHour / 3600, now });
   const projectReports = keyedBuckets({ capacity: GUARD.projectReportsPerHour, refillPerSec: GUARD.projectReportsPerHour / 3600, now });
+
+  /** The SWITCHES a moderator turned off (meta "credits_off"), as a Set of their keys. */
+  function switchedOff() {
+    try {
+      const list = JSON.parse(store.meta('credits_off') ?? '[]');
+      return new Set(Array.isArray(list) ? list.filter((key) => Object.hasOwn(SWITCHES, key)) : []);
+    } catch {
+      return new Set();
+    }
+  }
+  const isOff = (key) => switchedOff().has(key);
+
+  /** What the jam's batch rule reads about a member: when their Discord account was made and when they joined the server. */
+  const facts = (uid) => ({ accountCreatedAt: accountCreatedAt(uid), joinedAt: member(uid)?.joinedAt ?? null });
+
+  /** A member in their first 30 days in the server (GUARD.newcomerMs). */
+  function isNewcomer(uid, at = now()) {
+    const joined = member(uid)?.joinedAt;
+    return Number.isFinite(joined) && at - joined < GUARD.newcomerMs;
+  }
+
+  /**
+   * Whether what `actor` would pay `target` now waits for a moderator (a newcomer wave): the actor is a newcomer, and
+   * either what they gave this member lately is held already, or 3 other newcomers paid this member in the last 7 days
+   * and the actor was not one of them.
+   */
+  function waveHolds(actor, target, at) {
+    if (!isNewcomer(actor, at)) return false;
+    const since = at - GUARD.waveWindowMs;
+    if (store.get('SELECT 1 AS yes FROM credit_held WHERE actor_id = ? AND target_id = ? AND at > ?', actor, target, since)) return true;
+    const kinds = WAVE_KINDS.map(() => '?').join(', ');
+    const paid = store.all(`SELECT DISTINCT actor_id FROM credit_events WHERE target_id = ? AND at > ? AND amount > 0 AND kind IN (${kinds})`, target, since, ...WAVE_KINDS)
+      .map((row) => row.actor_id).filter((uid) => isSnowflake(uid) && isNewcomer(uid, at));
+    return !paid.includes(actor) && paid.length >= GUARD.waveGivers;
+  }
+
+  /** What is held for a member now, waiting for a moderator. */
+  const heldFor = (uid) => Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_held WHERE target_id = ?', uid)?.n ?? 0);
 
   /** Forget me's fingerprint of an account: keyed, so it names nobody without the relay's key. */
   async function fingerprint(uid) {
@@ -202,15 +297,28 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
       at,
     );
     if (!inserted) return 0;
-    const kindToday = Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE target_id = ? AND kind = ? AND day = ?', target, kind, today)?.n ?? 0);
+    // A kind a moderator switched off pays nothing, and its row stays at 0 like a revoked one, so what happened while
+    // it was off never pays later. The jam's prizes are held by events.mjs instead, before anything is paid.
+    if (kind !== 'jam' && isOff(SWITCH_OF[kind])) return 0;
+    const sum = (sql, ...args) => Number(store.get(sql, ...args)?.n ?? 0);
+    // What is held for the earner (a newcomer wave, below) counts toward every cap as if it were paid, so a held giver
+    // can never pile up more than a paid one could.
+    const kindToday = sum('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE target_id = ? AND kind = ? AND day = ?', target, kind, today)
+      + sum('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_held WHERE target_id = ? AND kind = ? AND day = ?', target, kind, today);
     // What this member already made the other earn in the last 7 days, every kind together.
-    const pairWeek = Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE actor_id = ? AND target_id = ? AND at > ?', actor, target, at - 7 * DAY_MS)?.n ?? 0);
+    const pairWeek = sum('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE actor_id = ? AND target_id = ? AND at > ?', actor, target, at - 7 * DAY_MS)
+      + sum('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_held WHERE actor_id = ? AND target_id = ? AND at > ?', actor, target, at - 7 * DAY_MS);
     const row = accountRow(target);
-    const earnedToday = row && row.day === today ? row.earned_today : 0;
+    const earnedToday = (row && row.day === today ? row.earned_today : 0) + sum('SELECT COALESCE(SUM(counted), 0) AS n FROM credit_held WHERE target_id = ? AND day = ?', target, today);
     const base = asked === null ? rule.amount : Math.max(0, Math.min(Math.floor(Number(asked) || 0), rule.max ?? rule.amount));
     const capped = Math.max(0, Math.min(base, rule.perDay - kindToday, prize ? Infinity : EARN.dayCap - earnedToday, prize ? Infinity : GUARD.pairWeek - pairWeek));
     const amount = economy ? economy.cap(kind, capped, today) : capped;
     if (amount === 0) return 0;
+    // A newcomer wave: what a 4th newcomer in a week would pay this member waits for a moderator (Credits on hold).
+    if (WAVE_KINDS.includes(kind) && waveHolds(actor, target, at)) {
+      store.run('INSERT INTO credit_held (event_id, actor_id, target_id, kind, day, amount, counted, at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', inserted.id, actor, target, kind, today, amount, prize ? 0 : amount, at);
+      return 0;
+    }
     store.run('UPDATE credit_events SET amount = ? WHERE id = ?', amount, inserted.id);
     const streakDay = row?.streak_day ?? 0;
     const streak = streakDay === today ? row.streak : streakDay === today - 1 ? row.streak + 1 : 1;
@@ -248,6 +356,34 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     });
     tell(target, paid, kind);
     return paid;
+  }
+
+  /**
+   * Spend credits inside the caller's transaction (the Shop): off the balance only, never the lifetime total (so a
+   * rank never drops), and never as a credit row, since several sums over credit_events do not look at the sign.
+   * The caller keeps its own record of what the credits bought. -> false when the balance is short.
+   */
+  function spend(uid, amount) {
+    const cost = Math.floor(Number(amount) || 0);
+    if (cost <= 0) return cost === 0;
+    if ((accountRow(uid)?.balance ?? 0) < cost) return false;
+    store.run('UPDATE accounts SET balance = balance - ? WHERE user_id = ?', cost, uid);
+    return true;
+  }
+
+  /**
+   * A Shop sale, inside the caller's transaction (shop.mjs): the maker of a community pack earns `amount` from its
+   * buyer, once per (buyer, maker, pack). Both must be in good standing (their holds read before the transaction),
+   * nobody earns from themselves, and one buyer is worth at most GUARD.salePairWeek credits to one maker in 7 days;
+   * what is left of the price is nobody's. Paid through pay(), so once and under the kind's day cap.
+   * -> the amount paid (the caller tells the maker once its transaction is done).
+   */
+  function sale({ buyer, maker, itemId, amount, buyerHeld = 0, makerHeld = 0 }) {
+    if (!isSnowflake(buyer) || !isSnowflake(maker) || buyer === maker) return 0;
+    if (!standing(buyer, buyerHeld).ok || !standing(maker, makerHeld).ok) return 0;
+    const week = Number(store.get(`SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE actor_id = ? AND target_id = ? AND kind = 'sale' AND at > ?`, buyer, maker, now() - 7 * DAY_MS)?.n ?? 0);
+    const asked = Math.max(0, Math.min(Math.floor(Number(amount) || 0), GUARD.salePairWeek - week));
+    return asked ? pay({ actor: buyer, target: maker, kind: 'sale', uniq: itemId, ref: itemId, amount: asked }) : 0;
   }
 
   function tell(uid, delta, reason) {
@@ -289,7 +425,8 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     const stand = standing(uid, held);
     return {
       user: { id: uid, name: who?.name ?? 'member' },
-      credits: { balance: money.balance, lifetime: money.lifetime, today: money.today, todayCap: money.todayCap },
+      // held: what a newcomer wave would have paid this member, waiting for a moderator's look.
+      credits: { balance: money.balance, lifetime: money.lifetime, today: money.today, todayCap: money.todayCap, held: heldFor(uid) },
       rank: rankFor(money.lifetime),
       specialRanks: specialRanks(who?.roleKeys, who?.isMod),
       streak: { days: money.streak, best: money.best },
@@ -326,8 +463,8 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     const since = at - FRONT.weekMs;
     const score = new Map();
     const bump = (id, field, n) => { const was = score.get(id) ?? { plays: 0, stars: 0 }; was[field] += n; score.set(id, was); };
-    // Plays and stars that count: from members in good standing, a play once per player and day.
-    for (const row of store.all('SELECT project_id, COUNT(*) AS n FROM play_log WHERE day > ? GROUP BY project_id', dayOf(since))) bump(row.project_id, 'plays', Number(row.n));
+    // Plays and stars that count: from members in good standing, each player once a week per project.
+    for (const row of store.all('SELECT project_id, COUNT(DISTINCT player_id) AS n FROM play_log WHERE day > ? GROUP BY project_id', dayOf(since))) bump(row.project_id, 'plays', Number(row.n));
     for (const row of store.all('SELECT project_id, COUNT(*) AS n FROM stars WHERE at > ? AND counted = 1 GROUP BY project_id', since)) bump(row.project_id, 'stars', Number(row.n));
     let top = null;
     for (const [id, week] of score) {
@@ -355,12 +492,100 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     const money = account(uid);
     const week = {
       earned: Number(store.get('SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE target_id = ? AND at > ?', uid, since)?.n ?? 0),
-      plays: Number(store.get('SELECT COUNT(*) AS n FROM play_log l JOIN projects p ON p.id = l.project_id WHERE p.owner_id = ? AND l.day > ?', uid, dayOf(since))?.n ?? 0),
+      plays: Number(store.get('SELECT COUNT(*) AS n FROM (SELECT DISTINCT l.project_id, l.player_id FROM play_log l JOIN projects p ON p.id = l.project_id WHERE p.owner_id = ? AND l.day > ?)', uid, dayOf(since))?.n ?? 0),
       stars: Number(store.get('SELECT COUNT(*) AS n FROM stars s JOIN projects p ON p.id = s.project_id WHERE p.owner_id = ? AND s.at > ? AND s.counted = 1', uid, since)?.n ?? 0),
     };
     const stand = standing(uid, held);
     const projects = Number(store.get('SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?', uid)?.n ?? 0);
     return { top: topView, fresh, rankUps, you: { balance: money.balance, lifetime: money.lifetime, rank: rankFor(money.lifetime), week, projects, hold: stand.ok ? null : { reason: stand.reason, until: stand.until } } };
+  }
+
+  /** A credit row's giver as a moderator reads it: a member's name, or what a forgotten member or an event is. */
+  function giverName(uid) {
+    if (String(uid).startsWith('gone:')) return 'a member who used Forget me';
+    if (String(uid).startsWith('event:')) return 'a community event';
+    return member(uid)?.name ?? store.get('SELECT name FROM members WHERE user_id = ?', uid)?.name ?? 'member';
+  }
+
+  /**
+   * Who to look at first (GET /v1/admin/credits/flags, and the moderators' alert): members whose last 30 days of
+   * credits came mostly from one member, and pairs who each made the other earn a lot. A member who later used Forget
+   * me still counts here as the giver they were, under an id that names nobody. -> at most 50, the most credits first.
+   */
+  function farmingFlags() {
+    const since = now() - GUARD.reviewDays * DAY_MS;
+    // Left out: a community event's prizes (no member gave them), and co-working rewards, which two people
+    // working together always earn from each other; the pair limit caps those, and a review still lists them.
+    const pairs = store.all(`SELECT target_id, actor_id, SUM(amount) AS amount FROM credit_events WHERE at > ? AND amount > 0 AND actor_id NOT LIKE 'event:%' AND kind NOT IN ('together', 'cowork') GROUP BY target_id, actor_id`, since);
+    const byTarget = new Map();
+    const given = new Map(); // "actor>target" -> amount
+    for (const row of pairs) {
+      const amount = Number(row.amount);
+      given.set(`${row.actor_id}>${row.target_id}`, amount);
+      const entry = byTarget.get(row.target_id) ?? { total: 0, top: null };
+      entry.total += amount;
+      if (!entry.top || amount > entry.top.amount) entry.top = { id: row.actor_id, amount };
+      byTarget.set(row.target_id, entry);
+    }
+    const flags = [];
+    for (const [uid, entry] of byTarget) {
+      const share = entry.total ? entry.top.amount / entry.total : 0;
+      const mutual = [...given.keys()].filter((key) => key.endsWith(`>${uid}`)).map((key) => key.split('>')[0])
+        .filter((other) => (given.get(`${other}>${uid}`) ?? 0) >= GUARD.flagMutual && (given.get(`${uid}>${other}`) ?? 0) >= GUARD.flagMutual);
+      const oneGiver = entry.total >= GUARD.flagMin && share >= GUARD.flagShare;
+      if (!oneGiver && !mutual.length) continue;
+      const forgotten = GONE_ID.test(entry.top.id);
+      flags.push({
+        id: uid,
+        name: giverName(uid),
+        total: entry.total,
+        top: { id: forgotten ? null : entry.top.id, name: giverName(entry.top.id), amount: entry.top.amount, share: Math.round(share * 100), accountCreatedAt: accountCreatedAt(entry.top.id), ...(forgotten ? { forgotten: true } : {}) },
+        why: oneGiver ? 'one-giver' : 'mutual',
+        mutual: mutual.slice(0, 5).map((other) => ({ id: other, name: giverName(other) })),
+      });
+    }
+    flags.sort((x, y) => y.total - x.total);
+    return flags.slice(0, 50);
+  }
+
+  /**
+   * Credits on hold, by the member they are for: the newcomers who would have paid them, how much each, how old each
+   * Discord account is and when each joined, and when the oldest hold drops. Oldest first.
+   */
+  function heldList() {
+    const rows = store.all('SELECT target_id, actor_id, SUM(amount) AS amount, COUNT(*) AS events, MIN(at) AS since FROM credit_held GROUP BY target_id, actor_id ORDER BY since');
+    const byTarget = new Map();
+    for (const row of rows) {
+      const entry = byTarget.get(row.target_id) ?? { member: { id: row.target_id, name: giverName(row.target_id) }, total: 0, since: row.since, givers: [] };
+      entry.total += Number(row.amount);
+      entry.since = Math.min(entry.since, row.since);
+      entry.givers.push({ id: row.actor_id, name: giverName(row.actor_id), amount: Number(row.amount), events: Number(row.events), ...facts(row.actor_id) });
+      byTarget.set(row.target_id, entry);
+    }
+    return [...byTarget.values()].sort((x, y) => x.since - y.since).map((entry) => ({ ...entry, dropsAt: entry.since + GUARD.heldKeepMs }));
+  }
+
+  /**
+   * A moderator decides on what is held for a member (all of it, or what one giver would have paid): "release" pays it
+   * (balance and lifetime, as any credit), "drop" lets it go. Audited. -> the amount it came to.
+   */
+  function decideHeld(target, action, from, modId) {
+    const where = from ? 'target_id = ? AND actor_id = ?' : 'target_id = ?';
+    const args = from ? [target, from] : [target];
+    const done = store.transaction(() => {
+      const rows = store.all(`SELECT * FROM credit_held WHERE ${where}`, ...args);
+      const total = rows.reduce((all, row) => all + Number(row.amount), 0);
+      if (!rows.length) return { total: 0, kind: null };
+      if (action === 'release') {
+        for (const row of rows) store.run('UPDATE credit_events SET amount = ? WHERE id = ?', row.amount, row.event_id);
+        store.run('INSERT INTO accounts (user_id, balance, lifetime) VALUES (?1, ?2, ?2) ON CONFLICT (user_id) DO UPDATE SET balance = balance + ?2, lifetime = lifetime + ?2', target, total);
+      }
+      store.run(`DELETE FROM credit_held WHERE ${where}`, ...args);
+      store.run('INSERT INTO audit (kind, actor_id, target_id, detail, at) VALUES (?, ?, ?, ?, ?)', action === 'release' ? 'credits-release' : 'credits-drop', modId, target, JSON.stringify({ from, total }), now());
+      return { total, kind: rows[0].kind };
+    });
+    if (action === 'release') tell(target, done.total, done.kind);
+    return done.total;
   }
 
   function routes(route) {
@@ -513,14 +738,17 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
           const stand = actor.readOnly ? { ok: false, reason: 'read-only' } : standing(actor.uid, playerHeld);
           const player = stand.ok;
           const both = player && standing(row.owner_id, ownerHeld).ok;
-          // The project's plays: once per player and day, from members in good standing.
+          // The play log: once per player and day, from members in good standing (the jam's votes read it).
           const fresh = player && Boolean(store.get('INSERT INTO play_log (project_id, player_id, day) VALUES (?, ?, ?) ON CONFLICT DO NOTHING RETURNING day', row.id, actor.uid, day));
-          if (fresh) store.run('UPDATE projects SET plays = plays + 1, last_played_at = ? WHERE id = ?', at, row.id);
+          // The project's plays, which "Top" ranks by: once a week per player, so playing it every day adds nothing more.
+          const weekly = fresh && !store.get('SELECT 1 AS yes FROM play_log WHERE project_id = ? AND player_id = ? AND day BETWEEN ? AND ?', row.id, actor.uid, day - 6, day - 1);
+          if (fresh) store.run('UPDATE projects SET plays = plays + ?, last_played_at = ? WHERE id = ?', weekly ? 1 : 0, at, row.id);
           // The maker earns once a day per player, whichever of their projects was played; the player once a day per maker.
           const owner = both ? pay({ actor: actor.uid, target: row.owner_id, kind: 'played', uniq: `d${day}`, ref: row.id }) : 0;
           const you = both ? pay({ actor: row.owner_id, target: actor.uid, kind: 'play', uniq: `d${day}`, ref: row.id }) : 0;
-          // Why nothing was paid, in a word Studio turns into a sentence: the player's hold, the maker's, or a limit already reached.
-          const why = !player ? stand.reason : !both ? 'maker-held' : !owner && !you ? 'limit' : null;
+          // Why nothing was paid, in a word Studio turns into a sentence: the player's hold, the maker's, plays switched
+          // off by a moderator, or a limit already reached.
+          const why = !player ? stand.reason : !both ? 'maker-held' : isOff('plays') ? 'paused' : !owner && !you ? 'limit' : null;
           return { counted: fresh, owner, you, why };
         });
         tell(row.owner_id, result.owner, 'played');
@@ -573,43 +801,42 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
 
     // Who to look at first: members whose last 30 days of credits came mostly
     // from one member, and pairs who each made the other earn a lot.
+    route('GET', '/v1/admin/credits/flags', () => reply(200, { ok: true, days: GUARD.reviewDays, flags: farmingFlags() }), { mod: true });
+
+    // Credits on hold (a newcomer wave): the list, and paying or dropping what is held for a member, all of it or one
+    // giver's (`from`). Not write routes, so they work while the relay is paused. Registered before
+    // /v1/admin/credits/:uid, which would match "held".
+    route('GET', '/v1/admin/credits/held', () => reply(200, { ok: true, holds: heldList(), keepDays: GUARD.heldKeepMs / DAY_MS }), { mod: true });
     route(
-      'GET',
-      '/v1/admin/credits/flags',
-      () => {
-        const since = now() - GUARD.reviewDays * DAY_MS;
-        // Left out: a community event's prizes (no member gave them), and co-working rewards, which two people
-        // working together always earn from each other; the pair limit caps those, and a review still lists them.
-        const pairs = store.all(`SELECT target_id, actor_id, SUM(amount) AS amount FROM credit_events WHERE at > ? AND amount > 0 AND actor_id NOT LIKE 'gone:%' AND actor_id NOT LIKE 'event:%' AND kind NOT IN ('together', 'cowork') GROUP BY target_id, actor_id`, since);
-        const byTarget = new Map();
-        const given = new Map(); // "actor>target" -> amount
-        for (const row of pairs) {
-          const amount = Number(row.amount);
-          given.set(`${row.actor_id}>${row.target_id}`, amount);
-          const entry = byTarget.get(row.target_id) ?? { total: 0, top: null };
-          entry.total += amount;
-          if (!entry.top || amount > entry.top.amount) entry.top = { id: row.actor_id, amount };
-          byTarget.set(row.target_id, entry);
-        }
-        const nameOf = (uid) => member(uid)?.name ?? store.get('SELECT name FROM members WHERE user_id = ?', uid)?.name ?? 'member';
-        const flags = [];
-        for (const [uid, entry] of byTarget) {
-          const share = entry.total ? entry.top.amount / entry.total : 0;
-          const mutual = [...given.keys()].filter((key) => key.endsWith(`>${uid}`)).map((key) => key.split('>')[0])
-            .filter((other) => (given.get(`${other}>${uid}`) ?? 0) >= GUARD.flagMutual && (given.get(`${uid}>${other}`) ?? 0) >= GUARD.flagMutual);
-          const oneGiver = entry.total >= GUARD.flagMin && share >= GUARD.flagShare;
-          if (!oneGiver && !mutual.length) continue;
-          flags.push({
-            id: uid,
-            name: nameOf(uid),
-            total: entry.total,
-            top: { id: entry.top.id, name: nameOf(entry.top.id), amount: entry.top.amount, share: Math.round(share * 100), accountCreatedAt: accountCreatedAt(entry.top.id) },
-            why: oneGiver ? 'one-giver' : 'mutual',
-            mutual: mutual.slice(0, 5).map((other) => ({ id: other, name: nameOf(other) })),
-          });
-        }
-        flags.sort((x, y) => y.total - x.total);
-        return reply(200, { ok: true, days: GUARD.reviewDays, flags: flags.slice(0, 50) });
+      'POST',
+      '/v1/admin/credits/held/:uid',
+      ({ actor, params, body }) => {
+        const from = body?.from === undefined || body?.from === null ? null : String(body.from);
+        if (!isSnowflake(params.uid) || !['release', 'drop'].includes(body?.action) || (from !== null && !isSnowflake(from))) return fail(400, 'bad-request');
+        const total = decideHeld(params.uid, body.action, from, actor.uid);
+        return reply(200, { ok: true, action: body.action, total, holds: heldList() });
+      },
+      { mod: true },
+    );
+
+    // The switches (SWITCHES): what a moderator turned off, and turning one off or back on (audited). Never a write
+    // route, so they work while the relay is paused too. Registered before /v1/admin/credits/:uid, which would match.
+    route('GET', '/v1/admin/credits/switches', () => reply(200, { ok: true, off: [...switchedOff()].sort(), switches: Object.keys(SWITCHES) }), { mod: true });
+    route(
+      'POST',
+      '/v1/admin/credits/switches',
+      ({ actor, body }) => {
+        const key = body?.key;
+        if (typeof key !== 'string' || !Object.hasOwn(SWITCHES, key) || typeof body?.on !== 'boolean') return fail(400, 'bad-request');
+        const off = store.transaction(() => {
+          const next = switchedOff();
+          if (body.on) next.delete(key);
+          else next.add(key);
+          store.setMeta('credits_off', JSON.stringify([...next].sort()));
+          store.run('INSERT INTO audit (kind, actor_id, detail, at) VALUES (?, ?, ?, ?)', 'credits-switch', actor.uid, JSON.stringify({ key, on: body.on }), now());
+          return [...next].sort();
+        });
+        return reply(200, { ok: true, off, switches: Object.keys(SWITCHES) });
       },
       { mod: true },
     );
@@ -632,16 +859,19 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
         );
         const total = rows.reduce((sum, row) => sum + Number(row.amount), 0);
         const givers = rows.map((row) => {
-          // Not a member: someone who used Forget me, or a community event's prize (events.mjs).
-          const gone = String(row.actor_id).startsWith('gone:') || String(row.actor_id).startsWith('event:');
-          const giver = gone ? null : member(row.actor_id);
+          // Not a member: a community event's prize (events.mjs), or someone who used Forget me, whose id here is a
+          // random one that names nobody, so a moderator can still take back what they gave (revoke's `from`).
+          const event = String(row.actor_id).startsWith('event:');
+          const forgotten = GONE_ID.test(row.actor_id);
+          const giver = event || forgotten ? null : member(row.actor_id);
           return {
-            id: gone ? null : row.actor_id,
-            name: String(row.actor_id).startsWith('event:') ? 'a community event' : gone ? 'a member who used Forget me' : (giver?.name ?? 'member'),
+            id: event ? null : row.actor_id,
+            name: giverName(row.actor_id),
+            ...(forgotten ? { forgotten: true } : {}),
             amount: Number(row.amount),
             events: Number(row.events),
             share: total ? Math.round((Number(row.amount) / total) * 100) : 0,
-            accountCreatedAt: gone ? null : accountCreatedAt(row.actor_id),
+            accountCreatedAt: event || forgotten ? null : accountCreatedAt(row.actor_id),
             joinedAt: giver?.joinedAt ?? null,
           };
         });
@@ -649,7 +879,7 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
         return reply(200, {
           ok: true,
           member: { id: params.uid, name: who.name, accountCreatedAt: accountCreatedAt(params.uid), joinedAt: who.joinedAt, standing: standing(params.uid, await heldUntil(params.uid)) },
-          credits: { balance: money.balance, lifetime: money.lifetime, rank: rankFor(money.lifetime).key },
+          credits: { balance: money.balance, lifetime: money.lifetime, rank: rankFor(money.lifetime).key, held: heldFor(params.uid) },
           days: GUARD.reviewDays,
           total,
           givers,
@@ -660,21 +890,25 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
 
     // Taking back credits that came from farming: every credit the member
     // earned in the last `days` (all of them, or only those `from` one
-    // member), off the balance and the lifetime total (so the rank too). The
-    // rows stay with amount 0, so the same plays and stars can never pay again.
+    // member, or from one who used Forget me since, by the id the review
+    // shows for them), off the balance and the lifetime total (so the rank
+    // too). The rows stay with amount 0, so the same plays and stars can never
+    // pay again.
     route(
       'POST',
       '/v1/admin/credits/:uid/revoke',
       ({ actor, params, body }) => {
         const days = body?.days === undefined ? GUARD.reviewDays : Number(body.days);
         const from = body?.from === undefined || body?.from === null ? null : String(body.from);
-        if (!isSnowflake(params.uid) || !Number.isSafeInteger(days) || days < 1 || days > 180 || (from !== null && !isSnowflake(from))) return fail(400, 'bad-request');
+        if (!isSnowflake(params.uid) || !Number.isSafeInteger(days) || days < 1 || days > 180 || (from !== null && !isSnowflake(from) && !GONE_ID.test(from))) return fail(400, 'bad-request');
         if (!member(params.uid) && !accountRow(params.uid)) return fail(404, 'not-found');
         const since = now() - days * DAY_MS;
         const total = store.transaction(() => {
           const where = from ? 'target_id = ? AND actor_id = ? AND at > ? AND amount > 0' : 'target_id = ? AND at > ? AND amount > 0';
           const args = from ? [params.uid, from, since] : [params.uid, since];
           const sum = Number(store.get(`SELECT COALESCE(SUM(amount), 0) AS n FROM credit_events WHERE ${where}`, ...args)?.n ?? 0);
+          // What the same givers would have paid them and is still held goes too, never paid.
+          store.run(`DELETE FROM credit_held WHERE ${from ? 'target_id = ? AND actor_id = ? AND at > ?' : 'target_id = ? AND at > ?'}`, ...args);
           if (!sum) return 0;
           store.run(`UPDATE credit_events SET amount = 0 WHERE ${where}`, ...args);
           store.run('UPDATE accounts SET balance = MAX(0, balance - ?1), lifetime = MAX(0, lifetime - ?1) WHERE user_id = ?2', sum, params.uid);
@@ -696,6 +930,8 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
         const row = projectRow(params.id);
         if (!row) return fail(404, 'not-found');
         if (row.owner_id !== actor.uid) return fail(403, 'forbidden');
+        // A moderator switched featuring off for now (SWITCHES): nothing is spent.
+        if (isOff('featuring')) return fail(409, 'limit', { reason: 'featuring-paused' });
         const at = now();
         const result = store.transaction(() => {
           const live = store.all('SELECT owner_id, featured_until FROM projects WHERE featured_until > ? ORDER BY featured_until', at);
@@ -723,10 +959,12 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
 
   /**
    * Forget me: the member's credits, projects, stars and plays. The credits
-   * they gave others stay, under the fingerprint instead of their id, so the
-   * receivers' daily and weekly limits still count them (deleted after a
-   * week); and the fingerprint holds this account's credits for 30 days, so
-   * forgetting and coming back cannot reset a limit.
+   * they gave others stay, under a random id that names nobody (and with no
+   * project), for the 180 days every credit row is kept: the receivers'
+   * daily and weekly limits still count them, and a moderator can still see
+   * them and take them back, so second accounts cannot hide what they paid
+   * someone by forgetting themselves. The fingerprint holds this account's
+   * credits for 30 days, so forgetting and coming back cannot reset a limit.
    */
   function forget(uid, print) {
     for (const row of store.all('SELECT id FROM projects WHERE owner_id = ?', uid)) store.run('DELETE FROM stars WHERE project_id = ?', row.id);
@@ -734,8 +972,10 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
     for (const row of store.all('SELECT project_id FROM stars WHERE user_id = ? AND counted = 1', uid)) store.run('UPDATE projects SET stars = MAX(0, stars - 1) WHERE id = ?', row.project_id);
     store.run('DELETE FROM stars WHERE user_id = ?', uid);
     store.run('DELETE FROM play_log WHERE player_id = ?', uid);
+    // What is held for them, or from them for someone else, goes: it was never paid.
+    store.run('DELETE FROM credit_held WHERE actor_id = ? OR target_id = ?', uid, uid);
     if (print) {
-      store.run('UPDATE OR IGNORE credit_events SET actor_id = ? WHERE actor_id = ? AND target_id <> ?', `gone:${print}`, uid, uid);
+      store.run('UPDATE OR IGNORE credit_events SET actor_id = ?, ref = NULL WHERE actor_id = ? AND target_id <> ?', `gone:${b64url(randomBytes(12))}`, uid, uid);
       store.run('INSERT INTO credit_holds (fingerprint, until) VALUES (?, ?) ON CONFLICT (fingerprint) DO UPDATE SET until = excluded.until', print, now() + GUARD.forgetHoldMs);
     }
     store.run('DELETE FROM credit_events WHERE actor_id = ? OR target_id = ?', uid, uid);
@@ -751,11 +991,12 @@ export function createCredits({ store, now, key, sendToUser, member, economy = n
       store.run('DELETE FROM projects WHERE id = ?', row.id);
     }
     store.run('DELETE FROM credit_events WHERE at < ?', at - PROJECT_LIMITS.eventKeepMs);
-    store.run(`DELETE FROM credit_events WHERE actor_id LIKE 'gone:%' AND at < ?`, at - 8 * DAY_MS);
     store.run('DELETE FROM credit_holds WHERE until < ?', at);
+    // Credits held for a newcomer wave that no moderator paid within 30 days drop.
+    store.run('DELETE FROM credit_held WHERE at < ?', at - GUARD.heldKeepMs);
     store.run('DELETE FROM play_log WHERE day < ?', dayOf(at) - 8);
     store.run('DELETE FROM features WHERE ends_at < ?', at - PROJECT_LIMITS.eventKeepMs);
   }
 
-  return Object.freeze({ routes, forget, fingerprint, upkeep, me, card, account, front, standing, heldUntil, award });
+  return Object.freeze({ routes, forget, fingerprint, upkeep, me, card, account, front, standing, heldUntil, award, spend, sale, tell, farmingFlags, isOff, facts, heldList });
 }

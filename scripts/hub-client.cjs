@@ -55,6 +55,17 @@
 //     an envelope for one PC (acked, or nacked "not-online" / "not-allowed").
 //     The relay answers with `pcs` (the PCs this one sees), `pcState` and
 //     `pcMsg` events. Envelopes are pc-trust.cjs's and pass here unread.
+//   - Pets (relay feature "pets", relay/src/pets.mjs): setPet names this
+//     member's pet ({ kind, skin, name } or null), said again after every
+//     `ready`, and the rooms this Studio has open answer with `roomPets`
+//     events: the pets of the members there, this member's own included. A
+//     kind newer than the relay's pets generation (its "pets.<n>" feature)
+//     goes as Ember, so an older relay never refuses the frame.
+//   - The Shop (relay feature "shop", relay/src/shop.mjs): shop() lists
+//     Studio's own items and members' style packs, shopOwned() what this
+//     member owns (for a new PC), shopBuy / shopPublish / shopUpdate /
+//     shopUnlist / shopReport, and modShopRemove for moderators. A pack's
+//     data comes back with the schema's keys only (packData).
 //
 // Like scripts/discord-oauth.cjs this is a network module, and everything it
 // reaches for is injected: fetch, the WebSocket class, the clock and the
@@ -85,15 +96,48 @@ const PRESENCE_EVERY_MS = 30_000;
 // Cloudflare without waking the relay (relay/src/hub-object.mjs).
 const KEEPALIVE_EVERY_MS = 30_000;
 const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
-// What this Studio tells the hub it can do (hello.features).
-const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs"]);
+// What this Studio tells the hub it can do (hello.features); "pets.2": it draws the Shop's pets too.
+const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs", "pets", "pets.2"]);
 // A historyReply must fit the hub's 16 KB frame limit.
 const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
 const PROJECT_KINDS = Object.freeze(["game", "app", "tool", "art", "music", "other"]);
 const PROJECT_VIEWS = Object.freeze(["new", "top", "played", "mine"]);
 const CREDIT_HOLDS = Object.freeze(["unknown", "read-only", "new-account", "new-member", "forgot-me"]);
+// What a moderator can switch off while they look into a new trick (relay/src/credits.mjs SWITCHES).
+const CREDIT_SWITCHES = Object.freeze(["plays", "stars", "together", "cowork", "jam", "sales", "featuring", "review", "batches"]);
+// A member who used Forget me, in a moderator's credit review: a random id that names nobody (relay credits.mjs GONE_ID).
+const GONE_ID = /^gone:[A-Za-z0-9_-]{16,22}$/;
+// Why a jam vote counts for nothing, or nothing more, in a moderator's view of the jam (relay events.mjs VOTE_WHYS).
+const VOTE_WHYS = Object.freeze(["no-entry", "standing", "self", "not-played", "own-batch", "same-batch"]);
 const RANK_KEY = /^[a-z_]{1,20}$/;
+// The Shop's shapes (relay/src/shop.mjs and shop-pack.mjs).
+const SHOP_VIEWS = Object.freeze(["studio", "new", "top", "owned", "mine"]);
+const SHOP_ITEM_KINDS = Object.freeze(["pet", "skin", "effect", "nodestyle", "pack"]);
+const SHOP_STATUSES = Object.freeze(["listed", "unlisted", "removed"]);
+const STUDIO_ITEM = /^studio:[a-z0-9-]{1,40}$/;
+const PACK_ID = /^pack_[A-Za-z0-9_-]{16}$/;
+const SHOP_CURSOR = /^[A-Za-z0-9_-]{1,32}$/;
+// The Shop's rotation (relay/src/shop-drops.mjs, feature "shop.drops"): a drop's id, its UTC times and its colours.
+const SHOP_DROP_ID = /^\d{4}-(?:0[1-9]|1[0-2])$/;
+const SHOP_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
+const SHOP_DROP_COLOURS = Object.freeze(["accent", "accent2", "background"]);
+const PACK_COLOUR = /^#[0-9a-fA-F]{6}$/;
+const PACK_PALETTE = Object.freeze(["accent", "background", "surface", "text"]);
+const PACK_NODE_STYLES = Object.freeze(["orbs", "glass", "minimal", "halo", "crystal", "singularity", "prism", "sigil"]);
+const PACK_MATERIALS = Object.freeze(["focus", "studio", "atmosphere"]);
+const PACK_FONTS = Object.freeze(["studio", "display", "serif", "mono"]);
+const PACK_PRICE_MAX = 250;
+const PACK_TIP_MAX = 100; // a tip for a community pack's maker, in credits
+// Pets' shapes (relay/src/protocol.mjs PET_KINDS, PET_GENERATION, PET_SKINS; renderer/pets.js). Each kind
+// came with a pets generation, and a relay's ready names the newest it knows ("pets.2").
+const PET_KINDS = Object.freeze(["dragon", "cloud", "phoenix", "wisp"]);
+const PET_GENERATION = Object.freeze({ dragon: 1, cloud: 2, phoenix: 2, wisp: 2 });
+const PET_SKINS = Object.freeze(["theme", "frost", "jade", "void", "gold"]);
+const PET_NAME_MAX = 24;
+const ROOM_PETS_MAX = 12;
+// The relay takes six pet frames a minute from one socket: a change waits its turn, and the latest one wins.
+const PET_EVERY_MS = 10_000;
 const ACK_TIMEOUT_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const BACKOFF_MS = Object.freeze([1_000, 2_000, 5_000, 10_000, 30_000, 60_000]);
@@ -424,6 +468,8 @@ function jamOf(value) {
     id: value.id, theme: line(value.theme, 60) ?? "", nextTheme: line(value.nextTheme, 60) ?? "",
     phase: JAM_PHASES.includes(value.phase) ? value.phase : "entries",
     startsAt: timeOf(value.startsAt), entriesUntil: timeOf(value.entriesUntil), endsAt: timeOf(value.endsAt), pool: count(value.pool, 1e6) ?? 0,
+    // When the results come: a day after voting closes, once a moderator had a look (a relay from before says nothing).
+    resultsAt: timeOf(value.resultsAt),
     entries: Array.isArray(value.entries) ? value.entries.map(entry).filter(Boolean).slice(0, 100) : [],
     you: { entered: opaque(value.you?.entered), votesLeft: count(value.you?.votesLeft, 10) ?? 0 },
     results: Array.isArray(value.results) ? value.results.map(jamPayout).filter(Boolean).slice(0, 100) : null,
@@ -438,6 +484,48 @@ function coworkOf(value) {
     attendees: count(value.attendees, 1e4) ?? 0, amount: count(value.amount, 1e4) ?? 0,
   };
 }
+// Credits on hold for a newcomer wave (relay credits.mjs heldList): by the member they are for, with each newcomer who
+// would have paid them, how much, how old their Discord account is and when they joined the server.
+function heldOf(value) {
+  if (!object(value) || !object(value.member) || !SNOWFLAKE.test(String(value.member.id ?? ""))) return null;
+  const when = (time) => (Number.isFinite(time) ? time : null);
+  return {
+    member: { id: String(value.member.id), name: text(value.member.name, 100) || "member" },
+    total: count(value.total, 1e12) ?? 0, since: when(value.since), dropsAt: when(value.dropsAt),
+    givers: Array.isArray(value.givers) ? value.givers.map((item) => (object(item) && SNOWFLAKE.test(String(item.id ?? "")) ? {
+      id: String(item.id), name: text(item.name, 100) || "member", amount: count(item.amount, 1e12) ?? 0, events: count(item.events, 1e9) ?? 0,
+      accountCreatedAt: when(item.accountCreatedAt), joinedAt: when(item.joinedAt),
+    } : null)).filter(Boolean).slice(0, 100) : [],
+  };
+}
+const holdsOf = (value) => (Array.isArray(value) ? value.map(heldOf).filter(Boolean).slice(0, 100) : []);
+// The switches a moderator turned off (relay credits.mjs SWITCHES), known keys only.
+const switchesOff = (value) => (Array.isArray(value) ? value.filter((key) => CREDIT_SWITCHES.includes(key)) : []);
+// A moderator's view of a Build Jam (GET /v1/admin/jam): each entry in its place now with its voters, whether each vote
+// counts and why not, each voter's account age, server join date and batch letter, and what the pool would pay now.
+function modJamOf(value) {
+  if (!object(value) || !opaque(value.id)) return null;
+  const person = (item) => {
+    const who = user(item);
+    return who ? { ...who, accountCreatedAt: timeOf(item.accountCreatedAt), joinedAt: timeOf(item.joinedAt), batch: /^[A-Z]$/.test(String(item.batch ?? "")) ? item.batch : null } : null;
+  };
+  const entry = (item) => {
+    const who = person(item?.user);
+    if (!who) return null;
+    const voters = Array.isArray(item.voters) ? item.voters.map((one) => {
+      const voter = person(one);
+      return voter ? { ...voter, counted: one.counted === true, why: VOTE_WHYS.includes(one.why) ? one.why : null } : null;
+    }).filter(Boolean).slice(0, 500) : [];
+    return { user: who, project: eventProject(item.project), votes: count(item.votes, 1e6) ?? 0, players: count(item.players, 1e6) ?? 0, resting: item.resting === true, voters };
+  };
+  return {
+    id: value.id, theme: line(value.theme, 60) ?? "",
+    status: ["entries", "voting", "review", "release"].includes(value.status) ? value.status : "review",
+    endsAt: timeOf(value.endsAt), resultsAt: timeOf(value.resultsAt), held: value.held === true, pool: count(value.pool, 1e6) ?? 0,
+    payouts: Array.isArray(value.payouts) ? value.payouts.map(jamPayout).filter(Boolean).slice(0, 100) : [],
+    entries: Array.isArray(value.entries) ? value.entries.map(entry).filter(Boolean).slice(0, 100) : [],
+  };
+}
 // GET /v1/events.
 function eventsPage(data) {
   const last = object(data?.lastJam) && opaque(data.lastJam.id) ? {
@@ -448,6 +536,8 @@ function eventsPage(data) {
   const together = object(data?.together) ? data.together : {};
   return {
     ok: true, now: timeOf(data?.now), jam: jamOf(data?.jam), lastJam: last, cowork: coworkOf(data?.cowork), nextCowork: timeOf(data?.nextCowork),
+    // A jam whose voting closed and whose results wait for a moderator's look: when they come (null while held).
+    reviewing: object(data?.reviewing) && opaque(data.reviewing.id) ? { id: data.reviewing.id, theme: line(data.reviewing.theme, 60) ?? "", resultsAt: timeOf(data.reviewing.resultsAt) } : null,
     together: { ticks: count(together.ticks, 100) ?? 0, needed: count(together.needed, 100) ?? 3, amount: count(together.amount, 1e4) ?? 0, everyMs: count(together.everyMs, 864e5) ?? 600000 },
     budget: { budget: count(budget.budget, 1e7) ?? 0, paid: count(budget.paid, 1e7) ?? 0, left: count(budget.left, 1e7) ?? 0, active: count(budget.active, 1e7) ?? 0 },
   };
@@ -461,6 +551,143 @@ function eventsFront(value) {
   } : null;
   const cowork = object(value.cowork) ? { id: opaque(value.cowork.id), startsAt: timeOf(value.cowork.startsAt), endsAt: timeOf(value.cowork.endsAt), here: count(value.cowork.here, 1e4) ?? 0 } : null;
   return { jam, cowork };
+}
+
+// ---- The Shop's shapes (relay/src/shop.mjs) ----------------------------------
+const shopItemId = (value) => typeof value === "string" && (STUDIO_ITEM.test(value) || PACK_ID.test(value));
+const isPackId = (value) => typeof value === "string" && PACK_ID.test(value);
+// A style pack's data with the schema's keys only (relay/src/shop-pack.mjs),
+// colours lower-cased, or null when it is not one. Anything else in it is
+// left behind, so nothing but colours and Studio's own keys reaches a page.
+function packData(value) {
+  if (!object(value) || value.v !== 1 || !object(value.palette)) return null;
+  const palette = {};
+  for (const key of [...PACK_PALETTE, "accent2"]) {
+    const colour = value.palette[key];
+    if (key === "accent2" && colour == null) continue;
+    if (typeof colour !== "string" || !PACK_COLOUR.test(colour)) return null;
+    palette[key] = colour.toLowerCase();
+  }
+  return {
+    v: 1, palette,
+    ...(PACK_NODE_STYLES.includes(value.nodeStyle) ? { nodeStyle: value.nodeStyle } : {}),
+    ...(PACK_MATERIALS.includes(value.material) ? { material: value.material } : {}),
+    ...(PACK_FONTS.includes(value.font) ? { font: value.font } : {}),
+  };
+}
+// A UTC ISO time as the relay writes a drop's (shop-drops.mjs DROP_TIME), or null.
+const shopTime = (value) => (typeof value === "string" && SHOP_TIME.test(value) && Number.isFinite(Date.parse(value)) ? value : null);
+// A Shop item from the relay, or null: only the known fields, strings and
+// numbers capped. A pack whose data is not a pack is left out. Its place in
+// the rotation: its drop, whether it is on sale (a relay from before drops
+// says nothing, and everything it lists is) and when it leaves.
+function itemCard(value) {
+  if (!object(value) || !shopItemId(value.id) || !SHOP_ITEM_KINDS.includes(value.kind)) return null;
+  const name = line(value.name, 40);
+  const data = value.kind === "pack" ? packData(value.data) : null;
+  if (!name || (value.kind === "pack" && !data)) return null;
+  return {
+    id: value.id, kind: value.kind, name, blurb: line(value.blurb, 160) ?? "",
+    price: count(value.price, 1e6) ?? 0, requires: shopItemId(value.requires) ? value.requires : null,
+    maker: object(value.maker) && snowflake(value.maker.id) ? { id: value.maker.id, name: text(value.maker.name, 100) || "member" } : null,
+    data, sales: count(value.sales, 1e9) ?? 0, owned: value.owned === true,
+    status: SHOP_STATUSES.includes(value.status) ? value.status : "listed",
+    createdAt: timeOf(value.createdAt), updatedAt: timeOf(value.updatedAt),
+    drop: SHOP_DROP_ID.test(String(value.drop ?? "")) ? value.drop : null, available: value.available !== false, leaves: shopTime(value.leaves),
+  };
+}
+// A drop as the relay lists it (shop-drops.mjs dropsAt): its id, name, line, times and banner colours (a colour that is
+// not #rrggbb is left out, and the banner uses the theme's), and for the current drop the ids of its items on sale.
+function dropCard(value, { items = false } = {}) {
+  if (!object(value) || !SHOP_DROP_ID.test(String(value.id ?? ""))) return null;
+  const name = line(value.name, 40), from = shopTime(value.from), until = shopTime(value.until);
+  if (!name || !from || !until || !(Date.parse(from) < Date.parse(until))) return null;
+  const colors = {};
+  for (const key of SHOP_DROP_COLOURS) if (typeof value.colors?.[key] === "string" && PACK_COLOUR.test(value.colors[key])) colors[key] = value.colors[key].toLowerCase();
+  return { id: value.id, name, blurb: line(value.blurb, 160) ?? "", from, until, colors, ...(items ? { items: Array.isArray(value.items) ? value.items.filter(shopItemId).slice(0, 48) : [] } : {}) };
+}
+// The drops a list carries: the current one, the next (a teaser) and the last that ended; null from a relay without them.
+function shopDrops(value) {
+  if (!object(value)) return null;
+  return { current: dropCard(value.current, { items: true }), next: dropCard(value.next), last: dropCard(value.last) };
+}
+// What a member typed for a pack: { name, blurb, price, data, listed } as the
+// relay takes them, the ones given only; null when one is wrong. The pack's
+// data goes as plain JSON, every key kept, so the relay's check can refuse a
+// key it does not name instead of it being dropped here, and say "too-big"
+// for anything over 2 KB that still fits a request (16 KB).
+function packFields(fields, { required = false } = {}) {
+  if (!object(fields)) return null;
+  const out = {};
+  if (fields.name !== undefined || required) {
+    const name = line(fields.name, 40);
+    if (!name || name.trim().length < 2) return null;
+    out.name = name;
+  }
+  if (typeof fields.blurb === "string" && !fields.blurb.trim()) out.blurb = "";
+  else if (fields.blurb != null) {
+    const blurb = line(fields.blurb, 160);
+    if (!blurb) return null;
+    out.blurb = blurb;
+  }
+  if (fields.price !== undefined || required) {
+    if (!Number.isInteger(fields.price) || (fields.price !== 0 && (fields.price < 10 || fields.price > PACK_PRICE_MAX))) return null;
+    out.price = fields.price;
+  }
+  if (fields.data !== undefined || required) {
+    if (!object(fields.data)) return null;
+    let json;
+    try { json = JSON.stringify(fields.data); } catch { return null; }
+    if (typeof json !== "string" || Buffer.byteLength(json) > 15 * 1024) return null;
+    out.data = JSON.parse(json);
+  }
+  if (fields.listed !== undefined) {
+    if (typeof fields.listed !== "boolean") return null;
+    out.listed = fields.listed;
+  }
+  return out;
+}
+
+// ---- Pets' shapes (relay/src/pets.mjs) ---------------------------------------
+// A pet as the relay takes it, { kind, skin, name } with the name on one line
+// and at most 24 characters, or null when it is not one.
+function petLook(value) {
+  if (!object(value) || !PET_KINDS.includes(value.kind) || !PET_SKINS.includes(value.skin)) return null;
+  const name = typeof value.name === "string" ? value.name.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim().slice(0, PET_NAME_MAX).trim() : "";
+  return { kind: value.kind, skin: value.skin, name };
+}
+// The newest pets generation a features list names ("pets" alone is the first), or 0.
+function petsGenerationOf(features) {
+  let newest = 0;
+  for (const name of Array.isArray(features) ? features : []) {
+    if (name === "pets") newest = Math.max(newest, 1);
+    const match = /^pets\.(\d{1,3})$/.exec(String(name));
+    if (match) newest = Math.max(newest, Number(match[1]));
+  }
+  return newest;
+}
+// A pet as a relay of that generation may take it: a kind newer than the
+// relay knows goes as Ember, so an older relay never refuses the frame.
+function petForRelay(pet, generation) {
+  if (!pet || (PET_GENERATION[pet.kind] ?? Infinity) <= Math.max(1, generation)) return pet;
+  return { ...pet, kind: "dragon" };
+}
+// A room's pets from the relay, each member once and at most 12, or null
+// when it is not a list: { id, userId, name, pet }, where id and userId are
+// the member's user id (id is what renderer/pets.js MefiPets.guests() reads)
+// and name is the member's display name.
+function roomPetsOf(value) {
+  if (!Array.isArray(value)) return null;
+  const seen = new Set();
+  const out = [];
+  for (const item of value.slice(0, ROOM_PETS_MAX)) {
+    const id = object(item) ? snowflake(item.userId) : null;
+    const pet = id ? petLook(item.pet) : null;
+    if (!pet || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, userId: id, name: text(item.name, 100) || "member", pet });
+  }
+  return out;
 }
 
 // A room's join code ("7K3Q-M2XR") and its link, or a failure.
@@ -510,6 +737,13 @@ function createHubClient(options = {}) {
   let remoteList = [];
   // My PCs: this PC as main named it ({ pc: { id, name, kind }, keys, lendTo }), or null.
   let pc = null;
+  // Pets: this member's pet as setPet named it (kept across reconnects and a
+  // Disconnect, since it is this Studio's own), what this socket last told
+  // the relay, and when, so changes keep to the relay's pace.
+  let myPet = null;
+  let petHeard = null;
+  let petSentAt = 0;
+  let petTimer = null;
   // Subscribed rooms, each with the parts of Studio holding it open (Rooms'
   // chat, Listen together, the cowork claims). The hub hears subscribe from
   // the first holder and unsubscribe only when the last lets go, so one part
@@ -530,6 +764,7 @@ function createHubClient(options = {}) {
       events: features.includes("events"),
       lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"), building: features.includes("building"),
       pcs: features.includes("pcs"), pcOn: Boolean(pc) && features.includes("pcs"),
+      shop: features.includes("shop"), pets: features.includes("pets"),
     };
   }
   function setState(next, nextError = null) {
@@ -703,6 +938,11 @@ function createHubClient(options = {}) {
         if (remote && features.includes("remote")) sendRemoteHello();
         // And which of them is one of My PCs (the relay forgets it when a socket closes).
         if (pc && features.includes("pcs")) sendPcHello();
+        // And this member's pet: a new socket starts without one, and is told at once.
+        petTimer = clearTimer(petTimer);
+        petHeard = null;
+        petSentAt = 0;
+        if (myPet) sendPetSoon();
         if (presenceTimer) stopEvery(presenceTimer);
         presenceTimer = every(() => { for (const roomId of rooms.keys()) send({ type: "presence", roomId }); }, PRESENCE_EVERY_MS);
         // The relay's keepalive keeps a socket with no rooms open (the remote,
@@ -836,6 +1076,12 @@ function createHubClient(options = {}) {
           : { ok: false, reason: typeof frame.reason === "string" ? frame.reason : "failed", retryAfter: Number.isFinite(frame.retryAfter) ? frame.retryAfter : undefined });
         return;
       }
+      // A room's pets (feature "pets"): the members there with a pet, this member's own included.
+      case "roomPets": {
+        const pets = features.includes("pets") && opaqueId(frame.roomId) ? roomPetsOf(frame.pets) : null;
+        if (pets) emit({ type: "roomPets", roomId: frame.roomId, pets });
+        return;
+      }
       case "error":
         emit({ type: "hubError", code: typeof frame.code === "string" ? frame.code : "unknown" });
         return;
@@ -865,6 +1111,23 @@ function createHubClient(options = {}) {
     send({ type: "pcHello", pc: { ...pc.pc }, keys: { ...pc.keys }, lendTo: [...pc.lendTo] });
   }
   const pcReady = () => state === "ready" && features.includes("pcs") && Boolean(pc);
+  // The pet frame to a relay that carries pets: at most one every PET_EVERY_MS
+  // (the latest pet waits its turn), and never one the relay already has. A
+  // pet the relay does not know yet goes as Ember.
+  function sendPetSoon() {
+    if (petTimer || state !== "ready" || !features.includes("pets")) return;
+    const pet = petForRelay(myPet, petsGenerationOf(features));
+    if (JSON.stringify(pet) === JSON.stringify(petHeard)) return;
+    const wait = petSentAt + PET_EVERY_MS - now();
+    if (wait > 0) {
+      petTimer = later(() => { petTimer = null; sendPetSoon(); }, wait);
+      return;
+    }
+    if (send({ type: "pet", pet })) {
+      petHeard = pet;
+      petSentAt = now();
+    }
+  }
 
   // An HTTP call with the hub session, renewed once when the hub says it
   // lapsed. Refusals keep the hub's own error, reason and retryAfter.
@@ -880,6 +1143,22 @@ function createHubClient(options = {}) {
     return answer;
   }
   const refused = (answer) => ({ ok: false, error: answer.error, ...(answer.reason ? { reason: answer.reason } : {}), ...(answer.retryAfter != null ? { retryAfter: answer.retryAfter } : {}) });
+  // A Shop refusal also keeps what Studio needs to say why: the item to get first (needs), the price now, the
+  // balance (and the tip that made it short), why this member cannot sell yet (hold, until), and the drop of an item
+  // that has rotated out (not-available).
+  const shopRefused = (answer) => {
+    const data = object(answer.data) ? answer.data : {};
+    return {
+      ...refused(answer),
+      ...(shopItemId(data.needs) ? { needs: data.needs } : {}),
+      ...(count(data.price, 1e6) != null ? { price: data.price } : {}),
+      ...(count(data.balance, 1e12) != null ? { balance: data.balance } : {}),
+      ...(count(data.tip, PACK_TIP_MAX) ? { tip: data.tip } : {}),
+      ...(CREDIT_HOLDS.includes(data.hold) ? { hold: data.hold } : {}),
+      ...(Number.isFinite(data.until) ? { until: data.until } : {}),
+      ...(SHOP_DROP_ID.test(String(data.drop ?? "")) ? { drop: data.drop } : {}),
+    };
+  };
   const bad = () => Promise.resolve({ ok: false, error: "bad-request" });
   const id = (value) => opaqueId(value);
   async function simple(method, path, body) {
@@ -896,6 +1175,12 @@ function createHubClient(options = {}) {
     const answer = await authed("GET", path);
     if (!answer.ok) return refused(answer);
     return { ok: true, [key]: Array.isArray(answer.data[key]) ? answer.data[key].map(shape).filter(Boolean) : [] };
+  }
+  // A pack the relay sent back after publishing, changing or unlisting it.
+  function packAnswer(answer) {
+    if (!answer.ok) return shopRefused(answer);
+    const pack = itemCard(answer.data.pack);
+    return pack ? { ok: true, pack } : { ok: false, error: "failed" };
   }
 
   return {
@@ -933,6 +1218,9 @@ function createHubClient(options = {}) {
       remote = null;
       remoteList = [];
       pc = null;
+      // The pet stays (it is this Studio's own); the next socket is told it again.
+      petTimer = clearTimer(petTimer);
+      petHeard = null;
       setState("off");
       if (token) await request("DELETE", "/v1/session", undefined, token);
       return status();
@@ -1078,11 +1366,13 @@ function createHubClient(options = {}) {
       if (!answer.ok) return refused(answer);
       const flags = Array.isArray(answer.data.flags) ? answer.data.flags.map((item) => {
         const who = user(item);
-        const top = user(item?.top);
+        // The most a member gave may come from one who used Forget me since: no id, a name that says so.
+        const forgotten = object(item?.top) && item.top.forgotten === true;
+        const top = forgotten ? { id: null, name: text(item.top.name, 100) || "a member who used Forget me" } : user(item?.top);
         if (!who || !top) return null;
         return {
           ...who, total: count(item.total, 1e9) ?? 0, why: item.why === "mutual" ? "mutual" : "one-giver",
-          top: { ...top, amount: count(item.top.amount, 1e9) ?? 0, share: count(item.top.share, 100) ?? 0, accountCreatedAt: Number.isFinite(item.top.accountCreatedAt) ? item.top.accountCreatedAt : null },
+          top: { ...top, amount: count(item.top.amount, 1e9) ?? 0, share: count(item.top.share, 100) ?? 0, accountCreatedAt: Number.isFinite(item.top.accountCreatedAt) ? item.top.accountCreatedAt : null, ...(forgotten ? { forgotten: true } : {}) },
           mutual: Array.isArray(item.mutual) ? item.mutual.map(user).filter(Boolean).slice(0, 5) : [],
         };
       }).filter(Boolean).slice(0, 50) : [];
@@ -1100,11 +1390,13 @@ function createHubClient(options = {}) {
       return {
         ok: true,
         member: { ...who, accountCreatedAt: when(data.member.accountCreatedAt), joinedAt: when(data.member.joinedAt), standing },
-        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, rank: RANK_KEY.test(String(data.credits?.rank ?? "")) ? data.credits.rank : "spark" },
+        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, rank: RANK_KEY.test(String(data.credits?.rank ?? "")) ? data.credits.rank : "spark", held: count(data.credits?.held, 1e12) ?? 0 },
         days: count(data.days, 365) ?? 30,
         total: count(data.total, 1e12) ?? 0,
         givers: Array.isArray(data.givers) ? data.givers.map((item) => ({
-          id: SNOWFLAKE.test(String(item?.id ?? "")) ? String(item.id) : null,
+          // A member's id, or the random one a member who used Forget me has here (modRevoke's `from` takes either).
+          id: SNOWFLAKE.test(String(item?.id ?? "")) || GONE_ID.test(String(item?.id ?? "")) ? String(item.id) : null,
+          forgotten: GONE_ID.test(String(item?.id ?? "")),
           name: text(item?.name, 100) || "member",
           amount: count(item?.amount, 1e12) ?? 0, events: count(item?.events, 1e9) ?? 0, share: count(item?.share, 100) ?? 0,
           accountCreatedAt: when(item?.accountCreatedAt), joinedAt: when(item?.joinedAt),
@@ -1114,7 +1406,7 @@ function createHubClient(options = {}) {
     async modRevoke(userId, options = {}) {
       const from = options?.from == null ? null : String(options.from);
       const days = options?.days == null ? null : Number(options.days);
-      if (!SNOWFLAKE.test(String(userId ?? "")) || (from !== null && !SNOWFLAKE.test(from)) || (days !== null && (!Number.isSafeInteger(days) || days < 1 || days > 180))) return { ok: false, error: "bad-request" };
+      if (!SNOWFLAKE.test(String(userId ?? "")) || (from !== null && !SNOWFLAKE.test(from) && !GONE_ID.test(from)) || (days !== null && (!Number.isSafeInteger(days) || days < 1 || days > 180))) return { ok: false, error: "bad-request" };
       const answer = await authed("POST", `/v1/admin/credits/${userId}/revoke`, { ...(from ? { from } : {}), ...(days ? { days } : {}) });
       if (!answer.ok) return refused(answer);
       return { ok: true, revoked: count(answer.data.revoked, 1e12) ?? 0, credits: { balance: count(answer.data.credits?.balance, 1e12) ?? 0, lifetime: count(answer.data.credits?.lifetime, 1e12) ?? 0, rank: RANK_KEY.test(String(answer.data.credits?.rank ?? "")) ? answer.data.credits.rank : "spark" } };
@@ -1125,9 +1417,11 @@ function createHubClient(options = {}) {
       const reports = Array.isArray(answer.data.reports) ? answer.data.reports.map((item) => {
         if (!object(item) || !opaqueId(item.id)) return null;
         return {
-          id: item.id, kind: item.kind === "project" ? "project" : "message",
+          id: item.id, kind: item.kind === "project" ? "project" : item.kind === "shop" ? "shop" : "message",
           roomId: opaqueId(item.roomId) ? item.roomId : null, messageId: SNOWFLAKE.test(String(item.messageId)) ? String(item.messageId) : null,
           projectId: opaqueId(item.projectId) ? item.projectId : null,
+          // A Shop pack's report (relay/src/shop.mjs): modShopRemove takes the pack off.
+          packId: isPackId(item.packId) ? item.packId : null,
           author: user(item.author), reporter: user(item.reporter), reason: text(item.reason, 500), text: typeof item.text === "string" ? text(item.text, 2000) : null,
           verified: item.verified === true, createdAt: Number.isFinite(item.createdAt) ? item.createdAt : null,
         };
@@ -1139,6 +1433,41 @@ function createHubClient(options = {}) {
       if (!SNOWFLAKE.test(String(userId ?? "")) || !Number.isSafeInteger(minutes) || minutes < 0 || minutes > 60 * 24 * 365) return bad();
       return simple("POST", `/v1/admin/members/${userId}/suspend`, { minutes });
     },
+    // Credits on hold (relay credits.mjs): what newcomer waves would have paid members, waiting for a moderator.
+    async modHeld() {
+      const answer = await authed("GET", "/v1/admin/credits/held");
+      return answer.ok ? { ok: true, holds: holdsOf(answer.data.holds), keepDays: count(answer.data.keepDays, 365) ?? 30 } : refused(answer);
+    },
+    // Pay ("release") or drop what is held for a member: all of it, or only what one newcomer would have paid.
+    async modHeldDecide(userId, action, from = null) {
+      if (!SNOWFLAKE.test(String(userId ?? "")) || !["release", "drop"].includes(action) || (from != null && !SNOWFLAKE.test(String(from)))) return bad();
+      const answer = await authed("POST", `/v1/admin/credits/held/${userId}`, { action, ...(from != null ? { from: String(from) } : {}) });
+      return answer.ok ? { ok: true, total: count(answer.data.total, 1e12) ?? 0, holds: holdsOf(answer.data.holds) } : refused(answer);
+    },
+    // The switches (relay credits.mjs SWITCHES): which kinds of reward, the jam's prizes or featuring a moderator
+    // turned off for now, and turning one off or back on. -> { ok, off: [key...] }
+    async modSwitches() {
+      const answer = await authed("GET", "/v1/admin/credits/switches");
+      return answer.ok ? { ok: true, off: switchesOff(answer.data.off) } : refused(answer);
+    },
+    async modSwitch(key, on) {
+      if (!CREDIT_SWITCHES.includes(key) || typeof on !== "boolean") return bad();
+      const answer = await authed("POST", "/v1/admin/credits/switches", { key, on });
+      return answer.ok ? { ok: true, off: switchesOff(answer.data.off) } : refused(answer);
+    },
+    // The Build Jam to look at (relay events.mjs, GET /v1/admin/jam): the one waiting for its day of review, else this
+    // week's, every vote with whether it counts and why not, and the voters' account ages, join dates and batches.
+    async modJam() {
+      const answer = await authed("GET", "/v1/admin/jam");
+      return answer.ok ? { ok: true, jam: modJamOf(answer.data.jam) } : refused(answer);
+    },
+    // A voter's votes in that jam no longer count, and they cannot vote in it again.
+    modJamVoid(eventId, userId) {
+      if (!id(eventId) || !SNOWFLAKE.test(String(userId ?? ""))) return bad();
+      return simple("DELETE", `/v1/admin/jam/${eventId}/votes/${userId}`);
+    },
+    // Pay a jam in review now instead of waiting its day out.
+    modJamRelease(eventId) { return id(eventId) ? simple("POST", `/v1/admin/jam/${eventId}/release`) : bad(); },
     async front() {
       if (!features.includes("front")) return { ok: false, error: "unsupported" };
       const answer = await authed("GET", "/v1/front");
@@ -1189,7 +1518,8 @@ function createHubClient(options = {}) {
       const data = answer.data;
       return {
         ok: true, user: user(data.user),
-        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, today: count(data.credits?.today, 1e6) ?? 0, todayCap: count(data.credits?.todayCap, 1e6) ?? 0 },
+        // held: what a newcomer wave would have paid this member, waiting for a moderator's quick check.
+        credits: { balance: count(data.credits?.balance, 1e12) ?? 0, lifetime: count(data.credits?.lifetime, 1e12) ?? 0, today: count(data.credits?.today, 1e6) ?? 0, todayCap: count(data.credits?.todayCap, 1e6) ?? 0, held: count(data.credits?.held, 1e12) ?? 0 },
         rank: rankOf(data.rank), specialRanks: specialOf(data.specialRanks), streak: { days: count(data.streak?.days, 1e6) ?? 0, best: count(data.streak?.best, 1e6) ?? 0 },
         featureCost: count(data.featureCost, 1e6) ?? 0, canEarn: data.canEarn === true,
         // Why this member cannot give or earn credits yet, and until when (relay/src/credits.mjs GUARD).
@@ -1241,7 +1571,7 @@ function createHubClient(options = {}) {
       if (!features.includes("projects") || !id(projectId) || typeof token !== "string" || token.length > 64) return { ok: false, error: "bad-request" };
       const answer = await authed("POST", `/v1/projects/${projectId}/played`, { token });
       if (!answer.ok) return refused(answer);
-      const why = ["own", "maker-held", "limit", ...CREDIT_HOLDS].includes(answer.data.why) ? answer.data.why : null;
+      const why = ["own", "maker-held", "limit", "paused", ...CREDIT_HOLDS].includes(answer.data.why) ? answer.data.why : null;
       return { ok: true, counted: answer.data.counted === true, credited: { owner: count(answer.data.credited?.owner, 1e6) ?? 0, you: count(answer.data.credited?.you, 1e6) ?? 0 }, why };
     },
     async star(projectId, on = true) {
@@ -1255,6 +1585,97 @@ function createHubClient(options = {}) {
       const answer = await authed("POST", `/v1/projects/${projectId}/feature`);
       if (!answer.ok) return refused(answer);
       return { ok: true, featuredUntil: Number.isFinite(answer.data.featuredUntil) ? answer.data.featuredUntil : null, balance: count(answer.data.balance, 1e12) ?? 0 };
+    },
+    // ---- The Shop (feature "shop", relay/src/shop.mjs) -----------------------
+    // Studio's own pets, effects and packs, and members' style packs, got with
+    // credits (never money). Each answers { ok, ... } or the relay's refusal
+    // with needs, price, balance and hold kept (shopRefused).
+    // A list: "studio", "new", "top", "owned" or "mine" (anything else is
+    // "studio"); `cursor` is the `next` of the page before.
+    async shop(view = "studio", cursor = null) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      const which = SHOP_VIEWS.includes(view) ? view : "studio";
+      if (cursor != null && !SHOP_CURSOR.test(String(cursor))) return { ok: false, error: "bad-request" };
+      const answer = await authed("GET", `/v1/shop?view=${which}${cursor != null ? `&cursor=${cursor}` : ""}`);
+      if (!answer.ok) return shopRefused(answer);
+      const data = answer.data;
+      return {
+        ok: true, view: which,
+        items: Array.isArray(data.items) ? data.items.map(itemCard).filter(Boolean).slice(0, 100) : [],
+        next: typeof data.next === "string" && SHOP_CURSOR.test(data.next) ? data.next : null,
+        balance: count(data.balance, 1e12) ?? 0, canEarn: data.canEarn === true,
+        hold: object(data.hold) && CREDIT_HOLDS.includes(data.hold.reason) ? { reason: data.hold.reason, until: timeOf(data.hold.until) } : null,
+        // The rotation (feature "shop.drops"): the drops, and the week's Featured shelf and when it changes.
+        drops: shopDrops(data.drops),
+        featured: Array.isArray(data.featured) ? data.featured.filter(shopItemId).slice(0, 8) : [],
+        featuredUntil: shopTime(data.featuredUntil),
+      };
+    },
+    // Everything this member owns, to put back on a new PC: { items: [{ id, kind, name, data, updatedAt }] }.
+    async shopOwned() {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      const answer = await authed("GET", "/v1/shop/owned");
+      if (!answer.ok) return shopRefused(answer);
+      const owned = (item) => {
+        if (!object(item) || !shopItemId(item.id) || !SHOP_ITEM_KINDS.includes(item.kind)) return null;
+        const name = line(item.name, 40);
+        const data = item.kind === "pack" ? packData(item.data) : null;
+        return name && (item.kind !== "pack" || data) ? { id: item.id, kind: item.kind, name, data, updatedAt: timeOf(item.updatedAt) } : null;
+      };
+      return { ok: true, items: Array.isArray(answer.data.items) ? answer.data.items.map(owned).filter(Boolean).slice(0, 2048) : [] };
+    },
+    // Buying, or getting a free pack, with a tip of 0 to 100 credits for a
+    // pack's maker if the member likes (Studio's own items take none). `price`
+    // is the price the member was shown, so a changed one is never paid by
+    // surprise. -> { ok, item, paid (the tip included), balance }. Refusals:
+    // "gone", "owned", "own" (your own pack), "needs" (+ needs),
+    // "price-changed" (+ price), "short" (+ balance, price, tip), "no-tip".
+    async shopBuy(itemId, price, tip = 0) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      const extra = tip == null ? 0 : tip;
+      if (!shopItemId(itemId) || count(price, 1e6) == null || count(extra, PACK_TIP_MAX) == null) return { ok: false, error: "bad-request" };
+      const answer = await authed("POST", `/v1/shop/${itemId}/buy`, { price, ...(extra ? { tip: extra } : {}) });
+      if (!answer.ok) return shopRefused(answer);
+      const item = itemCard(answer.data.item);
+      return item ? { ok: true, item, paid: count(answer.data.paid, 1e6) ?? price + extra, balance: count(answer.data.balance, 1e12) ?? 0 } : { ok: false, error: "failed" };
+    },
+    // A style pack: { name, blurb?, price (0, or 10 to 250), data }. Refusals:
+    // "bad-pack", "too-big", "low-contrast", "hold" (+ hold, until) for a
+    // priced pack before its maker may earn, and the limits' reasons.
+    async shopPublish(fields = {}) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      const given = packFields(fields, { required: true });
+      if (!given) return { ok: false, error: "bad-request" };
+      return packAnswer(await authed("POST", "/v1/shop/packs", { name: given.name, ...(given.blurb ? { blurb: given.blurb } : {}), price: given.price, data: given.data }));
+    },
+    // Any of { name, blurb, price, data, listed } for one of your packs; listed
+    // false takes it off the Shop, true puts it back (within the limits).
+    async shopUpdate(packId, fields = {}) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      const given = packFields(fields);
+      if (!isPackId(packId) || !given) return { ok: false, error: "bad-request" };
+      return packAnswer(await authed("PUT", `/v1/shop/packs/${packId}`, given));
+    },
+    // Off the Shop's lists; everyone who owns it keeps it.
+    async shopUnlist(packId) {
+      if (!features.includes("shop")) return { ok: false, error: "unsupported" };
+      if (!isPackId(packId)) return { ok: false, error: "bad-request" };
+      return packAnswer(await authed("DELETE", `/v1/shop/packs/${packId}`));
+    },
+    // { reason, text? }: into the moderators' reports, once per member, never your own pack.
+    shopReport(packId, fields = {}) {
+      if (!features.includes("shop")) return Promise.resolve({ ok: false, error: "unsupported" });
+      const why = typeof fields?.reason === "string" ? fields.reason.trim() : "";
+      const more = typeof fields?.text === "string" ? fields.text.trim() : "";
+      if (!isPackId(packId) || !why || why.length > 500 || more.length > 300) return bad();
+      return simple("POST", `/v1/shop/packs/${packId}/report`, { reason: text(why, 500), ...(more ? { text: text(more, 300) } : {}) });
+    },
+    // Moderators: a pack off the Shop for good (its owners lose it too), and its open reports resolved. { reason? }
+    modShopRemove(packId, fields = {}) {
+      if (!features.includes("shop")) return Promise.resolve({ ok: false, error: "unsupported" });
+      const given = fields?.reason == null || fields.reason === "" ? null : line(fields.reason, 200);
+      if (!isPackId(packId) || (given === null && fields?.reason != null && fields.reason !== "")) return bad();
+      return simple("POST", `/v1/admin/shop/${packId}/remove`, given ? { reason: given } : {});
     },
     // ---- File claims in a cowork room (main.cjs "Cowork claims") -------------
     // Claim before editing, renew every minute, release when done. A conflict
@@ -1402,6 +1823,19 @@ function createHubClient(options = {}) {
       if (jsonBytes(env) > PC_ENV_BYTES) return Promise.resolve({ ok: false, reason: "too-large" });
       return withAck({ type: "pcSend", to, env });
     },
+    // This member's pet ({ kind, skin, name }, as renderer/pets.js has it), or
+    // null for none: kept, and said again after each `ready` from a relay that
+    // carries "pets", so the rooms this Studio has open show it to the members
+    // there. Only a change goes out, at most one every 10 s (the latest wins).
+    // False when the shape is wrong.
+    setPet(value) {
+      const next = value == null ? null : petLook(value);
+      if (value != null && !next) return false;
+      if (JSON.stringify(next) === JSON.stringify(myPet)) return true;
+      myPet = next;
+      sendPetSoon();
+      return true;
+    },
     // What this member is building ({ project, running, doneToday }), or null
     // to stop sharing. Kept and re-sent after a reconnect; only a change goes out.
     setBuilding(value) {
@@ -1433,4 +1867,6 @@ module.exports = {
   PC_KINDS, pcKeys, pcHello, pcView, pcViews,
   KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,
   eventsPage, eventsFront,
+  SHOP_VIEWS, SHOP_ITEM_KINDS, itemCard, packData, packFields, dropCard, shopDrops,
+  PET_KINDS, PET_GENERATION, PET_SKINS, petLook, roomPetsOf, petsGenerationOf, petForRelay,
 };

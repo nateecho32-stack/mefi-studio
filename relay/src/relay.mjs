@@ -20,6 +20,7 @@
 // sleeping; everything in this file's memory does not, and nothing here needs
 // it to: rate buckets refill, pending peer-history asks just lapse.
 
+import { createAlerts } from './alerts.mjs';
 import { createChat, idTime } from './chat.mjs';
 import { FRONT, RANKS, createCredits, rankFor } from './credits.mjs';
 import { createEconomy } from './economy.mjs';
@@ -28,8 +29,10 @@ import { createLeases } from './leases.mjs';
 import { createListen } from './listen.mjs';
 import { createOembed, publicLink } from './media.mjs';
 import { createPcs } from './pcs.mjs';
+import { createPets } from './pets.mjs';
 import { CLOSE_CODES, FEATURES, LIMITS, NOW_PLAYING_PROVIDERS, OLDEST_PROTOCOL, PROTOCOL_VERSION, checkVersion, hubFrame, parseClientFrame, validateBody, validateQuery } from './protocol.mjs';
 import { createSessions, readConfig, describeMember } from './sessions.mjs';
+import { createShop } from './shop.mjs';
 import { createStore } from './store.mjs';
 import { DAY_MS, MINUTE_MS, SECOND_MS, b64url, cleanLine, cleanText, fromB64url, hmac, hmacKey, isOpaqueId, isSnowflake, keyedBuckets, newId, randomBytes } from './util.mjs';
 
@@ -148,7 +151,10 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   let credits = null;
   let economy = null;
   let events = null;
+  let shop = null;
   let pcs = null;
+  let pets = null;
+  let alerts = null;
   let alarmAt = undefined; // unknown after a wake
   const oembed = createOembed({ fetch: fetchImpl, now });
 
@@ -187,11 +193,18 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     economy = createEconomy({ store, now });
     credits = createCredits({ store, now, key: keys.play, sendToUser, member: (uid) => sessions.member(uid), economy });
     credits.routes(route);
+    // A line to the moderators' private Discord channel when something needs a look (alerts.mjs; off without the secret).
+    alerts = createAlerts({ store, fetch: fetchImpl, webhook: env?.MOD_ALERT_WEBHOOK, botToken: env?.MOD_ALERT_BOT_TOKEN, owners: config.ownerIds });
     // Community events the relay runs by itself (events.mjs): the weekly Build Jam, co-work hours, building together.
-    events = createEvents({ store, now, credits, economy, paused, rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
+    events = createEvents({ store, now, credits, economy, paused, review: (info) => alerts.jam(info), rooms: { present: presentIn, online: onlineIn, open: openEventRoom, join: joinDirect, close: (roomId) => setStatus({ uid: null, isMod: true }, roomId, 'closed'), member: isMember } });
     events.routes(route);
+    // The Shop (shop.mjs): Studio's own items and members' style packs, bought with credits.
+    shop = createShop({ store, now, credits });
+    shop.routes(route);
     // My PCs (pcs.mjs): kept on the sockets, never in the store.
     pcs = createPcs({ readySockets, sendFrame, sockets, now, friendsOf });
+    // Members' pets in the rooms they have open (pets.mjs): kept on the sockets too.
+    pets = createPets({ readySockets, sockets, sendFrame, now, members: memberIds, hidden: onlineHidden, owns: (uid, itemId) => shop.owns(uid, itemId) });
     const at = now();
     store.run(
       `INSERT INTO rooms (id, kind, name, owner_id, policy, listed, max_members, status, member_count, created_at, updated_at)
@@ -220,7 +233,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   const onlineHidden = (uid) => store.get('SELECT online_hidden FROM members WHERE user_id = ?', uid)?.online_hidden === 1;
 
   const paused = () => config.paused || store.meta('paused') === 'true';
-  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building, FEATURES.events, FEATURES.pcs];
+  const features = () => [FEATURES.companion, FEATURES.companionDirect, FEATURES.historyPeer, FEATURES.keepalive, FEATURES.messagesSigned, FEATURES.lobby, FEATURES.joinCodes, FEATURES.online, FEATURES.credits, FEATURES.projects, FEATURES.front, FEATURES.friendOnline, FEATURES.building, FEATURES.events, FEATURES.pcs, FEATURES.shop, FEATURES.shopDrops, FEATURES.pets, FEATURES.petsGeneration];
 
   // ---- rooms in the store --------------------------------------------------------
 
@@ -367,11 +380,13 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     return result;
   }
 
+  /** Who has the room open, to its subscribers; their pets (pets.mjs) follow when they changed. -> whether roomPets went out. */
   function publishPresence(roomId) {
     const members = memberIds(roomId);
     let inStudio = [...new Set(readySockets().filter(({ a }) => a.rooms?.includes(roomId) && members.has(a.uid)).map(({ a }) => a.uid))];
     if (roomId === LOBBY.id) inStudio = inStudio.filter((uid) => !onlineHidden(uid));
     publishRoom(roomId, 'presence', { roomId, inStudio });
+    return pets?.publish(roomId) ?? false;
   }
 
   /** Take a room off a member's sockets (they left, were removed, or it closed). */
@@ -452,6 +467,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       credits.upkeep();
       events.upkeep();
       economy.upkeep();
+      shop.upkeep();
       store.setMeta('upkeep_at', at);
     });
   }
@@ -473,7 +489,21 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     for (const roomId of swept.roomIds) publishClaims(roomId);
     listen.sweep();
     for (const [id, ask] of pendingHistory) if (ask.expiresAt <= at) pendingHistory.delete(id);
-    if (at - Number(store.meta('upkeep_at') ?? 0) >= RETENTION.maintenanceEveryMs) upkeep();
+    if (at - Number(store.meta('upkeep_at') ?? 0) >= RETENTION.maintenanceEveryMs) {
+      upkeep();
+      // Once a day, after the upkeep: the moderators hear about members who newly look like farming (alerts.mjs).
+      try {
+        await alerts.flags(credits.farmingFlags());
+      } catch {
+        // the next day's upkeep tells them
+      }
+    }
+    // Every alarm: members whose credits newly went on hold for a newcomer wave (credits.mjs), each told once.
+    try {
+      await alerts.holds(credits.heldList());
+    } catch {
+      // the next alarm tells them
+    }
     // The community events never stop the rest of the alarm: a fault there waits for the next one.
     if (!paused()) {
       try {
@@ -484,6 +514,7 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
     }
     for (const bucket of [userCalls, mints, searches, reportsBucket, claimWrites, connects, frames, postsShort, postsLong, companions, historyAsks]) bucket.sweep();
     pcs.sweep();
+    pets.sweep();
     await schedule();
   }
 
@@ -584,6 +615,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
         return pcs.state(ws, a, frame);
       case 'pcSend':
         return answer(ws, frame.nonce, pcs.send(ws, a, frame));
+      case 'pet':
+        return pets.set(ws, a, frame);
       default:
         return sendFrame(ws, 'error', { code: 'badFrame', message: `${frame.type} is not carried by this relay` });
     }
@@ -675,7 +708,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       a.rooms = [...a.rooms, roomId];
       sockets.write(ws, a);
     }
-    publishPresence(roomId);
+    // The room's pets reach this socket with everyone's when the list changed, or on their own when it did not.
+    if (!publishPresence(roomId)) pets.welcome(ws, a, roomId);
     sendFrame(ws, 'listen', listen.snapshot(roomId));
     if (room.kind === 'cowork') sendFrame(ws, 'claims', { roomId, leases: leases.list(roomId) });
     return undefined;
@@ -814,9 +848,12 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   // ---- HTTP ----------------------------------------------------------------------
 
   const ROUTES = [];
+  // A :name in a pattern is an opaque id, unless the route names its own pattern in options.param (the Shop's
+  // buy route, whose items may be Studio's own, "studio:skin-frost").
   const route = (method, pattern, handler, options = {}) => {
     const names = [];
-    const regex = new RegExp(`^${pattern.replace(/:([a-zA-Z]+)/g, (_, name) => (names.push(name), '([A-Za-z0-9_-]{1,64})'))}$`);
+    const param = options.param ?? '[A-Za-z0-9_-]{1,64}';
+    const regex = new RegExp(`^${pattern.replace(/:([a-zA-Z]+)/g, (_, name) => (names.push(name), `(${param})`))}$`);
     ROUTES.push({ method, regex, names, handler, options });
   };
 
@@ -1259,6 +1296,8 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
   route('POST', '/v1/me/online', ({ actor, body }) => {
     store.run('UPDATE members SET online_hidden = ? WHERE user_id = ?', body.visible ? 0 : 1, actor.uid);
     publishPresence(LOBBY.id);
+    // A member who hides shares no pet anywhere (pets.mjs): every room they have open hears it.
+    for (const roomId of new Set(readySockets().filter(({ a }) => a.uid === actor.uid).flatMap(({ a }) => a.rooms ?? []))) pets.publish(roomId);
     return reply(200, { ok: true, visible: body.visible });
   }, { body: 'onlineVisible', readOnlyOk: true });
 
@@ -1421,8 +1460,10 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
       store.run('DELETE FROM leases WHERE member_id = ?', actor.uid);
       store.run('DELETE FROM token_cache WHERE user_id = ?', actor.uid);
       out.projects = count('SELECT COUNT(*) AS n FROM projects WHERE owner_id = ?', actor.uid);
+      out.packs = count('SELECT COUNT(*) AS n FROM shop_packs WHERE maker_id = ?', actor.uid);
       credits.forget(actor.uid, fingerprint);
       events.forget(actor.uid);
+      shop.forget(actor.uid);
       store.run('DELETE FROM members WHERE user_id = ?', actor.uid);
       return out;
     });
@@ -1447,22 +1488,34 @@ export function createRelay({ sql, sockets, alarms = null, env = {}, fetch: fetc
 
   route('GET', '/v1/admin/reports', () => {
     const rows = store.all(`SELECT * FROM reports WHERE status = 'open' ORDER BY created_at DESC LIMIT 100`);
+    // A project report (credits.mjs) is kept as room "project" with the project's id as its message, and a Shop
+    // pack's (shop.mjs) as room "shop" with the pack's id.
+    const kindOf = (row) => (row.room_id === 'project' ? 'project' : row.room_id === 'shop' ? 'shop' : 'message');
     return reply(200, {
       ok: true,
-      // A project report (credits.mjs) is kept as room "project" with the project's id as its message.
-      reports: rows.map((row) => ({ id: row.id, kind: row.room_id === 'project' ? 'project' : 'message', roomId: row.room_id === 'project' ? null : row.room_id, messageId: row.room_id === 'project' ? null : row.message_id, projectId: row.room_id === 'project' ? row.message_id : null, author: row.author_id ? userView(row.author_id) : null, reporter: userView(row.reporter_id), reason: row.reason, text: row.text, verified: row.verified === 1, createdAt: row.created_at })),
+      reports: rows.map((row) => {
+        const kind = kindOf(row);
+        return {
+          id: row.id, kind, roomId: kind === 'message' ? row.room_id : null, messageId: kind === 'message' ? row.message_id : null,
+          projectId: kind === 'project' ? row.message_id : null, packId: kind === 'shop' ? row.message_id : null,
+          author: row.author_id ? userView(row.author_id) : null, reporter: userView(row.reporter_id), reason: row.reason, text: row.text, verified: row.verified === 1, createdAt: row.created_at,
+        };
+      }),
     });
   }, { mod: true });
 
-  route('POST', '/v1/admin/reports/:id/resolve', ({ actor, params }) => {
-    const row = store.get('SELECT id FROM reports WHERE id = ?', params.id);
+  // Resolving a report; with action "remove", a reported Shop pack also goes off the Shop for good (shop.remove).
+  route('POST', '/v1/admin/reports/:id/resolve', ({ actor, params, body }) => {
+    const row = store.get('SELECT id, room_id, message_id FROM reports WHERE id = ?', params.id);
     if (!row) return reply(404, { ok: false, error: 'not-found' });
+    if (body.action === 'remove' && row.room_id !== 'shop') return reply(400, { ok: false, error: 'bad-request', reason: 'action' });
     store.transaction(() => {
+      if (body.action === 'remove') shop.remove(row.message_id, actor.uid);
       store.run(`UPDATE reports SET status = 'resolved' WHERE id = ?`, row.id);
-      store.run('INSERT INTO audit (kind, actor_id, detail, at) VALUES (?, ?, ?, ?)', 'report-resolve', actor.uid, JSON.stringify({ reportId: row.id }), now());
+      store.run('INSERT INTO audit (kind, actor_id, detail, at) VALUES (?, ?, ?, ?)', 'report-resolve', actor.uid, JSON.stringify({ reportId: row.id, ...(body.action ? { action: body.action } : {}) }), now());
     });
     return reply(200, { ok: true });
-  }, { mod: true });
+  }, { mod: true, body: 'resolveReport' });
 
   route('POST', '/v1/admin/members/:uid/suspend', ({ actor, params, body }) => {
     const minutes = Number(body?.minutes);

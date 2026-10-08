@@ -167,15 +167,18 @@
 }
 
 /* ---- The first run in the 0.5 layout (setupHelper's welcome, html[data-layout="v2"]) ----
-   The 0.5 prototype's welcome: one card over the whole window, three steps
-   (connect, project, first task), Back / Skip / Continue. Theme tokens only;
+   The 0.5 prototype's welcome: one card over the whole window, four steps
+   (your look, connect, project, first task), Back / Skip / Continue. Theme tokens only;
    no text under 12 px; the card scrolls inside itself on a short window and
    reserves no width for a bar. */
 .setup-welcome { position: fixed; inset: 0; z-index: calc(var(--z-toast, 95) - 1); display: grid; place-items: center; padding: 24px; overflow: auto; background: radial-gradient(90% 80% at 50% 30%, color-mix(in srgb, var(--panel-solid) 96%, var(--gold) 4%) 0%, var(--bg) 70%); animation: setup-welcome-in var(--motion-base, 200ms) var(--ease-out, ease-out); }
 .setup-welcome[hidden] { display: none; }
 @keyframes setup-welcome-in { from { opacity: 0; } to { opacity: 1; } }
 .setup-welcome-card { width: min(640px, 100%); max-height: calc(100vh - 48px); padding: 28px 28px 0; overflow: auto; scrollbar-width: none; border: 1px solid color-mix(in srgb, var(--ivory) 12%, transparent); border-radius: 18px; background: var(--panel-solid); box-shadow: 0 30px 80px -30px rgba(0, 0, 0, .8); outline: none; }
-.setup-welcome-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 22px; }
+/* On a light page the card's dark drop shadow read as a smudge: it takes the light tone's softer one. */
+:root[data-studio-theme-tone="light"] .setup-welcome-card { box-shadow: var(--shadow-3); }
+/* One bar per step, however many there are. */
+.setup-welcome-steps { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin: 0 0 22px; }
 .setup-welcome-steps > i { height: 3px; border-radius: var(--r-pill, 999px); background: color-mix(in srgb, var(--ivory) 14%, transparent); transition: background var(--motion-base, 200ms) var(--ease-out, ease-out); }
 .setup-welcome-steps > i.on { background: var(--gold); }
 .setup-welcome-title { margin: 0 0 8px; color: var(--ivory); font: 650 max(12px, calc(22px * var(--text-scale, 1)))/1.25 var(--font-display); letter-spacing: -.01em; }
@@ -208,10 +211,55 @@ button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40
 .setup-welcome-gap { flex: 1 1 auto; }
 .setup-welcome-foot > button { min-height: 38px; padding: 0 16px; font-size: max(12px, calc(14px * var(--text-scale, 1))); }
 .setup-welcome-foot > button[hidden] { display: none; }
+/* Step 1, Make it yours: three looks as little windows painted in their own
+   colours (--look-* set from the theme), then rows for colour, text size,
+   motion and the dragon. The card's own colours change with each pick. */
+.setup-welcome-looks { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.setup-welcome-look { display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; justify-items: stretch; gap: 8px; align-content: start; min-width: 0; margin: 0; padding: 8px 8px 10px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--bg) 40%, transparent); color: var(--ivory); text-align: left; cursor: pointer; box-shadow: none; transition: border-color var(--motion-fast, 140ms) var(--ease-out, ease-out), background var(--motion-fast, 140ms) var(--ease-out, ease-out), translate var(--motion-base, 200ms) var(--ease-spring, ease-out); }
+.setup-welcome-look:hover { border-color: color-mix(in srgb, var(--gold) 40%, transparent); background: var(--tint-gold-1); translate: 0 -2px; transform: none; }
+.setup-welcome-look.is-on { border-color: color-mix(in srgb, var(--gold) 70%, transparent); background: color-mix(in srgb, var(--gold) 7%, color-mix(in srgb, var(--bg) 45%, transparent)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent); }
+/* A look is a button, and buttons keep to one line: its words wrap here. */
+.setup-welcome-look-words { display: grid; gap: 2px; min-width: 0; padding: 0 4px; white-space: normal; overflow-wrap: anywhere; }
+.setup-welcome-look-words b { font-size: max(12px, calc(15px * var(--text-scale, 1))); font-weight: 650; }
+.setup-welcome-look-words small { color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); line-height: 1.35; }
+.setup-welcome-look-art { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; border: 1px solid color-mix(in srgb, var(--look-text, #fff) 14%, transparent); border-radius: 10px; background: var(--look-bg, #111); }
+.setup-welcome-look-art > i { position: absolute; display: block; border-radius: 3px; }
+.setup-welcome-look-art > .rail { inset: 0 auto 0 0; width: 16%; border-radius: 0; background: var(--look-panel, #222); }
+.setup-welcome-look-art > .bar { top: 9%; left: 22%; width: 46%; height: 9%; background: color-mix(in srgb, var(--look-text, #fff) 82%, transparent); }
+.setup-welcome-look-art > .line { top: 27%; left: 22%; width: 66%; height: 6%; background: color-mix(in srgb, var(--look-text, #fff) 30%, transparent); }
+.setup-welcome-look-art > .line.short { top: 38%; width: 44%; }
+.setup-welcome-look-art > .button { left: 22%; bottom: 12%; width: 26%; height: 14%; border-radius: 5px; background: var(--look-accent, #888); }
+.setup-welcome-look-art > .orb { right: 12%; bottom: 14%; width: 16%; aspect-ratio: 1; height: auto; border-radius: 50%; background: radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--look-accent, #888) 55%, #fff), var(--look-accent, #888) 70%); box-shadow: 0 0 12px color-mix(in srgb, var(--look-accent, #888) 60%, transparent); }
+.setup-welcome-look-art > .orb.two { right: 30%; bottom: 36%; width: 10%; background: radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--look-accent2, #888) 55%, #fff), var(--look-accent2, #888) 70%); box-shadow: 0 0 10px color-mix(in srgb, var(--look-accent2, #888) 60%, transparent); }
+.setup-welcome-look-row { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; gap: 4px 12px; margin-top: 8px; }
+.setup-welcome-look-label { color: var(--muted); font-size: max(12px, calc(13px * var(--text-scale, 1))); font-weight: 600; }
+.setup-welcome-look-note { grid-column: 2; color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); line-height: 1.4; }
+/* The dragon row's tiny Ember (renderer/pets.js livePreview), under its name. */
+.setup-welcome-pet { grid-column: 1; grid-row: 2; justify-self: start; width: 108px; height: 54px; pointer-events: none; }
+.setup-welcome-seg { justify-self: start; min-width: min(100%, 300px); }
+.setup-welcome-seg > button { min-height: 34px; justify-items: center; text-align: center; font-size: max(12px, calc(13px * var(--text-scale, 1))); }
+.setup-welcome-swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.setup-welcome-swatch { width: 30px; height: 30px; min-height: 0; padding: 0; border: 2px solid color-mix(in srgb, var(--ivory) 18%, transparent); border-radius: 50%; background: linear-gradient(135deg, var(--swatch) 0 50%, var(--swatch-2) 50% 100%); box-shadow: inset 0 0 0 3px var(--swatch-bg, transparent); cursor: pointer; }
+.setup-welcome-swatch:hover { border-color: var(--gold-dim); transform: none; }
+.setup-welcome-swatch[aria-checked="true"] { border-color: var(--gold-bright); box-shadow: inset 0 0 0 3px var(--swatch-bg, transparent), 0 0 0 2px color-mix(in srgb, var(--gold) 40%, transparent); }
+/* After the welcome, once: where the look lives. Beside the Settings button,
+   its arrow pointing at it (setup-helper.js placeLookTip). */
+.setup-look-tip { position: fixed; z-index: 9001; left: 0; top: 0; display: grid; gap: 6px; width: min(340px, calc(100vw - 32px)); padding: 14px 16px 12px; border: 1px solid color-mix(in srgb, var(--gold) 38%, transparent); border-radius: 14px; background: color-mix(in srgb, var(--panel-solid) 94%, transparent); backdrop-filter: var(--blur-hard); box-shadow: var(--studio-float-shadow), 0 0 40px -16px color-mix(in srgb, var(--gold) 60%, transparent); color: var(--ivory); font: 500 max(12px, calc(13px * var(--text-scale, 1)))/1.45 var(--font-ui); transition: opacity 200ms var(--ease-out, ease-out), translate 300ms var(--ease-spring, ease-out); }
+@starting-style { .setup-look-tip { opacity: 0; translate: -8px 0; } }
+.setup-look-tip p { margin: 0; color: var(--muted); }
+.setup-look-tip-title { font-size: max(12px, calc(14px * var(--text-scale, 1))); font-weight: 650; }
+.setup-look-tip-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+.setup-look-tip::after { content: ""; position: absolute; width: 10px; height: 10px; rotate: 45deg; background: inherit; border: inherit; border-radius: 2px; }
+.setup-look-tip[data-side="right"]::after { left: -6px; top: calc(var(--arrow, 50%) - 5px); border-top: 0; border-right: 0; }
+.setup-look-tip[data-side="none"]::after { display: none; }
 @media (max-width: 520px) {
   .setup-welcome { padding: 12px; }
   .setup-welcome-card { padding: 20px 16px 0; max-height: calc(100vh - 24px); }
   .setup-welcome-foot { padding-bottom: 16px; }
   .setup-welcome-opt { flex-wrap: wrap; }
+  .setup-welcome-look-row { grid-template-columns: minmax(0, 1fr); }
+  .setup-welcome-look-art { aspect-ratio: 16 / 7; }
+  .setup-welcome-look-note { grid-column: 1; }
+  .setup-welcome-pet { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .setup-welcome { animation: none; } }

@@ -91,6 +91,26 @@ test("Home is Vibe: every route to Build's Home lands on Vibe instead", () => {
   assert.equal(loaded.view(), "vibe");
 });
 
+// A QA pass on 2026-10-06 found Social reading as a development dashboard: Social is people, rooms and a light eye on the
+// work now, and the details are Studio's. renderer/social.js says which pages those are; go() switches the mode first.
+test("a Studio page asked for from Social switches to Studio first, then opens as it was asked for; Home stays Social's", () => {
+  const loaded = load({ view: "vibe" });
+  const asked = [];
+  let mode = "vibe";
+  loaded.window.MefiVibe.mode = () => mode;
+  loaded.window.MefiSocial = {
+    studioOnly: (id, params) => { asked.push([id, JSON.parse(JSON.stringify(params ?? {}))]); return mode === "vibe" && id === "command"; },
+    toStudio: () => { loaded.log.push("to-studio"); mode = "build"; return true; },
+  };
+  loaded.nav.go("command", { rail: "work" });
+  assert.deepEqual(loaded.log, ["to-studio", "command"], "the mode first, then the page");
+  assert.deepEqual(asked.at(-1), ["command", { rail: "work" }], "asked with what it was opened with");
+  const home = load({ view: "page" });
+  home.window.MefiSocial = { studioOnly: () => false, toStudio: () => { home.log.push("to-studio"); return true; } };
+  home.nav.go("workspace");
+  assert.deepEqual(home.log, ["vibe"], "Home is Social's own: no switch");
+});
+
 test("leaving Command opened from Vibe goes back to Vibe, not Build's Agents page", () => {
   const loaded = load();
   loaded.nav.go("command");
@@ -126,17 +146,17 @@ test("Back on a Work page with nothing behind it returns to Vibe; Build keeps it
   assert.deepEqual(build.log, [], "Build's Task board is its section home, so Back stays put");
 });
 
-test("the Vibe rail in the template points only at registered destinations, and Build is its only exit", () => {
+test("the Social rail in the template points only at registered destinations, and Studio is its only exit", () => {
   const rail = template.match(/<nav id="vibe-rail"[\s\S]*?<\/nav>/)?.[0];
   assert.ok(rail, "renderer/booklet.template.html ships #vibe-rail");
   const loaded = load();
-  // agents.js registers Agents itself; the rest come from nav.js and vibe.js.
-  const known = new Set([...loaded.nav.list({}).map((dest) => dest.id), "agents"]);
+  // social.js registers Projects and today.js Activity themselves; the rest come from nav.js and vibe.js.
+  const known = new Set([...loaded.nav.list({}).map((dest) => dest.id), "projects", "activity"]);
   const targets = [...rail.matchAll(/data-nav="([^"]+)"/g)].map((match) => match[1]);
-  // Social's rail names the places as Studio's does: Friends first (Social is for friends), the Map, Work's boards, Team,
-  // Search; Settings and Help at the foot.
-  assert.deepEqual(targets, ["vibe", "friends", "command", "tasks", "plans", "ideas", "agents", "palette", "studio", "help"]);
-  assert.deepEqual([...rail.matchAll(/<span>([^<]+)<\/span>/g)].map((match) => match[1]), ["Today", "Friends", "Map", "Tasks", "Plans", "Ideas", "Team", "Search", "Settings", "Help", "Studio"], "the words Studio's rail uses: Map, not Watch; Team, not Agents");
+  // Social's rail holds Social's places (a QA pass on 2026-10-06): Home, Friends, Projects and Activity, then Search;
+  // Settings and Help at the foot. The Map, the boards and Team are Studio's.
+  assert.deepEqual(targets, ["vibe", "friends", "projects", "activity", "palette", "studio", "help"]);
+  assert.deepEqual([...rail.matchAll(/<span>([^<]+)<\/span>/g)].map((match) => match[1]), ["Home", "Friends", "Projects", "Activity", "Search", "Settings", "Help", "Studio"], "Home, as the tab and the trail say it in Social");
   for (const id of targets) assert.ok(known.has(id), `${id} is a registered destination`);
   assert.deepEqual([...rail.matchAll(/data-ui-mode="([^"]+)"/g)].map((match) => match[1]), ["build"]);
 });

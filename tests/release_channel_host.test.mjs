@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import { DEVELOPMENT_WARNING } from "../scripts/development-updater.mjs";
 const source = (await readFile(new URL("../main.cjs",import.meta.url),"utf8")).replace(/\r\n/g,"\n");
@@ -104,4 +105,18 @@ test("jobs and project switches that begin during download retain verified stagi
     vm.runInContext(slice("async function applyReleaseUpdate() {","\n// A boot that carries --released"),context);
     const result=await context.applyReleaseUpdate();assert.equal(result.deferred,true);assert.equal(context.releaseApplyInFlight,false);assert.equal(context.releaseState.state,"available");assert.equal(context.releaseState.staged.version,"0.4.5");
   }
+});
+// Development builds need a GitHub login, and the owner may sign in while Studio runs (Sign in to GitHub's
+// window, or gh auth login in a terminal): "no token" from gh is asked again after a minute, a token is kept.
+test("gh's token is kept for the boot, and no token is asked again after a minute, so a sign-in reaches the next check",async()=>{
+  let now=1_000_000,answer=null;const asked=[];
+  const context=vm.createContext({ghTokenCache:undefined,ghTokenMissAt:0,GH_TOKEN_RETRY_MS:60_000,decryptKey:(_settings,key)=>key==="githubTokenEncrypted"&&context.saved||null,saved:null,process:{env:{}},Date:{now:()=>now},setTimeout,clearTimeout,
+    spawn:(command,args)=>{asked.push([command,...args].join(" "));const child=Object.assign(new EventEmitter(),{stdout:new EventEmitter(),kill(){}});queueMicrotask(()=>{if(answer)child.stdout.emit("data",`${answer}\n`);child.emit("close",answer?0:1);});return child;}});
+  vm.runInContext(slice("async function resolveGithubToken(settings) {","\nasync function checkRelease() {"),context);
+  assert.equal(await context.resolveGithubToken({}),null);assert.equal(asked.length,1);
+  answer="gho_signedin";now+=30_000;assert.equal(await context.resolveGithubToken({}),null,"inside the minute the last answer stands");assert.equal(asked.length,1);
+  now+=31_000;assert.equal(await context.resolveGithubToken({}),"gho_signedin","a sign-in made since is heard");assert.equal(asked.length,2);
+  answer=null;now+=60*60_000;assert.equal(await context.resolveGithubToken({}),"gho_signedin","a token gh gave is kept for the boot");assert.equal(asked.length,2);
+  context.saved="ghp_saved";assert.equal(await context.resolveGithubToken({}),"ghp_saved","a token saved in Studio still comes first");
+  assert.deepEqual(asked,["gh auth token","gh auth token"]);
 });

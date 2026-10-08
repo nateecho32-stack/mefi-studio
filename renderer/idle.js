@@ -80,12 +80,12 @@
   const LEGEND = [
     { key: "session", sw: rgb(NODE_RGB.session), label: "session hub" },
     { key: "active", sw: rgb(NODE_RGB.warm), label: "current work — highlighted orb" },
-    { key: "verify", sw: rgb(NODE_RGB.verify), label: "awaiting verification — cool blue rim" },
+    { key: "verify", sw: rgb(NODE_RGB.verify), label: "awaiting verification — the Review ring" },
     { key: "done", sw: rgb(NODE_RGB.done), label: "completed todo" },
     { key: "pending", sw: rgb(NODE_RGB.pending), label: "pending todo" },
     { key: "stale", sw: rgb(NODE_RGB.stale), label: "stale session — pushed to the outer ring" },
     { key: "task", sw: rgb(NODE_RGB.task), label: "saved task — brighter while active" },
-    { key: "held", sw: rgb(NODE_RGB.amber), label: "held task — amber when blocked or awaiting your approval, dim while it waits or cools before a retry" },
+    { key: "held", sw: rgb(NODE_RGB.amber), label: "held task — the Needs you ring when blocked or awaiting your approval, dim while it waits or cools before a retry" },
     { key: "checkpoint", sw: rgb(NODE_RGB.warm), label: "checkpoint note" },
     { key: "pulse", sw: rgb(NODE_RGB.pulse), label: "edit landing" },
     { key: "dust", sw: rgb(NODE_RGB.dust), label: "external read / web" },
@@ -180,6 +180,8 @@
   const BACKDROP_ORDER = ["follow", "aurora", "deepspace", "nebula", "embers", "fireflies", "bokeh", "dust", "grid", "minimal"];
   // Chrome's sky is deep space: silver stars over matte black.
   const THEME_BACKDROP = { chrome: "deepspace", gold: "dust", midnight: "deepspace", forest: "fireflies", violet: "nebula", ember: "embers", aurora: "aurora", rose: "bokeh", custom: "dust",
+    // The light themes: scenes drawn in ink, not light (aurora and bokeh add light, which a pale sky cannot show).
+    daylight: "grid", paper: "dust",
     // The Void collection's two-tone themes.
     void: "deepspace", eclipse: "dust", abyss: "fireflies", dusk: "grid" };
   // Speech bubbles: what an agent says while it works, drawn beside its orb.
@@ -440,6 +442,35 @@
     // only dims nothing without it, so the classic layout never shows a dim it has no switch for.
     runningOnly: readStore("mefiStudio.cmdRunningOnly") === "1",
     mapOn: false,
+    // Kill switches, read once: "mefiStudio.mapRings" or "mefiStudio.mapFill"
+    // saved as "off" puts the work orbs' state rings, or a small tree's fill
+    // of the 3D overview, back as they were.
+    mapRings: readStore("mefiStudio.mapRings") !== "off",
+    mapFill: readStore("mefiStudio.mapFill") !== "off",
+    // The same for what makes the Map read at a glance: "mefiStudio.mapRipple"
+    // (a state change's ripple), "mefiStudio.mapLegendPoint" (the legend's
+    // pills count their nodes and light them up), "mefiStudio.mapHoverCard"
+    // (a work orb's hover card) and "mefiStudio.mapStateHues" (the four
+    // states' colours kept apart in every theme, glancePalette).
+    mapRipple: readStore("mefiStudio.mapRipple") !== "off",
+    mapLegendPoint: readStore("mefiStudio.mapLegendPoint") !== "off",
+    mapHoverCard: readStore("mefiStudio.mapHoverCard") !== "off",
+    mapStateHues: readStore("mefiStudio.mapStateHues") !== "off",
+    // The legend's pointing (stepLegendPoint): the pill under the pointer or
+    // the keyboard, the one clicked to hold, how much of the highlight is in
+    // force and each state's share of it.
+    legendHover: null,
+    legendPin: null,
+    legendLevel: 0,
+    legendLit: { active: 0, held: 0, verify: 0, done: 0 },
+    // This frame's work orbs per state, and what the pills last said.
+    glanceCounts: { active: 0, held: 0, verify: 0, done: 0 },
+    glanceShown: { active: -1, held: -1, verify: -1, done: -1 },
+    // Changes seen before this frame time are taken quietly (noteGlance): an
+    // entry's first reads catch up with what happened while nobody looked.
+    glanceSettleUntil: 0,
+    // Each state's colour as the Map draws it this theme (glancePalette).
+    glanceInk: null,
   };
 
   const el = {};
@@ -4110,7 +4141,8 @@
     const lift = always ? 1 : Number.isFinite(node._lift) ? node._lift : focused ? 1 : 0;
     const style = state.nodeStyle;
     const quiet = state.nodeTheme?.light === true ? (style === "singularity" || style === "prism" || style === "sigil" ? 0.92 : 0.85) : 0.65;
-    return { prominent: always || focused, maxRadius: (node.kind === "assistant" ? 14 : node.kind === "session" ? 12 : 11) + 4 * lift, alpha: quiet + (1 - quiet) * lift, shape: "circle" };
+    // A task orb is a size up from the rest (12, 16 when lifted), so work reads first.
+    return { prominent: always || focused, maxRadius: (node.kind === "assistant" ? 14 : node.kind === "session" || node.kind === "task" ? 12 : 11) + 4 * lift, alpha: quiet + (1 - quiet) * lift, shape: "circle" };
   }
 
   function setSettingsPreview(rect, { keepActive = false } = {}) {
@@ -4431,6 +4463,102 @@
       }
     }
     ctx.restore();
+  }
+
+  // Which of the Map legend's states (MAP_LEGEND: active, held, verify, done) a
+  // work orb shows as a ring, or null: done while its finish holds, Review while
+  // it is checked, Needs you when it waits on the owner (blocked or an
+  // approval), Running while it runs. Agents, the hub and quiet work wear none.
+  function stateRingOf(node, active, hold) {
+    if (!workOrb(node)) return null;
+    if (hold) return "done";
+    if (node._workLabel === "Verifying" || (node.task ?? node.workTask)?.status === "awaiting_verification") return "verify";
+    if (node._stage === "blocked" || node._stage === "approval") return "held";
+    if (active || node._workLabel === "Running") return "active";
+    return null;
+  }
+  // A work orb: a task, a todo, or a node carrying work (a session with a task
+  // on it, a node the executor builds). Agents and the hub never are.
+  function workOrb(node) {
+    const work = node.kind === "task" || node.kind === "todo" || Boolean(node.workTask) || Boolean(node._workLabel);
+    return work && node.kind !== "agent" && node.kind !== "assistant";
+  }
+  // The ring follows the style's silhouette a few pixels off the orb. Running
+  // breathes (2.4 s) and Needs you pulses (1.4 s), each in the node's own
+  // phase; Review and Done hold still, as everything does with motion off. It
+  // wears its state's colour as the Map draws it (state.glanceInk: kept apart
+  // from the theme's accent, a page ink on a light page); without one, a
+  // light page takes the colour's deep ink. `lit` (the legend pointing at its
+  // state, 0 to 1) draws it bolder and lets it glow.
+  function drawStateRing(ctx, node, p, radius, key, motion, time, still, dim, lit = 0) {
+    const styles = globalThis.window?.MefiNodeStyles;
+    const triple = key === "held" ? NODE_RGB.amber : key === "verify" ? NODE_RGB.verify : key === "done" ? NODE_RGB.done : NODE_RGB.warm;
+    const light = state.nodeTheme?.light === true;
+    const ink = state.glanceInk?.[key] ?? (light ? styles?.inkOf?.(triple, state.nodeTheme)?.hot ?? triple : triple);
+    const period = key === "active" ? 2400 : key === "held" ? 1400 : 0;
+    const beat = still || !period ? 0.5 : 0.5 + 0.5 * Math.sin(Math.PI * 2 * (time / period + (motion?.seed ?? 0)));
+    const gap = 3.2 + (key === "held" ? 1.4 : 0.6) * beat;
+    ctx.save();
+    ctx.globalAlpha *= dim;
+    ctx.beginPath();
+    if (styles) styles.outline(ctx, state.nodeStyle ?? "orbs", p.x, p.y, radius + gap, motion);
+    else ctx.arc(p.x, p.y, radius + gap, 0, Math.PI * 2);
+    ctx.strokeStyle = rgba(ink, Math.round((light ? 0.9 : Math.min(1, 0.62 + 0.3 * beat + 0.38 * lit)) * 32) / 32);
+    ctx.lineWidth = (key === "held" ? 2.2 : 1.8) + lit;
+    ctx.stroke();
+    // Running and Needs you also glow a little past the ring on a dark sky,
+    // and so does any state the legend points at.
+    if (!light && (period || lit > 0.02) && (node._detail ?? 3) >= 2) {
+      ctx.globalAlpha *= Math.min(1, (period ? 0.22 + 0.16 * beat : 0) + 0.3 * lit);
+      ctx.lineWidth = 6 + 2 * lit;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // A state change at a glance: the ring sends out one soft ripple in the new
+  // state's colour (noteGlance starts it), easing out from the ring over
+  // RIPPLE_MS and fading as it goes, in the style's silhouette.
+  const RIPPLE_MS = 800;
+  function drawStateRipple(ctx, node, p, radius, motion, time, dim) {
+    const u = (time - motion.rippleAt) / RIPPLE_MS;
+    if (!(u >= 0 && u < 1)) return false;
+    const key = motion.rippleKey;
+    const styles = globalThis.window?.MefiNodeStyles;
+    const triple = key === "held" ? NODE_RGB.amber : key === "verify" ? NODE_RGB.verify : key === "done" ? NODE_RGB.done : NODE_RGB.warm;
+    const light = state.nodeTheme?.light === true;
+    const ink = state.glanceInk?.[key] ?? (light ? styles?.inkOf?.(triple, state.nodeTheme)?.hot ?? triple : triple);
+    const out = 1 - (1 - u) * (1 - u) * (1 - u);
+    const reach = radius + 3.8 + 18 * out;
+    ctx.save();
+    ctx.globalAlpha *= dim * (1 - u) * (1 - u);
+    ctx.beginPath();
+    if (styles) styles.outline(ctx, state.nodeStyle ?? "orbs", p.x, p.y, reach, motion);
+    else ctx.arc(p.x, p.y, reach, 0, Math.PI * 2);
+    ctx.strokeStyle = rgba(ink, light ? 0.9 : 0.8);
+    ctx.lineWidth = 2.4 - 1.4 * out;
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+  // A work orb's legend state over time, kept on its motion record: when the
+  // state began (glanceSince, a Date.now() stamp; glanceExact once the Map saw
+  // the change happen) and the ripple a change sends out (rippleAt and
+  // rippleKey, read by drawStateRipple). A record's first sight is not news,
+  // nor is a change in the quiet moment after the Map opens
+  // (state.glanceSettleUntil), while its first reads catch up with what
+  // happened unseen. Motion off, the rings off, the ripple switched off or the
+  // Map closed (Home's scenery) keep the times and send no ripple. A node
+  // whose state holds costs one comparison.
+  function noteGlance(motion, key, time, still, at) {
+    if (motion.glance === key) return false;
+    const settled = motion.glance !== undefined && time >= (state.glanceSettleUntil ?? 0);
+    motion.glance = key; motion.glanceSince = at ?? Date.now(); motion.glanceExact = settled;
+    if (!key || !settled || still || !state.active || state.mapRings === false || state.mapRipple === false) return false;
+    motion.rippleAt = time; motion.rippleKey = key;
+    // The ripple earns the hot cadence for its run, as a style switch does.
+    state.styleBurstUntil = Math.max(state.styleBurstUntil ?? 0, time + RIPPLE_MS);
+    state.calmFrames = 0;
+    return true;
   }
 
   function drawWorkOrbit(ctx, node, p, radius, time, still) {
@@ -5024,21 +5152,29 @@
     return state.orbitFrame;
   }
 
-  // The overview's scale for a whole turn: the largest (at most 1) at which
-  // every anchor stays inside half-extents halfW × halfH of the frame at every
-  // angle of the spin, under every tilt its slow nod, the owner's pitch and
-  // the music's nod can give it. Each anchor only needs its reach off the
+  // How much closer than 1 the overview may come for a small tree: ten or more
+  // live nodes sit at 1 as before, fewer may come in up to 1.7 (one to three).
+  const FILL_MAX = 1.7;
+  function fillCeiling(count) {
+    if (!(count < 10)) return 1;
+    return Math.min(FILL_MAX, 1 + (10 - Math.max(1, count)) * 0.1);
+  }
+
+  // The overview's scale for a whole turn: the largest (at most `ceiling`, 1
+  // unless the tree is small) at which every anchor stays inside half-extents
+  // halfW × halfH of the frame at every angle of the spin, under every tilt
+  // its slow nod, the owner's pitch and the music's nod can give it. Each anchor only needs its reach off the
   // spin axis (r) and its height (y) about the centre, so the frame is sized
   // once for the turn instead of breathing in and out as a long tree swings
   // end-on. Across a turn an anchor's screen x peaks at r / √(1 − ρ²), where
   // ρ = r / camera distance; its screen y peaks with it nearest (or
   // farthest) and at the tilt that lifts it most.
-  function orbitEnvelope(points, centre, halfW, halfH) {
+  function orbitEnvelope(points, centre, halfW, halfH, ceiling = 1) {
     const scale = Math.max(0.01, state.fit * state.zoom);
     const distance = cameraDistance(scale);
     const nod = state.groove?.tiltRoom ?? 0;
     const low = state.pitch - 0.35 - nod, high = state.pitch + 0.35 + nod;
-    let fit = 1;
+    let fit = ceiling;
     for (const point of points) {
       const r = Math.hypot(point.x - centre.x, point.z - centre.z) * scale;
       const y = (point.y - centre.y) * scale;
@@ -5303,11 +5439,24 @@
       const previousOffset = state.overviewOffset ?? { x: 0, y: 0 };
       const moving = !still && state.view === "3d" && state.orbit === "auto" && !state.selected && !state.query && !state.focus && !state.panning && !state.rotating && !state.settingsPreview && Number.isFinite(animationTime) && Date.now() >= (state.settleUntil ?? 0);
       if (moving && !state.overviewMotion) state.overviewMotion = globalThis.window?.MefiCameraTour?.createOverview?.();
-      let scale = 1;
-      if (state.view !== "2d") {
-        const live = anchors.filter(({ node }) => !node.dying && !node._absorbed && node._layoutAnchor).map(({ node }) => node._layoutAnchor);
-        scale = orbitEnvelope(live, state.orbitFrame, halfW, halfH) * (groove?.frame ?? 1);
+      // In 3D a small tree comes in closer than 1 (fillCeiling), so a handful
+      // of nodes fills the frame instead of sitting as a thin line in the
+      // middle; the room checks below still shrink it to fit. The flat map
+      // keeps 1: its nodes hold the screen places they were given.
+      const live = anchors.filter(({ node }) => !node.dying && !node._absorbed && node._layoutAnchor).map(({ node }) => node._layoutAnchor);
+      // The ceiling itself moves over about a third of a second as nodes come
+      // and go, so a tree that gains its tenth node settles back to 1 instead
+      // of popping; motion Off moves it at once.
+      const target = state.view !== "2d" && state.mapFill !== false ? fillCeiling(live.length) : 1;
+      let fill = target;
+      if (state.view !== "2d" && Number.isFinite(state.fillNow) && state.fillNow !== target && !still && Number.isFinite(animationTime) && Number.isFinite(state.overviewAt)) {
+        const dt = Math.max(0, Math.min(0.1, (animationTime - state.overviewAt) / 1000));
+        fill = state.fillNow + (target - state.fillNow) * (1 - Math.exp(-dt / 0.12));
+        if (Math.abs(target - fill) < 0.002) fill = target;
       }
+      state.fillNow = fill;
+      let scale = fill;
+      if (state.view !== "2d") scale = orbitEnvelope(live, state.orbitFrame, halfW, halfH, fill) * (groove?.frame ?? 1);
       const roomX = Math.max(1, halfW - Math.abs(swayX)), roomY = Math.max(1, halfH - Math.abs(swayY));
       for (const { node, p } of anchors) {
         if (node.dying || node._absorbed) continue;
@@ -5324,6 +5473,13 @@
         const shot = state.overviewMotion.step({ points, viewport, dt: (animationTime - (state.overviewAt ?? animationTime)) / 1000, moving, still, initial: { scale: previousScale / frame, ...previousOffset }, ceiling: scale / frame });
         scale = shot.scale * frame;
         state.overviewOffset = { x: shot.x, y: shot.y };
+      }
+      // Coming in closer eases (about a third of a second); a frame that has to
+      // shrink to keep every node in view does so at once, as it always did.
+      if (fill > 1 && scale > previousScale && !still && Number.isFinite(animationTime) && Number.isFinite(state.overviewAt)) {
+        const dt = Math.max(0, Math.min(0.1, (animationTime - state.overviewAt) / 1000));
+        const eased = previousScale + (scale - previousScale) * (1 - Math.exp(-dt / 0.12));
+        scale = scale - eased < 0.002 ? scale : eased;
       }
       state.overviewAt = animationTime;
       state.overviewScale = scale;
@@ -5437,6 +5593,96 @@
     return [(int >> 16) & 255, (int >> 8) & 255, int & 255];
   }
 
+  // ---------- the four states' colours ----------
+  // The legend's four states read apart in every theme. Running wears the
+  // theme's accent; Needs you (amber), Review (blue) and Done (green) each keep
+  // at least STATE_HUE_GAP degrees of hue from it and from one another as the
+  // Map draws them, turning within their own family when an accent comes
+  // close: Daylight's and Midnight's blue turns Review toward violet, Forest's
+  // and Aurora's green turns Done toward lime, Studio gold's and Eclipse's
+  // amber turns Needs you toward rose. A grey accent (Chrome's silver) has no
+  // hue to meet. On a light page a colour darkens toward the page's own ink
+  // only as far as 4.5:1 against the page needs, so its hue still shows.
+  // Worked out once per theme (syncGraphTheme), never per frame.
+  const STATE_HUE_GAP = 40;
+  const STATE_GREY = 0.12; // a chroma under this (of 1) reads as grey, not as a hue
+  const STATE_INK_CONTRAST = 4.5;
+  const STATE_FAMILIES = { verify: [190, 290], done: [95, 175], held: [330, 65] };
+  const STATE_BASE = { held: [255, 212, 121], done: [104, 236, 164], verify: [151, 179, 244], verifyLight: [59, 86, 160] };
+  const LIGHT_INK = [12, 14, 20];
+  const linearOf = (value) => { const c = value / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+  const luminanceOf = (triple) => 0.2126 * linearOf(triple[0]) + 0.7152 * linearOf(triple[1]) + 0.0722 * linearOf(triple[2]);
+  function contrastOf(a, b) {
+    const x = luminanceOf(a), y = luminanceOf(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  }
+  const chromaOf = (triple) => (Math.max(triple[0], triple[1], triple[2]) - Math.min(triple[0], triple[1], triple[2])) / 255;
+  function hueOf(triple) {
+    const [r, g, b] = triple;
+    const max = Math.max(r, g, b), d = max - Math.min(r, g, b);
+    if (!d) return 0;
+    const sector = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return (sector * 60 + 360) % 360;
+  }
+  const hueGap = (a, b) => { const d = Math.abs(a - b) % 360; return Math.min(d, 360 - d); };
+  function hslOf(triple) {
+    const [r, g, b] = triple.map((value) => value / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+    const s = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+    return [hueOf(triple), s, l];
+  }
+  function rgbOfHsl(h, s, l) {
+    const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = l - c / 2;
+    const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+    return [r, g, b].map((value) => Math.max(0, Math.min(255, Math.round((value + m) * 255))));
+  }
+  const mixTriple = (from, toward, amount) => from.map((value, index) => Math.round(value + (toward[index] - value) * amount));
+  // The least darkening toward `ink` that holds `minimum` (4.5:1 unless
+  // asked) against `page`, in 64ths and never past three quarters; a colour
+  // that already holds it stays as it is.
+  function pageInk(triple, page, ink = LIGHT_INK, minimum = STATE_INK_CONTRAST) {
+    if (contrastOf(triple, page) >= minimum) return triple;
+    let low = 1, high = 48;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (contrastOf(mixTriple(triple, ink, mid / 64), page) >= minimum) high = mid;
+      else low = mid + 1;
+    }
+    return mixTriple(triple, ink, low / 64);
+  }
+  const inArc = (hue, [from, to]) => (from <= to ? hue >= from && hue <= to : hue >= from || hue <= to);
+  // { raw, ink }: each state's colour for the node bodies (raw) and as the
+  // rings, ripples, legend dots and hover card show it (ink: the raw colour,
+  // or its page ink on a light page). The nearest hue in a state's family
+  // that keeps the gap wins, in 5 degree steps; a family with no room keeps
+  // its own colour.
+  function glancePalette(accent, { light = false, page = [5, 5, 7], ink = LIGHT_INK } = {}) {
+    const shown = (triple) => (light ? pageInk(triple, page, ink) : triple);
+    const accentInk = shown(accent);
+    const placed = chromaOf(accentInk) < STATE_GREY ? [] : [hueOf(accentInk)];
+    const raw = { active: accent }, inks = { active: accentInk };
+    for (const key of ["verify", "done", "held"]) {
+      const base = key === "verify" && light ? STATE_BASE.verifyLight : STATE_BASE[key];
+      const [h, s, l] = hslOf(base);
+      let pick = null;
+      for (let step = 0; step <= 36 && !pick; step += 1) {
+        for (const sign of step ? [1, -1] : [1]) {
+          const hue = (((h + sign * step * 5) % 360) + 360) % 360;
+          if (!inArc(hue, STATE_FAMILIES[key])) continue;
+          const candidate = step ? rgbOfHsl(hue, s, l) : [...base];
+          const candidateInk = shown(candidate);
+          const at = hueOf(candidateInk);
+          if (placed.every((other) => hueGap(at, other) >= STATE_HUE_GAP)) { pick = [candidate, candidateInk, at]; break; }
+        }
+      }
+      if (!pick) { const baseInk = shown([...base]); pick = [[...base], baseInk, hueOf(baseInk)]; }
+      raw[key] = pick[0]; inks[key] = pick[1];
+      placed.push(pick[2]);
+    }
+    return { raw, ink: inks };
+  }
+  const hexOf = (triple) => `#${triple.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+
   function syncGraphTheme() {
     const style = window.getComputedStyle?.(document.documentElement);
     if (!style) return;
@@ -5447,27 +5693,62 @@
     const theme = window.MefiMusic?.themePalette?.() ?? null;
     const palette = theme?.canvas;
     state.canvasPalette = palette ?? null;
-    // The node styles' theme: the palette as stable triples (renderer/node-styles.js).
-    // Its key changes with the palette, so every style's cached paints rebuild.
-    state.nodeTheme = globalThis.window?.MefiNodeStyles?.theme(palette ?? null) ?? null;
     state.themeKey = theme?.theme ?? document.documentElement?.dataset?.studioTheme ?? null;
     NODE_RGB.warm = palette?.bright ? hexToRgb(palette.bright) : color("--gold-bright", NODE_RGB.warm);
-    NODE_RGB.task = [...NODE_RGB.warm];
     NODE_RGB.assistant = [...NODE_RGB.warm];
     NODE_RGB.session = palette?.text ? hexToRgb(palette.text) : color("--ivory", NODE_RGB.session);
     NODE_RGB.pending = palette?.muted ? hexToRgb(palette.muted) : color("--muted", NODE_RGB.pending);
     NODE_RGB.stale = palette?.dim ? hexToRgb(palette.dim) : color("--dim", NODE_RGB.stale);
     const bg = hexToRgb(palette?.background ?? "#050507");
-    NODE_RGB.verify = bg[0] * 0.2126 + bg[1] * 0.7152 + bg[2] * 0.0722 > 145 ? [59, 86, 160] : [151, 179, 244];
-    NODE_RGB.task = NODE_RGB.pending.map((value, index) => Math.round(value * 0.6 + NODE_RGB.verify[index] * 0.4));
+    const lightSky = bg[0] * 0.2126 + bg[1] * 0.7152 + bg[2] * 0.0722 > 145;
+    // The four states apart (glancePalette): Needs you, Review and Done wear
+    // the colours that keep clear of this theme's accent, bodies and badges
+    // too. With the switch off they stay as they were.
+    const glance = state.mapStateHues !== false ? glancePalette(NODE_RGB.warm, { light: lightSky, page: bg }) : null;
+    const verifyBase = lightSky ? STATE_BASE.verifyLight : STATE_BASE.verify;
+    NODE_RGB.verify = glance ? glance.raw.verify : [...verifyBase];
+    NODE_RGB.amber = glance ? glance.raw.held : [...STATE_BASE.held];
+    NODE_RGB.done = glance ? glance.raw.done : [...STATE_BASE.done];
+    NODE_RGB.task = NODE_RGB.pending.map((value, index) => Math.round(value * 0.6 + verifyBase[index] * 0.4));
+    // The node styles' theme: the palette as stable triples (renderer/node-styles.js).
+    // Its key changes with the palette, so every style's cached paints rebuild.
+    const stylePalette = palette && glance ? { ...palette, done: hexOf(NODE_RGB.done), amber: hexOf(NODE_RGB.amber) } : palette ?? null;
+    state.nodeTheme = globalThis.window?.MefiNodeStyles?.theme(stylePalette) ?? null;
+    state.glanceInk = glance ? glance.ink : null;
     state.canvasAccent = NODE_RGB.warm.join(",");
+    // The legend's dots: the four states in the colour their rings are drawn
+    // in (glanceInk), the rest in their node colours.
     for (const key of ["active", "task", "verify", "checkpoint", "focus", "assistant"]) {
-      const tint = key === "verify" ? NODE_RGB.verify : key === "task" || key === "checkpoint" ? NODE_RGB.task : NODE_RGB.warm;
+      const tint = glance && (key === "active" || key === "verify") ? glance.ink[key] : key === "verify" ? NODE_RGB.verify : key === "task" || key === "checkpoint" ? NODE_RGB.task : NODE_RGB.warm;
       const entry = LEGEND.find((item) => item.key === key);
       if (entry) entry.sw = rgb(tint);
       el.legendList?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
       el.mapLegend?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
     }
+    // Needs you and Done keep their own colours; on a light sky they take the
+    // deep ink the state rings use, so the legend's dots read on the pale ground.
+    const light = state.nodeTheme?.light === true;
+    const styles = globalThis.window?.MefiNodeStyles;
+    for (const [key, triple] of [["held", NODE_RGB.amber], ["done", NODE_RGB.done]]) {
+      const tint = glance ? glance.ink[key] : light ? styles?.inkOf?.(triple, state.nodeTheme)?.hot ?? triple : triple;
+      const entry = LEGEND.find((item) => item.key === key);
+      if (entry) entry.sw = rgb(tint);
+      el.legendList?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
+      el.mapLegend?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", rgb(tint));
+    }
+    // The other rows in Done's colour follow it.
+    for (const [key, alpha] of [["folded", 1], ["absorbed", 0.8], ["done-hold", 0.95]]) {
+      const sw = alpha === 1 ? rgb(NODE_RGB.done) : rgba(NODE_RGB.done, alpha);
+      const entry = LEGEND.find((item) => item.key === key);
+      if (entry) entry.sw = sw;
+      el.legendList?.querySelector(`[data-sw="${key}"]`)?.style.setProperty("--sw", sw);
+    }
+    // Words in a node's colour on a light page (a callout's number and status
+    // line, a work label) take that colour's page ink, held at 4.5:1 against
+    // both grounds they sit on: the page, and a callout's number chip (28% of
+    // the colour over the page); a dark page keeps the colours. Looked up by
+    // the colour itself (state.textInks).
+    state.textInks = lightSky && glance ? new Map(Object.values(NODE_RGB).map((triple) => [triple, pageInk(pageInk(triple, mixTriple(bg, triple, 0.28)), bg)])) : null;
   }
 
   // The role colours live in the tree's palette (window.MefiTree.agentColor) so
@@ -7168,7 +7449,44 @@
     return !verifying && (node._workLabel === "Running" || node.state === "active");
   }
 
+  // The legend pointing at a state (layout v2's #map-legend): the pill under
+  // the pointer or the keyboard (legendHover), else the one clicked to hold
+  // (legendPin), keeps its state's work orbs at full strength and dims the
+  // rest toward a quarter; pointing at another pill while one is held shows
+  // that one until the pointer leaves. legendLevel eases how much of that is
+  // in force (in about 0.15 s, out in about 0.25 s) and legendLit each
+  // state's share, so moving from pill to pill cross-fades instead of
+  // popping; motion off lands both at once. Only while the Map is open in its
+  // frame.
+  const LEGEND_KEYS = ["active", "held", "verify", "done"];
+  const LEGEND_DIM = 0.72;
+  function easeToward(from, to, dt, up, down, still) {
+    if (still || !(dt > 0) || !Number.isFinite(from)) return to;
+    const next = from + (to - from) * (1 - Math.exp(-dt / (to > from ? up : down)));
+    return Math.abs(next - to) < 0.004 ? to : next;
+  }
+  function stepLegendPoint(dt, still) {
+    const want = state.mapLegendPoint !== false && state.active && state.mapOn ? state.legendHover ?? state.legendPin ?? null : null;
+    if (!want && !(state.legendLevel > 0)) return;
+    const lit = state.legendLit;
+    state.legendLevel = easeToward(state.legendLevel, want ? 1 : 0, dt, 0.05, 0.08, still);
+    for (let index = 0; index < LEGEND_KEYS.length; index += 1) {
+      const key = LEGEND_KEYS[index];
+      lit[key] = state.legendLevel > 0 ? easeToward(lit[key], key === want ? 1 : 0, dt, 0.05, 0.08, still) : 0;
+    }
+  }
+  // A node's share of the dim: none for an orb in the state pointed at.
+  function legendEmphasis(node) {
+    const lit = node._glance ? state.legendLit[node._glance] ?? 0 : 0;
+    return 1 - LEGEND_DIM * state.legendLevel * (1 - lit);
+  }
+
   function emphasis(node) {
+    const base = branchEmphasis(node);
+    return state.legendLevel > 0 ? base * legendEmphasis(node) : base;
+  }
+
+  function branchEmphasis(node) {
     if (state.query) return state.matchSet.has(node.id) ? 1 : 0.25;
     if (state.runningOnly && state.mapOn) return runningLit(node) ? 1 : 0.25;
     if (state.camMode === "follow" && state.follow) {
@@ -8570,7 +8888,8 @@
       const nw = measure(ctx, CALLOUT_NUMBER_FONT, content.number) + 8;
       ctx.font = CALLOUT_NUMBER_FONT;
       ctx.beginPath(); ctx.roundRect(x, baseline - 10.5, nw, 13, 3.5); ctx.fillStyle = rgba(tint, filled ? 0.28 : 0.2); ctx.fill();
-      ctx.fillStyle = rgba(tint, 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(content.number, x + 4, baseline - 0.5);
+      // (on a light page its words take the colour's page ink: state.textInks)
+      ctx.fillStyle = rgba(state.textInks?.get(tint) ?? tint, 1); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; ctx.fillText(content.number, x + 4, baseline - 0.5);
       x += nw + 5;
     }
     ctx.font = CALLOUT_TITLE_FONT; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
@@ -8580,7 +8899,7 @@
     if (content.counts && size.subH) {
       const statusRgb = content.mark === "error" ? NODE_RGB.amber : content.mark === "verify" ? NODE_RGB.verify : content.mark === "check" ? NODE_RGB.done : content.mark === "live" ? tint : NODE_RGB.pending;
       ctx.font = CALLOUT_COUNTS_FONT; ctx.textAlign = "left";
-      ctx.fillStyle = rgba(statusRgb, content.mark === "dot" ? 0.95 : 0.85);
+      ctx.fillStyle = rgba(state.textInks?.get(statusRgb) ?? statusRgb, content.mark === "dot" ? 0.95 : 0.85);
       ctx.fillText(content.counts, rect.x + 21, baseline + CALLOUT_SUB_H);
     }
     if (bubble && size.lines.length) {
@@ -8889,6 +9208,8 @@
         state.zoom = Math.exp(smoothDamp(Math.log(state.zoom), Math.log(state.zoomTarget), camVel, "zoom", glide, dt));
       }
     } else camVel.zoom = 0;
+    // The legend pointing at a state eases in and out (stepLegendPoint).
+    stepLegendPoint(dt, still);
     // Callouts keep their spots while the camera is in flight (placeCallout):
     // "in flight" is a pan still worth more than a few pixels, or a zoom glide.
     const flightPx = Math.hypot(state.camera.tx - state.camera.x, state.camera.ty - state.camera.y, state.camera.tz - state.camera.z) * state.fit * state.zoom * (state.overviewScale ?? 1);
@@ -8949,6 +9270,9 @@
     const nodeStyles = globalThis.window?.MefiNodeStyles ?? null;
     const motionTable = nodeStyles ? (state.nodeMotion ??= new Map()) : null;
     const frameNo = (state.frameNo = (state.frameNo ?? 0) + 1);
+    // The work orbs in each legend state this frame (paintLegendCounts).
+    const glanceCounts = state.glanceCounts;
+    glanceCounts.active = glanceCounts.held = glanceCounts.verify = glanceCounts.done = 0;
     for (const { node } of projected) {
       node._orbitTrail = null; node._extraGlow = false;
       const wantLift = state.hoverNode === node || state.selected?.id === node.id ? 1 : 0;
@@ -8967,6 +9291,14 @@
         const job = runningJobs.find((entry) => entry.taskId === node.task?.id);
         node.progress = typeof job?.progress === "number" && Number.isFinite(job.progress) ? job.progress : null;
       }
+      // Its legend state (stateRingOf), worked out once a frame for the ring,
+      // the ripple, the legend's counts and pointing and the hover card, with
+      // the same busy test the orb itself is drawn by; noteGlance times it.
+      const busy = node._workLabel !== "Verifying" && (isBusyNode(node, runningIds) || node.state === "active" || node.kind === "agent" && node.status === "running");
+      const glance = stateRingOf(node, busy, node.doneHold ? state.doneHold.get(node.id) ?? null : null);
+      node._glance = glance;
+      if (motion) noteGlance(motion, glance, time, still);
+      if (glance && !node.dying && !node._absorbed) glanceCounts[glance] += 1;
     }
     // A record whose node has been gone for 90 frames is dropped.
     if (motionTable && frameNo % 64 === 0) for (const [id, record] of motionTable) if (frameNo - record.seen > 90) motionTable.delete(id);
@@ -9223,7 +9555,7 @@
         nodeStyles.stepMotion(motion, stepFlags, dt, still);
         tint = nodeStyles.shownTint(motion, tint, time, still);
       }
-      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 12 : node.child ? 7.5 : 11;
+      const base = node.kind === "todo" ? 4.5 : node.kind === "assistant" ? 15 : node.kind === "agent" ? 10 : node.kind === "task" ? 13 : node.child ? 7.5 : 11;
       // Hover and selection ease the node up a twentieth (the record's sel),
       // on top of the lift that raises its size cap.
       const pop = motion ? 1 + 0.05 * motion.sel : 1;
@@ -9248,8 +9580,11 @@
       const styleReach = nodeStyles ? radius * nodeStyles.reach(state.nodeStyle ?? "orbs", motion) : 0;
       const marking = selectReachFloor ? Math.max(motion?.sel ?? 0, chosen ? 1 : 0) : 0;
       node._styleReach = marking > 0.01 ? Math.max(styleReach, radius + 4 * marking) : styleReach;
+      // The legend pointing at this orb's state brings it all the way forward
+      // (legendLit: 0 to 1), the way a hover does.
+      const legendLit = state.legendLevel > 0 && node._glance ? state.legendLevel * (state.legendLit[node._glance] ?? 0) : 0;
       const surface = surfaceFlags;
-      surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, visual.alpha * factor);
+      surface.selected = Boolean(selected); surface.active = active; surface.alpha = Math.max(0.35, (visual.alpha + (1 - visual.alpha) * legendLit) * factor);
       surface.detail = detail; surface.chosen = chosen; surface.motion = motion;
       surface.outlineOn = nodeTone?.outside ? layer : null;
       drawNodeSurface(ctx, node, p, radius, tint, surface);
@@ -9266,6 +9601,17 @@
           if (marked) nodeStyles.select(ctx, state.nodeStyle, p, radius, tint, overlay);
         }
       }
+      // The node's state at a glance: a ring in its legend colour (Running,
+      // Needs you, Review, Done) round every work orb, so the Map reads like
+      // its legend in every theme. Under the work orbit and the done badge;
+      // labels and callouts keep clear of it. The state was worked out above
+      // (node._glance); a change sends out one ripple (noteGlance).
+      const ring = state.mapRings !== false ? node._glance ?? null : null;
+      if (ring) {
+        drawStateRing(ctx, node, p, radius, ring, motion, time, still, Math.max(0.35, factor), legendLit);
+        node._styleReach = Math.max(node._styleReach ?? 0, radius + 6);
+      }
+      if (motion?.rippleKey && ring && !still && time - motion.rippleAt < RIPPLE_MS) drawStateRipple(ctx, node, p, radius, motion, time, Math.max(0.35, factor));
       drawWorkOrbit(ctx, node, p, radius, time, still);
       drawFiledWork(ctx, node, p, radius, runningIds, time, still);
       drawAgentDress(ctx, node, p, radius, tint, time, still);
@@ -9374,6 +9720,8 @@
     if (far !== ctx) far.restore();
     state.frameClip = null;
     syncFarLayer(liveFocusIds);
+    // The legend's counts follow the frame, only while the Map is open.
+    if (!scenery && state.active) paintLegendCounts();
     state.calmFrames = sceneAtRest(projected, runningIds, still, audioLinked) ? (state.calmFrames ?? 0) + 1 : 0;
     // A still pointer over a turning or gliding tree: ask again what is under
     // it now that this frame's positions are known (a few times a second).
@@ -9847,7 +10195,8 @@
       pen.strokeStyle = rgba(workStatus || verifying ? colorOf(node) : NODE_RGB.pending, priority <= 2 ? 0.75 : workStatus === "Running" ? 0.45 : verifying ? 0.35 : 0.25); pen.lineWidth = 1; pen.stroke();
       if (workStatus) {
         pen.font = '600 9px system-ui, "Segoe UI", sans-serif'; pen.textBaseline = "alphabetic"; pen.textAlign = "left";
-        pen.fillStyle = rgba(colorOf(node), alpha);
+        const statusTint = colorOf(node);
+        pen.fillStyle = rgba(state.textInks?.get(statusTint) ?? statusTint, alpha);
         pen.fillText(workStatus === "Verifying" ? "VERIFYING" : workStatus === "Next" ? "UP NEXT" : "RUNNING", paint.x + 8, paint.y + 13);
       }
       pen.font = font; pen.textBaseline = "alphabetic"; pen.textAlign = workStatus ? "left" : rect.align;
@@ -9914,16 +10263,94 @@
     return parts.filter(Boolean).join(" · ");
   }
 
+  // A work orb's hover card (state.mapHoverCard): the tip names the orb's
+  // title, its state in the legend's words and how long it has been in it
+  // (glanceLine), and shows over its callout too, which says neither. Quiet
+  // work says what it is doing in the app's one vocabulary (MefiStage).
+  const GLANCE_WORDS = { active: "Running", held: "Needs you", verify: "Review", done: "Done" };
+  const stampOf = (value) => {
+    const number = Number(value);
+    if (Number.isFinite(number) && number > 0) return number;
+    const parsed = Date.parse(value || "");
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  // When a work orb's state began, as { at, exact } or null: for Running its
+  // run's own start and for Done its finish (the board's stamps), else the
+  // change the Map saw happen (noteGlance), else a lower bound: the Map has
+  // seen it so since then, and a Review's last board write may go back further.
+  function glanceSince(node, key) {
+    const task = node.task ?? node.workTask ?? null;
+    if (key === "active" && task?.id != null) {
+      const at = stampOf(autopilotJobs(state.assistant).find((entry) => entry.taskId === task.id)?.startedAt);
+      if (at) return { at, exact: true };
+    }
+    if (key === "done") {
+      const at = stampOf(state.doneHold.get(node.id)?.since ?? task?.doneAt);
+      if (at) return { at, exact: true };
+    }
+    const m = node._m ?? null;
+    if (!m || m.glance !== key || !Number.isFinite(m.glanceSince)) return null;
+    if (m.glanceExact) return { at: m.glanceSince, exact: true };
+    const written = key === "verify" ? stampOf(task?.updatedAt) : 0;
+    return { at: written ? Math.min(written, m.glanceSince) : m.glanceSince, exact: false };
+  }
+  // Rounded to the minute, as the Map's other labels are ("Builder · 41m").
+  function stayWords(ms) {
+    const minutes = Math.round(ms / 60000);
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return minutes % 60 ? `${hours} h ${minutes % 60} min` : `${hours} h`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days === 1 ? "" : "s"}`;
+  }
+  function quietWords(node) {
+    if (node._workLabel === "Next") return "Up next";
+    if (node.kind === "todo") return node.status === "completed" ? "Done" : node.status === "cancelled" ? "Cancelled" : "Not started";
+    const task = node.task ?? node.workTask ?? null;
+    if (!task) return "Waiting";
+    const stage = node._stage ?? (task.status === "open" || task.status == null ? "ready" : task.status);
+    return globalThis.window?.MefiStage?.label?.(stage, task, { short: true }) ?? String(stage).replace(/_/g, " ");
+  }
+  // "Running · for 12 min", "Review · for at least 5 min", "Needs you · just
+  // now", or for quiet work what it is doing ("Up next", "Ready").
+  function glanceLine(node, now = Date.now()) {
+    const key = node._glance ?? null;
+    if (!key) return quietWords(node);
+    const words = GLANCE_WORDS[key];
+    const since = glanceSince(node, key);
+    if (!since) return words;
+    const ms = Math.max(0, now - since.at);
+    if (ms < 60000) return since.exact ? `${words} · just now` : words;
+    return `${words} · for ${since.exact ? "" : "at least "}${stayWords(ms)}`;
+  }
+  // The card's state line: written only when its words or colour change.
+  function paintTipCard(node) {
+    if (!el.tipState) return;
+    const line = glanceLine(node);
+    if (el.tipStateText && el.tipStateText.textContent !== line) el.tipStateText.textContent = line;
+    const key = node._glance ?? null;
+    const colour = key ? rgb(state.glanceInk?.[key] ?? (key === "held" ? NODE_RGB.amber : key === "verify" ? NODE_RGB.verify : key === "done" ? NODE_RGB.done : NODE_RGB.warm)) : "";
+    if (el.tipStateSw && el.tipStateSw.dataset.colour !== colour) {
+      el.tipStateSw.dataset.colour = colour;
+      el.tipStateSw.hidden = !colour;
+      if (colour) el.tipStateSw.style.setProperty("--sw", colour);
+    }
+    el.tipState.hidden = false;
+  }
+
   function refreshTip(px, py) {
     if (!el.tip) return;
     const key = tipKey();
-    // An orb with a callout already says what the tooltip would; keep the
-    // tip for bubbles, checkpoint notes and orbs without a card.
-    if (!key || state.panning || (state.hoverNode?._callout && !state.hoverBubble && !state.hoverSpeech)) {
+    // A work orb's hover card shows over its callout. Otherwise an orb with a
+    // callout already says what the tooltip would; keep the tip for bubbles,
+    // checkpoint notes and orbs without a card.
+    const card = state.mapHoverCard !== false && Boolean(state.hoverNode) && !state.hoverBubble && workOrb(state.hoverNode);
+    if (!key || state.panning || (!card && state.hoverNode?._callout && !state.hoverBubble && !state.hoverSpeech)) {
       hideTip();
       return;
     }
-    if (key !== state.tipNode) {
+    const fresh = key !== state.tipNode;
+    if (fresh) {
       state.tipNode = key;
       // The pointer is in canvas space (the canvas is fixed at inset 0) but the
       // tip lives in #idle-hud, which the app rail shifts right: measure the
@@ -9932,6 +10359,8 @@
       state.tipOrigin = hudBox ? { left: hudBox.left, top: hudBox.top, width: hudBox.width } : null;
       const title = el.tip.querySelector(".tip-title");
       const meta = el.tip.querySelector(".tip-meta");
+      if (meta) meta.hidden = card;
+      if (el.tipState && !card) el.tipState.hidden = true;
       if (state.hoverSpeech && !state.hoverBubble && !state.hoverNode) {
         // The full remark, for a bubble that had to clip itself.
         const bubble = state.speech.get(state.hoverSpeech);
@@ -9945,17 +10374,31 @@
       } else {
         const node = state.hoverNode;
         if (title) title.textContent = node.label ?? node.kind;
-        if (meta) meta.textContent = tipMeta(node);
+        if (meta) meta.textContent = card ? "" : tipMeta(node);
       }
     }
+    if (card) paintTipCard(state.hoverNode);
     el.tip.hidden = false;
     const origin = state.tipOrigin ?? { left: 0, top: 0, width: el.width };
-    el.tip.style.setProperty("--x", `${Math.max(8, Math.min(origin.width - 260, px - origin.left + 14))}px`);
-    el.tip.style.setProperty("--y", `${Math.max(12, py - origin.top - 12)}px`);
+    const x = Math.max(8, Math.min(origin.width - 260, px - origin.left + 14));
+    let y = Math.max(12, py - origin.top - 12);
+    // The card keeps off the legend's corner: one measure per new tip, and
+    // over a pill row it opens above the pointer instead.
+    if (card) {
+      if (fresh || !state.tipBox) {
+        const legend = el.legend?.getBoundingClientRect?.();
+        state.tipBox = { w: el.tip.offsetWidth || 0, h: el.tip.offsetHeight || 0, legendTop: legend && legend.height > 0 ? legend.top - origin.top : Infinity, legendRight: legend && legend.width > 0 ? legend.right - origin.left : -Infinity };
+      }
+      const box = state.tipBox;
+      if (y + box.h > box.legendTop - 6 && x < box.legendRight) y = Math.max(12, py - origin.top - box.h - 14);
+    }
+    el.tip.style.setProperty("--x", `${x}px`);
+    el.tip.style.setProperty("--y", `${y}px`);
   }
 
   function hideTip() {
     state.tipNode = null;
+    state.tipBox = null;
     if (el.tip) el.tip.hidden = true;
   }
 
@@ -11243,14 +11686,19 @@
 
   // ---------- legend and view controls ----------
   // The Map's legend (layout v2): the four states the prototype names, each in the colour its legend row already
-  // uses here (current work, held for you, awaiting verification, completed).
+  // uses here (current work, held for you, awaiting verification, completed). Each is a pill that points at its work
+  // orbs: it counts them (paintLegendCounts), lights them up while the pointer or the keyboard is on it (pointLegend)
+  // and keeps them lit once clicked, until it is clicked again or Esc (pinLegend). With "mefiStudio.mapLegendPoint"
+  // saved as "off" they are the plain colour keys they were.
   const MAP_LEGEND = [["active", "Running"], ["held", "Needs you"], ["verify", "Review"], ["done", "Done"]];
   function renderMapLegend() {
     if (!el.mapLegend || el.mapLegend.childElementCount) return;
+    const pointing = state.mapLegendPoint !== false;
+    el.legendPills = pointing ? {} : null;
     for (const [key, label] of MAP_LEGEND) {
       const entry = LEGEND.find((item) => item.key === key);
       if (!entry) continue;
-      const row = document.createElement("span");
+      const row = document.createElement(pointing ? "button" : "span");
       row.className = "map-legend-row";
       const swatch = document.createElement("i");
       swatch.className = "sw";
@@ -11259,9 +11707,73 @@
       const text = document.createElement("span");
       text.textContent = label;
       row.append(swatch, text);
+      if (pointing) {
+        row.type = "button";
+        row.dataset.state = key;
+        row.setAttribute("aria-pressed", "false");
+        const count = document.createElement("b");
+        count.className = "map-legend-count";
+        count.setAttribute("aria-hidden", "true");
+        row.append(count);
+        el.legendPills[key] = { row, count, label };
+      }
       el.mapLegend.append(row);
     }
+    if (pointing) el.mapLegend.setAttribute("aria-label", "Work on the Map by state");
+    // The next frame writes every count.
+    for (const key of LEGEND_KEYS) state.glanceShown[key] = -1;
   }
+
+  // The counts, from the frame's (state.glanceCounts), written only when one changed: the number, and the words a
+  // screen reader hears for the pill.
+  function paintLegendCounts() {
+    const pills = el.legendPills;
+    if (!pills) return;
+    const counts = state.glanceCounts, shown = state.glanceShown;
+    for (let index = 0; index < LEGEND_KEYS.length; index += 1) {
+      const key = LEGEND_KEYS[index];
+      const count = counts[key];
+      if (count === shown[key]) continue;
+      shown[key] = count;
+      const pill = pills[key];
+      if (!pill) continue;
+      pill.count.textContent = String(count);
+      pill.row.dataset.count = String(count);
+      pill.row.setAttribute("aria-label", `${pill.label}: ${count} on the Map`);
+      pill.row.title = `${pill.label}: ${count} on the Map. Point to light them up, click to keep them lit.`;
+    }
+  }
+
+  // The pill under the pointer, or focused from the keyboard; null lets go.
+  function pointLegend(key) {
+    const next = LEGEND_KEYS.includes(key) ? key : null;
+    if (next === state.legendHover) return false;
+    state.legendHover = next;
+    legendBurst();
+    return true;
+  }
+
+  // The pill clicked to hold (or null): says so on every pill and, unless asked not to, to screen readers.
+  function pinLegend(key, { announce = true } = {}) {
+    const next = state.mapLegendPoint !== false && LEGEND_KEYS.includes(key) ? key : null;
+    if (next === state.legendPin) return false;
+    state.legendPin = next;
+    for (const pill of Object.values(el.legendPills ?? {})) pill.row.setAttribute("aria-pressed", String(pill.row.dataset.state === next));
+    legendBurst();
+    if (announce && el.announce) {
+      const label = MAP_LEGEND.find(([entry]) => entry === next)?.[1] ?? "";
+      el.announce.textContent = next ? `Showing ${label}: ${state.glanceCounts[next] ?? 0} on the Map. Press Esc or choose ${label} again to show everything.` : "Showing everything on the Map again.";
+    }
+    return true;
+  }
+
+  // A change of pill eases in at the display's rate, as a new selection does.
+  function legendBurst() {
+    state.styleBurstUntil = Math.max(state.styleBurstUntil ?? 0, (globalThis.performance?.now?.() ?? Date.now()) + 400);
+    if (typeof wakeFrames === "function") wakeFrames();
+  }
+
+  const legendPillOf = (target) => target?.closest?.(".map-legend-row[data-state]") ?? null;
 
   function renderLegend() {
     renderMapLegend();
@@ -11593,6 +12105,11 @@
       setLegend(false);
       return true;
     }
+    // A state the legend holds lit lets go next.
+    if (state.legendPin) {
+      pinLegend(null);
+      return true;
+    }
     if (state.query) {
       clearSearch();
       return true;
@@ -11629,7 +12146,16 @@
     const on = globalThis.document?.documentElement?.dataset?.frame === "on";
     if (on === state.mapOn) return;
     state.mapOn = on;
-    if (!on) closeMapMenu();
+    if (!on) { closeMapMenu(); releaseLegend(); }
+  }
+
+  // The legend lets go of its pointing at once (the Map closing, the frame going): nothing held, nothing eased.
+  function releaseLegend() {
+    state.legendHover = null;
+    state.legendPin = null;
+    state.legendLevel = 0;
+    for (const key of Object.keys(state.legendLit ?? {})) state.legendLit[key] = 0;
+    for (const pill of Object.values(el.legendPills ?? {})) pill.row.setAttribute("aria-pressed", "false");
   }
 
   function setRunningOnly(on, { save = true } = {}) {
@@ -11946,10 +12472,18 @@
     if (document.hidden || document.body.dataset.sheet || pickerHeld()) return;
     refreshGraph();
   }
+  // A tree nobody was drawing catches up with what changed meanwhile in its
+  // first reads; for that moment its state changes are taken quietly
+  // (noteGlance): no ripple, and no exact time for the hover card.
+  const GLANCE_SETTLE_MS = 1500;
+  function quietGlances() {
+    state.glanceSettleUntil = (globalThis.performance?.now?.() ?? Date.now()) + GLANCE_SETTLE_MS;
+  }
   function startHomeBackdrop() {
     state.homeBackdropWanted = true;
     if (!el.canvas || state.active || state.homeBackdrop) return;
     state.homeBackdrop = true;
+    quietGlances();
     setBackdropSurfaces(true);
     el.canvas.hidden = false;
     if (el.far) el.far.hidden = false;
@@ -11995,7 +12529,8 @@
     }
     // Command opens over Home (the quiet clock, or a jump that keeps Home
     // underneath): it takes the canvas over from the backdrop where it stands.
-    releaseHomeBackdrop();
+    // A tree nobody was drawing first catches up quietly (quietGlances).
+    if (!releaseHomeBackdrop()) quietGlances();
     state.active = true;
     state.calmFrames = 0;
     state.lastInput = Date.now();
@@ -12108,6 +12643,7 @@
     closeMapMenu();
     hideTip();
     clearSearch();
+    releaseLegend();
     el.canvas.hidden = true;
     if (el.far) { el.far.hidden = true; el.far.classList?.remove("focused", "soft"); }
     state.focus = null;
@@ -12454,6 +12990,10 @@
     el.emptyRetry = document.getElementById("cmd-empty-retry");
     el.emptyAssistant = document.getElementById("cmd-empty-assistant");
     el.tip = document.getElementById("cmd-tip");
+    // The hover card's state line (paintTipCard).
+    el.tipState = el.tip?.querySelector?.(".tip-state") ?? null;
+    el.tipStateSw = el.tipState?.querySelector?.(".sw") ?? null;
+    el.tipStateText = el.tipState?.querySelector?.(".tip-state-text") ?? null;
 
     if (el.profile) {
       el.profile.innerHTML = PROFILE_ORDER.map((key) => `<option value="${key}" ${key === state.profile ? "selected" : ""}>${PROFILES[key].label}</option>`).join("");
@@ -12571,6 +13111,14 @@
     el.mapZoomOut?.addEventListener("click", () => userZoom(state.zoom * 0.89));
     el.mapZoomIn?.addEventListener("click", () => userZoom(state.zoom * 1.12));
     el.legendToggle?.addEventListener("click", () => setLegend(!state.legendOpen));
+    // The legend's pills (renderMapLegend): the pointer on one lights its state's orbs up (the gaps between pills keep
+    // the last one, so moving along them never flickers), leaving the row lets go; a keyboard focus does the same,
+    // and a click holds it.
+    el.mapLegend?.addEventListener("pointerover", (event) => { const pill = legendPillOf(event.target); if (pill) pointLegend(pill.dataset.state); });
+    el.mapLegend?.addEventListener("pointerleave", () => pointLegend(null));
+    el.mapLegend?.addEventListener("focusin", (event) => { const pill = legendPillOf(event.target); if (pill?.matches?.(":focus-visible")) pointLegend(pill.dataset.state); });
+    el.mapLegend?.addEventListener("focusout", (event) => { if (!el.mapLegend.contains(event.relatedTarget)) pointLegend(null); });
+    el.mapLegend?.addEventListener("click", (event) => { const pill = legendPillOf(event.target); if (pill) pinLegend(state.legendPin === pill.dataset.state ? null : pill.dataset.state); });
     el.feedMenu?.addEventListener("click", () => setFeedMenu(!state.feedMenuOpen));
     el.feedToggle?.addEventListener("click", () => setFeedCollapsed(!state.feedCollapsed));
     setFeedCollapsed(state.feedCollapsed, false);
@@ -13063,6 +13611,8 @@
     audioWaveStatus: () => ({ connections: (state.active && state.reactive && (state.inputStream || state.localAudio) && !noMotion() ? state.audioWaves ?? [] : []).map((wave) => ({ ...wave, points: wave.points.map((point) => ({ ...point })) })) }),
     isActive: () => state.active,
     escape,
+    // nav.js's Escape lets go of a state the legend holds lit before it opens the companion.
+    releaseLegendPin: () => (state.active && state.legendPin ? pinLegend(null) : false),
     handleKey,
     selection,
     bumpHud,
@@ -13099,6 +13649,12 @@
     },
     directorStatus: () => ({ active: Boolean(state.director), directed: Boolean(state.directed), zen: Boolean(state.zenDirector && state.director === state.zenDirector), camMode: state.camMode, zoom: state.zoom, zoomTarget: state.zoomTarget ?? null, pitch: state.pitch, pitchHome: Number.isFinite(state.pitchHome) ? state.pitchHome : null, returning: state.returning ? state.returning.camMode ?? true : null, restore: state.directorRestore ? { ...state.directorRestore } : null }),
     focusStatus: () => ({ id: state.focus?.id ?? null, kind: state.focus?.kind ?? null, since: state.focus?.since ?? null, restore: state.focusRestore ? { ...state.focusRestore } : null, sharp: state.focusIds ? [...state.focusIds] : null, farLayer: Boolean(el.farCtx), hover: state.hoverCallout, zoom: state.zoom, orbit: state.orbit }),
+    // The legend's pointing and counts, and each work orb's state as the Map reads it at a glance.
+    glanceStatus: () => ({
+      hover: state.legendHover, pin: state.legendPin, level: state.legendLevel, counts: { ...state.glanceCounts },
+      colours: state.glanceInk ? Object.fromEntries(Object.entries(state.glanceInk).map(([key, triple]) => [key, [...triple]])) : null,
+      nodes: state.nodes.filter((node) => node._glance !== undefined && workOrb(node)).map((node) => ({ id: node.id, state: node._glance ?? null, line: glanceLine(node), ripple: node._m?.rippleKey ?? null })),
+    }),
     calloutStatus: () => state.nodes.filter((node) => node._callout).map((node) => ({ id: node.id, kind: node.kind, side: node._callout.side, vert: node._callout.vert, length: node._callout.length, rect: { ...node._callout.rect }, hit: { ...node._callout.hit }, leader: { x1: node._callout.sx, y1: node._callout.sy, x2: node._callout.ex, y2: node._callout.ey }, title: node._callout.content.title, number: node._callout.content.number, counts: node._callout.content.counts, mark: node._callout.content.mark, lines: node._callout.content.lines.map((line) => line.text) })),
     search,
     selectAssistant,

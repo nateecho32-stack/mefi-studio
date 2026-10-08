@@ -1882,6 +1882,422 @@ test("the tree's centre is the smallest circle around it from above, halfway up 
   assert.equal(env.orbitCentre(nodes), centre, "an unchanged tree reuses its centre");
 });
 
+test("a small tree fills the 3D overview: a handful of nodes comes in closer than 1, ten or more stay at 1, all in view", () => {
+  const frames = {};
+  for (const count of [3, 6, 12, 30]) {
+    const { env, state, nodes, area } = overviewFixture("constellation", { count });
+    let frame = null;
+    overviewTurn(env, state, nodes, area, 1, (points, step) => {
+      frame ??= state.overviewScale;
+      assert.ok(Math.abs(state.overviewScale - frame) < 1e-9, `${count} nodes keep one frame through the turn (step ${step})`);
+      for (const { node, p } of points) assert.ok(p.x - 25 >= area.x - 1e-6 && p.x + 25 <= area.x + area.w + 1e-6 && p.y - 25 >= area.y - 1e-6 && p.y + 25 <= area.y + area.h + 1e-6, `${count} nodes: ${node.id} stays in view`);
+    });
+    frames[count] = frame;
+  }
+  // As far in as the room allows (the layout already spreads a few nodes wide).
+  assert.ok(frames[3] > 1.1, `three nodes come in closer (${frames[3]})`);
+  assert.ok(frames[6] > 1 && frames[6] <= frames[3] + 1e-9, `six come in less (${frames[6]})`);
+  assert.ok(frames[12] <= 1 && frames[30] <= 1, "ten or more sit at 1 at most, as before");
+  // The flat map keeps its screen places: no fill there.
+  const flat = overviewFixture("constellation", { count: 3 });
+  flat.state.view = "2d";
+  overviewTurn(flat.env, flat.state, flat.nodes, flat.area, 0, () => {});
+  assert.ok(flat.state.overviewScale <= 1, "2D stays at 1");
+  // The kill switch ("mefiStudio.mapFill" saved as "off") keeps a small tree at 1.
+  const off = overviewFixture("constellation", { count: 3 });
+  off.state.mapFill = false;
+  overviewTurn(off.env, off.state, off.nodes, off.area, 0, () => {});
+  assert.ok(off.state.overviewScale <= 1, `the fill switched off stays at 1 (${off.state.overviewScale})`);
+});
+
+test("the Map's state rings and a small tree's fill each have a kill switch, read once", () => {
+  const source = section("    runningOnly: readStore(", "  const el = {};");
+  assert.match(source, /mapRings: readStore\("mefiStudio\.mapRings"\) !== "off"/);
+  assert.match(source, /mapFill: readStore\("mefiStudio\.mapFill"\) !== "off"/);
+  const loop = section("      // The node's state at a glance:", "      drawWorkOrbit(ctx, node, p, radius, time, still);");
+  assert.ok(loop.includes("const ring = state.mapRings !== false ? node._glance ?? null : null;"), "rings off: no ring is drawn");
+  assert.ok(/if \(motion\?\.rippleKey && ring && !still && time - motion\.rippleAt < RIPPLE_MS\) drawStateRipple\(/.test(loop), "and no ripple without its ring, or with motion off");
+});
+
+test("the Map's glance has a kill switch per behaviour, each read once: the ripple, the legend's pointing, the hover card and the state colours", () => {
+  const source = section("    runningOnly: readStore(", "  const el = {};");
+  for (const [key, store] of [["mapRipple", "mapRipple"], ["mapLegendPoint", "mapLegendPoint"], ["mapHoverCard", "mapHoverCard"], ["mapStateHues", "mapStateHues"]]) {
+    assert.match(source, new RegExp(`${key}: readStore\\("mefiStudio\\.${store}"\\) !== "off",`), `${store} saved as "off" turns it off`);
+  }
+  // Each switch is honoured where its behaviour starts.
+  assert.match(section("  function noteGlance(", "  function drawWorkOrbit("), /state\.mapRings === false \|\| state\.mapRipple === false\) return false;/, "no ripple starts with the ripple (or the rings) off");
+  assert.match(section("  function stepLegendPoint(", "  // A node's share of the dim"), /const want = state\.mapLegendPoint !== false && state\.active && state\.mapOn \?/, "no pointing with the switch off, the Map closed or the frame gone");
+  assert.match(section("  function renderMapLegend(", "  // The counts, from the frame's"), /const row = document\.createElement\(pointing \? "button" : "span"\);/, "off, the legend is the plain colour keys it was");
+  assert.match(section("  function refreshTip(", "  function hideTip("), /const card = state\.mapHoverCard !== false && /, "off, the tip is the old one");
+  assert.match(section("  function syncGraphTheme(", "  // The role colours live"), /const glance = state\.mapStateHues !== false \? glancePalette\(/, "off, the four states keep the colours they had");
+});
+
+test("a small tree's fill ceiling eases as nodes come and go, and moves at once with motion off", () => {
+  const { env, state, nodes, area } = overviewFixture("constellation", { count: 10 });
+  let time = 1000;
+  const frame = (still = false) => {
+    state.camera.x = state.camera.tx ?? state.camera.x; state.camera.y = state.camera.ty ?? state.camera.y; state.camera.z = state.camera.tz ?? state.camera.z;
+    env.layoutProjectedGraph(nodes.map((node) => ({ node, p: env.project(node) })), area, "orbit", time, still);
+    time += 16;
+  };
+  const near = (value, expected) => Math.abs(value - expected) < 1e-9;
+  for (const node of nodes.slice(4)) node.dying = true;
+  frame(true);
+  assert.ok(near(state.fillNow, 1.6), `four live nodes may come in to 1.6 (${state.fillNow})`);
+  for (const node of nodes.slice(4)) node.dying = false;
+  frame();
+  assert.ok(state.fillNow > 1.45 && state.fillNow < 1.6, `ten live nodes: a frame later the ceiling has only begun to come down (${state.fillNow})`);
+  for (let i = 0; i < 60; i += 1) frame();
+  assert.equal(state.fillNow, 1, "and it settles at 1 within a second");
+  for (const node of nodes.slice(4)) node.dying = true;
+  frame(true);
+  assert.ok(near(state.fillNow, 1.6), "with motion off it moves at once");
+});
+
+test("every work orb's ring is a Map legend state: Done while its finish holds, then Review, Needs you, Running; quiet work and agents wear none", () => {
+  const env = vm.createContext({});
+  vm.runInContext(`${section("function stateRingOf(", "function drawStateRing(")}
+this.stateRingOf = stateRingOf;`, env);
+  const ring = (node, active = false, hold = null) => env.stateRingOf(node, active, hold);
+  assert.equal(ring({ kind: "task" }, false, { at: 1 }), "done");
+  assert.equal(ring({ kind: "task", _workLabel: "Verifying" }, true), "verify", "a check in progress is Review even while active");
+  assert.equal(ring({ kind: "task", task: { status: "awaiting_verification" } }), "verify");
+  assert.equal(ring({ kind: "task", _stage: "approval" }), "held");
+  assert.equal(ring({ kind: "task", _stage: "blocked" }), "held");
+  assert.equal(ring({ kind: "task", _workLabel: "Running" }), "active");
+  assert.equal(ring({ kind: "todo" }, true), "active");
+  assert.equal(ring({ kind: "session", workTask: { status: "open" }, _workLabel: "Running" }), "active", "work pinned on a session rings its host");
+  assert.equal(ring({ kind: "task" }), null, "quiet work: no ring");
+  assert.equal(ring({ kind: "session" }, true), null, "a session with no work of its own: no ring");
+  assert.equal(ring({ kind: "agent", status: "running" }, true), null, "agents keep their own dress");
+});
+
+test("a state ring draws on its own: the legend colour round the style's outline, a deep ink on a light page, still with motion off", () => {
+  const strokes = [], outlines = [];
+  const kept = [];
+  const ctx = { globalAlpha: 1, lineWidth: 1, strokeStyle: "", save() { kept.push([this.globalAlpha, this.lineWidth, this.strokeStyle]); }, restore() { [this.globalAlpha, this.lineWidth, this.strokeStyle] = kept.pop(); }, beginPath() {}, arc() { outlines.push("arc"); }, stroke() { strokes.push([this.strokeStyle, this.lineWidth, this.globalAlpha]); } };
+  const NODE_RGB = { warm: [230, 201, 141], amber: [255, 212, 121], verify: [151, 179, 244], done: [104, 236, 164] };
+  const run = (key, { light = false, still = false } = {}) => {
+    strokes.length = 0; outlines.length = 0;
+    const env = vm.createContext({
+      NODE_RGB, Math,
+      state: { nodeTheme: { light }, nodeStyle: "orbs" },
+      rgba: (triple, alpha) => `rgba(${triple.join(",")},${alpha})`,
+      window: { MefiNodeStyles: { outline: (_ctx, style, x, y, r) => outlines.push([style, x, y, r]), inkOf: (triple) => ({ hot: triple.map((value) => Math.round(value / 2)) }) } },
+    });
+    vm.runInContext(`${section("function stateRingOf(", "function drawWorkOrbit(")}
+this.drawStateRing = drawStateRing;`, env);
+    env.drawStateRing(ctx, { _detail: 3 }, { x: 100, y: 50 }, 12, key, { seed: 0.25 }, 1200, still, 1);
+    return { strokes: [...strokes], outlines: [...outlines] };
+  };
+  const held = run("held");
+  assert.equal(held.outlines[0][0], "orbs", "the ring follows the style's own outline");
+  assert.ok(held.outlines[0][3] > 12 + 3, "a few pixels off the orb");
+  assert.match(held.strokes[0][0], /^rgba\(255,212,121,/, "Needs you is the legend's amber");
+  assert.equal(held.strokes.length, 2, "and glows a little on a dark sky");
+  assert.match(run("done").strokes[0][0], /^rgba\(104,236,164,/);
+  assert.equal(run("done").strokes.length, 1, "Done holds still, no glow");
+  assert.match(run("verify", { light: true }).strokes[0][0], /^rgba\(76,90,122,/, "a light page takes the deep ink");
+  const a = run("active", { still: true }), b = run("active", { still: true });
+  assert.deepEqual(a, b, "with motion off the ring holds still");
+});
+
+// A canvas fake that records what each stroke would paint.
+function strokeRecorder() {
+  const strokes = [], outlines = [], kept = [];
+  const ctx = { globalAlpha: 1, lineWidth: 1, strokeStyle: "", save() { kept.push([this.globalAlpha, this.lineWidth, this.strokeStyle]); }, restore() { [this.globalAlpha, this.lineWidth, this.strokeStyle] = kept.pop(); }, beginPath() {}, arc() { outlines.push(["arc"]); }, stroke() { strokes.push({ style: this.strokeStyle, width: this.lineWidth, alpha: this.globalAlpha }); } };
+  const styles = { outline: (_ctx, style, x, y, r) => outlines.push([style, r]), inkOf: (triple) => ({ hot: triple.map((value) => Math.round(value / 2)) }) };
+  return { ctx, strokes, outlines, styles, clear() { strokes.length = 0; outlines.length = 0; } };
+}
+const STATE_NODE_RGB = { warm: [230, 201, 141], amber: [255, 212, 121], verify: [151, 179, 244], done: [104, 236, 164] };
+
+test("a state ring wears the colour the Map draws its state in, and pointed at from the legend it draws bolder and glows", () => {
+  const { ctx, strokes, styles, clear } = strokeRecorder();
+  const state = { nodeTheme: { light: true }, nodeStyle: "orbs", glanceInk: { done: [57, 122, 90], verify: [99, 59, 160] } };
+  const env = vm.createContext({ NODE_RGB: STATE_NODE_RGB, state, rgba: (triple, alpha) => `rgba(${triple.join(",")},${alpha})`, window: { MefiNodeStyles: styles } });
+  vm.runInContext(section("function stateRingOf(", "function drawWorkOrbit("), env);
+  const draw = (key, lit = 0) => { clear(); env.drawStateRing(ctx, { _detail: 3 }, { x: 0, y: 0 }, 12, key, { seed: 0.25 }, 1200, false, 1, lit); return strokes.map((stroke) => ({ ...stroke })); };
+  assert.match(draw("done")[0].style, /^rgba\(57,122,90,/, "a light page takes the state's page ink as it is, not inked twice");
+  assert.match(draw("verify")[0].style, /^rgba\(99,59,160,/);
+  state.nodeTheme.light = false; state.glanceInk = null;
+  const quiet = draw("done"), pointed = draw("done", 1);
+  assert.equal(quiet.length, 1, "Done holds still, no glow");
+  assert.equal(pointed.length, 2, "pointed at, it glows");
+  assert.ok(pointed[0].width > quiet[0].width, "and draws bolder");
+  assert.ok(Number(pointed[0].style.match(/,([\d.]+)\)$/)[1]) > Number(quiet[0].style.match(/,([\d.]+)\)$/)[1]), "and brighter");
+});
+
+test("a state change ripples out from the ring in the new state's colour and fades over 0.8 s", () => {
+  const { ctx, strokes, outlines, styles, clear } = strokeRecorder();
+  const state = { nodeTheme: { light: false }, nodeStyle: "halo", glanceInk: { verify: [185, 151, 244] } };
+  const env = vm.createContext({ NODE_RGB: STATE_NODE_RGB, state, rgba: (triple, alpha) => `rgba(${triple.join(",")},${alpha})`, window: { MefiNodeStyles: styles } });
+  vm.runInContext(section("  const RIPPLE_MS = 800;", "  // A work orb's legend state over time"), env);
+  const motion = { rippleAt: 1000, rippleKey: "verify" };
+  const at = (time) => { clear(); const drawn = env.drawStateRipple(ctx, {}, { x: 0, y: 0 }, 10, motion, time, 1); return { drawn, stroke: strokes[0] ? { ...strokes[0] } : null, outline: outlines[0] ?? null }; };
+  const early = at(1060), late = at(1600);
+  assert.equal(early.drawn, true);
+  assert.match(early.stroke.style, /^rgba\(185,151,244,/, "in the colour the Map draws Review in");
+  assert.equal(early.outline[0], "halo", "in the style's own silhouette");
+  assert.ok(early.outline[1] > 13 && late.outline[1] > early.outline[1] + 6, `it leaves the ring and grows outward (${early.outline[1]} → ${late.outline[1]})`);
+  assert.ok(late.stroke.alpha < early.stroke.alpha / 3 && late.stroke.width < early.stroke.width, "and fades and thins as it goes");
+  assert.equal(at(1800).drawn, false, "one ripple, 0.8 s");
+  assert.equal(at(999).drawn, false);
+  // Drawn under the node's ring only, and never with motion off.
+  const loop = section("      // The node's state at a glance:", "      drawWorkOrbit(ctx, node, p, radius, time, still);");
+  assert.match(loop, /if \(motion\?\.rippleKey && ring && !still && time - motion\.rippleAt < RIPPLE_MS\) drawStateRipple\(ctx, node, p, radius, motion, time, Math\.max\(0\.35, factor\)\);/);
+});
+
+test("only a change the Map sees sends a ripple: first sight, the quiet entry, motion off, the switches and Home's scenery send none, and a state that holds costs one comparison", () => {
+  const state = { active: true, mapRings: true, mapRipple: true, glanceSettleUntil: 0, styleBurstUntil: 0, calmFrames: 9 };
+  const env = vm.createContext({ state, Date });
+  vm.runInContext(section("  const RIPPLE_MS = 800;", "  function drawWorkOrbit("), env);
+  const record = {};
+  assert.equal(env.noteGlance(record, null, 1000, false, 5000), false, "first sight is not news");
+  assert.deepEqual([record.glance, record.glanceSince, record.glanceExact], [null, 5000, false]);
+  const watched = new Proxy(record, { set(target, key, value) { assert.fail(`a state that holds writes nothing (${String(key)})`); return Reflect.set(target, key, value); } });
+  assert.equal(env.noteGlance(watched, null, 1100, false, 5100), false);
+  assert.equal(env.noteGlance(record, "active", 2000, false, 6000), true, "a change ripples");
+  assert.deepEqual([record.glance, record.glanceSince, record.glanceExact, record.rippleAt, record.rippleKey], ["active", 6000, true, 2000, "active"]);
+  assert.equal(state.styleBurstUntil, 2800, "at the hot cadence for the ripple's 0.8 s");
+  assert.equal(state.calmFrames, 0);
+  assert.equal(env.noteGlance(record, null, 2500, false, 6500), false, "going quiet has no colour to ripple in");
+  assert.equal(record.glanceExact, true, "but its time is kept");
+  state.glanceSettleUntil = 4000;
+  assert.equal(env.noteGlance(record, "held", 3000, false, 7000), false, "the quiet moment after the Map opens catches up silently");
+  assert.equal(record.glanceExact, false, "and its time is only a lower bound");
+  state.glanceSettleUntil = 0;
+  assert.equal(env.noteGlance(record, "verify", 5000, true, 8000), false, "motion off: no ripple");
+  assert.equal(record.glanceExact, true, "motion off still times the change");
+  state.mapRipple = false;
+  assert.equal(env.noteGlance(record, "done", 6000, false), false, "mefiStudio.mapRipple off");
+  state.mapRipple = true; state.mapRings = false;
+  assert.equal(env.noteGlance(record, "active", 7000, false), false, "no ripple without the rings");
+  state.mapRings = true; state.active = false;
+  assert.equal(env.noteGlance(record, "held", 8000, false), false, "behind Home the change is kept, not shown");
+  state.active = true;
+  assert.equal(env.noteGlance(record, "verify", 9000, false), true);
+  assert.equal(record.rippleKey, "verify");
+  // The frame works the state out once per node, before anything draws, and counts it for the legend.
+  const frame = section("  function drawFrame(", "    layoutProjectedGraph(");
+  assert.ok(frame.includes("const glance = stateRingOf(node, busy, node.doneHold ? state.doneHold.get(node.id) ?? null : null);"));
+  assert.ok(frame.includes("if (motion) noteGlance(motion, glance, time, still);"));
+  assert.ok(frame.includes("if (glance && !node.dying && !node._absorbed) glanceCounts[glance] += 1;"));
+  assert.ok(section("  function drawFrame(", "  // ---------- labels ----------").includes("if (!scenery && state.active) paintLegendCounts();"), "the counts are written only while the Map is open");
+  // An entry the backdrop was not drawing, and the backdrop's own start, catch up quietly.
+  assert.ok(section("  function enter(", "  function exit(").includes("if (!releaseHomeBackdrop()) quietGlances();"));
+  assert.ok(section("  function startHomeBackdrop(", "  function releaseHomeBackdrop(").includes("quietGlances();"));
+});
+
+test("the legend points at a state: the rest dims toward a quarter, easing in and out, a new pill cross-fades, motion off lands at once", () => {
+  const state = { mapLegendPoint: true, active: true, mapOn: true, legendHover: null, legendPin: null, legendLevel: 0, legendLit: { active: 0, held: 0, verify: 0, done: 0 }, query: "", matchSet: new Set(), runningOnly: false, camMode: "orbit", follow: null, branch: null };
+  const env = vm.createContext({ state });
+  vm.runInContext(section("  // What Running only (the Map, layout v2) keeps lit", "  // A native <select> picker paints"), env);
+  const held = { id: "a", kind: "task", _glance: "held" }, running = { id: "b", kind: "task", _glance: "active" }, quiet = { id: "c", kind: "session", _glance: null };
+  const near = (value, expected) => Math.abs(value - expected) < 1e-9;
+  assert.equal(env.emphasis(quiet), 1, "nothing pointed at: nothing dims");
+  env.stepLegendPoint(1 / 60, false);
+  assert.equal(state.legendLevel, 0, "and nothing is eased");
+  state.legendHover = "held";
+  env.stepLegendPoint(1 / 60, false);
+  assert.ok(state.legendLevel > 0.1 && state.legendLevel < 0.5, `it eases in (${state.legendLevel})`);
+  for (let frame = 0; frame < 20; frame += 1) env.stepLegendPoint(1 / 60, false);
+  assert.equal(state.legendLevel, 1, "in about a fifth of a second");
+  assert.equal(env.emphasis(held), 1, "Needs you keeps full strength");
+  assert.ok(near(env.emphasis(running), 0.28) && near(env.emphasis(quiet), 0.28), "the rest dims toward a quarter");
+  state.legendHover = "active";
+  env.stepLegendPoint(1 / 60, false);
+  assert.equal(state.legendLevel, 1, "moving to the next pill keeps the dim");
+  assert.ok(state.legendLit.held > 0 && state.legendLit.held < 1 && state.legendLit.active > 0 && state.legendLit.active < 1, "and cross-fades the two states");
+  state.legendHover = null;
+  env.stepLegendPoint(1 / 60, false);
+  assert.ok(state.legendLevel > 0 && state.legendLevel < 1, "letting go eases out too");
+  for (let frame = 0; frame < 40; frame += 1) env.stepLegendPoint(1 / 60, false);
+  assert.equal(state.legendLevel, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.legendLit)), { active: 0, held: 0, verify: 0, done: 0 });
+  assert.equal(env.emphasis(running), 1);
+  // A held pill shows while nothing else is pointed at; pointing at another shows that one until the pointer
+  // leaves. Motion off lands at once.
+  state.legendPin = "verify"; state.legendHover = "done";
+  env.stepLegendPoint(1 / 60, true);
+  assert.deepEqual([state.legendLevel, state.legendLit.verify, state.legendLit.done], [1, 0, 1], "the pill under the pointer shows over the held one");
+  state.legendHover = null;
+  env.stepLegendPoint(1 / 60, true);
+  assert.deepEqual([state.legendLevel, state.legendLit.verify, state.legendLit.done], [1, 1, 0], "and the held one comes back when it leaves");
+  // The search's dim and the legend's compose.
+  state.query = "a"; state.matchSet = new Set(["b"]);
+  assert.ok(near(env.emphasis(running), 0.28) && near(env.emphasis(held), 0.25 * 0.28), "both dims apply");
+  state.query = ""; state.matchSet = new Set();
+  // The frame gone, the Map closed or the switch off: nothing is pointed at.
+  for (const change of [() => { state.mapOn = false; }, () => { state.active = false; }, () => { state.mapLegendPoint = false; }]) {
+    Object.assign(state, { mapOn: true, active: true, mapLegendPoint: true, legendLevel: 1 });
+    change();
+    env.stepLegendPoint(1 / 60, true);
+    assert.equal(state.legendLevel, 0);
+  }
+  assert.ok(section("  function drawFrame(", "    const { ctx } = el;").includes("stepLegendPoint(dt, still);"), "once a frame, before the hot cadence is decided");
+  // An orb in the pointed-at state comes all the way forward, the way a hover does.
+  const loop = section("      // The legend pointing at this orb's state", "      drawNodeSurface(ctx, node, p, radius, tint, surface);");
+  assert.ok(loop.includes("surface.alpha = Math.max(0.35, (visual.alpha + (1 - visual.alpha) * legendLit) * factor);"));
+});
+
+test("the four states read apart in every built-in theme: Running wears the accent and the others turn within their family to keep 40 degrees of hue", async () => {
+  const music = await readFile(new URL("../renderer/music.js", import.meta.url), "utf8");
+  const pure = vm.createContext({ URL });
+  vm.runInContext(`${music.slice(music.indexOf("  const THEMES"), music.indexOf("  let stored;"))}\nthis.api = { resolvePalette, THEMES };`, pure);
+  const env = vm.createContext({});
+  vm.runInContext(`${section("  // ---------- the four states' colours ----------", "  function syncGraphTheme() {")}\nthis.api = { glancePalette, hueOf, hueGap, chromaOf, contrastOf, STATE_BASE, STATE_FAMILIES };`, env);
+  const { glancePalette, hueOf, hueGap, chromaOf, contrastOf } = env.api;
+  const { STATE_BASE, STATE_FAMILIES } = JSON.parse(JSON.stringify({ STATE_BASE: env.api.STATE_BASE, STATE_FAMILIES: env.api.STATE_FAMILIES }));
+  const hex = (value) => [1, 3, 5].map((index) => parseInt(value.slice(index, index + 2), 16));
+  const inFamily = (hue, [from, to]) => (from <= to ? hue >= from && hue <= to : hue >= from || hue <= to);
+  const themes = [...Object.keys(pure.api.THEMES), "custom"];
+  for (const key of ["chrome", "gold", "daylight", "paper", "aurora", "void", "eclipse", "abyss", "dusk"]) assert.ok(themes.includes(key), `${key} is a built-in theme`);
+  const states = ["active", "held", "verify", "done"];
+  const report = {};
+  for (const key of themes) {
+    const canvas = pure.api.resolvePalette(key, {}).canvas;
+    const page = hex(canvas.background);
+    const light = page[0] * 0.2126 + page[1] * 0.7152 + page[2] * 0.0722 > 145;
+    const { raw, ink } = JSON.parse(JSON.stringify(glancePalette(hex(canvas.bright), { light, page })));
+    report[key] = ink;
+    assert.deepEqual(raw.active, hex(canvas.bright), `${key}: Running wears the theme's accent`);
+    for (let a = 0; a < states.length; a += 1) for (let b = a + 1; b < states.length; b += 1) {
+      const [x, y] = [ink[states[a]], ink[states[b]]];
+      const gap = hueGap(hueOf(x), hueOf(y));
+      // A grey (Chrome's silver) has no hue to be mistaken for: it is told apart by having none.
+      const grey = chromaOf(x) < 0.12 || chromaOf(y) < 0.12;
+      assert.ok(grey || gap >= 40, `${key}: ${states[a]} ${x} and ${states[b]} ${y} are only ${gap.toFixed(1)} degrees apart`);
+    }
+    for (const state of ["held", "verify", "done"]) {
+      assert.ok(chromaOf(ink[state]) >= 0.15, `${key}: ${state} keeps its colour (${ink[state]})`);
+      assert.ok(inFamily(hueOf(raw[state]), STATE_FAMILIES[state]), `${key}: ${state} stays in its family (${hueOf(raw[state]).toFixed(0)} degrees)`);
+      if (light) assert.ok(contrastOf(ink[state], page) >= 4.5, `${key}: ${state} holds 4.5:1 on the light page (${contrastOf(ink[state], page).toFixed(2)})`);
+    }
+    if (light) assert.ok(contrastOf(ink.active, page) >= 4.5, `${key}: Running holds 4.5:1 on the light page`);
+  }
+  // The capture that found it: Daylight's Running and Review were the same blue. Review turns toward violet there.
+  assert.ok(hueOf(report.daylight.verify) > 250, `Daylight's Review turns toward violet (${report.daylight.verify})`);
+  assert.ok(hueOf(report.midnight.verify) > 250, "and Midnight's");
+  // Where nothing comes close every state keeps the colour it had.
+  for (const key of ["chrome", "rose", "dusk"]) {
+    assert.deepEqual([report[key].held, report[key].verify, report[key].done], [STATE_BASE.held, STATE_BASE.verify, STATE_BASE.done], `${key} keeps the base colours`);
+  }
+  // Applied once per theme, to the bodies, the badges, the rings, ripples and legend dots, and the hover card's dot.
+  const sync = section("  function syncGraphTheme(", "  // The role colours live");
+  for (const line of [
+    "NODE_RGB.verify = glance ? glance.raw.verify : [...verifyBase];",
+    "NODE_RGB.amber = glance ? glance.raw.held : [...STATE_BASE.held];",
+    "NODE_RGB.done = glance ? glance.raw.done : [...STATE_BASE.done];",
+    "const stylePalette = palette && glance ? { ...palette, done: hexOf(NODE_RGB.done), amber: hexOf(NODE_RGB.amber) } : palette ?? null;",
+    "state.glanceInk = glance ? glance.ink : null;",
+  ]) assert.ok(sync.includes(line), `syncGraphTheme carries ${line}`);
+  for (const [name, start, end] of [["drawStateRing", "  function drawStateRing(", "  // A state change at a glance"], ["drawStateRipple", "  function drawStateRipple(", "  // A work orb's legend state over time"]]) {
+    assert.ok(section(start, end).includes("const ink = state.glanceInk?.[key] ?? "), `${name} wears the state's colour as the Map draws it`);
+  }
+  assert.ok(section("  function paintTipCard(", "  function refreshTip(").includes("state.glanceInk?.[key] ??"), "and so does the hover card's dot");
+});
+
+test("a theme change hands the four states' colours to the bodies, rings and legend, and on a light page words in a node's colour hold 4.5:1; the switch off puts the old colours back", async () => {
+  const music = await readFile(new URL("../renderer/music.js", import.meta.url), "utf8");
+  const pure = vm.createContext({ URL });
+  vm.runInContext(`${music.slice(music.indexOf("  const THEMES"), music.indexOf("  let stored;"))}\nthis.api = { resolvePalette };`, pure);
+  const sync = (key, { hues = true } = {}) => {
+    const canvas = pure.api.resolvePalette(key, {}).canvas;
+    const NODE_RGB = { session: [236, 229, 216], warm: [230, 201, 141], verify: [151, 179, 244], done: [104, 236, 164], pending: [138, 128, 108], stale: [96, 88, 74], pulse: [169, 255, 205], dust: [157, 183, 255], live: [87, 255, 154], collision: [255, 212, 121], task: [230, 201, 141], assistant: [230, 201, 141], amber: [255, 212, 121] };
+    const legend = ["active", "verify", "held", "done", "folded"].map((entry) => ({ key: entry, sw: "" }));
+    const themes = [];
+    const state = { mapStateHues: hues };
+    const env = vm.createContext({
+      state, NODE_RGB, LEGEND: legend, el: {},
+      rgb: (triple) => `rgb(${triple.join(",")})`, rgba: (triple, alpha) => `rgba(${triple.join(",")},${alpha})`,
+      document: { documentElement: { dataset: {} } },
+      window: { getComputedStyle: () => ({ getPropertyValue: () => "" }), MefiMusic: { themePalette: () => ({ theme: key, canvas }) }, MefiNodeStyles: { theme: (palette) => { themes.push(palette); return { light: canvas.background > "#8" }; }, inkOf: (triple) => ({ hot: triple.map((value) => Math.round(value / 2)) }) } },
+    });
+    vm.runInContext(`${section("  function hexToRgb(hex) {", "  // The role colours live")}\nthis.api = { syncGraphTheme, contrastOf, mixTriple };`, env);
+    env.api.syncGraphTheme();
+    return { state, NODE_RGB, legend, themes, canvas, ...env.api };
+  };
+  const hex = (value) => [1, 3, 5].map((index) => parseInt(value.slice(index, index + 2), 16));
+  const day = sync("daylight");
+  assert.equal(JSON.stringify(day.NODE_RGB.verify), JSON.stringify(day.state.glanceInk.verify), "Daylight's Review is violet and needs no ink: it already reads");
+  assert.ok(day.NODE_RGB.verify[2] > day.NODE_RGB.verify[1] && day.NODE_RGB.verify[0] > day.NODE_RGB.verify[1], `violet (${day.NODE_RGB.verify})`);
+  assert.equal(day.legend.find((entry) => entry.key === "verify").sw, `rgb(${day.state.glanceInk.verify.join(",")})`, "the legend's dot is the ring's colour");
+  assert.equal(day.legend.find((entry) => entry.key === "held").sw, `rgb(${day.state.glanceInk.held.join(",")})`);
+  assert.equal(day.legend.find((entry) => entry.key === "folded").sw, `rgb(${day.NODE_RGB.done.join(",")})`, "rows in Done's colour follow it");
+  assert.match(String(day.themes.at(-1).done), /^#[0-9a-f]{6}$/, "the node styles' badges get Done's colour");
+  for (const key of ["daylight", "paper"]) {
+    const run = key === "daylight" ? day : sync(key);
+    const page = hex(run.canvas.background);
+    for (const [name, triple] of Object.entries(run.NODE_RGB)) {
+      const ink = run.state.textInks.get(triple);
+      assert.ok(ink, `${key}: ${name} has a text ink`);
+      for (const [ground, colour] of [["the page", page], ["a number chip", run.mixTriple(page, triple, 0.28)]]) {
+        assert.ok(run.contrastOf(ink, colour) >= 4.5, `${key}: ${name} text holds 4.5:1 on ${ground} (${run.contrastOf(ink, colour).toFixed(2)})`);
+      }
+    }
+  }
+  assert.equal(sync("aurora").state.textInks, null, "a dark page keeps the colours");
+  // Off: the colours they had, the deep ink on a light page's dots, no text inks.
+  const off = sync("daylight", { hues: false });
+  assert.deepEqual(JSON.parse(JSON.stringify([off.NODE_RGB.verify, off.NODE_RGB.amber, off.NODE_RGB.done])), [[59, 86, 160], [255, 212, 121], [104, 236, 164]]);
+  assert.equal(off.state.glanceInk, null);
+  assert.equal(off.state.textInks, null);
+  assert.equal(off.themes.at(-1).done, undefined, "the node styles keep their own Done");
+});
+
+test("a work orb's hover card says its state in the legend's words and for how long: exact when the board or the Map knows, at least when not", () => {
+  const now = 10_000_000_000;
+  const state = { assistant: { running: [{ taskId: "t1", startedAt: now - 12 * 60000 }] }, doneHold: new Map([["task:t3", { since: now - 30000 }]]) };
+  const labels = { ready: "Ready", waiting: "Waiting", cooling: "Retry scheduled" };
+  const env = vm.createContext({ state, Date, window: { MefiStage: { label: (stage) => labels[stage] ?? stage } } });
+  vm.runInContext(`const autopilotJobs = (assistant) => assistant?.running ?? [];\n${section("  // A work orb's hover card (state.mapHoverCard)", "  function refreshTip(")}`, env);
+  const line = (node) => env.glanceLine(node, now);
+  assert.equal(line({ kind: "task", task: { id: "t1" }, _glance: "active" }), "Running · for 12 min", "a run's own start");
+  assert.equal(line({ id: "task:t3", kind: "task", task: { id: "t3" }, _glance: "done" }), "Done · just now", "the finish");
+  assert.equal(line({ kind: "task", task: { id: "t4" }, _glance: "held", _m: { glance: "held", glanceSince: now - 75 * 60000, glanceExact: true } }), "Needs you · for 1 h 15 min", "a change the Map saw");
+  assert.equal(line({ kind: "task", task: { id: "t5" }, _glance: "held", _m: { glance: "held", glanceSince: now - 2 * 86400000, glanceExact: true } }), "Needs you · for 2 days");
+  assert.equal(line({ kind: "task", task: { id: "t2", updatedAt: now - 3 * 3600000 }, _glance: "verify", _m: { glance: "verify", glanceSince: now - 5 * 60000, glanceExact: false } }), "Review · for at least 3 h", "a Review's last write goes back further than the Map's first sight");
+  assert.equal(line({ kind: "task", task: { id: "t6", updatedAt: new Date(now - 20 * 60000).toISOString() }, _glance: "verify", _m: { glance: "verify", glanceSince: now - 7 * 60000, glanceExact: false } }), "Review · for at least 20 min", "a written date counts too");
+  assert.equal(line({ kind: "todo", status: "in_progress", _glance: "active", _m: { glance: "active", glanceSince: now - 20000, glanceExact: false } }), "Running", "under a minute of a lower bound says nothing of time");
+  assert.equal(line({ kind: "todo", status: "in_progress", _glance: "active", _m: { glance: "held", glanceSince: now - 20000, glanceExact: true } }), "Running", "a record that has not caught up says nothing of time");
+  assert.equal(line({ kind: "task", task: { id: "t7", status: "open" }, _glance: null, _workLabel: "Next" }), "Up next");
+  assert.equal(line({ kind: "task", task: { id: "t8", status: "open" }, _glance: null, _stage: "cooling" }), "Retry scheduled", "quiet work speaks the app's one vocabulary");
+  assert.equal(line({ kind: "task", task: { id: "t9", status: "open" }, _glance: null }), "Ready");
+  assert.equal(line({ kind: "todo", status: "pending", _glance: null }), "Not started");
+  assert.deepEqual(JSON.parse(JSON.stringify(vm.runInContext("GLANCE_WORDS", env))), { active: "Running", held: "Needs you", verify: "Review", done: "Done" });
+  assert.match(source, /const MAP_LEGEND = \[\["active", "Running"\], \["held", "Needs you"\], \["verify", "Review"\], \["done", "Done"\]\];/, "the card's words are the legend's");
+});
+
+test("hovering a work orb shows its card over its callout and keeps it off the legend's corner; with the switch off the tip is the old one", () => {
+  const item = () => ({ hidden: true, textContent: "", dataset: {}, style: { props: {}, setProperty(key, value) { this.props[key] = value; } } });
+  const title = item(), meta = item(), tipState = item(), dot = item(), words = item();
+  const tip = { ...item(), offsetWidth: 220, offsetHeight: 48, querySelector: (selector) => (selector === ".tip-title" ? title : selector === ".tip-meta" ? meta : null) };
+  const el = { tip, tipState, tipStateSw: dot, tipStateText: words, width: 1600, hud: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1600 }) }, legend: { getBoundingClientRect: () => ({ left: 16, top: 800, right: 400, width: 384, height: 40 }) } };
+  const node = { id: "task:t1", kind: "task", label: "Search notes by tag", task: { id: "t1" }, _glance: "active", _callout: {} };
+  const state = { mapHoverCard: true, hoverNode: node, hoverBubble: null, hoverSpeech: null, panning: null, tipNode: null, assistant: { running: [{ taskId: "t1", startedAt: Date.now() - 40 * 60000 - 5000 }] }, doneHold: new Map(), glanceInk: { active: [29, 71, 158] } };
+  const env = vm.createContext({ state, el, NODE_RGB: STATE_NODE_RGB, rgb: (triple) => `rgb(${triple.join(",")})`, Date, window: {} });
+  vm.runInContext(`const autopilotJobs = (assistant) => assistant?.running ?? [];\n${section("  // ---------- hover tooltip ----------", "  // ---------- interaction ----------")}\n${section("  // A work orb: a task, a todo", "  // The ring follows")}`, env);
+  env.refreshTip(500, 300);
+  assert.equal(tip.hidden, false, "the card shows over the callout");
+  assert.equal(title.textContent, "Search notes by tag");
+  assert.equal(words.textContent, "Running · for 40 min");
+  assert.equal(tipState.hidden, false);
+  assert.equal(meta.hidden, true, "the card is its title and its state, nothing else");
+  assert.equal(dot.style.props["--sw"], "rgb(29,71,158)", "its dot is the colour of its ring");
+  assert.deepEqual([tip.style.props["--x"], tip.style.props["--y"]], ["514px", "288px"]);
+  env.refreshTip(100, 790);
+  assert.equal(tip.style.props["--y"], `${790 - 48 - 14}px`, "over the legend's corner it opens above the pointer");
+  // An orb without work keeps the old tip.
+  state.hoverNode = { id: "s1", kind: "session", label: "A session", _callout: {} };
+  env.refreshTip(500, 300);
+  assert.equal(tip.hidden, true, "a session with a callout still has no tip");
+  // The switch off: a work orb with a callout has no tip, as before.
+  env.hideTip();
+  state.mapHoverCard = false; state.hoverNode = node;
+  env.refreshTip(500, 300);
+  assert.equal(tip.hidden, true);
+});
+
 test("music moves the overview only inside the frame it keeps in reserve", () => {
   for (const layout of ["constellation", "tree", "helix", "layers"]) {
     const { env, state, nodes, area } = overviewFixture(layout);
@@ -1988,8 +2404,12 @@ test("circular 3D views retain meaningful volume and separate work rims through 
     assert.ok(Number.isFinite(thickness) && thickness > shortSide * 0.04, `${layout} retains a curved volume instead of a flat or tilted field (${thickness.toFixed(1)}px)`);
     const surfaceRadius = ({ node, p }) => {
       const working = node._workLabel === "Running";
-      const base = node.kind === "task" ? 12 : node.kind === "assistant" ? 15 : 11;
-      const radius = Math.min(working || node.kind === "assistant" ? 15 : 11, base * Math.max(0.75, Math.min(1.15, p.k)));
+      // idle.js's sizes: a task orb is 13 (capped 12, 16 when working), the
+      // assistant 15 (14 + 4 lifted), others 11 (15 lifted); a working orb's
+      // orbit reaches 9 past it, and a state ring 5 past a quiet one.
+      const base = node.kind === "task" ? 13 : node.kind === "assistant" ? 15 : 11;
+      const cap = (node.kind === "task" ? 12 : node.kind === "assistant" ? 14 : 11) + (working || node.kind === "assistant" ? 4 : 0);
+      const radius = Math.min(cap, base * Math.max(0.75, Math.min(1.15, p.k)));
       return radius + (working ? 9 : 0);
     };
     for (const yaw of [-0.45, -0.25, 0, 0.25, 0.45]) for (const pitch of [-0.2, 0, 0.2]) {

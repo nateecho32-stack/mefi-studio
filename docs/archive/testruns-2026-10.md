@@ -6,6 +6,304 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Resources: the resource manager for other apps, manual and auto, gated in C:\wt\resmgr
+
+Branch `feat/resource-manager` (C:\wt\resmgr) off 4b150b3, main merged in up to 86cfa93 (one CHANGELOG conflict,
+both sides kept; the booklet regenerated after each merge, identical to the auto-merge). New:
+`scripts/resource-rules.cjs`, `resource-host.cjs`, `resource-helper.cs` (C#, built once with Windows' csc.exe),
+`renderer/resources.js` + `.css`, `docs/resource-manager.md`; `main.cjs` loads the host on first use.
+
+Proof: `npm run check` ok (300 targets, 614 specs); `npm run audit` 0 findings; eslint on the changed files: no new
+warnings (the 6 it prints are old lines in main.cjs and nav.js). New suites: `resource_rules` 17/17,
+`resource_host` 15/15 (a scripted helper over fake pipes), `resources_ui` 11/11, `resource_helper_win` 1/1 (builds
+the real helper and slows, pauses, refuses, adopts after a kill, restores on stdin close and ends a throwaway
+process; 10 s). On the merged tree, 25 files through `npm run test:one`: 428/428 (the four above plus alerts_wiring,
+report_wiring, shell_frame_bars, shell_frame_wiring, app_rail, module_purity, log_core, booklet_build,
+booklet_inputs, machine_kill_host, executor_resume, nav_startup, nav_focus_claim, palette_keyboard, settings_nav,
+preload_fanout, auditor_dom, explorer_ui, layout_contract_nav, tabs_host, type_into_menu). Python contracts 248 OK
+(1 skipped). `npm run test:fast` before the merge: 7416/7437; the alerts_wiring miss was this change (its quit hook
+sat between two lines that suite pins together; moved below `outsideWorkQuit`), the rest were git_actions, sync and
+rust_parity_git/_repo/_snapshots cases running 1-10 minutes each on a PC with about 400 MB free; none touches a file
+of this change, and hosted CI runs them. `shell_render` (walks every destination, the new page included):
+1/1 pass in a real window (161 s). Hosted CI on the branch: Studio checks green in 9m11s on f8d3f0e (run 37482793905: build-booklet diff, check, lint, the full Node stage with the git and Rust parity suites, the Python contracts, audit, packaging); main merged again up to 86cfa93 after it (docs, release workflow and TESTRUNS only).
+
+Measured on the 16 GB laptop (506 processes, 46 apps): helper start 52 ms, first snapshot 0.77 s (file details,
+cached after), then 15.8 ms per snapshot round trip and 2.6 ms of rules; about 16 KB per page push, every 2 s and
+only while the page is on screen (held while the window is hidden); the helper holds about 18 MB.
+
+Seen in a fake-bridge preview at 1440x900 and 640x800 (no horizontal overflow). Fixed there: an option or switch now
+carries its `selected`/`checked` attribute (MefiPatch keeps choices by markup, so the settings showed their first
+option), and the search box no longer stretches across the tools row.
+
+Not run: the full `npm test` (the Electron lane apart from shell_render).
+
+## 2026-10-06 Your PCs and Friends reconnect by themselves; only a Studio that is really behind must update
+
+Branch `wip/auto-reconnect` (C:\wt\reconnect), landed on main as 7718e36 (rebased three times as main moved; the
+CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged). New `scripts/link-compat.cjs`
+(protocol windows for paired PCs and the relay); paired checks start again by themselves after a restart, update or
+crash and back off while the coordinator is away; Friends gets "Reconnect by itself", a retry on wake, and the relay's
+hello window. The relay change is not deployed by this landing: the live relay drops the new `oldest` field (checked
+against HEAD's protocol.mjs), so today's Studio and this one both connect until it is redeployed.
+
+`npm run check` ok, eslint on the changed files 0 problems (main.cjs keeps its 5 older warnings), `npm run audit` 0
+findings, booklet byte-identical to a fresh build. Through `npm run test:one` on the rebased tree: the affected and
+overlapping suites 135/135 (link_compat, paired_reconnect, paired_worker, paired_worker_lifecycle, paired_worker_ui,
+hub_client, hub_host, relay_core, relay_e2e, friends_front_ui, rooms_ui, project_hub_ui, playlists, friends_render);
+before the playlists rebase 177/179 across 26 suites incl. paired_worker_render, friends_render, friends_two_render
+and companion_hub_render, the 2 failures being paired_reconnect's own fixed-sleep waits under load, rewritten to wait
+for the poll, start and abort (then 6/6 on every run that got a lease turn; 3 of 5 back-to-back tries timed out
+waiting for the lease, not in the suite). paired_worker's heartbeat test now uses a 40 ms lease (it took 30 s once a
+missed heartbeat stopped aborting at once). paired_worker_render captures the Start by itself switches and "Studio
+0.4.6 (older, still connects)" fitting a 600 px window. Hosted CI (ci.yml, Windows) green on 6445219 (7 min 10 s),
+3a4c7be (7 min 23 s) and the landed 7718e36; after the last rebase 52/52 again here (hub_host,
+paired_worker_lifecycle, paired_reconnect, link_compat, hub_client), since main.cjs moved under it. Not run here: the
+full `npm test` (CI is the full gate) and a real two-PC test (owner).
+
+## 2026-10-06 The release workflow's hosted gate, smoke launch, signing switch and Rust-host switch; the 0.5 scope refreshed
+
+Cloud session, branch `claude/funny-einstein-19ljkq` (436fd2c, a45cc38) on main fa672de. `release.yml` now holds
+`docs/release-workflow-signpath.yml` (removed) and the PC's patch 575579f from `wip/release-yml-host-switch`, joined
+where they meet: every package-release call passes the resolved host, the folder lookup matches it, and the smoke
+launch gives the Rust host MEFI_STUDIO_USER_DATA and reads its stderr. Nothing ran: the workflow starts only on a
+`v*` tag or a dispatch, and neither was made.
+
+Why the hosted gate matters, measured: `ci.yml`'s `npm test` on main 4ce5657 (run 37476474394) skipped 46
+real-window tests (the Electron lane's 43 of 69 and 3 serialized), because `scripts/fetch-electron.mjs` leaves the
+binary out when CI=true. `release.yml` fetches it before `npm test`, so its full gate runs them on the hosted runner.
+
+Here (Linux, Node 24.21.0): PyYAML parses the workflow (22 steps, in order); `tests/release_workflow.test.mjs` 6/6
+through `npm run test:one`, and six mutations of the workflow (TAG_HOST, a signing step's if, --skip-build, the
+test:fast step, the smoke pattern, a branch trigger) each fail it; `npm run check` ok (296 targets, 609 specs);
+`npm run lint` 47 warnings, as on main, none in the new file; `npm run audit` 0 findings; `npm run test:fast` 7422
+tests, 7364 pass, 58 skipped, 0 fail (2 min 38 s); Python contracts 248 OK (3 skipped); the normalized-path lock ok.
+Not checked: the workflow on a runner, and the Rust host's smoke launch there (WebView2 on the runner, and
+Start-Process -Wait on its child processes); the first `host: tauri` dispatch shows both.
+
+My merge of `ui/social-studio-names` 0fc3043 was dropped before pushing: main's 0f5076a carries the same change.
+
+## 2026-10-06 Background git leaves no fsmonitor daemons, and Claude workers start only the desk's MCP servers
+
+Branch `fix/git-fsmonitor-worker-mcp` in `C:\wt\fsmon`: the 2026-10-03 commit c575fd3 (left on one PC in `C:\wt\mem`,
+260 commits behind) replayed onto main 539fb8f. One conflict, `cliInvocation`'s Claude line, which main had given live
+progress and the thinking flag: `--strict-mcp-config` sits beside them. Added since: the `MEFI_STUDIO_WORKER_OWN_MCP=1`
+switch and its pin, a live-mode pin, a `sync` test (git reports `core.fsmonitor=false` in a repository that turns it on),
+and the same override in the Rust ports (`repo::run_git`, `git::run`'s `child_env` for git children, `eyes::git`).
+The memory figures (nine daemons at ~44 MB from one worktree list; ~380 MB of the owner's own MCP servers per Claude
+worker) are the 10-03 measurements, not taken again.
+
+CI `Studio checks` (Windows: check, lint, `npm test`, audit) green on 7a034f1, the same change on main 4b150b3.
+Local, with mefi-core built from this branch (`CARGO_TARGET_DIR=C:\rt\fsmon`): rust_parity_repo, rust_parity_git,
+rust_parity_eyes, executor_core and sync 86/86, none skipped. `npm run check` ok on 539fb8f. An earlier local run
+(executor_core, executor_live_progress, executor_worktree, git_actions, sync x5, outside_work x2, usage_tracker_host,
+eyes x3) had one failure, `sync`'s session-hook test, where `git config` hit runGit's 30 s limit with 128-617 MB free
+and eight sessions' tests queued; it passed in the 86/86 run.
+
+## 2026-10-06 The rail's words are whole, and its places are checked at every window size
+
+Branch `ui/rail-words` in `C:\wt\modes` on main 4b150b3: 0f5076a (the Social/Studio launch hint, "Each launch opens
+the mode you last used", which main's merge of the rename did not take) and f9fb916 (at rest the rail keeps 4 px at
+its sides instead of 10 and a tile 2 px, so a word has about 51 px instead of 39; the rail's 64 px is unchanged).
+
+Measured in a real window (`shell_render`, new section 2b, Studio's rail at 1920x1080, 1440x900, 1100x720, 600x560 and
+600x560 at 150%): before, "Settings" needed 43 px and had 39 at the three larger sizes (Segoe UI), and every place was
+reachable; after, no word is cut and every place's middle is the place itself at all five sizes, with Segoe UI and with
+Verdana standing in for Linux's DejaVu Sans. Social's Home has no rail (a question for the owner, not changed here).
+The whole `shell_render` passes on this branch (214 s), the new section included; `skills_render` 1/1.
+
+`npm run check` ok, `npm run audit` 0 errors and 0 warnings, `npm run lint` 0 errors and 47 warnings (as main).
+shell_frame_css, shell_frame_bars, layout_contract_css, app_rail, vibe_home, vibe_panels, vibe_frame, booklet_build
+and size_page: 182/182.
+
+The skills landing (d55269f) said six of its window suites were still queued: all passed afterwards on its tree, one at
+a time: today_render (67 s), skills_render (27 s), composer_render (47 s), autonomy_render (17 s), agent_setup_render
+(45 s) and unified_studio_render (190 s), with team_render and sessions_render as reported.
+
+Incident on this PC, 08:26: removing a throwaway worktree with `git worktree remove --force` followed its node_modules
+junction into the shared node_modules and deleted @electron/get, @electron-internal/extract-zip, @types/node, debug and
+Electron's chrome_100_percent.pak and chrome_200_percent.pak before a locked DLL stopped it. Restored by 08:31 from
+Electron's download cache and an `npm ci --ignore-scripts` scratch copy; all 15 lock entries match, `electron.exe
+--version` is 44.4.1 and window suites pass again. A window suite that failed oddly on this PC between 08:26 and 08:31
+should be run again.
+
+## 2026-10-06 A test stage that runs past its limit is stopped with everything it started
+
+Branch `wip/test-speed` (C:\wt\speed), main 017d51a merged in. Overnight an economy-events gate held the machine-wide
+Electron lane about nine hours: media_window_render and layout_contract_render each kept an Electron window alive
+after their own kill timers failed (29 to 300 MB free), so `node --test` never finished, until killed by hand.
+run-node-tests now gives each stage a limit (scripts/test-lease.mjs stageLimitMs: 120 min for the parallel stage,
+90 for the Electron lane, 30 for each exclusive fixture; MEFI_TEST_STAGE_LIMIT_MIN) and past it ends the stage's
+whole tree (killTree: taskkill /T, three tries, then SIGKILL), names the suites still running and fails the stage.
+test_lease.test.mjs no longer spells a fixture name, so it runs with the quick suites and in test:fast.
+
+Tried and dropped, measured alone: running the parity suites' JavaScript and Rust halves side by side.
+rust_parity_repo went from 115 s to 75 s, but rust_parity_git from 78 s to 366 s with a failure (both halves start
+many processes at once; at ~500 MB free a filesystem check timed out), and at the 4-wide width this laptop usually
+gets, the parallel stage is bound by total work, which side-by-side halves do not reduce.
+
+`npm run check` ok, eslint on the changed files 0 problems, `npm run audit` 0 findings, hosted CI (ci.yml, Windows)
+green on e2eb757 in 7 min 9 s. `npm run test:fast` here at 4 suites at a time (223 to 510 MB free while other
+sessions ran Electron suites through the lease): 7409 tests, 7392 pass, 14 skipped, 2 fail plus one cancelled, all
+process-heavy suites under that load: git_actions "a push maps sign-in and network failures", project_preview "a
+real npm preview process reaches readiness" and rust_parity_repo "sync answers the same". Alone through `npm run
+test:one`: 85 of 86 pass; rust_parity_repo's sync test hit its own 240 s timeout again at ~200 MB free (it passed
+in 115 s on main's copy earlier today, and this branch does not touch it). The new suites pass:
+run_node_tests_stage_limit (a copy of the runner meets a suite kept alive by a child that never ends: stopped in
+about 5 s, named, the run failed, the turn given back, no process left) and test_lease 13/13.
+
+## 2026-10-06 Sharing playlists in rooms and on the Project hub lands on main
+
+Branch `feat/playlists-share` in `C:\wt\playlists` (aadb6ad; parked first as `wip/playlists-share` 48e3a8a), rebased
+onto main e0e5a46 with the CHANGELOG kept from both sides and `renderer/booklet.html` rebuilt, not merged. No relay
+change and no deploy: a room gets the share text as a message, the hub a YouTube `watch_videos` link.
+
+On this PC: `npm run check` ok (296 targets, every selector used), eslint on the touched files adds no warnings (the
+5 in main.cjs are older), `npm run audit` no findings. Node, run together: playlists 16/16 (4 new), rooms_ui and
+project_hub_ui (one new case each; the HUB_PROJECT_METHODS pin now reads playProject: 2 and pins the `here` rule),
+music, booklet_build, together_ui, friends_front_ui and every hub_* suite: 234 pass, 0 fail. Windows CI (`Studio
+checks`) runs on this commit before the fast-forward. Electron suites were not run here: the change adds no window
+fixture and the media ones passed this morning on the same menu; friends_render (12 px text rule) is covered by the
+card's 12 px floor in music.css.
+
+Seen in a browser preview of the real renderer files with a stub room service: Share › Send it to friends lists only
+active rooms you're in (the Lobby first), Post sent 1,337 characters to the Lobby, the chat card plays and saves once
+(then Saved and Open in Playlists), Add to the Project hub sent a 226-character link with a blurb naming the channels,
+and the hub shelf offers Save; no console errors.
+
+## 2026-10-06 A way to Routing opens More settings at Routing; the background check reads the Settings strip where Settings shows
+
+Branch `fix/routing-narrow` in `C:\wt\routing`, off main 017d51a. The full Electron lane on main 0b2fa14 (here, one
+suite at a time under the test lease) had 43 of 47 ok: command_render and today_render passed alone again (flakes),
+shell_render stops at the display-scaling check as before, and unified_studio_render failed every time at
+"#ai-role-routine-choice fits in narrow Routing". The Seats and models page (wip/models, 6c9126b) files Routing into
+the closed More settings, and go("agents", {pane: "routing"}) left it closed, so the controls were laid out but
+folded away (about 5,800 px down, nothing hit). agents.js openTeam now opens More at #settings-routing for a Routing
+way in that names no control. The suite then reached its contrast sweep, where `.settings-nav` read transparent:
+its solid fill is a container query on the Settings page, and since the window-scroll fix (efec563, bf0d0ce) the tab
+pages are not laid out under another page; the sweep now reads the strip with Settings open in the Studio mode and
+requires it measured there.
+
+unified_studio_render ok (alone, under the lease); team_render, agent_setup_render, settings_render ok; npm run check
+ok; npm run lint 0 errors and 47 warnings, as on clean main 017d51a. Hosted CI (Windows) on ef34f7a: green (37472060180). After merging main 4b150b3 (shell_render at 125% scaling): shell_render ok here, its first pass on this PC, so every window suite is green with this fix.
+
+## 2026-10-06 shell_render passes at 125% display scaling: the inspector check reads the page's own width
+
+Branch `fx/scaling` (on main 017d51a; first proven on 0b2fa14): in `tests/fixtures/shell-render-electron.cjs` the narrow-window
+check "it shrinks to leave the main area its 320" compared the inspector with `1100 - 64 - 344 - 320`. At 125% or
+150% display scaling a 1100 px content size comes out 1101 CSS px (the fixture's resize already allows exactly that
+one pixel) and the inspector takes it, so the suite failed on the owner's PCs even on clean main ("373 !== 372").
+The expected width is now `state.inner[0] - 64 - 344 - 320`, the probe's own innerWidth; the rule itself is
+unchanged.
+
+Proof on the owner's PC (AppliedDPI 120, 125%), Electron alone: `node --test tests/shell_render.test.mjs` 1/1 pass
+(112 s); the same suite on clean main fails at that check. `npm run check` ok. Not run: the full `npm test` (one
+fixture line; hosted CI runs the Node stage on the branch and skips real-window suites).
+`layout_contract_render` is gone from main with the classic layout; before that it also failed with the fixture
+forced to device scale factor 1 ("v1 geometry moved"), so its red on the PCs was not only scaling.
+
+## 2026-10-06 Friends › Events: the community budget, the weekly Build Jam, co-work hours and building together
+
+Branch `wip/economy-events` (C:\wt\econ) off 33c3c4e, main merged in up to 711ceb5 (0d82a1a: seven files resolved by
+hand with both sides kept; d1344bc puts the Playlists entry back to once after an earlier merge took 0e9f37f, not
+d55269f as its message says). Relay: `relay/src/economy.mjs` (a daily community budget, 200 + 25 per member seen this
+week who is old enough to earn) and `relay/src/events.mjs` (the weekly Build Jam, co-work hours at 02:00, 10:00 and
+18:00 UTC, building together), run on the relay's alarm; schema v5; credits.mjs gains together, cowork and jam kinds
+paid through award(). Studio: hub-client events calls, main.cjs HUB_EVENT_METHODS, preload hubEvents,
+renderer/friends-events.js + .css as Friends › Events.
+
+A read-only review of the social side found, in this branch, an alarm that would have woken the relay every second
+before each co-work hour and through a pause, a listed co-work room nobody could approve requests for, prizes two
+votes could win, and Forget me leaving names in results; all fixed in 113ca61 with tests. Its findings in other
+files went to the social session, which landed them on main (711ceb5).
+
+Gate on 132132d (main f1934aa merged): the parallel stage at 4 suites at a time, 7227 tests, 7210 pass, 3 fail, all a
+git time limit hit under load (29 to 780 MB free while other sessions ran): git_actions "a listener that throws does
+not stop a publish half-way", rust_parity_git "the actions answer like the JavaScript" and rust_parity_snapshots
+"the same attempt on two identical repositories". Python contracts 248 OK (1 skipped), normalized-path lock OK,
+`npm run audit` 0 findings. The Electron lane did not finish: media_window_render and layout_contract_render each
+kept an Electron window alive all night (their kill timers never landed at that memory) and held the machine-wide
+lane about nine hours until killed at 06:11 (a stage limit for exactly this is on wip/test-speed). The Electron
+suites were then run one at a time on the merged tree 0d82a1a through the lease with a 12-minute guard each:
+42 of 47 pass on the first pass (layout_contract_render left out: it fails on clean main here and retires with
+ui/v2-only). Of the five: shell_render is the known display-scaling failure on clean main; agent_setup_render and
+unified_studio_render fail on main's own renderer too (a control run in C:\wt\speed, at other assertions:
+load-sensitive); today_render and tree_dynamics_render, which had run 10 and 15 minutes under load, pass alone
+(101 s and 14 s). friends_render, companion_hub_render and friends_two_render pass. The three git time-limit
+suites pass alone: git_actions, rust_parity_git and rust_parity_snapshots, 72/72 in 2 min 41 s through `npm run
+test:one`.
+
+After the 711ceb5 merge: `npm run check` ok; the relay, hub, Friends and companion suites 169 pass, 2 skipped, 0 fail.
+
+## 2026-10-06 The social review's fixes land with the polish: say what helps, why a play earned nothing, one vocabulary
+
+Branch `wip/social-polish-2` in `C:\wt\polish2`: wip/social-polish (a676b05, Windows CI green) + 67e5898, the fixes from
+the "Engine optimization and social features" session's review of the social side (string ids in hub-client; one
+hubState() so Connect shows only when it can help; a play's why from the relay to the Project hub; private first
+rooms; The Lobby's own nudges, focus kept across reads, calendar days, this week's events row; one vocabulary; 12 px
+bubble labels; Play/Star labels; arrow keys in the tab rows; Search words), with main 0661f8c merged (119bc83:
+CHANGELOG keeps both sides, TESTRUNS rows from both and main's archived row, rotated; booklet.html regenerated).
+
+Run through `npm run test:one` (the machine-wide test lease) on 119bc83: companion_hub_render, friends_render and
+friends_two_render (the two Studios meeting end to end) 1/1 each, rooms_ui, friends_front_ui (13, new: the connection
+sentences, the nudges, the events row), project_hub_ui (play reasons), hub_client (17, new: missing ids refused),
+hub_host, relay_credits (the play's why), relay_connect, relay_e2e, booklet_build and module_purity: 165 tests, 165
+pass. Also pc_remote_ui, pc_sync_ui, together_ui, friends_mod_ui, friends_navigation, relay_core, app_rail,
+onboarding and palette_layout_v2 on 67e5898. `npm run check` ok. Windows CI runs the full gate on the landing commit
+before the fast-forward; the relay is redeployed with it (front().you.projects and hold, the play's why).
+
+## 2026-10-06 The Social/Studio names, the scroll fix, the social polish and the models page land while the PCs are offline
+
+Landed by the planning chat (cloud, Linux, Node 24.21.0) after the owner's PC became unreachable at 02:35 UTC. Each
+branch's tip had green Windows CI: ui/social-studio-names 2ee0106 (merge e2d2034); fix/doc-scroll ace7d22 (efec563,
+plus bf0d0ce: the rule split so every selector starts with html[data-frame], the one pin its CI failed);
+wip/social-polish a676b05 (1e54cc5; tabs.js keeps main's agents block and takes "lobby"); wip/models bc490ff (6c9126b;
+both sides kept in main.cjs, executor-core.cjs, agents.js and build-booklet.mjs, the teamLayout() calls dropped since the
+classic layout is gone; d9dad85 updates cli_deadline_host's pin). booklet.html rebuilt after each merge. Hosted Windows
+CI green on 1e54cc5 and d9dad85; main fast-forwarded to d9dad85.
+
+Here, as a non-root user under xvfb: npm run check ok, lint 0 errors (47 warnings, as before), audit 0/0, test:fast ok.
+Every real-window suite, one at a time, before the merges (55494c6) and after them: agent_setup_render, sessions_render
+and today_render failed only after them, each on a fixture that described the old state. Agent setup opened Seats and
+models without a target, and the seat rows now fold under More settings (c385a65 names the row, as an old way in does).
+Sessions pinned " · Vibe" and "Build · task" (c385a65, 15bfec3). Today asserted that Tab never leaves the document,
+which held only because the order walked into the Model catalog's 28 controls under the frame's layers; with
+fix/doc-scroll the order wraps once through the document and back to the frame, which 15bfec3 allows, pinning that no
+stop lands under the layers. After the fixes all three pass; sessions_render's "the keyboard starts on the open
+project" failed once and passed twice, the known flake. Failing on Linux both before and after, and ok on Windows per
+the ui/v2-only row: team_render (Providers sideways at 600x560@1.5), unified_studio_render and project_map_render (the
+map at 600x560@1.5), settings_render (Report a problem's panels at 600x560@1.5), workflow_render (the authoring layout
+at 600) and command_render (task pixels): Linux fonts and software rendering. friends_render and friends_two_render
+pass; their screenshots show the open room as a chat app, rooms as cards, each place's own icon, two Studios catching
+up after one was away, and no scroll arrow over the status bar.
+
+## 2026-10-06 The social side polished, and two Studios meeting through the relay end to end
+
+Branch `wip/social-polish` in `C:\wt\polish` (bea5ec9 an open room like a chat app, rooms as cards, Friends icons,
+plain words; 671b1b8 the two-Studio proof and The Lobby following who arrives), main merged (1de784f, clean;
+booklet.html regenerated and equal).
+
+The two-person flow, recorded (tests/friends_two_render.test.mjs, new): one Electron process plays two PCs, two real
+windows in the 0.5 layout with their own user data (separate session partitions), each bridge reaching its own copy
+of main.cjs's real Rooms hub block, and the real relay between them (relay/node/adapter.mjs: the Worker, the Hub
+object, SQLite, scripted Discord). Both meet in The Lobby and see each other online; PC one makes "Two PC test" from
+New room and reads its invite code from the room's menu; PC two joins with the code typed in lower case with a space;
+they chat both ways with Enter and see each other's face in the room; PC two closes Studio, PC one sends two more, PC
+two comes back and the two missed messages are filled in from PC one's copy (the relay keeps none); PC one starts
+Listen together and PC two hears the shared player; PC one shares a project from the Project hub and PC two plays it:
+the link opens in the browser, two minutes on PC one gets "Someone played your project: +5 credits" and its Lobby
+shows 5 credits, PC two's shows 2. 1/1, about 40 s.
+
+Polish checked in real windows (friends_render): an open room with five messages (a mention of this member, one of
+someone unnamed, and this member's own) at 1920x1080, 1100x720 and 600x560 at 150%: the room's name once, the chat
+taking most of the height, the composer on screen with Send inside it, Load earlier at the top of the log, mentions as
+names and "@someone"; every Friends place at 1920x1080, 1440x900, 1100x720 and 600x560 at 150% in Chrome, and every
+place plus an open room in a light palette, with no text under 12 px and nothing wider than the page.
+
+Run alone here on the merge: friends_render, companion_hub_render, friends_two_render and unified_studio_render 1/1
+each; rooms_ui 14/14, friends_front_ui 12/12, friends_mod_ui 4/4, friends_navigation 8/8, project_hub_ui 7/7, app_rail
+40/40, onboarding 43/43, tabs_strip 66/66, module_purity 63/63, booklet_build 5/5, hub_host 14/14, relay_connect 6/6.
+`npm run check` ok. Windows CI runs the full gate on the landing commit before the fast-forward.
+
 ## 2026-10-06 The studio log kept on disk and Trace's Load older (S2) land on main
 
 Branch `land/s2-log` in a cloud session (Linux, Node 24.21.0), stacked on S12 over main f1934aa (first gated over 00d32ca): the parked "not

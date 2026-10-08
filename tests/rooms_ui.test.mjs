@@ -256,6 +256,24 @@ test("one header, a chat that reads as names, faces of who is here, and one comp
   assert.equal(panel.find("rooms-send").parentElement.className, "rooms-composer", "Send sits inside the composer");
 });
 
+test("friends' pets visit while their room is open: the room's pets but yours fly in, and leaving the room sends them home", async () => {
+  const env = environment({ rooms: [room()], replies: { messages: { ok: true, messages: [], hasMore: false } } });
+  const visits = [];
+  env.window.MefiPets = { guests: (list) => { visits.push(JSON.parse(JSON.stringify(list))); return []; } };
+  const panel = env.rooms.panel();
+  await flush();
+  panel.buttons("Open")[0].click();
+  await flush();
+  const pet = { kind: "dragon", skin: "jade", name: "Pip" };
+  env.push({ type: "roomPets", roomId: "room_mine", pets: [{ userId: ME.id, name: "Mefi", pet: { kind: "dragon", skin: "theme", name: "Ember" } }, { userId: FRIEND.id, name: "Aksana", pet }] });
+  assert.deepEqual(visits.at(-1), [{ id: FRIEND.id, name: "Aksana", pet }], "your own pet is already on your screen");
+  env.push({ type: "roomPets", roomId: "room_other", pets: [{ userId: "323456789012345678", name: "Other", pet }] });
+  assert.equal(visits.length, 1, "another room's pets never fly in here");
+  panel.buttons("‹ Rooms")[0].click();
+  await flush();
+  assert.deepEqual(visits.at(-1), [], "leaving the room sends them home");
+});
+
 test("a room opened while another one's messages load shows its own, and a late page is dropped", async () => {
   const gates = new Map();
   const env = environment({

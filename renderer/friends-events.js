@@ -8,14 +8,15 @@
 //     member's own time), the prize pot, your entry (one of your shared
 //     projects) and every entry with Play and Vote. A vote needs a two-minute
 //     play first, counts only from members in good standing (the page says
-//     when yours start), and stays hidden until the results. A moderator can
-//     take an entry out.
+//     when yours start), and stays hidden until the results, a day after
+//     voting closes (a moderator has a look first). A moderator can take an
+//     entry out.
 //   - The co-work hour: when the next one starts, Join, and how many are
 //     there. The relay counts members of that hour's room while their Studio
 //     is connected, on any page, so nothing has to stay open.
 //   - Build together: credits for working in a co-work room with friends,
 //     and the way to bring one (a room's join code, in Rooms).
-//   - Last week's results.
+//   - Last week's results, or when they come while they wait for the look.
 //   - Today's community pot in one line.
 // Everything goes through main's hub:events channel (HUB_EVENT_METHODS) and
 // hub:projects (me, playProject); text only. A repaint keeps the focused
@@ -52,6 +53,7 @@
     self: "You cannot vote for your own entry.",
     entry: "That entry was withdrawn.",
     "voting-closed": "Voting has closed. The results are below.",
+    barred: "A moderator took your votes out of this jam.",
     over: "That co-work hour has ended.",
     "new-member": "Co-work hours open after your first day in the server.",
     "room-full": "That co-work hour is full.",
@@ -188,6 +190,8 @@
       page = {
         jam: events.jam ? { ...events.jam, entries: events.jam.entries ?? [], you: { entered: null, votesLeft: 0, ...(events.jam.you ?? {}) } } : null,
         lastJam: events.lastJam ? { ...events.lastJam, results: events.lastJam.results ?? [] } : null,
+        // A jam whose voting closed and whose results wait for a moderator's look (resultsAt null while they hold them).
+        reviewing: events.reviewing ?? null,
         cowork: events.cowork ?? null,
         nextCowork: events.nextCowork ?? null,
         together: { ticks: 0, needed: 3, amount: 4, ...(events.together ?? {}) },
@@ -311,7 +315,7 @@
         list.append(row(node("strong", "", name), meta, tools));
       }
       parts.push(list);
-      if (jam.phase !== "results") parts.push(node("p", "muted friends-events-fine", `${plural(jam.you.votesLeft, "vote")} left. Votes stay hidden until the results, ${when(jam.endsAt)}, and count only for entries you played.`));
+      if (jam.phase !== "results") parts.push(node("p", "muted friends-events-fine", `${plural(jam.you.votesLeft, "vote")} left. Votes stay hidden until the results, ${when(jam.resultsAt ?? jam.endsAt)}, and count only for entries you played.`));
       return section(`Build Jam: ${jam.theme || "this week"}`, "friends-events-jam", parts);
     }
 
@@ -355,8 +359,15 @@
 
     function resultsPart() {
       const last = page.lastJam;
-      if (!last) return null;
+      const waiting = page.reviewing;
+      if (!last && !waiting) return null;
+      // Voting closed and a moderator has a day to look before the prizes pay.
+      const ahead = waiting ? node("p", "muted friends-events-review", waiting.resultsAt
+        ? `${waiting.theme || "Last week's jam"}: voting has closed. The results come ${when(waiting.resultsAt)}, after a moderator's look.`
+        : `${waiting.theme || "Last week's jam"}: voting has closed. A moderator is looking at the results before they come.`) : null;
+      if (!last) return section("Last week's jam", "friends-events-results", [ahead]);
       const parts = [node("p", "muted", `${last.theme || "Last week"} · a pot of ${plural(last.pool, "credit")}.`)];
+      if (ahead) parts.unshift(ahead);
       const places = last.results.filter((payout) => payout.place).sort((a, b) => a.place - b.place);
       const showcase = last.results.filter((payout) => !payout.place);
       if (!places.length && !showcase.length) parts.push(node("p", "muted", "No entry had enough votes or players."));

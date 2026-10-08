@@ -735,7 +735,7 @@
       const chat = window.MefiToday?.homeView?.() === "chat" && rootEl().dataset.uiMode !== "vibe";
       if (session || built?.title) parts.push(String(session || built.title));
       // Vibe's Today is the board: the prototype's breadcrumb says so.
-      else parts.push(window.MefiToday ? (chat ? "Chat" : rootEl().dataset.uiMode === "vibe" ? "Today, the board" : "Today") : String(dest?.label || dest?.short || "Home"));
+      else parts.push(window.MefiToday ? (chat ? "Chat" : rootEl().dataset.uiMode === "vibe" ? "Home" : "Today") : String(dest?.label || dest?.short || "Home"));
       return parts;
     }
     const place = placeTrail(n, id, dest);
@@ -830,16 +830,19 @@
     }
     return { section: "team", title: "Team", rows };
   }
-  // Friends lists its three places (renderer/companion-hub.js friendsPlaces), the one that shows current.
+  // Friends lists its three places (renderer/companion-hub.js friendsPlaces), the one that shows current: the Shop's
+  // row while the Shop's own page (route "shop") shows.
   function friendsModel(n, id) {
     let places = null;
     try { places = window.MefiCompanionHub?.friendsPlaces?.() ?? null; } catch { places = null; }
     if (!Array.isArray(places) || !places.length) return null;
-    const rows = places.map((place) => ({ kind: "row", key: `friends:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: id === "friends-page" && Boolean(place.current), run: place.run }));
+    const rows = places.map((place) => ({ kind: "row", key: `friends:${place.id}`, label: String(place.label), glyph: typeof place.glyph === "string" ? place.glyph : null, current: (id === "friends-page" || (id === "shop" && place.id === "shop")) && Boolean(place.current), run: place.run }));
     return { section: "friends", title: "Friends", rows };
   }
   // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
   function placeTrail(n, id, dest) {
+    // Social's own pages (renderer/social.js, renderer/today.js) are places of their own: the project, then the page.
+    if (id === "activity" || id === "projects") return [String(dest?.label || id)];
     const place = placeOfRoute(n, id);
     if (place === "settings") {
       if (id === "size") return ["Settings", "Appearance", String(dest?.label || "Size and density")];
@@ -856,6 +859,7 @@
       const page = MAP_PAGES.find(([route]) => route === id);
       return page ? (page[0] === "command" ? ["Map"] : ["Map", page[1]]) : null;
     }
+    if (place === "friends" && id === "shop") return ["Friends", "Shop"];
     if (place === "friends" && id === "friends-page") {
       let here = null;
       try { here = window.MefiCompanionHub?.friendsPlace?.() ?? null; } catch { here = null; }
@@ -1196,6 +1200,7 @@
   }
 
   // ---- the status bar -----------------------------------------------------------------------------
+  const socialActivity = () => currentMode() === "vibe" && Boolean(nav()?.get?.("activity"));
   function buildStatus(bar) {
     const items = {};
     const item = (key, className, run, label) => {
@@ -1209,7 +1214,8 @@
     items.layout.setAttribute("aria-expanded", "false");
     items.layout.setAttribute("title", "Layout: list, inspector, tab strip and sizes");
     items.layout.append(icon("panelL"), text("span", "shell-status-word", "Layout"));
-    const working = item("working", "shell-working", () => nav()?.go?.("command"), "Nothing running");
+    // What is running opens the Map in Studio, and Activity in Social (renderer/social.js keeps Social to its own pages).
+    const working = item("working", "shell-working", () => nav()?.go?.(socialActivity() ? "activity" : "command"), "Nothing running");
     working.append(el("i", "shell-dot", { "aria-hidden": "true" }), text("span", "", ""));
     const waiting = item("waiting", "shell-waiting", () => openInbox(waiting), "Waiting on you");
     waiting.append(icon("bell"), text("span", "", ""));
@@ -1315,7 +1321,7 @@
       working.dataset.tone = run;
       working.children[1].textContent = word;
       working.setAttribute("aria-label", word);
-      working.setAttribute("title", "What is running. Open the Map.");
+      working.setAttribute("title", socialActivity() ? "What is running. Open Activity." : "What is running. Open the Map.");
     }
     const needs = live.needs || 0;
     waiting.hidden = needs <= 0;
@@ -1412,7 +1418,9 @@
     const menu = state.menu;
     if (!menu) return false;
     state.menu = null;
-    menu.node.remove?.();
+    // A menu effect from the Shop plays it away (renderer/effects.js); without one it simply goes.
+    const effects = window.MefiEffects;
+    if (typeof effects?.leave === "function") effects.leave(menu.node); else menu.node.remove?.();
     state.statusParts?.items?.layout?.setAttribute?.("aria-expanded", "false");
     if (restore) {
       const back = menu.returnTo?.isConnected === false ? state.statusParts?.items?.layout : menu.returnTo;

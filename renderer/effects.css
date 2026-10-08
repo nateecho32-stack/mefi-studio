@@ -1,0 +1,35 @@
+/* Mefi's Studio AI+ — the pet and the menu effects (renderer/pets.js, renderer/effects.js).
+   Both draw on small canvases of their own that sit above everything and
+   never take the pointer: the pet's travels with it, and a closing menu's
+   dust is laid over the menu only while it leaves. */
+.studio-pet,
+.exit-effect-dust {
+  position: fixed;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  contain: strict;
+  will-change: transform;
+}
+.studio-pet { z-index: 2147482600; }
+.studio-pet[hidden] { display: none; }
+.exit-effect-dust { z-index: 2147482500; }
+/* Glitch's filter lives in a little SVG of its own (effects.js): it takes no
+   room and is never seen, but stays rendered so the filter can be used. */
+.exit-effect-defs { position: fixed; left: 0; top: 0; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+/* Settings › Appearance › Interface: the pet and menu effect card (pets.js). */
+.settings-flair-body { display: grid; gap: 16px; }
+.settings-flair-body > .field { display: grid; gap: 8px; }
+.settings-flair-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Its Try and Shop buttons wrap their words rather than run past a narrow card (styles.css keeps buttons on one line). */
+.settings-flair-row > button { max-width: 100%; height: auto; white-space: normal; text-align: start; }
+.settings-flair-name { width: min(200px, 100%); }
+.settings-flair-shop { justify-self: start; }
+/* The pet's live picture, and its three picks side by side (one under another when narrow). */
+.settings-flair-preview { display: block; width: min(100%, 360px); height: 132px; border: 1px solid var(--hairline, rgba(127, 127, 127, 0.25)); border-radius: 12px; background: color-mix(in srgb, var(--gold) 5%, transparent); }
+.settings-flair-picks { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+.settings-flair-pick { display: grid; gap: 6px; flex: 1 1 160px; min-width: 0; max-width: 240px; }
+.settings-flair-pick > :is(select, input) { width: 100%; min-width: 0; }
+@media print {
+  .studio-pet, .exit-effect-dust { display: none; }
+}

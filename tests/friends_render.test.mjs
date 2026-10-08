@@ -44,7 +44,7 @@ test("Friends in the 0.5 layout: The Lobby and the prototype's places in the lis
     }
     assert.equal(code, 0, `${report?.failure || "No renderer report"}\n${output}`);
     assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
-    assert.equal(report.places.length, 6, "every place was opened from its row");
+    assert.equal(report.places.length, 7, "every place was opened from its row");
     assert.ok(report.shots.length >= 6, `the screenshots were taken (${report.shots.length})`);
     assert.ok(report.complete, "the fixture ran to its end");
   } finally {

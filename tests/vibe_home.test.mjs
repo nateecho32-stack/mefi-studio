@@ -40,7 +40,7 @@ function bridge({ needsYou = null, plans = [], blocked = [] } = {}) {
   return { api, calls };
 }
 
-async function load({ storage = new Map(), search = "", panels = true, ...options } = {}) {
+async function load({ storage = new Map(), search = "", panels = true, timers = null, ...options } = {}) {
   const { api, calls } = bridge(options);
   const events = {};
   const { document, get } = createDom({ ids: templateIds((id) => id.startsWith("vibe-")) });
@@ -61,7 +61,10 @@ async function load({ storage = new Map(), search = "", panels = true, ...option
     window, document, console,
     location: { search },
     localStorage: { getItem: (key) => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), length: 0, key: () => null },
-    requestAnimationFrame: () => 0, setTimeout: () => 0, clearTimeout() {},
+    // `timers`: a test that wants to run them later gets each one (fn, ms) instead of none ever firing.
+    requestAnimationFrame: () => 0,
+    setTimeout: (fn, ms) => { if (!timers) return 0; timers.push({ fn, ms }); return timers.length; },
+    clearTimeout: (id) => { if (timers?.[id - 1]) timers[id - 1].cancelled = true; },
     CustomEvent: class { constructor(type, init = {}) { this.type = type; this.detail = init.detail; } },
   });
   vm.runInContext(source, context);
@@ -88,6 +91,55 @@ test("every launch opens in Vibe, even after closing in Build; a reload resumes,
   assert.equal(capture.window.MefiVibe.mode(), "build", "diagnostic launches keep the view their fixtures expect");
   const fresh = await load();
   assert.equal(fresh.window.MefiVibe.mode(), "vibe");
+});
+
+test("a wide Home keeps the conversation docked: Esc and a decision leave it, and closing it keeps it away until it is opened again", async () => {
+  const storage = new Map();
+  const loaded = await load({ storage, needsYou: { items: [{ kind: "review", taskId: "t2", title: "Fix the login redirect loop" }] } });
+  const layer = loaded.get("vibe-layer"), chat = loaded.get("vibe-chat"), toggle = loaded.get("vibe-chat-toggle");
+  const placed = [];
+  loaded.window.MefiToday = { show: () => { layer.dataset.today = "on"; return true; }, hide() {}, placeBox: () => placed.push(layer.dataset.dock ?? "page") };
+  layer.clientWidth = 1848;
+  await loaded.window.MefiVibe.enter(); await settle();
+  assert.equal(layer.dataset.side, "on", "a wide Home has a column at the right, for Friends");
+  assert.equal(layer.dataset.dock, "chat", "and docks the conversation in it");
+  assert.equal(chat.hidden, false);
+  assert.equal(toggle.getAttribute("aria-expanded"), "true");
+  assert.deepEqual(placed, ["chat"], "Today moves Friends and the box (under the thread) into it");
+  await layer.trigger("keydown", { key: "Escape" });
+  assert.equal(chat.hidden, false, "Esc closes drawers, not the docked conversation");
+  await loaded.get("vibe-pulse").click();
+  assert.equal(loaded.get("vibe-ask").hidden, false, "a decision opens over it");
+  assert.equal(chat.hidden, false, "and leaves it docked under it");
+  await layer.trigger("keydown", { key: "Escape" });
+  assert.equal(loaded.get("vibe-ask").hidden, true, "Esc closes the decision first");
+  assert.equal(chat.hidden, false);
+  loaded.window.MefiVibe.openPanel("tasks");
+  assert.equal(chat.hidden, false, "a panel opens over it too");
+  loaded.window.MefiVibePanels.close();
+  await loaded.get("vibe-chat-close").click();
+  assert.equal(layer.dataset.dock, undefined);
+  assert.equal(chat.hidden, true, "its close button puts it away");
+  assert.equal(layer.dataset.side, "on", "Friends keeps the column");
+  assert.equal(storage.get("mefiStudio.social.chatDock"), "off", "and that is remembered");
+  assert.deepEqual(placed, ["chat", "page"], "the box goes back to the page");
+  loaded.window.MefiVibe.syncDock();
+  assert.equal(chat.hidden, true, "it stays away while nothing changes");
+  await toggle.click();
+  assert.equal(layer.dataset.dock, "chat", "opening it on a wide Home docks it again");
+  assert.equal(storage.get("mefiStudio.social.chatDock"), "on");
+  layer.clientWidth = 1200;
+  loaded.window.MefiVibe.syncDock();
+  assert.equal(layer.dataset.dock, undefined, "a window too narrow for it undocks it");
+  assert.equal(layer.dataset.side, undefined, "and the column goes: Friends is the page's again");
+  assert.equal(chat.hidden, true, "rather than leaving a drawer over the page");
+  assert.equal(storage.get("mefiStudio.social.chatDock"), "on", "a narrow window is not a choice to close it");
+  layer.clientWidth = 1848;
+  loaded.window.MefiVibe.syncDock();
+  assert.equal(chat.hidden, false, "it comes back with the room");
+  loaded.window.MefiVibe.exit();
+  assert.equal(layer.dataset.dock, undefined, "leaving Social undocks it");
+  assert.equal(layer.dataset.side, undefined, "and takes the column away");
 });
 
 test("a new project's dock still offers Watch, so its tree is one click away", async () => {
@@ -202,4 +254,40 @@ test("a mode switch that keeps the page swaps the Home underneath it, so Studio'
   assert.equal(workspace.exited >= 1, true, "and back again: Studio's Home steps out");
   assert.equal(layer.hidden, false, "Social's Home is under the page again");
   assert.deepEqual(loaded.gone, []);
+});
+
+// A QA pass on 2026-10-06 found Social's line under the box still saying a demo's first build was queued after that build was
+// verified: what just happened is news for a while, then it goes.
+test("the line under the box is news for a while: good news leaves after 20 s and a warning after a minute; an error stays", async () => {
+  const timers = [];
+  const loaded = await load({ timers });
+  await loaded.window.MefiVibe.enter(); await settle();
+  const line = loaded.get("vibe-feedback");
+  const fire = (ms) => { for (const timer of timers.filter((one) => one.ms === ms && !one.cancelled && !one.fired)) { timer.fired = true; timer.fn(); } };
+  loaded.window.MefiVibe.feedback("Notes app is ready, and its first build is queued.", "good");
+  assert.equal(line.textContent, "Notes app is ready, and its first build is queued.");
+  fire(20000);
+  assert.equal(line.textContent, "", "good news leaves by itself");
+  loaded.window.MefiVibe.feedback("Added to the queue. New work is paused; Resume below to start it.", "warn");
+  fire(20000);
+  assert.equal(line.textContent, "Added to the queue. New work is paused; Resume below to start it.", "a warning stays longer");
+  fire(60000);
+  assert.equal(line.textContent, "");
+  loaded.window.MefiVibe.feedback("That didn't go through. Your text is still in the box.", "bad");
+  fire(20000); fire(60000);
+  assert.equal(line.textContent, "That didn't go through. Your text is still in the box.", "an error stays until the next thing you do");
+  loaded.window.MefiVibe.feedback("Added.", "good");
+  loaded.window.MefiVibe.feedback("Sizing it up…");
+  fire(20000);
+  assert.equal(line.textContent, "Sizing it up…", "a newer line is never cleared by an older one's timer, and work in flight stays");
+});
+
+test("a cooling-down gate says what holds the work and what frees it; the start's own error is left to the tooltip", async () => {
+  const loaded = await load();
+  loaded.window.mefiStudio.assistantStatus = async () => ({ ok: true, status: { held: false, execute: false, running: [], loop: { state: "parked", tone: "warn", on: true, headline: "Agents are cooling down", reason: "Workers failed to start several times in a row, so new starts wait until 14:05. Last error: spawn opencode ENOENT at C:\tools\opencode.cmd", action: { id: "start", label: "Try now" } } } });
+  await loaded.window.MefiVibe.enter(); await settle();
+  assert.equal(loaded.get("vibe-gate").hidden, false);
+  assert.equal(loaded.get("vibe-gate-text").textContent, "Workers failed to start several times in a row, so new starts wait until 14:05.");
+  assert.match(loaded.get("vibe-gate").title, /Last error: spawn opencode ENOENT/, "the whole line stays a hover away");
+  assert.equal(loaded.get("vibe-gate-action").textContent, "Try now");
 });

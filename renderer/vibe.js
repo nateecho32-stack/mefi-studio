@@ -338,7 +338,11 @@
     if (!gate) return;
     box.dataset.tone = gate.tone;
     $("gate-title").textContent = gate.title;
-    $("gate-text").textContent = gate.text;
+    // The line says what holds the work and the button what frees it; a failed start's own error is Studio's to show (the
+    // whole line stays in the tooltip).
+    const said = gate.key === "parked" ? String(gate.text || "").replace(/\s*Last error: [\s\S]*$/, "") : gate.text;
+    $("gate-text").textContent = said;
+    box.title = said !== gate.text ? `${gate.title} ${gate.text}` : "";
     const button = $("gate-action");
     button.hidden = !gate.action;
     if (gate.action) {
@@ -575,14 +579,14 @@
     if (!window.MefiVibePanels) return false;
     if (!active()) go("vibe");
     closeAsk({ quiet: true });
-    if (state.chatOpen) closeChat();
+    if (state.chatOpen && !docked()) hideChat();
     window.MefiVibePanels.open(kind, { ...options, data: shared() });
     signatures.delete("lanes"); renderDock(lanes());
     return true;
   }
   function closeDrawers() {
     closeAsk({ quiet: true });
-    if (state.chatOpen) closeChat();
+    if (state.chatOpen && !docked()) hideChat();
   }
   // Build it on an idea: the same promotion as the Ideas page's Make task.
   async function promoteIdea(idea) {
@@ -987,7 +991,18 @@
     finally { suggestion.saving = false; if (id === projectId() && epoch === draftEpoch) renderEvolution(); }
   }
   function grow() { const input = $("input"); input.style.height = "auto"; input.style.height = `${Math.min(220, input.scrollHeight)}px`; }
-  function feedback(text, tone = "") { const node = $("feedback"); node.textContent = text; node.dataset.tone = tone; }
+  // The line under the box says what just happened. It is news for a while, then it would be stale (a QA pass on 2026-10-06
+  // still read "its first build is queued" after that build was verified): good news leaves after FEEDBACK_GOOD_MS and a
+  // warning after FEEDBACK_WARN_MS, unless something newer took its place. An error, or a note about work in flight
+  // ("Sizing it up…"), stays until the next thing you do.
+  const FEEDBACK_GOOD_MS = 20000, FEEDBACK_WARN_MS = 60000;
+  let feedbackTimer = 0;
+  function feedback(text, tone = "") {
+    const node = $("feedback"); node.textContent = text; node.dataset.tone = tone;
+    clearTimeout(feedbackTimer); feedbackTimer = 0;
+    const keep = tone === "good" ? FEEDBACK_GOOD_MS : tone === "warn" ? FEEDBACK_WARN_MS : 0;
+    if (text && keep) feedbackTimer = setTimeout(() => { feedbackTimer = 0; if (node.textContent === text) { node.textContent = ""; node.dataset.tone = ""; } }, keep);
+  }
   // ---- the sizing strip -------------------------------------------------------
   // Build it's wait, live under the box (renderer/vibe-flow.js): the quick
   // look, the lead planning the steps, then the board. It shows only when the
@@ -1082,9 +1097,37 @@
   }
 
   // ---- conversation drawer --------------------------------------------------
-  function openChat() {
-    closeAsk({ quiet: true });
-    window.MefiVibePanels?.close?.({ quiet: true });
+  // On a wide window Social's Home has a column of its own at the right, where the drawer opens (2026-10-07: the owner
+  // asked for the empty sides to be used): Friends at its top and the conversation docked under it, the box at the foot of
+  // its thread. The column stands while Home is up (today.js sets #vibe-layer[data-today="on"]) and the layer has room for
+  // the page beside it (data-side); the conversation docks in it (data-dock) unless it was closed, which keeps it away
+  // (mefiStudio.social.chatDock = "off") until it is opened again. A decision or a panel opens over the column, and Esc
+  // leaves the conversation be.
+  const DOCK_KEY = "mefiStudio.social.chatDock";
+  const DOCK_MIN = 1440; // the layer's width with room for the page and the column beside it
+  const docked = () => layer.dataset.dock === "chat";
+  const sided = () => layer.dataset.side === "on";
+  const dockRoom = () => !layer.hidden && layer.dataset.today === "on" && (layer.clientWidth || 0) >= DOCK_MIN;
+  // Today moves Friends into the column and the box under the docked thread, and back (renderer/today.js placeBox).
+  function setLayout(side, dock) {
+    if (side === sided() && dock === docked()) return;
+    if (side) layer.dataset.side = "on"; else delete layer.dataset.side;
+    if (dock) layer.dataset.dock = "chat"; else delete layer.dataset.dock;
+    window.MefiToday?.placeBox?.();
+  }
+  const setDock = (on) => setLayout(on || dockRoom(), on);
+  // Fits the window: a docked conversation the window grows too narrow for goes away rather than turning into a drawer
+  // over the page; it comes back with the room.
+  function syncDock() {
+    // A drawer open when the window grows wide docks too: it was open because it was wanted.
+    const side = dockRoom(), want = side && (state.chatOpen || read(DOCK_KEY) !== "off");
+    if (side === sided() && want === docked()) return;
+    const was = docked();
+    setLayout(side, want);
+    if (want && !was && !state.chatOpen) showChat();
+    else if (!want && was && state.chatOpen) hideChat();
+  }
+  function showChat() {
     state.chatOpen = true; $("chat").hidden = false; layer.dataset.chat = "open";
     $("chat-toggle").setAttribute("aria-expanded", "true");
     state.seenMessageId = messages().at(-1)?.id ?? null;
@@ -1092,12 +1135,23 @@
     signatures.delete("chat"); renderChat();
     const thread = $("thread"); thread.scrollTop = thread.scrollHeight;
   }
-  function closeChat() {
+  function hideChat() {
     state.chatOpen = false; $("chat").hidden = true; layer.dataset.chat = "closed";
     $("chat-toggle").setAttribute("aria-expanded", "false");
     state.seenMessageId = messages().at(-1)?.id ?? null;
     if (projectId() && state.seenMessageId) write(`mefiStudio.vibe.seen.${projectId()}`, state.seenMessageId);
     signatures.delete("chat"); renderChat();
+  }
+  // Opening it on a wide Home docks it again; elsewhere it is the drawer.
+  function openChat() {
+    closeAsk({ quiet: true });
+    window.MefiVibePanels?.close?.({ quiet: true });
+    if (dockRoom()) { write(DOCK_KEY, "on"); setDock(true); }
+    showChat();
+  }
+  function closeChat() {
+    if (docked()) { write(DOCK_KEY, "off"); setDock(false); }
+    hideChat();
   }
 
   // ---- needs you ------------------------------------------------------------
@@ -1173,7 +1227,7 @@
   const lasted = (at) => { const text = ago(at); return text === "just now" ? "under a minute" : text.replace(/ ago$/, ""); };
   const needKey = (need) => need ? `${need.kind}:${need.id}` : "";
   function openNeed(need) {
-    if (state.chatOpen) closeChat();
+    if (state.chatOpen && !docked()) hideChat();
     window.MefiVibePanels?.close?.({ quiet: true });
     state.need = { kind: need.kind, id: need.id };
     $("ask").hidden = false; layer.dataset.ask = "open";
@@ -1557,6 +1611,7 @@
     render();
     // Layout v2: Today draws the front door's own pieces where it wants them (renderer/today.js); nothing in v1.
     window.MefiToday?.show?.();
+    syncDock();
     paintRail();
     if (!window.MefiBoot?.isActive?.()) layer.focus({ preventScroll: true });
     return refresh();
@@ -1568,6 +1623,7 @@
     window.MefiToday?.hide?.();
     closeAsk({ quiet: true });
     window.MefiVibePanels?.close?.({ quiet: true });
+    syncDock();
     paintRail();
     if (!window.MefiWorkspace?.isActive?.()) window.MefiIdle?.setHomeBackdrop?.(false);
   }
@@ -1624,8 +1680,10 @@
       if (event.key !== "Escape") return;
       if (window.MefiVibePanels?.isOpen?.()) { event.preventDefault(); event.stopPropagation(); window.MefiVibePanels.escape(); return; }
       if (!$("ask").hidden) { event.preventDefault(); event.stopPropagation(); closeAsk(); return; }
-      if (state.chatOpen) { event.preventDefault(); event.stopPropagation(); closeChat(); $("chat-toggle").focus(); }
+      if (state.chatOpen && !docked()) { event.preventDefault(); event.stopPropagation(); closeChat(); $("chat-toggle").focus(); }
     });
+    // The docked conversation follows the window (syncDock): the layer is fixed to the frame, so its size is the window's.
+    if (typeof ResizeObserver === "function") new ResizeObserver(() => syncDock()).observe(layer);
   }
 
   // The pushes that keep `state` current: the front door's own (init wires them
@@ -1825,7 +1883,7 @@
   });
   // Vibe's keys on the shortcut sheet, under Home: display-only rows
   // (nav.js's handleKey skips the "command" group; the listener above acts).
-  for (const [key, id, label] of [...VIBE_KEYS, ["Enter", "vibe-key-talk", "Social: talk it over (in the box)"], ["Ctrl Enter", "vibe-key-build", "Social: build it (in the box)"]]) {
+  for (const [key, id, label] of [...VIBE_KEYS, ["Enter", "vibe-key-talk", "Social: send to Mefi (in the box)"], ["Ctrl Enter", "vibe-key-build", "Social: build it right away (in the box)"]]) {
     window.MefiNav?.register?.({
       id, label, short: label, desc: label, kind: "action", layer: null, section: "home", group: "command", key, glyph: null, badge: null,
       showIn: { tabs: false, tools: false, dock: false, palette: false, help: true, footer: false },
@@ -1890,5 +1948,7 @@
   }
   window.MefiVibe = { enter, exit, isActive: active, refresh, mode, setMode, landing, startup, showNotes, closeNotes, snapshot, openPanel, closeDrawers, composeEvolution, suggestEvolution, openNeed: openNeedById, requestChange, paintDock: () => renderDock(lanes()), promoteIdea: (idea) => promoteIdea(idea), feedback: (text, tone) => feedback(text, tone), ready: () => refreshFlight ?? Promise.resolve(), data: readModel, watch,
     // The four ways to start (Modify, Experiment, Fix, Improve), as copies: Build's Today (renderer/today.js) offers the same starters in its own box.
-    intents: () => Object.fromEntries(Object.entries(INTENTS).map(([id, entry]) => [id, { ...entry }])) };
+    intents: () => Object.fromEntries(Object.entries(INTENTS).map(([id, entry]) => [id, { ...entry }])),
+    // The docked conversation: Today asks it to fit again when Home comes and goes (data-today), and says whether it is docked.
+    syncDock, docked };
 })();

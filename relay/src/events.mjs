@@ -7,13 +7,20 @@
 //   the next Monday members play the entries and vote for up to three. A
 //   vote counts only from a member in good standing (credits.mjs standing())
 //   who played that entry during the jam (play_log, which already holds only
-//   plays from members in good standing, once per player and day). On Monday
-//   the results are paid from the jam's pool (economy.mjs): an entry played
-//   by three or more members earns a showcase reward, and the top three with
-//   at least three votes share the rest 50/30/20, at most 40 credits a vote,
-//   with no place for anyone who took one in the two jams before (the
-//   prizes go round). An entry whose project left the hub drops out. Votes
-//   stay hidden until then.
+//   plays from members in good standing, once per player and day), and the
+//   votes of one batch of accounts (made within 3 days of each other and
+//   joined the server within 12 hours of each other: credits.mjs GUARD)
+//   count once, and not at all for their own batch's entry. Only members in good
+//   standing may enter. When voting closes on Monday the jam waits a day for
+//   a moderator's look (status "review": they see every vote and why it
+//   counts, may take a voter's votes out or an entry, and may pay sooner;
+//   the jam switch, credits.mjs SWITCHES, holds the prizes for as long as it
+//   is off), then the results are paid from the jam's pool (economy.mjs): an
+//   entry played by three or more members earns a showcase reward, and the
+//   top three with at least three votes share the rest 50/30/20, at most 40
+//   credits a vote, with no place for anyone who took one in the two jams
+//   before (the prizes go round). An entry whose project left the hub drops
+//   out. Votes stay hidden from members until then.
 // - Co-work hours. Three times a day (02:00, 10:00 and 18:00 UTC) the relay
 //   opens a listed co-work room for an hour. It looks who is there at three
 //   moments (15, 35 and 55 minutes in): a member who joined that hour's room
@@ -36,6 +43,7 @@
 // There are no rewards for inviting or bringing anyone (Discord's platform
 // rules): credits come from building and playing together.
 
+import { GUARD } from './credits.mjs';
 import { DAY_MS, HOUR_MS, MINUTE_MS, isOpaqueId, isSnowflake } from './util.mjs';
 import { dayOf } from './economy.mjs';
 
@@ -56,7 +64,13 @@ export const JAM = Object.freeze({
   showcaseAmount: 5,
   showcaseShareMax: 0.3, // of the pool, at most, for all the showcase rewards together
   listMax: 100,
+  reviewMs: DAY_MS, // after voting closes, a day for a moderator's look before the prizes are paid
 });
+
+/** Why a jam vote counts for nothing (or nothing more), as a moderator's view of the jam says it. */
+export const VOTE_WHYS = Object.freeze(['no-entry', 'standing', 'self', 'not-played', 'own-batch', 'same-batch']);
+/** A jam's statuses before its prizes are paid: running, in its day of review, released by a moderator. */
+const UNPAID = Object.freeze(['open', 'review', 'release']);
 
 export const COWORK = Object.freeze({
   hoursUtc: Object.freeze([2, 10, 18]),
@@ -150,15 +164,18 @@ export function splitPool(pool, ranked) {
 }
 
 /**
- * createEvents({ store, now, credits, economy, rooms, paused })
- *   credits: { award(o) -> Promise<number>, standing(uid, held), heldUntil(uid) -> Promise<number>, card(uid) }
+ * createEvents({ store, now, credits, economy, rooms, paused, review })
+ *   credits: { award(o) -> Promise<number>, standing(uid, held), heldUntil(uid) -> Promise<number>, card(uid),
+ *              isOff(switchKey), facts(uid) -> { accountCreatedAt, joinedAt } }
  *   economy: createEconomy(...)
  *   rooms:   { present(roomId) -> uid[] (members with the room open), online(roomId) -> uid[] (members with Studio connected),
  *              open({ name, maxMembers }) -> roomId, join(roomId, uid) -> result, close(roomId), member(roomId, uid) -> bool }
  *   paused:  () -> bool, the relay's pause: nothing is made, run or paid while it is on
+ *   review:  async ({ id, theme, resultsAt, entries, votes, batched }) when a jam's voting closes and its day of review
+ *            starts (the relay tells the moderators); a fault there never stops the jam
  * -> { routes(route), tick(), nextDue(), forget(uid), upkeep(), summary(uid) }
  */
-export function createEvents({ store, now, credits, economy, rooms, paused = () => false }) {
+export function createEvents({ store, now, credits, economy, rooms, paused = () => false, review = null }) {
   const eventRow = (id) => (isOpaqueId(id) ? store.get('SELECT * FROM events WHERE id = ?', id) : undefined);
   const nameOf = (uid) => store.get('SELECT name FROM members WHERE user_id = ?', uid)?.name ?? 'member';
 
@@ -176,6 +193,8 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
   }
 
   const jamDays = (row) => ({ from: dayOf(row.starts_at), to: dayOf(row.ends_at - 1) });
+  // How long a closed jam waits for a moderator's look: a day, or nothing while the review is switched off.
+  const reviewMs = () => (credits.isOff('review') ? 0 : JAM.reviewMs);
 
   /** Members in good standing who played the entry's project during the jam (its owner never counts). */
   function playersOf(row, entry) {
@@ -207,6 +226,8 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
       startsAt: row.starts_at,
       entriesUntil: row.entries_until,
       endsAt: row.ends_at,
+      // Voting closes at endsAt; the results come a day later, after a moderator's look (JAM.reviewMs).
+      resultsAt: row.ends_at + reviewMs(),
       // The pool so far: what the budget left on the jam's finished days.
       pool: row.pool ?? economy.jamPool(from, Math.min(to, dayOf(at) - 1)),
       nextTheme: themeFor(weekOf(row.starts_at) + 1),
@@ -233,39 +254,147 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
     return out;
   }
 
-  /** Closing a jam: count the votes that still stand, then pay. Safe to run again: each payment is paid once. */
+  /**
+   * Which of these members make a batch (credits.mjs GUARD): Discord accounts made within 3 days of each other that
+   * also joined the server within 12 hours of each other, most likely one person's. -> Map uid -> its batch (one of
+   * its uids); a member in no batch is a batch of their own.
+   */
+  function batchesOf(uids) {
+    const list = [...new Set(uids)].sort().map((uid) => ({ uid, ...credits.facts(uid) }));
+    const root = new Map(list.map(({ uid }) => [uid, uid]));
+    const find = (uid) => {
+      let top = uid;
+      while (root.get(top) !== top) top = root.get(top);
+      root.set(uid, top);
+      return top;
+    };
+    const near = (a, b, span) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= span;
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = i + 1; j < list.length; j += 1) {
+        const [one, two] = [list[i], list[j]];
+        if (!near(one.accountCreatedAt, two.accountCreatedAt, GUARD.batchMadeMs) || !near(one.joinedAt, two.joinedAt, GUARD.batchJoinedMs)) continue;
+        const [x, y] = [find(one.uid), find(two.uid)];
+        if (x !== y) root.set(y, x);
+      }
+    }
+    return new Map(list.map(({ uid }) => [uid, find(uid)]));
+  }
+
+  /**
+   * A jam's count as it stands now: which votes count (from a member in good standing who played the entry during the
+   * jam, never their own, one per batch of accounts and none from the entrant's own batch), the entries in order with
+   * their votes and players, and what the pool pays.
+   * -> { entries, ranked, pool, payouts, votes: [{ voterId, entrantId, at, counted, why }], batch }
+   */
+  async function tally(row) {
+    // An entry whose project left the hub (removed, reported away, or its owner forgotten) drops out.
+    const entries = store.all('SELECT e.* FROM event_entries e JOIN projects p ON p.id = e.project_id WHERE e.event_id = ? ORDER BY e.at', row.id);
+    const votes = store.all('SELECT voter_id, entrant_id, at FROM event_votes WHERE event_id = ? ORDER BY at, voter_id', row.id);
+    const voters = [...new Set(votes.map((vote) => vote.voter_id))];
+    const held = new Map();
+    for (const voter of voters) held.set(voter, await credits.heldUntil(voter));
+    const good = new Set(voters.filter((voter) => credits.standing(voter, held.get(voter)).ok));
+    // The batch rule can be switched off (credits.mjs SWITCHES "batches"): then every member is a batch of their own.
+    const batch = credits.isOff('batches') ? new Map([...voters, ...entries.map((entry) => entry.user_id)].map((uid) => [uid, uid])) : batchesOf([...voters, ...entries.map((entry) => entry.user_id)]);
+    const counted = new Map(); // entrant -> the batches whose vote counted
+    const checked = votes.map((vote) => {
+      const entry = entries.find((item) => item.user_id === vote.entrant_id);
+      let why = null;
+      if (!entry) why = 'no-entry';
+      else if (!good.has(vote.voter_id)) why = 'standing';
+      else if (vote.voter_id === entry.user_id) why = 'self';
+      else if (!playedDuring(row, entry.project_id, vote.voter_id)) why = 'not-played';
+      else if (batch.get(vote.voter_id) === batch.get(entry.user_id)) why = 'own-batch';
+      else {
+        const seen = counted.get(entry.user_id) ?? new Set();
+        if (seen.has(batch.get(vote.voter_id))) why = 'same-batch';
+        seen.add(batch.get(vote.voter_id));
+        counted.set(entry.user_id, seen);
+      }
+      return { voterId: vote.voter_id, entrantId: vote.entrant_id, at: vote.at, counted: why === null, why };
+    });
+    // Who took a place in the jams just before sits this one's places out.
+    const resting = new Set();
+    for (const before of store.all(`SELECT results FROM events WHERE kind = 'jam' AND status = 'closed' AND ends_at <= ? ORDER BY ends_at DESC LIMIT ?`, row.starts_at, JAM.placeRestJams)) {
+      for (const payout of JSON.parse(before.results ?? '{}').payouts ?? []) if (payout.place && payout.userId) resting.add(payout.userId);
+    }
+    const ranked = entries
+      .map((entry) => ({ userId: entry.user_id, projectId: entry.project_id, votes: counted.get(entry.user_id)?.size ?? 0, players: playersOf(row, entry), at: entry.at, resting: resting.has(entry.user_id) }))
+      .sort((a, b) => b.votes - a.votes || b.players - a.players || a.at - b.at);
+    const { from, to } = jamDays(row);
+    const pool = entries.length ? economy.jamPool(from, to) : 0;
+    const payouts = splitPool(pool, ranked).map((payout) => ({ ...payout, projectId: ranked.find((entry) => entry.userId === payout.userId)?.projectId ?? null, name: nameOf(payout.userId) }));
+    return { entries, ranked, pool, payouts, votes: checked, batch };
+  }
+
+  /**
+   * A moderator's view of a jam (GET /v1/admin/jam): each entry in its place now with its voters, whether each vote
+   * counts and why not (VOTE_WHYS), how old each voter's Discord account is, when they joined the server and their
+   * batch ("A", "B"...: accounts the batch rule ties together, only when there are two or more), and what the pool
+   * would pay if the jam closed now.
+   */
+  async function reviewView(row) {
+    const at = now();
+    const count = await tally(row);
+    const sizes = new Map();
+    for (const root of count.batch.values()) sizes.set(root, (sizes.get(root) ?? 0) + 1);
+    const letters = new Map();
+    for (const [root, size] of [...sizes].sort((x, y) => (x[0] < y[0] ? -1 : 1))) if (size > 1) letters.set(root, String.fromCharCode(65 + (letters.size % 26)));
+    const person = (uid) => ({ id: uid, name: nameOf(uid), ...credits.facts(uid), batch: letters.get(count.batch.get(uid)) ?? null });
+    const held = credits.isOff('jam');
+    return {
+      id: row.id,
+      theme: row.theme,
+      // "entries" or "voting" while it runs, "review" while it waits for a look, "release" once a moderator paid it.
+      status: row.status === 'open' ? jamPhase(row, at) : row.status,
+      endsAt: row.ends_at,
+      resultsAt: held ? null : row.status === 'review' || row.status === 'open' ? row.ends_at + reviewMs() : at,
+      held,
+      pool: count.pool,
+      payouts: count.payouts.map(({ userId, name, place, amount, why }) => ({ userId, name, place, amount, why })),
+      entries: count.ranked.map((entry) => ({
+        user: person(entry.userId),
+        project: projectLite(entry.projectId),
+        votes: entry.votes,
+        players: entry.players,
+        resting: entry.resting,
+        voters: count.votes.filter((vote) => vote.entrantId === entry.userId).map((vote) => ({ ...person(vote.voterId), counted: vote.counted, why: vote.why })),
+      })),
+    };
+  }
+
+  /**
+   * Closing a jam, in steps the alarm takes: when voting closes it waits a day for a moderator's look ("review"; a jam
+   * nobody entered closes at once), then its count is final and the prizes are paid ("paying", then "closed"). A
+   * moderator may pay sooner ("release"), and the jam switch (credits.mjs SWITCHES) holds a jam in review for as long
+   * as it is off. Safe to run again: each payment is paid once.
+   */
   async function closeJam(row) {
     if (row.status === 'closed') return;
     if (row.status === 'open') {
-      // An entry whose project left the hub (removed, reported away, or its owner forgotten) drops out.
-      const entries = store.all('SELECT e.* FROM event_entries e JOIN projects p ON p.id = e.project_id WHERE e.event_id = ?', row.id);
-      const votes = store.all('SELECT voter_id, entrant_id FROM event_votes WHERE event_id = ?', row.id);
-      const voters = [...new Set(votes.map((vote) => vote.voter_id))];
-      const held = new Map();
-      for (const voter of voters) held.set(voter, await credits.heldUntil(voter));
+      const entered = Number(store.get('SELECT COUNT(*) AS n FROM event_entries e JOIN projects p ON p.id = e.project_id WHERE e.event_id = ?', row.id)?.n ?? 0);
+      // The day of review can be switched off (credits.mjs SWITCHES "review"): then the prizes pay straight away.
+      store.run(`UPDATE events SET status = ? WHERE id = ? AND status = 'open'`, entered && reviewMs() > 0 ? 'review' : 'release', row.id);
+      row = eventRow(row.id);
+      if (row?.status === 'review') {
+        try {
+          const count = await tally(row);
+          await review?.({ id: row.id, theme: row.theme, resultsAt: row.ends_at + JAM.reviewMs, entries: count.entries.length, votes: count.votes.filter((vote) => vote.counted).length, batched: count.votes.filter((vote) => vote.why === 'same-batch' || vote.why === 'own-batch').length });
+        } catch {
+          // the moderators' heads-up is a courtesy: the jam goes on without it
+        }
+        return;
+      }
+    }
+    if (row?.status === 'review' || row?.status === 'release') {
+      // The jam switch holds the prizes; a jam in review waits its day out unless a moderator released it.
+      if (credits.isOff('jam') || (row.status === 'review' && now() < row.ends_at + reviewMs())) return;
+      const count = await tally(row);
       store.transaction(() => {
         const fresh = eventRow(row.id);
-        if (fresh.status !== 'open') return;
-        const good = new Set(voters.filter((voter) => credits.standing(voter, held.get(voter)).ok));
-        const tally = {};
-        for (const vote of votes) {
-          const entry = entries.find((item) => item.user_id === vote.entrant_id);
-          if (!entry || !good.has(vote.voter_id) || vote.voter_id === entry.user_id) continue;
-          if (!playedDuring(fresh, entry.project_id, vote.voter_id)) continue;
-          tally[entry.user_id] = (tally[entry.user_id] ?? 0) + 1;
-        }
-        // Who took a place in the jams just before sits this one's places out.
-        const resting = new Set();
-        for (const before of store.all(`SELECT results FROM events WHERE kind = 'jam' AND status = 'closed' AND ends_at <= ? ORDER BY ends_at DESC LIMIT ?`, fresh.starts_at, JAM.placeRestJams)) {
-          for (const payout of JSON.parse(before.results ?? '{}').payouts ?? []) if (payout.place && payout.userId) resting.add(payout.userId);
-        }
-        const ranked = entries
-          .map((entry) => ({ userId: entry.user_id, projectId: entry.project_id, votes: tally[entry.user_id] ?? 0, players: playersOf(fresh, entry), at: entry.at, resting: resting.has(entry.user_id) }))
-          .sort((a, b) => b.votes - a.votes || b.players - a.players || a.at - b.at);
-        const { from, to } = jamDays(fresh);
-        const pool = entries.length ? economy.jamPool(from, to) : 0;
-        const payouts = splitPool(pool, ranked).map((payout) => ({ ...payout, projectId: ranked.find((entry) => entry.userId === payout.userId)?.projectId ?? null, name: nameOf(payout.userId) }));
-        store.run(`UPDATE events SET status = 'paying', pool = ?, results = ? WHERE id = ?`, pool, JSON.stringify({ votes: tally, payouts, entries: entries.length }), row.id);
+        if (fresh.status !== 'review' && fresh.status !== 'release') return;
+        const votes = Object.fromEntries(count.ranked.filter((entry) => entry.votes > 0).map((entry) => [entry.userId, entry.votes]));
+        store.run(`UPDATE events SET status = 'paying', pool = ?, results = ? WHERE id = ?`, count.pool, JSON.stringify({ votes, payouts: count.payouts, entries: count.entries.length }), row.id);
       });
     }
     const paying = eventRow(row.id);
@@ -431,7 +560,13 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
       for (const offset of COWORK.checksAt) if (row.starts_at + offset > at) candidates.push(row.starts_at + offset);
       candidates.push(row.ends_at > at ? row.ends_at : soon);
     }
-    if (store.get(`SELECT 1 AS yes FROM events WHERE kind = 'jam' AND status <> 'closed' AND ends_at <= ?`, at)) candidates.push(soon);
+    // A jam past its end: closed a minute later or, in review, once its day is out; never while the jam switch holds it
+    // (switching it back on schedules the alarm again).
+    for (const row of store.all(`SELECT status, ends_at FROM events WHERE kind = 'jam' AND status <> 'closed' AND ends_at <= ?`, at)) {
+      if ((row.status === 'review' || row.status === 'release') && credits.isOff('jam')) continue;
+      const due = row.status === 'review' ? row.ends_at + reviewMs() : at;
+      candidates.push(due > at ? due : soon);
+    }
     return Math.min(...candidates);
   }
 
@@ -441,6 +576,8 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
     const at = now();
     const jam = currentJam(at);
     const last = store.get(`SELECT * FROM events WHERE kind = 'jam' AND status = 'closed' ORDER BY ends_at DESC LIMIT 1`);
+    const waiting = store.get(`SELECT * FROM events WHERE kind = 'jam' AND status IN ('review', 'release', 'paying') ORDER BY ends_at DESC LIMIT 1`);
+    const held = waiting && waiting.status !== 'paying' && credits.isOff('jam');
     const cowork = currentCowork(at);
     const day = dayOf(at);
     const ticks = Number(store.get('SELECT ticks FROM together_ticks WHERE day = ? AND user_id = ?', day, uid)?.ticks ?? 0);
@@ -448,6 +585,8 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
       now: at,
       jam: jam ? jamView(jam, uid, at) : null,
       lastJam: last ? { id: last.id, theme: last.theme, endsAt: last.ends_at, pool: last.pool, results: JSON.parse(last.results ?? '{}').payouts ?? [] } : null,
+      // A jam whose voting closed and whose results are not out yet: when they come (null while a moderator holds them).
+      reviewing: waiting ? { id: waiting.id, theme: waiting.theme, resultsAt: held ? null : waiting.status === 'review' ? Math.max(at, waiting.ends_at + reviewMs()) : at } : null,
       cowork: coworkView(cowork, uid, at),
       nextCowork: nextCoworkStart(cowork ? cowork.ends_at : at),
       together: { ticks: Math.min(ticks, TOGETHER.ticksNeeded), needed: TOGETHER.ticksNeeded, amount: TOGETHER.amount, everyMs: TOGETHER.everyMs },
@@ -474,8 +613,10 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
 
     route('GET', '/v1/events', ({ actor }) => reply(200, { ok: true, ...summary(actor.uid) }));
 
-    // Entering: one of your own shared projects, one entry per member, until Saturday.
-    route('POST', '/v1/events/:id/entry', ({ actor, params, body }) => {
+    // Entering: one of your own shared projects, one entry per member, until Saturday. Prizes go only to members in
+    // good standing, so only they may enter: a new second account cannot crowd the list.
+    route('POST', '/v1/events/:id/entry', async ({ actor, params, body }) => {
+      const held = await credits.heldUntil(actor.uid);
       const at = now();
       const result = store.transaction(() => {
         const row = eventRow(params.id);
@@ -484,6 +625,8 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
         const project = store.get('SELECT id, owner_id FROM projects WHERE id = ?', body.projectId);
         if (!project) return fail(404, 'not-found', { reason: 'project' });
         if (project.owner_id !== actor.uid) return fail(403, 'forbidden', { reason: 'not-yours' });
+        const stand = credits.standing(actor.uid, held);
+        if (!stand.ok) return fail(403, 'forbidden', { reason: 'standing', hold: stand.reason });
         const was = store.get('SELECT project_id FROM event_entries WHERE event_id = ? AND user_id = ?', row.id, actor.uid);
         if (was?.project_id === project.id) return reply(200, { ok: true, unchanged: true });
         // A different project is a different entry: the votes for the old one go.
@@ -507,11 +650,11 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
       return reply(200, { ok: true, jam: jamView(eventRow(row.id), actor.uid) });
     }, { write: true, readOnlyOk: true });
 
-    // A moderator takes an entry out of a jam that is still running.
+    // A moderator takes an entry out of a jam that is still running or waiting for its review.
     route('DELETE', '/v1/events/:id/entries/:userId', ({ actor, params }) => {
       const row = eventRow(params.id);
       if (!row || row.kind !== 'jam' || !isSnowflake(params.userId)) return fail(404, 'not-found');
-      if (row.status !== 'open') return fail(409, 'conflict', { reason: 'closed' });
+      if (!UNPAID.includes(row.status)) return fail(409, 'conflict', { reason: 'closed' });
       store.transaction(() => {
         store.run('DELETE FROM event_votes WHERE event_id = ? AND entrant_id = ?', row.id, params.userId);
         store.run('DELETE FROM event_entries WHERE event_id = ? AND user_id = ?', row.id, params.userId);
@@ -531,6 +674,8 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
         if (phase !== 'entries' && phase !== 'voting') return fail(409, 'conflict', { reason: 'voting-closed' });
         const stand = credits.standing(actor.uid, held);
         if (!stand.ok) return fail(403, 'forbidden', { reason: 'standing', hold: stand.reason });
+        // A moderator took this member's votes out of this jam (the void route below): they stay out of it.
+        if (store.get(`SELECT 1 AS yes FROM audit WHERE kind = 'event-votes-void' AND target_id = ? AND room_id = ?`, actor.uid, row.id)) return fail(403, 'forbidden', { reason: 'barred' });
         const entry = store.get('SELECT * FROM event_entries WHERE event_id = ? AND user_id = ?', row.id, body.userId);
         if (!entry) return fail(404, 'not-found', { reason: 'entry' });
         if (entry.user_id === actor.uid) return fail(403, 'forbidden', { reason: 'self' });
@@ -552,6 +697,40 @@ export function createEvents({ store, now, credits, economy, rooms, paused = () 
       store.run('DELETE FROM event_votes WHERE event_id = ? AND voter_id = ? AND entrant_id = ?', row.id, actor.uid, params.userId);
       return reply(200, { ok: true, jam: jamView(row, actor.uid) });
     }, { write: true, readOnlyOk: true });
+
+    // Moderators: the jam to look at (the one waiting for its review, else this week's), with every vote, whether it
+    // counts and why not, each voter's account age, server join date and batch, and what the prizes would be now.
+    route('GET', '/v1/admin/jam', async () => {
+      const row = store.get(`SELECT * FROM events WHERE kind = 'jam' AND status IN ('review', 'release') ORDER BY ends_at DESC LIMIT 1`) ?? currentJam();
+      return reply(200, { ok: true, jam: row ? await reviewView(row) : null });
+    }, { mod: true });
+
+    // Moderators: a voter's votes in this jam no longer count, and they cannot vote in it again; audited (the audit
+    // row's room_id holds the jam's id, which the vote route reads).
+    route('DELETE', '/v1/admin/jam/:id/votes/:userId', ({ actor, params }) => {
+      const row = eventRow(params.id);
+      if (!row || row.kind !== 'jam' || !isSnowflake(params.userId)) return fail(404, 'not-found');
+      if (!UNPAID.includes(row.status)) return fail(409, 'conflict', { reason: 'closed' });
+      const removed = store.transaction(() => {
+        const gone = store.all('DELETE FROM event_votes WHERE event_id = ? AND voter_id = ? RETURNING entrant_id', row.id, params.userId).length;
+        store.run('INSERT INTO audit (kind, actor_id, target_id, room_id, detail, at) VALUES (?, ?, ?, ?, ?, ?)', 'event-votes-void', actor.uid, params.userId, row.id, JSON.stringify({ votes: gone }), now());
+        return gone;
+      });
+      return reply(200, { ok: true, removed });
+    }, { write: true, mod: true });
+
+    // Moderators: pay a jam in review now instead of waiting its day out (never while the jam switch holds its prizes).
+    route('POST', '/v1/admin/jam/:id/release', ({ actor, params }) => {
+      const row = eventRow(params.id);
+      if (!row || row.kind !== 'jam') return fail(404, 'not-found');
+      if (row.status !== 'review') return fail(409, 'conflict', { reason: row.status === 'open' ? 'voting' : 'closed' });
+      if (credits.isOff('jam')) return fail(409, 'conflict', { reason: 'held' });
+      store.transaction(() => {
+        store.run(`UPDATE events SET status = 'release' WHERE id = ? AND status = 'review'`, row.id);
+        store.run('INSERT INTO audit (kind, actor_id, room_id, at) VALUES (?, ?, ?, ?)', 'event-release', actor.uid, row.id, now());
+      });
+      return reply(200, { ok: true });
+    }, { write: true, mod: true });
 
     // A co-work hour: join its room straight away, no request to approve.
     route('POST', '/v1/events/:id/join', ({ actor, params }) => {

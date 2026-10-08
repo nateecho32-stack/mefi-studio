@@ -29,6 +29,25 @@ const up = async (over = {}) => {
   await t.settle();
   return t;
 };
+// Studio's Today page (the page its pinned tab opens) draws the prototype's four columns; Social's Home draws the list
+// (the tests near the end of this file). The board's own behaviour is checked on the four columns.
+const BOARD = "today-overlay-board";
+const upBoard = async (over = {}) => {
+  const t = await loadToday({ layer: true, mode: "build", data: everything(), ...over });
+  await t.settle();
+  // The page's own markup under its board, as renderer/booklet.template.html has it (this DOM makes only the elements with ids).
+  const holder = byId(t, BOARD);
+  if (!holder.querySelector(".today-groups")) {
+    const groups = t.document.createElement("div"); groups.className = "today-groups";
+    const latest = t.document.createElement("section"); latest.className = "today-latest"; latest.hidden = true;
+    const rows = t.document.createElement("ul"); rows.className = "today-latest-rows";
+    latest.append(t.document.createElement("h3"), rows);
+    holder.append(groups, latest);
+  }
+  t.nav.registered.find((entry) => entry.id === "today").open({ focus: false });
+  await t.settle();
+  return t;
+};
 
 test("Vibe's front door borrows its pieces into Today, and stop() puts every one back where it was", async () => {
   const t = await loadToday({ layer: true, active: true, data: everything() });
@@ -52,7 +71,7 @@ test("Today is drawn inside Vibe's own layer, after its sky, with the pieces in 
   const page = byId(t, "today-page");
   assert.equal(page.parentNode, layer);
   assert.equal(page.getAttribute("aria-label"), "Today");
-  assert.deepEqual(layer.children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-sky", "vibe-top", "today-page", "vibe-stage", "vibe-dock"], "under the top bar that stays (so Tab reads the page top to bottom), over the backdrop's sky, so the node tree stays behind it");
+  assert.deepEqual(layer.children.map((child) => child.id || child.className.split(" ")[0]), ["vibe-sky", "vibe-top", "today-page", "vibe-stage", "vibe-dock", "today-side"], "under the top bar that stays (so Tab reads the page top to bottom), over the backdrop's sky, so the node tree stays behind it; the column at the right of a wide Home waits after it, empty");
   assert.equal(page.querySelector("#today-scroll").tabIndex, -1, "the scroller is not a tab stop of its own");
   assert.equal(page.querySelector(".today-head"), null, "no second top bar: Vibe's own keeps the project, New app and the conversation toggle");
   assert.deepEqual(t.front.order(t.front.top), ["vibe-top-left", "mode-switch", "vibe-top-actions"], "and is left exactly as it was");
@@ -67,6 +86,52 @@ test("Today is drawn inside Vibe's own layer, after its sky, with the pieces in 
   assert.equal(byId(t, "vibe-compose").parentNode, page.querySelector(".today-box"));
   // The layer that is left behind holds what v1 had in it, minus what moved.
   assert.deepEqual(t.front.order(t.front.stage), ["vibe-lanes", "vibe-quiet"], "only v1's own lanes and quiet line stay behind (CSS hides them: Today draws its own)");
+});
+
+test("docked, the box and its status line go under the conversation's thread, back to the page in order, and home on stop()", async () => {
+  const t = await up();
+  const layer = byId(t, "vibe-layer"), slot = byId(t, "today-page").querySelector(".today-box"), holder = byId(t, "today-chat-box");
+  const inSlot = () => slot.children.map((child) => child.id).filter((id) => id.startsWith("vibe-"));
+  assert.equal(holder.parentNode, byId(t, "vibe-chat"), "the holder waits in the conversation (renderer/vibe.js docks it on a wide Home)");
+  assert.deepEqual(holder.children, [], "empty while the box is the page's");
+  layer.dataset.dock = "chat";
+  t.today.placeBox();
+  assert.deepEqual(holder.children.map((child) => child.id), ["vibe-feedback", "vibe-compose"], "docked: the line that says how a send went, then the box, at the foot of the thread");
+  assert.deepEqual(inSlot(), ["vibe-hint", "vibe-flow", "vibe-sparks", "vibe-gate", "vibe-last"], "what holds the agents back and a build's sizing stay with the page's work");
+  t.today.placeBox();
+  assert.deepEqual(holder.children.map((child) => child.id), ["vibe-feedback", "vibe-compose"], "a second ask moves nothing");
+  delete layer.dataset.dock;
+  t.today.placeBox();
+  assert.deepEqual(holder.children, []);
+  assert.deepEqual(inSlot(), ["vibe-compose", "vibe-hint", "vibe-flow", "vibe-feedback", "vibe-sparks", "vibe-gate", "vibe-last"], "undocked, the page's own order again");
+  // Friends goes to the column at the right while it stands (data-side), over the docked conversation, and back after Your work.
+  const grid = byId(t, "today-page").querySelector(".today-social"), side = byId(t, "today-side");
+  assert.equal(side.parentNode, layer, "the column's holder is the layer's own, beside the page");
+  const people = t.document.createElement("section"); people.id = "social-people";
+  grid.append(people);
+  layer.dataset.side = "on";
+  t.today.placeBox();
+  assert.equal(people.parentNode, side, "a wide Home puts Friends in the column");
+  assert.deepEqual(inSlot()[0], "vibe-compose", "the box stays the page's while the conversation is not docked");
+  layer.dataset.dock = "chat";
+  t.today.placeBox();
+  assert.equal(people.parentNode, side);
+  assert.deepEqual(holder.children.map((child) => child.id), ["vibe-feedback", "vibe-compose"]);
+  delete layer.dataset.dock; delete layer.dataset.side;
+  t.today.placeBox();
+  assert.deepEqual(grid.children.map((child) => child.id), ["today-work", "social-people"], "narrower, Friends is the page's again, after Your work");
+  people.remove();
+  // Docked when Today stops: every piece still goes home and the holder goes.
+  layer.dataset.dock = "chat";
+  t.today.placeBox();
+  t.today.stop();
+  await t.settle();
+  assert.equal(byId(t, "vibe-compose").parentNode, t.front.stage);
+  assert.equal(byId(t, "vibe-feedback").parentNode, t.front.stage);
+  assert.equal(byId(t, "today-chat-box"), null, "the holder leaves with the page");
+  assert.equal(byId(t, "today-side"), null, "and so does the column's");
+  const plainLoad = await loadToday({ layer: true, data: everything() });
+  assert.deepEqual(t.front.order(t.front.stage), plainLoad.front.order(plainLoad.front.stage), "the front door is exactly as v1 draws it");
 });
 
 test("hide() keeps the page for next time, show() does not build a second one, and v1's front door is back on stop()", async () => {
@@ -86,7 +151,7 @@ test("hide() keeps the page for next time, show() does not build a second one, a
 
 test("the summary says what is going on, and its need chip is the popover's anchor, the same node from one push to the next", async () => {
   const t = await up();
-  assert.deepEqual(chips(t), ["4 need you", "1 running", "3 to review"], "the digest's count (plans are not in it), what is live, what is under Review (a result, what is being checked, a plan)");
+  assert.deepEqual(chips(t), ["4 need you", "1 running", "2 in review"], "the digest's count (plans are not in it), what is live, what is In review (what is being checked, a plan: Social's list files a result to review under Needs you)");
   const need = byId(t, "today-summary").querySelector('[data-chip="need"]');
   assert.equal(need.tagName, "button");
   assert.equal(need.getAttribute("aria-haspopup"), "dialog");
@@ -98,56 +163,56 @@ test("the summary says what is going on, and its need chip is the popover's anch
   t.today.closeInbox();
   await t.push(everything({ needs: [needQuestion()] }));
   assert.equal(byId(t, "today-summary").querySelector('[data-chip="need"]'), need, "a push that changes the number keeps the chip");
-  assert.deepEqual(chips(t), ["1 needs you", "1 running", "1 to review"], "a single one reads as one");
+  assert.deepEqual(chips(t), ["1 needs you", "1 running", "1 in review"], "a single one reads as one");
   await t.push(board({ needs: [], running: [], tasks: [] }));
   assert.deepEqual(chips(t), ["All clear"], "nothing waits, nothing runs: one calm chip");
 });
 
 test("four groups, one line each, in their order: Needs you, Running, Review, Done", async () => {
-  const t = await up();
-  const shown = byId(t, "today-board").querySelector(".today-groups").children.map((node) => node.dataset.group);
+  const t = await upBoard();
+  const shown = byId(t, BOARD).querySelector(".today-groups").children.map((node) => node.dataset.group);
   assert.deepEqual(shown, ["needs", "running", "review", "done"]);
-  assert.deepEqual(byId(t, "today-board").querySelector(".today-groups").children.map((node) => node.getAttribute("aria-label")), ["Needs you", "Running", "Review", "Done"], "the prototype's four columns (Done holds what finished today)");
-  assert.deepEqual(keysOf(t, "needs"), ["need:question:q1", "need:approval:t5", "need:blocked:t6"]);
-  assert.deepEqual(keysOf(t, "running"), ["run:t3", "next:t9"]);
-  assert.deepEqual(keysOf(t, "review"), ["need:review:t7", "check:t8", "plan:pl1"], "a result ready to review first, then what is being checked, then the plan");
-  assert.deepEqual(keysOf(t, "done"), ["done:t20", "done:t21"]);
-  assert.deepEqual(group(t, "needs").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["3"], "each group says how many");
-  assert.deepEqual(group(t, "done").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["2"]);
-  assert.equal(group(t, "done").querySelector(".today-more"), null, "no 'more' while everything fits");
+  assert.deepEqual(byId(t, BOARD).querySelector(".today-groups").children.map((node) => node.getAttribute("aria-label")), ["Needs you", "Running", "Review", "Done"], "the prototype's four columns (Done holds what finished today)");
+  assert.deepEqual(keysOf(t, "needs", BOARD), ["need:question:q1", "need:approval:t5", "need:blocked:t6"]);
+  assert.deepEqual(keysOf(t, "running", BOARD), ["run:t3", "next:t9"]);
+  assert.deepEqual(keysOf(t, "review", BOARD), ["need:review:t7", "check:t8", "plan:pl1"], "a result ready to review first, then what is being checked, then the plan");
+  assert.deepEqual(keysOf(t, "done", BOARD), ["done:t20", "done:t21"]);
+  assert.deepEqual(group(t, "needs", BOARD).querySelectorAll("h3 .today-count").map((node) => node.textContent), ["3"], "each group says how many");
+  assert.deepEqual(group(t, "running", BOARD).querySelectorAll("h3 .today-count").map((node) => node.textContent), ["1"], "Running counts what runs, not what waits its turn under it");
+  assert.deepEqual(group(t, "done", BOARD).querySelectorAll("h3 .today-count").map((node) => node.textContent), ["2"]);
+  assert.equal(group(t, "done", BOARD).querySelector(".today-more"), null, "no 'more' while everything fits");
   // The feed is what the assistant already noticed.
-  const latest = byId(t, "today-board").querySelector(".today-latest");
+  const latest = byId(t, BOARD).querySelector(".today-latest");
   assert.equal(latest.hidden, false);
   assert.deepEqual(latest.querySelectorAll(".today-latest-row").map((row) => row.textContent), ["Finished the typo fix and checked it.10 min ago"]);
 });
 
 test("all four columns show while a project is open, each saying when it is empty, as the prototype's board; no project says what to do", async () => {
-  const t = await up({ data: board({ running: [job()] }) });
-  const columns = () => byId(t, "today-board").querySelector(".today-groups").children;
+  const t = await upBoard({ data: board({ running: [job()] }) });
+  const columns = () => byId(t, BOARD).querySelector(".today-groups").children;
   const empty = () => Object.fromEntries(columns().map((node) => [node.dataset.group, node.querySelector(".today-col-empty").hidden ? null : node.querySelector(".today-col-empty").textContent]));
   assert.deepEqual(columns().map((node) => node.dataset.group), ["needs", "running", "review", "done"]);
   assert.deepEqual(empty(), { needs: "Nothing is waiting on you.", running: null, review: "Nothing to review.", done: "Nothing finished yet today." });
-  assert.equal(byId(t, "today-quiet").hidden, true, "the columns say it; no second line");
+  assert.equal(byId(t, "today-overlay-quiet").hidden, true, "the columns say it; no second line");
   const before = columns();
   await t.push(board());
   assert.deepEqual(columns().map((node, index) => node === before[index]), [true, true, true, true], "the columns stay put");
   assert.deepEqual(empty(), { needs: "Nothing is waiting on you.", running: "Nothing is running.", review: "Nothing to review.", done: "Nothing finished yet today." });
-  assert.equal(byId(t, "today-quiet").hidden, true);
-  assert.equal(byId(t, "today-quiet").getAttribute("role"), "status");
+  assert.equal(byId(t, "today-overlay-quiet").hidden, true);
   await t.push(board({ projectId: null, projectName: "" }));
   assert.equal(columns().length, 0, "no project, no columns");
-  assert.match(byId(t, "today-quiet").textContent, /^Pick a project to begin/, "no project is its own empty state");
-  assert.equal(byId(t, "today-quiet").hidden, false);
+  assert.match(byId(t, "today-overlay-quiet").textContent, /^Pick a project to begin/, "no project is its own empty state");
+  assert.equal(byId(t, "today-overlay-quiet").hidden, false);
 });
 
 test("detail follows html[data-detail]: titles only, plus status, or everything", async () => {
-  const t = await up({ detail: "titles" });
-  const running = () => cardsOf(t, "running")[0];
-  const question = () => cardsOf(t, "needs")[0];
+  const t = await upBoard({ detail: "titles" });
+  const running = () => cardsOf(t, "running", BOARD)[0];
+  const question = () => cardsOf(t, "needs", BOARD)[0];
   assert.equal(running().querySelector(".today-card-meta"), null, "titles: a title and nothing else");
   assert.equal(running().querySelector(".today-bar"), null);
   assert.equal(question().querySelector(".today-card-quick"), null, "and no answer buttons: open it to decide");
-  assert.equal(byId(t, "today-board").querySelector(".today-latest").hidden, true, "the feed is a status, not a title");
+  assert.equal(byId(t, BOARD).querySelector(".today-latest").hidden, true, "the feed is a status, not a title");
   // + status (the default)
   t.documentElement.dataset.detail = "status";
   t.window.dispatchEvent({ type: "mefi:appearance" }); await t.settle();
@@ -155,11 +220,11 @@ test("detail follows html[data-detail]: titles only, plus status, or everything"
   assert.equal(running().querySelector(".today-bar i").style.width, "40%", "a bar for a job that reports its progress");
   assert.deepEqual(question().querySelectorAll(".today-card-quick [data-option]").map((node) => node.dataset.option), ["yes", "no"], "the first two options that are an answer by themselves");
   assert.equal(question().querySelector(".today-card-more"), null);
-  assert.equal(byId(t, "today-board").querySelector(".today-latest").hidden, false);
+  assert.equal(byId(t, BOARD).querySelector(".today-latest").hidden, false);
   // everything
   t.documentElement.dataset.detail = "all";
   t.window.dispatchEvent({ type: "mefi:appearance" }); await t.settle();
-  assert.equal(cardsOf(t, "done")[1].querySelectorAll(".today-card-more").map((node) => node.textContent).join(), "The page loads and the links work.", "what the checker said");
+  assert.equal(cardsOf(t, "done", BOARD)[1].querySelectorAll(".today-card-more").map((node) => node.textContent).join(), "The page loads and the links work.", "what the checker said");
   // Unknown values are the default, never a blank board.
   t.documentElement.dataset.detail = "everything-and-more";
   t.window.dispatchEvent({ type: "mefi:appearance" }); await t.settle();
@@ -185,22 +250,22 @@ test("a card opens its session: in its thread when the session panels are there,
 });
 
 test("a need answers in place with its first two options, or opens the Inbox on it", async () => {
-  const t = await up();
-  const card = cardsOf(t, "needs")[0];
+  const t = await upBoard();
+  const card = cardsOf(t, "needs", BOARD)[0];
   await card.querySelector('[data-option="yes"]').click(); await t.settle();
   assert.deepEqual(t.callsOf("assistantAnswer"), [{ id: "q1", optionId: "yes", projectId: "p1" }], "one host call, the same one the Inbox makes");
-  const decided = cardsOf(t, "needs")[0];
+  const decided = cardsOf(t, "needs", BOARD)[0];
   assert.equal(decided.className.includes("is-decided"), true, "the card becomes its Decided line, in the same place");
   assert.match(decided.textContent, /^Decided · Answered: Yes, ignore case/);
-  assert.equal(byId(t, "today-summary").querySelector('[data-chip="need"]').querySelector(".today-chip-text").textContent, "3 need you", "and the count moved at once");
-  assert.deepEqual(group(t, "needs").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["2"]);
+  assert.equal(byId(t, "today-overlay-summary").querySelector('[data-chip="need"]').querySelector(".today-chip-text").textContent, "3 need you", "and the count moved at once");
+  assert.deepEqual(group(t, "needs", BOARD).querySelectorAll("h3 .today-count").map((node) => node.textContent), ["2"]);
   // A thing with no options of its own offers the app's first two actions for it, as the prototype's card offers its answers; More opens the Inbox on it.
-  const approval = cardsOf(t, "needs").find((node) => node.dataset.key === "need:approval:t5");
+  const approval = cardsOf(t, "needs", BOARD).find((node) => node.dataset.key === "need:approval:t5");
   assert.deepEqual(approval.querySelectorAll(".today-card-quick button").map((node) => node.textContent), ["Approve build", "Drop it", "More"]);
   assert.equal(approval.querySelector(".today-card-q").textContent, "Your permission settings require approval of this brief before it can start.", "what holds it, in the card's own box");
   await approval.querySelector('[data-action="approve"]').click(); await t.settle();
   assert.deepEqual(t.callsOf("backlogControl"), [{ action: "approve", taskId: "t5", projectId: "p1", expectedScope: "scope-5" }], "the same call the Inbox makes");
-  const blocked = cardsOf(t, "needs").find((node) => node.dataset.key === "need:blocked:t6");
+  const blocked = cardsOf(t, "needs", BOARD).find((node) => node.dataset.key === "need:blocked:t6");
   assert.deepEqual(blocked.querySelectorAll(".today-card-quick button").map((node) => node.textContent), ["Try again", "It's done", "More"]);
   assert.equal(blocked.querySelector(".today-card-open").textContent, "Fix the login redirect loop");
   assert.equal(blocked.querySelector(".today-card-meta").textContent, "Same failure repeating · 6 min");
@@ -223,8 +288,8 @@ test("a card that waits on you is its session, as the prototype's board: the tas
 
 test("a result to review is a card under Review that opens on what it changed; one still being checked opens its session", async () => {
   const sessions = [];
-  const t = await up({ extras: { MefiSessions: { active: () => true, open: (...args) => { sessions.push(plain(args)); return true; } } }, data: everything({ needs: [needReview(), needReview({ id: "t11", title: "Still being checked", checking: true })] }) });
-  const [ready, checking] = cardsOf(t, "review");
+  const t = await upBoard({ extras: { MefiSessions: { active: () => true, open: (...args) => { sessions.push(plain(args)); return true; } } }, data: everything({ needs: [needReview(), needReview({ id: "t11", title: "Still being checked", checking: true })] }) });
+  const [ready, checking] = cardsOf(t, "review", BOARD);
   assert.equal(ready.dataset.key, "need:review:t7");
   assert.equal(ready.querySelector(".today-card-meta").textContent, "Ready to review · 6 min");
   assert.equal(ready.querySelector(".today-card-quick"), null, "Review's cards are lines to open, as the prototype's");
@@ -232,7 +297,7 @@ test("a result to review is a card under Review that opens on what it changed; o
   assert.equal(checking.querySelector(".today-card-meta").textContent, "Checking its work · 6 min");
   await checking.querySelector(".today-card-open").click();
   assert.deepEqual(sessions, [["t7", { preview: true, tab: "changes" }], ["t11", { preview: true }]]);
-  assert.deepEqual(group(t, "review").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["3"], "the two results and the one being checked");
+  assert.deepEqual(group(t, "review", BOARD).querySelectorAll("h3 .today-count").map((node) => node.textContent), ["3"], "the two results and the one being checked");
 });
 
 test("the quick answers are the first two options that answer by themselves; More opens the Inbox on the card", async () => {
@@ -249,24 +314,24 @@ test("the quick answers are the first two options that answer by themselves; Mor
 });
 
 test("a card that did not change is the same node after a push, so what is under the hand stays under the hand", async () => {
-  const t = await up();
-  const before = Object.fromEntries(["needs", "running", "review", "done"].map((key) => [key, cardsOf(t, key)]));
-  const groups = byId(t, "today-board").querySelector(".today-groups").children;
+  const t = await upBoard();
+  const before = Object.fromEntries(["needs", "running", "review", "done"].map((key) => [key, cardsOf(t, key, BOARD)]));
+  const groups = byId(t, BOARD).querySelector(".today-groups").children;
   await t.push(everything());
-  for (const key of Object.keys(before)) assert.deepEqual(cardsOf(t, key).map((card, index) => card === before[key][index]), before[key].map(() => true), `${key}: nothing rebuilt`);
-  assert.deepEqual(byId(t, "today-board").querySelector(".today-groups").children.map((node, index) => node === groups[index]), [true, true, true, true]);
+  for (const key of Object.keys(before)) assert.deepEqual(cardsOf(t, key, BOARD).map((card, index) => card === before[key][index]), before[key].map(() => true), `${key}: nothing rebuilt`);
+  assert.deepEqual(byId(t, BOARD).querySelector(".today-groups").children.map((node, index) => node === groups[index]), [true, true, true, true]);
   // One job's progress moves: only its card is rebuilt.
   await t.push(everything({ running: [job({ progress: 0.7 })] }));
-  assert.notEqual(cardsOf(t, "running")[0], before.running[0]);
-  assert.equal(cardsOf(t, "running")[1], before.running[1], "the one next to it is the one it was");
-  assert.equal(cardsOf(t, "needs")[1], before.needs[1]);
+  assert.notEqual(cardsOf(t, "running", BOARD)[0], before.running[0]);
+  assert.equal(cardsOf(t, "running", BOARD)[1], before.running[1], "the one next to it is the one it was");
+  assert.equal(cardsOf(t, "needs", BOARD)[1], before.needs[1]);
 });
 
 test("more than six finished today show six and a link to the rest", async () => {
   const many = Array.from({ length: 9 }, (_, index) => finished({ id: `d${index}`, title: `Done thing ${index}`, doneAt: NOW - (index + 1) * 600000 }));
-  const t = await up({ data: board({ tasks: many }) });
-  assert.equal(cardsOf(t, "done").length, 6);
-  const more = group(t, "done").querySelector(".today-more");
+  const t = await upBoard({ data: board({ tasks: many }) });
+  assert.equal(cardsOf(t, "done", BOARD).length, 6);
+  const more = group(t, "done", BOARD).querySelector(".today-more");
   assert.equal(more.hidden, false);
   assert.equal(more.textContent, "3 more");
   await more.click();
@@ -389,4 +454,103 @@ test("v1 is untouched: nothing borrowed, nothing drawn, nothing heard, nothing a
   assert.equal(t.today.count(), 0);
   assert.equal(t.today.openInbox(null), false);
   assert.equal(t.nav.registered.length, 0);
+});
+
+// ---- Social's Home: the list (a QA pass on 2026-10-06 found Social reading as an agent dashboard) ------------------------------------
+test("Social's Home lists the work in short: a heading only over a group with something in it, and results to review under Needs you, so its count is the pill's", async () => {
+  const t = await up();
+  const shown = () => byId(t, "today-board").querySelector(".today-groups").children.filter((node) => !node.hidden);
+  assert.equal(byId(t, "today-board").dataset.style, "list");
+  assert.deepEqual(shown().map((node) => [node.dataset.group, node.querySelector(".today-group-name").textContent, node.querySelector(".today-count").textContent]),
+    [["needs", "Needs you", "4"], ["running", "Running", "1"], ["queued", "Up next", "1"], ["review", "In review", "2"], ["done", "Done today", "2"]],
+    "one word for each state: needs you, running, up next, in review, done today");
+  assert.equal(chips(t)[0], "4 need you", "the pill, the Inbox and the heading count the same things");
+  // Home keeps each group to a few rows; the rest are one press away on Activity.
+  assert.deepEqual(keysOf(t, "needs"), ["need:question:q1", "need:approval:t5", "need:blocked:t6"]);
+  const more = group(t, "needs").querySelector(".today-more");
+  assert.equal(more.hidden, false);
+  assert.equal(more.textContent, "1 more");
+  await more.click();
+  assert.deepEqual(t.nav.gone.at(-1), ["activity", null]);
+  assert.deepEqual(keysOf(t, "queued"), ["next:t9"], "what waits its turn has its own heading, not Running's");
+  assert.deepEqual(keysOf(t, "running"), ["run:t3"]);
+  assert.equal(byId(t, "today-board").querySelector(".today-latest").hidden, true, "the assistant's notices are Studio's");
+  // Nothing at all: no empty headings, one quiet line.
+  await t.push(board());
+  assert.deepEqual(shown().map((node) => node.dataset.group), [], "no group stands empty");
+  assert.equal(byId(t, "today-quiet").hidden, false);
+  assert.equal(byId(t, "today-quiet").getAttribute("role"), "status", "said once, and announced");
+  assert.match(byId(t, "today-quiet").textContent, /^All quiet/);
+});
+
+test("queued work that cannot start says what holds it, in Social's list and in Studio's column, never Running 0 over queued work", async () => {
+  const paused = { ...everything({ running: [], next: [{ id: "t9", title: "Translate the help page", stage: "queued" }] }), gate: { key: "paused" } };
+  const t = await up({ data: paused });
+  const queued = group(t, "queued");
+  assert.equal(queued.hidden, false);
+  assert.equal(queued.querySelector(".today-group-name").textContent, "Paused");
+  assert.equal(queued.querySelector(".today-count").textContent, "1");
+  assert.equal(group(t, "running").hidden, true, "nothing runs: no Running heading at all");
+  const studio = await upBoard({ data: paused });
+  const running = group(studio, "running", BOARD);
+  assert.equal(running.querySelector(".today-group-name").textContent, "Paused", "the column is named for what it holds");
+  assert.equal(running.getAttribute("aria-label"), "Paused");
+  assert.equal(running.querySelector(".today-count").textContent, "1");
+  assert.deepEqual(keysOf(studio, "running", BOARD), ["next:t9"]);
+  const held = await upBoard({ data: { ...paused, gate: { key: "held" } } });
+  assert.equal(group(held, "running", BOARD).querySelector(".today-group-name").textContent, "Agents off");
+  const waiting = await upBoard({ data: { ...paused, gate: null } });
+  assert.equal(group(waiting, "running", BOARD).querySelector(".today-group-name").textContent, "Up next");
+});
+
+test("Social's Home puts your work beside the Friends card, and the rail's Activity stop carries what needs you", async () => {
+  const t = await loadToday({ layer: true, active: false, data: everything() });
+  await t.settle();
+  const people = t.document.createElement("section");
+  people.id = "social-people";
+  let disposed = 0;
+  people.dispose = () => { disposed += 1; };
+  t.window.MefiSocial = { peopleCard: () => people, openInStudio: (...args) => t.nav.gone.push(["studio", ...plain(args)]) };
+  const badge = byId(t, "vibe-rail-needs");
+  badge.hidden = true;
+  t.vibe.active = true;
+  t.today.show(); await t.settle();
+  const grid = byId(t, "today-page").querySelector(".today-social");
+  assert.deepEqual(grid.children.map((node) => node.id), ["today-work", "social-people"], "your work, then your friends");
+  assert.equal(byId(t, "today-work").querySelector("#today-board"), byId(t, "today-board"), "the list sits in Your work");
+  const links = byId(t, "today-work").querySelectorAll(".social-link").map((node) => node.textContent);
+  assert.deepEqual(links, ["See all", "Open in Studio"]);
+  await byId(t, "today-work").querySelectorAll(".social-link")[1].click();
+  assert.deepEqual(t.nav.gone.at(-1), ["studio", "workspace"], "the details are Studio's, one press away");
+  assert.equal(badge.hidden, false);
+  assert.equal(badge.textContent, "4");
+  t.today.stop();
+  assert.equal(disposed, 1, "the Friends card stops reading when Home goes");
+});
+
+test("Activity has every row; finished work past the day's six is one press from the task board, as on Studio's Today", async () => {
+  const many = Array.from({ length: 9 }, (_, index) => finished({ id: `d${index}`, title: `Done thing ${index}`, doneAt: NOW - (index + 1) * 600000 }));
+  const t = await up({ data: board({ tasks: many }) });
+  // Home shows three of the six and leaves the rest to Activity.
+  assert.equal(cardsOf(t, "done").length, 3);
+  const home = group(t, "done").querySelector(".today-more");
+  assert.equal(home.textContent, "6 more", "three Home leaves out, and three past the day's six");
+  assert.equal(home.dataset.to, "activity");
+  await home.click();
+  assert.deepEqual(t.nav.gone.at(-1), ["activity", null]);
+});
+
+test("on Social's Home a Decided line never pushes something that still needs you behind N more", async () => {
+  const t = await up();
+  // Needs you holds four (a question, an approval, a stopped task, a result to review); Home shows three.
+  assert.deepEqual(keysOf(t, "needs"), ["need:question:q1", "need:approval:t5", "need:blocked:t6"]);
+  await cardsOf(t, "needs")[0].querySelector('[data-option="yes"]').click(); await t.settle();
+  await cardsOf(t, "needs").find((node) => node.dataset.key === "need:approval:t5").querySelector('[data-action="approve"]').click(); await t.settle();
+  // Two Decided lines and two that still wait: both of those show, and each Decided line keeps its place while it shows.
+  const keys = keysOf(t, "needs");
+  assert.ok(keys.includes("need:blocked:t6") && keys.includes("need:review:t7"), `what still needs you is on Home: ${JSON.stringify(keys)}`);
+  assert.deepEqual(keys, ["need:question:q1", "need:approval:t5", "need:blocked:t6", "need:review:t7"], "the answers read where they were given");
+  assert.equal(cardsOf(t, "needs")[0].className.includes("is-decided"), true);
+  assert.deepEqual(group(t, "needs").querySelectorAll("h3 .today-count").map((node) => node.textContent), ["2"]);
+  assert.equal(group(t, "needs").querySelector(".today-more")?.hidden ?? true, true, "nothing that waits is left behind a link");
 });

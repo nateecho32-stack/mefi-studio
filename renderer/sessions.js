@@ -59,6 +59,8 @@
     return node;
   }
   const toast = (message, kind = "info", options) => { try { window.MefiToast?.(message, kind, options); } catch { /* no toasts */ } };
+  // A menu that closes: a menu effect from the Shop plays it away (renderer/effects.js), else it simply goes.
+  const letGo = (node) => { const effects = window.MefiEffects; if (typeof effects?.leave === "function") effects.leave(node); else node.remove?.(); };
   const plain = (error, fallback) => window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : String(error?.message || error || fallback);
   const escapeRe = (text) => String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const stampOf = (value) => { const number = Number(value); if (Number.isFinite(number) && number > 0) return number; const parsed = Date.parse(value || ""); return Number.isFinite(parsed) ? parsed : 0; };
@@ -616,11 +618,11 @@
   }
   function projectAction(run) { closeProjectMenu(false); try { run(); } catch { /* the control went away */ } }
   function paintProjectMenu(panel, data) {
-    // A redraw while the menu is open keeps the keyboard on the same item.
-    const old = panel.root.querySelector?.(".sx-projmenu");
+    // A redraw while the menu is open keeps the keyboard on the same item. One already leaving (inert) is left to go.
+    const old = [...(panel.root.querySelectorAll?.(".sx-projmenu") ?? [])].find((node) => !node.hasAttribute?.("inert"));
     const ITEMS = "[role=menuitem], [role=menuitemradio]";
     const held = old && old.contains?.(document.activeElement) ? [...old.querySelectorAll(ITEMS)].indexOf(document.activeElement) : -1;
-    old?.remove?.();
+    if (old) { if (S.projMenu) old.remove?.(); else letGo(old); }
     if (!S.projMenu) return;
     const menu = el("div", "sx-menu sx-projmenu"); menu.id = "sessions-project-menu"; menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Projects");
     const item = (label, run, { icon = null, small = "", radio = false, on = false, avatar = "" } = {}) => {
@@ -762,7 +764,10 @@
     paintList();
   }
   function paintMenu(panel, data) {
-    panel.root.querySelector?.(".sx-menu")?.remove?.();
+    // A redraw of an open menu swaps it at once; a menu that closed leaves (letGo). Only the row's menu: the project
+    // menu is an .sx-menu too, and one already leaving (inert) is left to go.
+    const rows = [...(panel.root.querySelectorAll?.(".sx-menu") ?? [])].filter((node) => !node.classList?.contains?.("sx-projmenu") && !node.hasAttribute?.("inert"));
+    for (const old of rows) { if (S.menu) old.remove?.(); else letGo(old); }
     if (!S.menu) return;
     const task = taskById(S.menu, data);
     if (!task) { S.menu = null; return; }

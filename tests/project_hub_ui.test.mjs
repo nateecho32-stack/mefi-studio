@@ -224,3 +224,14 @@ test("a playlist on the hub shows its videos, plays in Studio and still counts; 
   assert.deepEqual(env.calls.at(-1), ["playProject", "proj_a"]);
   assert.deepEqual(played, ["Code & math"], "a game is not a playlist");
 });
+
+test("a maker sees what a newcomer wave would have paid them, waiting for a quick check", async () => {
+  const env = environment({ replies: { me: me({ credits: { balance: 42, lifetime: 120, today: 7, todayCap: 60, held: 12 } }) } });
+  const card = env.hub.card();
+  await flush();
+  assert.match(card.byClass("project-hub-me")[0].textContent, /today 7\/60 · 3-day streak · 12 credits waiting for a quick check/);
+  const none = environment();
+  const plain = none.hub.card();
+  await flush();
+  assert.ok(!plain.byClass("project-hub-me")[0].textContent.includes("waiting"), "nothing said when nothing waits");
+});

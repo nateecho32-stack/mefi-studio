@@ -1,0 +1,152 @@
+/* Social (renderer/social.js, renderer/today.js): people, rooms, your projects and a simple talk with Mefi, with the details
+   left to Studio. Inlined after today.css, so it wins its ties. Every colour is a theme token and no text is under 12 px, at
+   any text size (--text-scale). Nothing here matches in Studio: each rule waits for Social's own layer, its pages or
+   html[data-ui-mode="vibe"]. */
+
+.social-sheet, .today-social, .today-side {
+  --s-f12: max(12px, calc(12px * var(--text-scale, 1)));
+  --s-f13: max(12px, calc(13px * var(--text-scale, 1)));
+  --s-f14: max(12px, calc(14px * var(--text-scale, 1)));
+  --s-f15: max(12px, calc(15px * var(--text-scale, 1)));
+  --s-f18: max(12px, calc(18px * var(--text-scale, 1)));
+  --s-ink: var(--ivory);
+  --s-soft: var(--muted);
+  --s-faint: var(--dim);
+  --s-edge: color-mix(in srgb, var(--ivory) 12%, transparent);
+  --s-card: color-mix(in srgb, var(--panel-solid) 44%, transparent);
+  --s-row: color-mix(in srgb, var(--panel-solid) 62%, transparent);
+  --s-gap: var(--d-gap, 12px);
+}
+
+/* ---- the status bar: what runs and what waits on you; usage, cost, the machine's load and the permission mode are Studio's ---- */
+html[data-ui-mode="vibe"] #shell-status :is(.shell-usage, .shell-usage-sep, .shell-machine, .shell-cost, .shell-permission) { display: none !important; }
+
+/* ---- Home's box: one conversation, one action (Send). Build it, the permission mode, the answer styles, the starting points,
+   "decided for you" and the Git chip step aside here; Studio's box and header keep them. ---- */
+#vibe-layer[data-today="on"] :is(#vibe-build, #vibe-autonomy-control, #vibe-chat-tools, #vibe-sparks, #vibe-decisions) { display: none !important; }
+#vibe-layer[data-today="on"] > .vibe-top :is(.gs-slot, [data-vibe-panel="settings"]) { display: none !important; }
+#vibe-layer[data-today="on"] :is(.today, .today-chat-box) .vibe-compose #vibe-talk { min-width: 96px; justify-content: center; }
+
+/* ---- Home: your work and your friends, laid out by the room the page has (today.css's today-page container) ----
+   Friends is always at the right (2026-10-07). On a wide window it sits in the column at the right of Home, over the docked
+   conversation (vibe.css, data-side), and Your work has the page to itself. Narrower: one column, then from 900 px Your work
+   beside Friends under the box, then from 1180 px Friends as a column of its own at the right, from the top of the page. */
+.today-social { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-gap); align-items: start; min-width: 0; }
+.today-social > * { min-width: 0; }
+@container today-page (min-width: 900px) {
+  .today-social:has(> .social-people:not([hidden])) { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
+}
+@container today-page (min-width: 1180px) {
+  .today-col:has(> .today-social > .social-people:not([hidden])) { grid-template-columns: minmax(0, 1fr) clamp(300px, 28%, 400px); grid-template-rows: auto auto auto 1fr; column-gap: calc(var(--t-gap, 12px) * 2); }
+  .today-col:has(> .today-social > .social-people:not([hidden])) > .today-social { display: contents; }
+  .today-col:has(> .today-social > .social-people:not([hidden])) > .today-top { grid-column: 1; grid-row: 1; }
+  .today-col:has(> .today-social > .social-people:not([hidden])) > .today-box { grid-column: 1; grid-row: 2; }
+  .today-col:has(> .today-social > .social-people:not([hidden])) #today-work { grid-column: 1; grid-row: 3; }
+  /* The fourth row takes what the Friends column needs past the page's own rows, so the rows beside it keep their heights. */
+  .today-col:has(> .today-social > .social-people:not([hidden])) .social-people { grid-column: 2; grid-row: 1 / -1; align-self: start; }
+}
+/* Your work's rows side by side once its card has the room for two: three across the page beside the column, as many as
+   Home shows of each group. */
+.social-work { container: social-work / inline-size; }
+@container social-work (min-width: 720px) {
+  .today-board[data-style="list"] .today-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+}
+@container social-work (min-width: 1180px) {
+  .today-board[data-style="list"] .today-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); }
+}
+
+.social-card { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 10px; min-width: 0; padding: 12px 14px 14px; border: 1px solid var(--s-edge); border-radius: 14px; background: var(--s-card); backdrop-filter: var(--studio-glass-blur, blur(16px) saturate(1.3)); color: var(--s-ink); }
+.social-card[hidden] { display: none; }
+/* A <header>: styles.css gives every header a page heading's 24 px top, a 12 px foot and a rule under it; a card's title row
+   keeps to the card's own spacing. */
+.social-card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; min-width: 0; padding: 0; border: 0; }
+.social-card-title { margin: 0; color: var(--s-ink); font: 650 var(--s-f15)/1.3 var(--font-ui); }
+.social-card-links { display: inline-flex; flex-wrap: wrap; gap: 4px 14px; }
+.social-card-note { margin: 0; color: var(--s-soft); font-size: var(--s-f13); line-height: 1.5; }
+.social-card-note:empty { display: none; }
+.social-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.social-card-foot { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-top: 2px; }
+.social-card-foot[hidden] { display: none; }
+.social-link { min-height: 0; padding: 2px 0; border: 0; background: none; box-shadow: none; color: var(--s-soft); font: 600 var(--s-f13)/1.3 var(--font-ui); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); text-underline-offset: 3px; cursor: pointer; }
+.social-link:hover, .social-link:focus-visible { color: var(--s-ink); }
+.social-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 30px; padding: 0 12px; border: 1px solid var(--hairline-strong); border-radius: 10px; background: transparent; color: var(--s-ink); font: 600 var(--s-f13)/1 var(--font-ui); white-space: nowrap; cursor: pointer; }
+.social-btn:hover { border-color: color-mix(in srgb, var(--ivory) 30%, transparent); }
+/* A ring on every stop of Social's own, as Today's (today.css). */
+:is(.social-link, .social-btn, .social-person-go):focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+.social-btn.primary { border-color: transparent; background: var(--ivory); color: var(--on-ivory, var(--bg)); }
+
+/* Your work: the list (data-style="list"), a few compact rows of each group with a heading; a group with nothing in it takes no room. */
+.today-board[data-style="list"] { gap: 8px; }
+.today-board[data-style="list"] .today-groups { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.today-board[data-style="list"] .today-group { gap: 6px; padding: 0; border: 0; border-radius: 0; background: none; backdrop-filter: none; }
+.today-board[data-style="list"] .today-group[hidden] { display: none; }
+.today-board[data-style="list"] .today-group > h3 { padding: 0 2px; font-size: max(12px, calc(12.5px * var(--text-scale, 1))); }
+.today-board[data-style="list"] .today-group[data-group="queued"] > h3 { color: var(--muted); }
+.today-board[data-style="list"] .today-cards { gap: 6px; }
+.today-board[data-style="list"] .today-card { gap: 4px; padding: 8px 10px; border-radius: 10px; background: color-mix(in srgb, var(--panel-solid) 58%, transparent); }
+.today-board[data-style="list"] :is(.today-wt, .today-card-more) { display: none; }
+.today-board[data-style="list"] .today-more { justify-self: start; }
+/* In Social the run's own lines (the last output, a check's command) are Studio's. */
+html[data-ui-mode="vibe"] :is(.today-need-evidence, .today-card-more) { display: none; }
+.social-work > .today-quiet { margin: 0; }
+
+/* ---- the Friends card: who is online, the rooms open now and what friends shared, compact (2026-10-07) ----
+   One line a row, small faces, a quiet label over each part and no fill until the pointer is on a row, so the card reads
+   at a glance and leaves the column's height to the conversation. */
+.social-people { gap: 8px; }
+.social-people > .social-card-head { align-items: center; }
+.social-online { display: inline-flex; align-items: center; gap: 6px; color: var(--s-soft); font: 600 var(--s-f12)/1 var(--font-ui); }
+.social-online[hidden] { display: none; }
+.social-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 6px color-mix(in srgb, var(--good) 70%, transparent); }
+.social-card-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-width: 0; }
+.social-people-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 2px 6px; margin: 0 -4px; padding: 0; list-style: none; }
+.social-person-go { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; min-height: 38px; padding: 3px 6px 3px 4px; border: 0; border-radius: 9px; background: transparent; color: var(--s-ink); text-align: left; cursor: pointer; }
+.social-person-go:hover, .social-person-go:focus-visible { background: var(--s-row); }
+.social-face { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: hsl(var(--who-hue, 210) 45% 34%); color: #fff; font: 700 var(--s-f12)/1 var(--font-ui); }
+.social-person-text { display: grid; gap: 1px; min-width: 0; }
+.social-person-text b, .social-row-text b { overflow: hidden; color: var(--s-ink); font: 600 var(--s-f13)/1.3 var(--font-ui); text-overflow: ellipsis; white-space: nowrap; }
+.social-person-text small, .social-row-text small { overflow: hidden; color: var(--s-soft); font-size: var(--s-f12); line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+.social-empty { color: var(--s-soft); font-size: var(--s-f13); line-height: 1.5; list-style: none; }
+.social-subsection { display: grid; gap: 2px; min-width: 0; }
+.social-subhead { margin: 0 0 2px; color: var(--s-faint); font: 650 var(--s-f12)/1.2 var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+.social-rows { display: grid; gap: 0; margin: 0 -4px; padding: 0; list-style: none; }
+/* A row: the name, then what it is, on one line (either gives way first when the column is narrow), and its one action. */
+.social-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; min-height: 34px; padding: 2px 4px 2px 8px; border-radius: 9px; background: transparent; }
+.social-row:hover, .social-row:focus-within { background: var(--s-row); }
+/* A name over what it is, as Projects shows its rows; the Friends card puts the two on one line. Shared by both, it cut
+   Projects' names to "Notes..." beside their folders (2026-10-07). */
+.social-row-text { display: grid; gap: 2px; min-width: 0; }
+.social-people .social-row-text { display: flex; align-items: baseline; gap: 8px; }
+.social-people .social-row-text > * { flex: 0 1 auto; min-width: 0; }
+.social-row .social-btn { min-height: 26px; height: 26px; padding: 0 10px; border-radius: 8px; font-size: var(--s-f12); }
+/* In the column at the right of a wide Home (vibe.css, data-side) the card keeps to its share of the height: what does not
+   fit scrolls inside it, under its title, so the conversation under it keeps its room. */
+.today-side > .social-people { grid-template-rows: auto minmax(0, 1fr) auto; max-height: min(46vh, 440px); }
+.today-side > .social-people > .social-card-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+
+/* ---- Projects and Activity: pages of Social's own, in the main area like every other page ---- */
+/* As wide as Home's column (today.css --today-max), less the Friends column it does not have: a wide window fills with more
+   cards per row rather than empty sides. */
+.social-sheet { display: grid; gap: 16px; align-content: start; width: 100%; max-width: 1640px; margin: 0 auto; padding: 22px clamp(16px, 2vw, 28px) 28px; color: var(--s-ink); }
+html[data-shell="rail"] .social-page > .social-sheet { width: 100%; height: auto; min-height: 100%; max-width: 1640px; margin: 0 auto; overflow: visible; background: transparent; }
+.social-page { overflow-y: auto; overscroll-behavior: contain; }
+.social-page-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 20px; }
+.social-page-words { display: grid; gap: 4px; min-width: 0; flex: 1 1 320px; }
+.social-page-words h1 { margin: 0; color: var(--s-ink); font: 650 var(--s-f18)/1.3 var(--font-display, var(--font-ui)); letter-spacing: -.01em; outline: none; }
+.social-page-about { margin: 0; max-width: 70ch; color: var(--s-soft); font-size: var(--s-f14); line-height: 1.5; }
+.social-projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.social-project { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-width: 0; padding: 10px 12px; border: 1px solid var(--s-edge); border-radius: 12px; background: var(--s-card); }
+.social-project[data-current="true"] { border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.social-projects-friends > .social-btn { justify-self: start; }
+.social-project-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: color-mix(in srgb, var(--gold) 22%, var(--panel-solid)); color: var(--s-ink); font: 700 var(--s-f12)/1 var(--font-ui); }
+/* Activity is a page in the main area (.workspace-page): its bar and its list in a centred column, like Projects and Friends,
+   as wide as theirs; its rows sit side by side as Home's do once there is room (the social-work container). */
+#activity-overlay > .activity-sheet { background: transparent; }
+#activity-overlay .activity-sheet > :is(.sheet-head, .today-page-body) { width: min(1640px, 100%); margin: 0 auto; box-sizing: border-box; }
+#activity-overlay .activity-sheet > .sheet-head { padding: 18px clamp(20px, 2vw, 28px) 6px; border: 0; background: none; }
+#activity-overlay .activity-sheet > .today-page-body { container: social-work / inline-size; }
+@media (max-width: 680px) {
+  .social-card { padding: 10px 12px 12px; }
+  .social-project { grid-template-columns: auto minmax(0, 1fr); }
+  .social-project > .social-btn { grid-column: 1 / -1; justify-self: start; }
+}

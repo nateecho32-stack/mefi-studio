@@ -6,10 +6,11 @@
 // account name only; `gh auth status` output never leaves this module), and
 // for the open project a GitHub remote, installed dependencies and a drive
 // that supports Git worktrees (exFAT and FAT do not). Actions run Studio's own
-// commands in a visible PowerShell window, like scripts/cli-setup.cjs: the
-// renderer names an action, never a command, a URL or a path. Cloning takes a
-// repository from the signed-in account's own list and a folder the owner
-// picks in main's dialog. Guarded by tests/pc_setup.test.mjs.
+// commands in a visible PowerShell window (scripts/setup-window.cjs, shared
+// with scripts/cli-setup.cjs): the renderer names an action, never a command,
+// a URL or a path. Cloning takes a repository from the signed-in account's own
+// list and a folder the owner picks in main's dialog. Guarded by
+// tests/pc_setup.test.mjs.
 const path = require("node:path");
 
 const TOOLS = Object.freeze([
@@ -17,6 +18,14 @@ const TOOLS = Object.freeze([
   { id: "gh", name: "GitHub CLI", cmd: "gh", winget: "GitHub.cli" },
   { id: "node", name: "Node.js", cmd: "node", winget: "OpenJS.NodeJS.LTS" },
 ]);
+// Each setup window's title bar, so the owner can tell it from other consoles.
+const WINDOW_TITLES = Object.freeze({
+  "install-git": "Mefi Studio: Install Git",
+  "install-gh": "Mefi Studio: Install GitHub CLI",
+  "install-node": "Mefi Studio: Install Node.js",
+  "github-login": "Mefi Studio: Sign in to GitHub",
+  "install-deps": "Mefi Studio: Install project packages",
+});
 const REPO = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/;
 const WEAK_FILESYSTEMS = new Set(["EXFAT", "FAT", "FAT32"]);
 const refreshPath = "$env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User') + ';' + $env:Path";
@@ -64,7 +73,7 @@ function setupScript(action) {
       `Write-Host '${tool.name} is installed. Return to Studio and choose Check again.'`);
   } else if (action === "github-login") {
     lines.push("if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'Install the GitHub CLI first.' }",
-      "Write-Host 'Sign in to GitHub in the browser that opens. Studio never sees your password or token.'",
+      "Write-Host 'The GitHub CLI may ask a question first (Enter takes the default). Then copy the one-time code it shows, press Enter, and enter the code on the GitHub page that opens. Studio never sees your password or token.'",
       "gh auth login --hostname github.com --web --git-protocol https",
       "if ($LASTEXITCODE -ne 0) { throw 'GitHub sign-in did not finish. Try again.' }",
       "gh auth setup-git",
@@ -135,11 +144,9 @@ function createPcSetup({ execFile, spawn, platform = process.platform, env = () 
     running.add(name);
     try {
       const script = `try {\n${setupScript(name)}\n} catch { Write-Host $_.Exception.Message -ForegroundColor Red }\nRead-Host 'Press Enter to close this setup window'`;
-      const child = spawn("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")], { cwd: name === "install-deps" ? cwd : undefined, env: env(), windowsHide: false, stdio: "ignore" });
-      // Not detached, as in cli-setup.cjs: a detached PowerShell gets no
-      // console and exits at once without running the script. From Studio (no
-      // console of its own) this child opens its own visible terminal.
-      await new Promise((resolve, reject) => { child.once("spawn", resolve); child.once("error", reject); });
+      // A console of its own (setup-window.cjs, loaded on first use): gh's sign-in shows its code and opens the browser only in a terminal.
+      const { openSetupWindow } = require("./setup-window.cjs");
+      const child = await openSetupWindow(spawn, script, { title: WINDOW_TITLES[name], cwd: name === "install-deps" ? cwd : undefined, env: env() });
       child.once("close", () => running.delete(name));
       child.unref?.();
       return { ok: true, launched: true, message: "Finish in the setup window, then choose Check again." };

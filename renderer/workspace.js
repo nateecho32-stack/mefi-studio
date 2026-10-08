@@ -1336,10 +1336,10 @@
     for (const [id, key, fallback] of [["person-name", "person", ""], ["agent-name", "companion", "Mefi"], ["accent", "accent", "chrome"]]) {
       $(id).value = storage.get(key, fallback);
       $(id).addEventListener("input", () => {
-        // Music announces the actual theme (and whether this is a temporary
-        // preview) before Workspace writes its own accent preference.
+        // Music applies and announces the theme; syncThemeChoice below then
+        // writes Workspace's own accent preference from that announcement.
         if (id === "accent" && window.MefiMusic?.applyTheme) {
-          window.MefiMusic.applyTheme($(id).value === "sage" ? "forest" : $(id).value, true, { navigate: false });
+          window.MefiMusic.applyTheme($(id).value === "sage" ? "forest" : $(id).value, true);
           return;
         }
         storage.set(key, $(id).value);
@@ -1390,6 +1390,6 @@
     }, 15000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden && active()) refresh(); });
   }
-  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview, snapshot, setComposerMode: setMode, send: (purpose) => submit(null, purpose) };
+  window.MefiWorkspace = { enter, exit, refresh, ready, isActive: active, activeProjectId: () => state.activeId, selectProject: (id) => selectProject(id), buildMode, setAutoBuild, agentMode, setAgentMode, composeTask, requestChange, startTask, previewAction, previewStatus: () => state.preview, snapshot, setComposerMode: setMode, send: (purpose) => submit(null, purpose) };
   init();
 })();

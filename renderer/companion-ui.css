@@ -15,7 +15,8 @@
 }
 @starting-style { .companion-panel.companion-dynamic:not([hidden]) { opacity: 0; translate: 0 6px; scale: .985; } }
 .companion-menu-pane[hidden] { display: none; }
-.companion-shell-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: none; }
+/* padding and border: as a <header> it took styles.css's page heading spacing (24 px over the title, a rule under it). */
+.companion-shell-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: none; padding: 0; border: 0; }
 .companion-shell-head > div { display: grid; gap: 3px; }
 .companion-shell-head strong { font-size: 19px; }
 .companion-shell-head > button { width: 32px; height: 32px; padding: 0; border-radius: 50%; }

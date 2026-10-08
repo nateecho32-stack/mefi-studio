@@ -252,6 +252,9 @@ const measure = `
 function readableProbe(rootSelector) {
   const parse = (value) => {
     const text = String(value || "").trim();
+    // music.js writes --bg as #rrggbb: without this the page underneath read as transparent black, which a light theme is not.
+    const hex = /^#([0-9a-f]{6})$/i.exec(text);
+    if (hex) return { r: parseInt(hex[1].slice(0, 2), 16), g: parseInt(hex[1].slice(2, 4), 16), b: parseInt(hex[1].slice(4, 6), 16), a: 1 };
     let match = /^rgba?\(([^)]+)\)$/.exec(text);
     if (match) { const parts = match[1].split(/[\s,/]+/).filter(Boolean).map(Number); return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }; }
     match = /^color\(srgb ([^)]+)\)$/.exec(text);
@@ -259,11 +262,20 @@ function readableProbe(rootSelector) {
     return null;
   };
   const over = (top, under) => ({ r: top.r * top.a + under.r * (1 - top.a), g: top.g * top.a + under.g * (1 - top.a), b: top.b * top.a + under.b * (1 - top.a), a: 1 });
+  const lightPage = document.documentElement.dataset.studioThemeTone === "light";
   const gradient = (image) => {
     const stops = String(image || "").match(/rgba?\([^)]+\)|color\(srgb [^)]+\)/g);
     if (!stops || !/gradient/.test(image)) return null;
     const colors = stops.map(parse).filter(Boolean);
     if (!colors.length) return null;
+    // On a light page each stop weighs by its alpha, so a transparent stop (rgba(0, 0, 0, 0)) thins the fill instead
+    // of darkening it: a straight mean turned the page's washes grey there. Dark pages keep the measure they are
+    // gated with (the weighted one reads Studio gold's Inbox times at 4.48 there, today.css's to settle).
+    const weight = colors.reduce((sum, color) => sum + color.a, 0);
+    if (lightPage && weight > 0) {
+      const weighted = (key) => colors.reduce((sum, color) => sum + color[key] * color.a, 0) / weight;
+      return { r: weighted("r"), g: weighted("g"), b: weighted("b"), a: weight / colors.length };
+    }
     const mean = (key) => colors.reduce((sum, color) => sum + color[key], 0) / colors.length;
     return { r: mean("r"), g: mean("g"), b: mean("b"), a: mean("a") };
   };
@@ -405,7 +417,7 @@ app.whenReady().then(async () => {
   // ---- the chrome at 1920x1080, beside the prototype's shots (docs/prototype/): the status bar, Search and the Inbox ----------------------
   // Everything a person reads there is checked in every theme (12 px and 4.5:1, readableProbe). It runs on the board as it starts (the
   // question still open), on Build's Home with no session open, and leaves it as it found it: Chrome (the default) on, the player's own status back.
-  const THEMES = ["chrome", "aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "void", "eclipse", "abyss", "dusk"];
+  const THEMES = ["chrome", "aurora", "gold", "midnight", "forest", "violet", "ember", "rose", "daylight", "paper", "void", "eclipse", "abyss", "dusk"];
   const readable = async (rootSelector, label) => {
     const misses = [];
     for (const theme of THEMES) {
@@ -633,10 +645,16 @@ app.whenReady().then(async () => {
     await until("document.getElementById('vibe-layer').dataset.today === 'on' && !document.getElementById('vibe-layer').hidden && document.querySelector('#today-board .today-group')", "Vibe's Today");
     await sleep(900);
     await capture("today-vibe-1920.png");
-    report.todayVibe = await run("return { trail: [...document.querySelectorAll('#shell-top .shell-crumb')].map((node) => node.textContent), groups: [...document.querySelectorAll('#today-board .today-group')].map((node) => [node.dataset.group, node.querySelector('h3').firstChild.textContent, node.querySelectorAll('.today-card, .today-need').length, node.querySelector('.today-col-empty').hidden ? null : node.querySelector('.today-col-empty').textContent]), need: { title: document.querySelector('#today-board [data-group=needs] .today-card-title')?.textContent ?? null, meta: document.querySelector('#today-board [data-group=needs] .today-card-meta')?.textContent ?? null, q: document.querySelector('#today-board [data-group=needs] .today-card-q')?.textContent ?? null }, kicker: getComputedStyle(document.querySelector('#today-page .vibe-kicker'), '::after').content, build: document.querySelector('#vibe-build .today-key')?.textContent ?? null };");
-    assert.deepEqual(report.todayVibe.trail, ["Notes app", "Today, the board"], "the prototype's breadcrumb for Vibe's Today");
-    assert.deepEqual(report.todayVibe.groups.map((group) => group[1]), ["Needs you", "Running", "Review", "Done"], "the prototype's four columns, all four drawn");
-    assert.deepEqual(report.todayVibe.groups.find((group) => group[0] === "done").slice(2), [0, "Nothing finished yet today."], "an empty column says so");
+    report.todayVibe = await run("return { trail: [...document.querySelectorAll('#shell-top .shell-crumb')].map((node) => node.textContent), groups: [...document.querySelectorAll('#today-board .today-group')].map((node) => [node.dataset.group, node.querySelector('h3').firstChild.textContent, node.querySelectorAll('.today-card, .today-need').length, node.hidden]), need: { title: document.querySelector('#today-board [data-group=needs] .today-card-title')?.textContent ?? null, meta: document.querySelector('#today-board [data-group=needs] .today-card-meta')?.textContent ?? null, q: document.querySelector('#today-board [data-group=needs] .today-card-q')?.textContent ?? null }, kicker: getComputedStyle(document.querySelector('#today-page .vibe-kicker'), '::after').content, build: document.querySelector('#vibe-build .today-key')?.textContent ?? null, send: document.getElementById('vibe-talk')?.textContent ?? null, buildShown: getComputedStyle(document.getElementById('vibe-build')).display !== 'none', rail: getComputedStyle(document.getElementById('vibe-rail')).display !== 'none' };");
+    assert.deepEqual(report.todayVibe.trail, ["Notes app", "Home"], "Social calls its Home what its rail calls it");
+    // Social's Home lists the work in short (a QA pass on 2026-10-06): a group only while it holds something, in one set of words.
+    const shownGroups = report.todayVibe.groups.filter((group) => !group[3]);
+    assert.ok(shownGroups.length >= 2 && shownGroups.every((group) => group[2] > 0), `a group only while it holds something: ${JSON.stringify(report.todayVibe.groups)}`);
+    assert.ok(shownGroups.every((group) => ["Needs you", "Running", "Up next", "Paused", "Agents off", "No AI connected", "In review", "Done today"].includes(group[1])), `one set of words for where work stands: ${JSON.stringify(shownGroups)}`);
+    assert.equal(report.todayVibe.groups.find((group) => group[0] === "done")[3], true, "nothing finished today: no empty Done column");
+    assert.match(report.todayVibe.send, /^Send/, "the box's one action");
+    assert.equal(report.todayVibe.buildShown, false, "Build it is a key in Social (Ctrl Enter), not a second button");
+    assert.equal(report.todayVibe.rail, true, "Social's rail stands beside its Home");
     assert.deepEqual({ ...report.todayVibe.need, meta: report.todayVibe.need.meta?.replace(/\d+ min$/, "N min") }, { title: "Add an empty state to the notes list", meta: "Asking a question · N min", q: "Should the empty state also appear when a search has no matches?" }, "a card that waits on you is its session: the task, what it asks and for how long, the question in its box");
     assert.equal(report.todayVibe.kicker, '" · Social"', "the calm mode is called Social now");
     assert.equal(report.todayVibe.build, "Ctrl Enter");
@@ -1025,8 +1043,11 @@ app.whenReady().then(async () => {
     assert.ok(tab && tab.active, `the session has a tab of its own, and it is the one showing: ${JSON.stringify(tab)}`);
     assert.equal(await run("return window.MefiTabs.list().some((item) => item.route.id === 'tasks');"), false, "and no tab for the Task board, which could not say which task it was asked for");
   }
-  assert.equal(await run("return document.getElementById('vibe-layer').hasAttribute('inert');"), true, "Today is covered while the thread shows");
-  assert.equal(await run("const r = document.getElementById('sessions-thread').getBoundingClientRect(); const node = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return Boolean(node && node.closest('#sessions-thread'));"), true, "and the thread, not Today, is what a press lands on");
+  // A task opened from Social opens in Studio (renderer/social.js): the mode switches under the page.
+  assert.equal(await run("return document.documentElement.dataset.uiMode;"), "build", "Social hands the task to Studio");
+  assert.equal(await run("return document.getElementById('vibe-layer').hasAttribute('inert') || document.getElementById('vibe-layer').hidden;"), true, "Today is covered while the thread shows");
+  // Toasts float over everything (the steps above left a few up); under them, the thread is what a press lands on.
+  assert.equal(await run("const r = document.getElementById('sessions-thread').getBoundingClientRect(); const node = document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2).find((item) => !item.closest('#toast-host')); return Boolean(node && node.closest('#sessions-thread'));"), true, "and the thread, not Today, is what a press lands on");
   await capture("sessions-from-today-1440.png");
   // Home again puts the thread away and uncovers Today.
   await run("window.MefiNav.go('workspace', { view: 'home' });");

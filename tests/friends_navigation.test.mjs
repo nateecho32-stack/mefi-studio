@@ -50,6 +50,7 @@ function load({ delayed = false } = {}) {
     MefiCompanionFriends: { card: () => card("playground", "friends-title") },
     MefiProjectHub: { card: () => card("hub", "project-hub-title") },
     MefiFriendsEvents: { card: () => card("events", "friends-events-title") },
+    MefiShop: { card: () => card("shop", "friends-shop-title") },
     MefiFriendsFront: { card: () => card("lobby", "friends-front-title") },
   };
   const context = vm.createContext({
@@ -75,7 +76,7 @@ function load({ delayed = false } = {}) {
 // Friends is a page of its own (renderer/companion-hub.js openPlace): the
 // companion's Friends bubble and its targets open that page at a place, one
 // card at a time; the frame's list column lists the places.
-for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pcs"], ["playground", "Playground", "playground"], ["hub", "Project hub", "hub"], ["events", "Events", "events"]]) {
+for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", "Rooms", "rooms"], ["pcs", "Your PCs", "pcs"], ["playground", "Playground", "playground"], ["hub", "Project hub", "hub"], ["events", "Events", "events"], ["shop", "Shop", "shop"]]) {
   test(`Friends ${target} opens the Friends page at that place, not the bubbles`, () => {
     const loaded = load();
     assert.equal(loaded.hub.open({ section: "friends", target }), true);
@@ -88,7 +89,7 @@ for (const [target, title, kind] of [["lobby", "The Lobby", "lobby"], ["rooms", 
     assert.deepEqual(loaded.made, [kind], "only the place's own card is built");
     assert.equal(loaded.document.querySelector("#friends-place-tabs"), null, "the list column lists the places: no tabs of the page's own");
     const places = [...loaded.hub.friendsPlaces()];
-    assert.deepEqual(places.map((place) => place.label), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events"], "Moderation shows only to moderators");
+    assert.deepEqual(places.map((place) => place.label), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events", "Shop"], "Moderation shows only to moderators");
     assert.deepEqual(places.filter((place) => place.current).map((place) => place.id), [target]);
   });
 }
@@ -139,4 +140,25 @@ test("any navigation closes the open bubbles", () => {
   loaded.hub.open();
   loaded.fire("mefi:nav", { detail: { id: "tasks", action: "open" } });
   assert.equal(loaded.hub.isOpen(), false);
+});
+
+// The Shop is a page of its own (renderer/friends-shop.js, route "shop"): Friends' place "shop" and the bubble's target
+// open that page, not a card in Friends; its row stays in Friends' list and is the current one while the page shows.
+// Without MefiShop.pageOn (an older build) or with "mefiStudio.shop.page" off, it is Friends' place as before (above).
+test("the Shop's place opens the Shop's own page, and its row is current while that page shows", () => {
+  const loaded = load();
+  let route = null;
+  loaded.window.MefiShop.pageOn = () => true;
+  const go = loaded.window.MefiNav.go;
+  loaded.window.MefiNav.go = (id, params) => { if (id === "shop") route = "shop"; return go(id, params); };
+  loaded.window.MefiNav.current = () => route;
+  assert.equal(loaded.hub.open({ section: "friends", target: "shop" }), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.goes)), [["friends-page", { place: "shop" }], ["shop", null]], "Friends' place goes on to the route");
+  assert.equal(loaded.page()?.hidden ?? true, true, "Friends' page does not open for it");
+  assert.deepEqual(loaded.made, [], "no Shop card is built inside Friends");
+  const places = [...loaded.hub.friendsPlaces()];
+  assert.deepEqual(places.map((place) => place.label), ["The Lobby", "Rooms", "Your PCs", "Playground", "Project hub", "Events", "Shop"], "the Shop keeps its row among Friends' places");
+  assert.deepEqual(places.filter((place) => place.current).map((place) => place.id), ["shop"]);
+  places.find((place) => place.id === "shop").run();
+  assert.deepEqual(JSON.parse(JSON.stringify(loaded.goes.at(-2))), ["friends-page", { place: "shop" }], "its row goes the same way");
 });

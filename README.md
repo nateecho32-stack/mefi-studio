@@ -41,7 +41,7 @@ Pick a project folder, say what you want, and coding agents build it while you w
 
 | | |
 | --- | --- |
-| **Download** | **0.5.0**, released 6 October 2026. [Release notes](docs/releases/0.5.0.md) |
+| **Download** | **0.5.0**, released 8 October 2026. [Release notes](docs/releases/0.5.0.md) |
 | **Next** | **0.5.x** finishes what 0.5.0 left for later: the [0.5 scope](docs/release-scope-0.5.0.md) lists it, and the [roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html) has the rest. |
 | **Platform** | **Studio is moving from Electron to Rust** with Tauri 2, in three stages. The interface, your settings and your saved keys stay the same, and the Electron build keeps shipping until the switch. [How it works](docs/rust-migration.md) |
 
@@ -64,11 +64,11 @@ The [public roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html
 <table>
   <tr>
     <td width="50%" valign="top">
-      <img src="docs/images/0.5/today.webp" alt="Social in the 0.5 layout: What's next for Notes app? with a box to build or talk it over, and a board of Needs you, Running, Review and Done cards">
-      <p><strong>Today.</strong> Social's home: one box to build or ask, and a board of what needs you, what runs, what to review and what is done.</p>
+      <img src="docs/images/0.5/today.webp" alt="Social's Home in the 0.5 layout on a wide window: its rail with Home, Friends, Projects and Activity; What's next for Notes app? over Your work, its cards side by side; and a column at the right with the Friends card (who is online, the rooms open now, what friends shared this week) over the conversation with Mefi, the box and its Send button at its foot">
+      <p><strong>Home.</strong> Social's home: your work in short, and beside it who is online and the conversation with Mefi.</p>
     </td>
     <td width="50%" valign="top">
-      <img src="docs/images/0.5/inbox.webp" alt="The Inbox over Social's Today: a failed check with Try a different approach, a permission request with Deny recommended, and a question with Mefi's suggestion and numbered options">
+      <img src="docs/images/0.5/inbox.webp" alt="The Inbox over Social's Home: a failed check with Try a different approach, a permission request with Deny recommended, and a question with Mefi's suggestion and numbered options">
       <p><strong>One Inbox.</strong> Every question, approval and failed check that waits on you, with a suggested answer.</p>
     </td>
   </tr>
@@ -194,7 +194,7 @@ The [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is where people share p
 
 - **Friends**, in the menu, brings the community inside Studio once you sign in with Discord: **The Lobby** (who is online and the week's top project), **Rooms** with a chat (hangouts for up to 25, cowork rooms for up to 10, joined with a short invite code), **Listen together**, the **Playground**, the **Project hub** (share a project as a card and earn credits by playing other people's) and **Events** (a weekly Build Jam and co-work hours). It runs on the Mefi Studio relay, a free service built into Studio: the relay keeps no chat, and links in chat are never clickable.
 - The personal media player, playlists and radio work without any of it.
-- **Every theme and node style is free**, the Void collection included.
+- **Every theme and node style Studio comes with is free**, the Void collection included. The Shop's extras, four node styles among them, cost credits you earn by making and playing things, never money.
 
 The [community guide](https://nateecho32-stack.github.io/mefi-studio/wiki/#/community) explains what's available. [Public site and voice direction](docs/public-site.md) records the website's location, public naming and proposed voice integration.
 
