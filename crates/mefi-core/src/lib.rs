@@ -26,6 +26,10 @@
 //! - `snapshots`: attempt snapshots, Changed files and Revert
 //!   (scripts/attempt-snapshots-host.cjs and attempt-snapshots.cjs), behind a
 //!   Rust-backed factory.
+//! - `scratch`: the drive as a slower tier of memory for agents and the
+//!   engine (docs/plans/scratch-tier.md): a memory-mapped arena with a buddy
+//!   allocator, a content-addressed index, a crc32'd journal and BM25 search,
+//!   behind the JavaScript twin scripts/scratch-host.cjs.
 //!
 //! `jsre` runs JavaScript regular expressions with JavaScript's meaning.
 
@@ -38,6 +42,7 @@ pub mod js;
 pub mod jsre;
 pub mod paths;
 pub mod repo;
+pub mod scratch;
 pub mod settings;
 pub mod skills;
 pub mod snapshots;
@@ -51,6 +56,7 @@ pub fn dispatch(function: &str, args: &[serde_json::Value], callbacks: &dyn call
         Some(("images", name)) => images::call(name, args, callbacks),
         Some(("snapshots", name)) => snapshots::call(name, args, callbacks),
         Some(("settings", name)) => settings::call(name, args, callbacks),
+        Some(("scratch", name)) => scratch::call(name, args, callbacks),
         _ => repo::call(function, args, callbacks),
     }
 }
