@@ -29,6 +29,8 @@
 //   dev-logs/              the dev tools' and --capture output
 //   resources/             the resource manager's helper program and its
 //                          journal (resource-host.cjs)
+//   scratch/<projectId>/   the project's Scratch store (scratch-host.cjs, or
+//                          the Rust arena under the Rust host)
 //
 // Pure module: no Electron, no filesystem, no network, no clock reads.
 
@@ -38,7 +40,7 @@ const path = require("node:path");
 
 const APP_FOLDER = Object.freeze({ win32: "MefiStudio", darwin: "MefiStudio", other: "mefi-studio" });
 const ONEDRIVE_ENV = Object.freeze(["OneDrive", "OneDriveConsumer", "OneDriveCommercial"]);
-const LAYOUT = Object.freeze({ journal: "journal", logs: "logs", archive: "archive", migrations: "migrations", devLogs: "dev-logs", resources: "resources", fallback: "local" });
+const LAYOUT = Object.freeze({ journal: "journal", logs: "logs", archive: "archive", migrations: "migrations", devLogs: "dev-logs", resources: "resources", scratch: "scratch", fallback: "local" });
 const RULES = Object.freeze(["chosen", "env", "platform", "userData"]);
 
 const pathsFor = (platform) => (platform === "win32" ? path.win32 : path.posix);
@@ -115,8 +117,8 @@ function dayOf(value) {
 /**
  * The local folder and its layout:
  * { root, rule, rejected: [{rule, dir, reason, detail?}], oneDrive,
- *   journalDir(projectId), logsDir(), archiveDir(kind?), migrationsDir(date), devLogsDir(),
- *   resourcesDir() }.
+ *   journalDir(projectId), scratchDir(projectId), logsDir(), archiveDir(kind?), migrationsDir(date),
+ *   devLogsDir(), resourcesDir() }.
  * `rule` is "chosen", "env", "platform" or "userData"; `oneDrive` is only
  * ever true for the userData fallback, when even that sits inside OneDrive.
  */
@@ -159,6 +161,7 @@ function localRoot({ platform = process.platform, env = {}, homedir = "", userDa
     rejected: Object.freeze(rejected.map((entry) => Object.freeze(entry))),
     oneDrive: synced,
     journalDir: (projectId) => paths.join(root, LAYOUT.journal, folderName(projectId, "journalDir")),
+    scratchDir: (projectId) => paths.join(root, LAYOUT.scratch, folderName(projectId, "scratchDir")),
     logsDir: () => paths.join(root, LAYOUT.logs),
     archiveDir: (kind = null) => (kind === null || kind === undefined || kind === "" ? paths.join(root, LAYOUT.archive) : paths.join(root, LAYOUT.archive, folderName(kind, "archiveDir"))),
     migrationsDir: (date) => paths.join(root, LAYOUT.migrations, dayOf(date)),

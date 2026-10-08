@@ -13239,6 +13239,8 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
 .resources-about p, .resources-about li { max-width: 78ch; }
 .resources-about p { margin: 6px 0 0; }
 .resources-about ul { margin: 6px 0 0; padding-left: 18px; }
+.resources-scratch { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: 6px 0 0; color: var(--dim); font-size: 13px; }
+.resources-scratch[hidden] { display: none; }
 @media (max-width: 980px) {
   .resources-row { grid-template-columns: minmax(0, 1fr) 130px; }
   .resources-side { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
@@ -16486,6 +16488,26 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           </div>
           </div>
         </details>
+<!-- renderer/scratch.js: Settings › System › Storage, this PC's own folder and the Scratch store (the slower memory tier; docs/plans/scratch-tier.md). -->
+<details class="settings-optional settings-card" id="settings-storage" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-gauge"/></svg></span><span class="settings-summary-text"><b>Storage</b><span>This PC's own files and the Scratch store agents park work in</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary>
+          <div class="settings-place-group">
+          <p class="settings-eyebrow">This PC's folder</p>
+          <p class="muted" id="scratch-local-note">Logs, archives, journals and the Scratch store live in this PC's own folder, never inside OneDrive. <code id="scratch-local-dir">Studio's local folder</code></p>
+          </div>
+          <div class="settings-place-group">
+          <p class="settings-eyebrow">Scratch</p>
+          <p class="muted">Agents park long outputs and notes here between attempts instead of carrying them in memory, and Studio keeps its indexes here. It is a cache on this PC: compacting or turning it off loses nothing you cannot make again.</p>
+          <label class="switch" title="Agents and Studio may park work in the Scratch store on this PC"><input type="checkbox" id="scratch-enabled" checked><span class="track"></span><span>Keep a Scratch store on this PC</span></label>
+          <label class="switch" title="Builders get scratch_put, scratch_get and scratch_search tools at the desk"><input type="checkbox" id="scratch-agent-tools" checked><span class="track"></span><span>Give agents the scratch tools</span></label>
+          <label class="pop-row" title="How much disk the store may use per project before the least recently used run scratch leaves it"><span class="grow">Room per project</span><select id="scratch-cap"><option value="256">256 MB</option><option value="512" selected>512 MB</option><option value="1024">1 GB</option><option value="2048">2 GB</option><option value="4096">4 GB</option></select></label>
+          <label class="pop-row" title="Task history bodies move out of the board into the store. Auto waits until every paired PC runs a Studio that reads them there."><span class="grow">Task history bodies in Scratch</span><select id="scratch-history"><option value="auto" selected>Auto (when every PC is ready)</option><option value="on">On</option><option value="off">Off</option></select></label>
+          <div class="row tight update-row">
+            <button id="scratch-compact" class="ghost" type="button" title="Drop what no key uses any more and write a fresh index">Compact now</button>
+            <span class="eyes-status" id="scratch-status" role="status">Scratch: not open yet</span>
+          </div>
+          <p class="muted" id="scratch-note" role="status" hidden></p>
+          </div>
+        </details>
 <details class="settings-optional settings-card" id="settings-styler" data-desktop-only><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-plug"/></svg></span><span class="settings-summary-text"><b>Discord Server Styler</b><span>Bot and local dashboard</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><p class="muted">Run the bot and its local dashboard from this desktop. Bot credentials stay in the separate Server Styler project's <code>.env</code>.</p><div class="row studio-actions" id="server-styler-actions"><button class="primary" data-styler-action="start">Start Server Styler</button><button data-styler-action="open">Open dashboard</button><button data-styler-action="folder">Open bot folder</button><button data-styler-action="stop">Stop</button></div><p class="eyes-status" id="server-styler-status" role="status">Checking Server Styler…</p></details>
 <details class="settings-optional settings-card" id="settings-log"><summary><span class="settings-card-glyph" aria-hidden="true"><svg class="glyph"><use href="#g-legend"/></svg></span><span class="settings-summary-text"><b>Connection log</b><span>Provider, tool and probe activity</span></span><svg class="glyph settings-chev" aria-hidden="true" focusable="false"><use href="#g-chev"/></svg></summary><pre class="log" id="studio-log" aria-label="Connection log">No activity yet.</pre></details>
 </section>
@@ -17216,6 +17238,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         <p id="resources-headline" class="resources-headline" role="status" aria-live="polite">Looking at this PC…</p>
         <p id="resources-problem" class="resources-problem" role="alert" hidden></p>
         <div id="resources-meters" class="resources-meters" role="group" aria-label="This PC's load"></div>
+        <!-- renderer/resources.js scratchLine: the open project's Scratch store (the slower memory tier) and Compact. -->
+        <p id="resources-scratch" class="resources-scratch" role="status" hidden><span id="resources-scratch-text"></span><button id="resources-scratch-compact" class="ghost mini" type="button" title="Drop what no key uses any more and write a fresh index. Nothing you can still read is lost.">Compact</button></p>
         <div class="resources-tools" id="resources-tools">
           <button id="resources-focus" class="mini" type="button" title="One round of what auto mode does while agents build: slow heavy apps you are not using, and give memory back if building is short of it">Make room now</button>
           <button id="resources-restore" class="ghost mini" type="button" title="Every app Studio slowed or paused goes back to how it was">Restore all</button>
@@ -108125,7 +108149,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const TOAST_GAP_MS = 8000;
   const state = {
     view: null, error: "", reading: null, busy: new Set(), notes: new Map(), armed: null,
-    all: false, filter: "", sort: "memory", lease: 0, toasts: [], toastTimer: 0,
+    all: false, filter: "", sort: "memory", lease: 0, toasts: [], toastTimer: 0, scratch: null,
   };
   let initialized = false;
 
@@ -108305,6 +108329,40 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     }
     item.append(main, numbers, side);
     return item;
+  }
+
+  // ---- Scratch, the slower memory tier -----------------------------------------------------
+  // One line under the meters: the open project's Scratch store (main.cjs
+  // "Scratch tier") and Compact. Read when the page opens (which opens the
+  // store on its first look), repainted on scratch:state. A build without the
+  // bridge, or a store that is off, hides the line.
+  function scratchLine(view) {
+    const line = $("scratch");
+    if (!line) return;
+    if (!view?.ok || !view.enabled) { line.hidden = true; return; }
+    line.hidden = false;
+    const text = $("scratch-text");
+    if (text) text.textContent = view.line ?? "";
+    const compact = $("scratch-compact");
+    if (compact) compact.disabled = state.busy.has("scratch") || !view.stats;
+  }
+  async function scratchRead() {
+    if (typeof api()?.scratchStats !== "function") { state.scratch = null; scratchLine(null); return; }
+    try { state.scratch = await api().scratchStats({ open: true }); }
+    catch { state.scratch = null; }
+    scratchLine(state.scratch);
+  }
+  async function scratchCompact() {
+    if (typeof api()?.scratchCompact !== "function" || state.busy.has("scratch")) return;
+    state.busy.add("scratch");
+    scratchLine(state.scratch);
+    let result;
+    try { result = await api().scratchCompact(); }
+    catch (error) { result = { ok: false, error: say(error, "The store could not be compacted.") }; }
+    state.busy.delete("scratch");
+    if (result?.ok) toast(result.removed ? `Compacted: ${plural(result.removed, "unused blob")} dropped.` : "Compacted: nothing was unused.", "good");
+    else toast(say(result?.error, "The store could not be compacted."), "bad");
+    await scratchRead();
   }
 
   // ---- painting --------------------------------------------------------------------------
@@ -108586,6 +108644,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     void lease(true);
     renew();
     void read({ quiet: Boolean(state.view) });
+    void scratchRead();
     render();
     if (params?.focus !== false) requestAnimationFrame(() => $(`mode-${state.view?.mode ?? "manual"}`)?.focus?.({ preventScroll: true }));
   }
@@ -108641,6 +108700,8 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
       void setPref({ [pref]: target.type === "checkbox" ? target.checked === true : Number(target.value) });
     });
     api()?.onResources?.((view) => onPush(view));
+    $("scratch-compact")?.addEventListener("click", () => { void scratchCompact(); });
+    api()?.onScratchState?.((view) => { state.scratch = view; if (isOpen()) scratchLine(view); });
     document.addEventListener("visibilitychange", () => { if (!document.hidden && isOpen()) { void lease(true); void read({ quiet: true }); } });
   }
 
@@ -108662,6 +108723,109 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
   const boot = () => { init(); listen(); };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
+})();
+
+// Settings › System › Storage: this PC's own folder and the Scratch store, the
+// slower memory tier agents park work in (docs/plans/scratch-tier.md). The
+// host decides everything (main.cjs "Scratch tier", scripts/scratch-rules.cjs):
+// this file shows its answer and sends the four choices back as plain values.
+// The card never opens a store by itself: it asks for the picture with
+// `open: false` when the card unfolds, so a launch stays as light as before,
+// and only Compact now (or Team › Resources) opens the open project's store.
+// MEFI_STUDIO_NO_SCRATCH=1 turns the switches off for the launch and the card
+// says so; a setting survives a restart (settings.scratch).
+(function () {
+  "use strict";
+  const api = () => window.mefiStudio;
+  const $ = (id) => document.getElementById(id);
+  const state = { view: null, busy: false };
+
+  function paint() {
+    const view = state.view;
+    if (!view?.ok) return;
+    const prefs = view.prefs ?? {};
+    const forced = Boolean(prefs.forced);
+    const enabled = $("scratch-enabled");
+    if (enabled) { enabled.checked = prefs.enabled === true; enabled.disabled = forced; }
+    const tools = $("scratch-agent-tools");
+    if (tools) { tools.checked = prefs.agentTools === true; tools.disabled = forced || prefs.enabled !== true; }
+    const cap = $("scratch-cap");
+    if (cap) {
+      const value = String(prefs.capMB ?? 512);
+      if (![...cap.options].some((option) => option.value === value)) {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = `${value} MB`;
+        cap.append(option);
+      }
+      cap.value = value;
+      cap.disabled = forced;
+    }
+    const history = $("scratch-history");
+    if (history) { history.value = prefs.historyBodies === true ? "on" : prefs.historyBodies === false ? "off" : "auto"; history.disabled = forced; }
+    const compact = $("scratch-compact");
+    if (compact) compact.disabled = state.busy || prefs.enabled !== true;
+    const status = $("scratch-status");
+    if (status) status.textContent = view.line ?? "";
+    const dir = $("scratch-local-dir");
+    if (dir) dir.textContent = view.localDir || "Studio's local folder";
+    const note = $("scratch-note");
+    if (note) {
+      const refused = prefs.refused ? `MEFI_SCRATCH_DIR is ${prefs.refused.reason === "onedrive" ? "inside OneDrive" : "not a full path"}, so Studio keeps the store in its own folder.` : "";
+      const words = forced ? "Turned off for this launch by MEFI_STUDIO_NO_SCRATCH." : refused;
+      note.hidden = !words;
+      note.textContent = words;
+    }
+  }
+
+  async function refresh({ open = false } = {}) {
+    if (typeof api()?.scratchStats !== "function") return null;
+    try {
+      const view = await api().scratchStats({ open });
+      if (view?.ok) { state.view = view; paint(); }
+      return view;
+    } catch {
+      return null;
+    }
+  }
+
+  async function set(patch) {
+    if (typeof api()?.scratchSet !== "function") return;
+    let result;
+    try { result = await api().scratchSet(patch); }
+    catch (error) { result = { ok: false, error: String(error?.message ?? error) }; }
+    if (result?.ok) { if (state.view) { state.view = { ...state.view, prefs: result.prefs ?? state.view.prefs, enabled: result.prefs?.enabled ?? state.view.enabled, line: result.line ?? state.view.line }; paint(); } }
+    else { window.MefiToast?.(result?.error || "That setting could not be saved.", "bad"); paint(); }
+  }
+
+  async function compact() {
+    if (typeof api()?.scratchCompact !== "function" || state.busy) return;
+    state.busy = true;
+    paint();
+    let result;
+    try { result = await api().scratchCompact(); }
+    catch (error) { result = { ok: false, error: String(error?.message ?? error) }; }
+    state.busy = false;
+    if (result?.ok) window.MefiToast?.(result.removed ? `Compacted: ${result.removed} unused blob${result.removed === 1 ? "" : "s"} dropped.` : "Compacted: nothing was unused.", "good");
+    else window.MefiToast?.(result?.error || "The store could not be compacted.", "bad");
+    await refresh({ open: true });
+  }
+
+  function init() {
+    if (typeof api()?.scratchStats !== "function" || !$("settings-storage")) return;
+    $("scratch-enabled")?.addEventListener("change", (event) => { void set({ enabled: event.target.checked === true }); });
+    $("scratch-agent-tools")?.addEventListener("change", (event) => { void set({ agentTools: event.target.checked === true }); });
+    $("scratch-cap")?.addEventListener("change", (event) => { void set({ capMB: Number(event.target.value) }); });
+    $("scratch-history")?.addEventListener("change", (event) => { void set({ historyBodies: event.target.value === "on" ? true : event.target.value === "off" ? false : "auto" }); });
+    $("scratch-compact")?.addEventListener("click", () => { void compact(); });
+    // The card reads when it unfolds, and whenever the host pushes a change.
+    $("settings-storage")?.addEventListener("toggle", () => { if ($("settings-storage").open) void refresh(); });
+    api()?.onScratchState?.((view) => { if (view?.ok) { state.view = view; paint(); } });
+  }
+
+  window.MefiScratch = { refresh, compact, state: () => state.view };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
 })();
 
 // Review: what an attempt changed, what the advisory checks said and how the preview looked before and

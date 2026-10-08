@@ -283,3 +283,29 @@ test("the git-host factory asks for the project check here, schedules the Done e
   assert.equal(failing.onSyncEvent({}), undefined, "events never throw");
   withEnv("git-host", () => assert.equal(factory("git-host", collaborators, host), null));
 });
+
+test("the scratch factory sends the folder and the cap first, answers like createScratch, and never throws", async () => {
+  assert.ok(FACTORIES.scratch);
+  const host = recordingHost(async (api, args) => ({ ok: true, api, request: args[1] }));
+  const store = withEnv(undefined, () => factory("scratch", { dir: "C:\\local\\scratch\\p1", capMB: 256 }, host));
+  assert.deepEqual(Object.keys(store).sort(), ["capBytes", "close", "compact", "dir", "evict", "get", "has", "host", "list", "open", "put", "search", "stats"]);
+  assert.equal(store.host, "rust");
+  assert.equal(store.capBytes, 256 * 1024 * 1024);
+  await store.open();
+  await store.put({ key: "run/r1/out", text: "hello" });
+  await store.get({ key: "run/r1/out" });
+  await store.search({ query: "hello", limit: 5 });
+  await store.stats();
+  await store.compact();
+  await store.evict({ prefix: "run/r1/" });
+  assert.deepEqual(host.calls.map((call) => call.api), ["core.scratch.open", "core.scratch.put", "core.scratch.get", "core.scratch.search", "core.scratch.stats", "core.scratch.compact", "core.scratch.evict"]);
+  assert.ok(host.calls.every((call) => call.args.length === 2), "the collaborators and one request cross, every call");
+  assert.deepEqual(host.calls[0].args[0], { dir: "C:\\local\\scratch\\p1", capMB: 256 });
+  assert.deepEqual(host.calls[1].args[1], { key: "run/r1/out", text: "hello" });
+  assert.deepEqual(host.calls[0].args[1], {}, "a call without a request sends an empty one");
+  // A host failure answers like the JavaScript host: { ok: false, reason }, with the folder kept out of the words.
+  const failing = factory("scratch", { dir: "C:\\local\\scratch\\p1", capMB: 256 }, { callWithFunctions: async () => { throw new Error("arena C:\\local\\scratch\\p1\\arena.bin is torn"); } });
+  assert.deepEqual(await failing.put({ key: "run/r1/out", text: "x" }), { ok: false, reason: "error", error: "arena <scratch>\\arena.bin is torn" });
+  assert.equal((await failing.stats()).ok, false);
+  withEnv("scratch", () => assert.equal(factory("scratch", { dir: "C:\\x", capMB: 512 }, host), null, "MEFI_STUDIO_RUST_OFF=scratch keeps the JavaScript host"));
+});

@@ -24,6 +24,19 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   progress, so Resume picks up where it stopped. Start a new app opens the
   folder it already made instead of asking for a new name.
 
+- **Team › Resources shows the Scratch store.** Scratch is a new store on
+  this PC's own disk (never inside OneDrive) where agents park long outputs
+  and notes between attempts and Studio keeps its indexes, instead of holding
+  them in memory. One line under the meters says how full the open project's
+  store is ("Scratch: 61 MB of 512 MB, 1,204 keys, 94% hits, compacted 2 h
+  ago") with **Compact**. **Settings › System › Storage** shows where this
+  PC's files live and holds the store's choices: keep a store, give agents
+  the scratch tools, room per project (512 MB unless you say otherwise) and
+  whether task history bodies move there (Auto waits until every paired PC
+  is ready). The choices survive a restart; `MEFI_STUDIO_NO_SCRATCH=1` turns
+  it off for a launch. Nothing uses the store yet beyond the page: the agent
+  tools and the history move land in their own steps.
+
 - **A wave of new accounts can't farm credits for someone.** When more than
   three members in their first 30 days in the server pay the same member in a
   week (by playing their project, starring it or buying their pack), the

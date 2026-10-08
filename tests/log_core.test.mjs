@@ -151,6 +151,9 @@ test("the layout names safe folders", () => {
   const where = localRoot({ platform: "linux", env: { HOME: "/h" }, userData: "/u" });
   assert.equal(where.logsDir(), "/h/.local/state/mefi-studio/logs");
   assert.equal(where.resourcesDir(), "/h/.local/state/mefi-studio/resources", "the resource manager's helper and journal stay on this PC");
+  assert.equal(where.scratchDir("p1"), "/h/.local/state/mefi-studio/scratch/p1", "a project's Scratch store stays on this PC");
+  assert.equal(path.posix.dirname(where.scratchDir("../../etc")), "/h/.local/state/mefi-studio/scratch", "an id never climbs out of scratch");
+  assert.throws(() => where.scratchDir("///"), /letters or digits/);
   assert.equal(where.archiveDir("log"), "/h/.local/state/mefi-studio/archive/log");
   const escaped = path.posix.basename(where.journalDir("../../etc"));
   assert.equal(path.posix.dirname(where.journalDir("../../etc")), "/h/.local/state/mefi-studio/journal", "an id never climbs out of the journal");
