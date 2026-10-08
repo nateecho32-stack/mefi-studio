@@ -39,6 +39,24 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-08 The launch screen and Vibe New app offer to stop the agents when a switch is refused for running work
+
+Detached worktree C:\wt\stopswitch, off main b640d29. The owner's screenshot: opening or starting a project on the launch
+screen showed "The assistant is finishing work in this project. Pause it, let the current work finish, then switch." with
+the Start agents switch off and no way forward. selectProject already has a saveProgress mode (stop every agent, keep each
+run's checkpoint, then switch) that only the Workspace sidebar used. Changed: startup:choose and preload startupChoose pass
+saveProgress through; the launch card gets a hidden "Stop the agents and switch" button (boot-force) that startup.js raises
+only for a busy refusal that is not "already in progress", for Open and for a new app whose folder was made but could not
+open (retried with projectsSelect(addedId, { saveProgress }) so the folder is not made twice); the Vibe New app panel's retry
+button reads "Stop agents, open app and start building" after a busy refusal and passes saveProgress on the second click.
+Checked: `npm run check` ok (314 targets); `npm run audit` ok (0 findings); `npm run lint` 0 errors, 47 warnings, the same
+count as without the change. New tests: 3 in startup_screen (32/32), 1 in vibe_panels (52/52), plus startup_resume 14/14,
+daily_paper 10/10, booklet_build 5/5. The full `npm test` here, run while other sessions held the PC, failed only in git-heavy
+suites that passed alone: advisory_checks 26/26, attempt_review_host 28/28, executor_worktree 12/12, rust_parity_repo 3/3,
+rust_parity_snapshots 3/3, rust_parity_git 4/4 (141 s; it failed twice under load on a `filesystem: NTFS` probe and passes
+4/4 on clean main b640d29 as well). Not measured: hot paths (a button and one IPC argument, no new startup work). Not run
+in the real app: both buttons are pinned by stubbed tests only.
+
 ## 2026-10-07 A newcomer wave cannot farm credits for someone: credits on hold, a moderator's Pay or Drop, the Studio bot's message
 
 Branch `fix/credits-wave` (C:\wt\credits-wave, off main cde77af). The owner, through the Studio UI/UX session: if more
@@ -510,26 +528,6 @@ suites ran 25-70 min each and failed on time limits under that load (the known p
 sides' blocks kept, and 327/330 (3 skipped, 0 failed) here across app_wide_ipc, preload_fanout, module_purity,
 booklet_build, the pc_* and pcs_host suites, hub_host, remote_host/admission/gate, studio_api_*, resource_*,
 resources_ui, settings_nav, backlog_engine and attempt_snapshots_host. Not run here: a real two-PC or laptop-battery test (owner).
-
-## 2026-10-06 Other apps: the Studio API, MCP server and skill, and the setup prompt
-
-Branch `feat/studio-api` (C:\wt\apilink), merged with main twice (the CHANGELOG kept from both sides,
-`renderer/booklet.html` rebuilt, not merged). New `scripts/studio-api.cjs` (pure rules),
-`scripts/studio-api-server.cjs` (127.0.0.1 endpoint and key file), `scripts/studio-link.mjs` (the MCP server and command
-line apps run), `renderer/studio-api.js` (Settings › Other apps) and main.cjs "Other apps"; work an app files carries
-`origin.via = "app"` and waits for the owner's OK in every mode.
-
-`npm run check` ok, eslint on the changed files no new warnings, `npm run audit` 0 findings, booklet byte-identical to
-a fresh build. Through `npm run test:one` on the final tree: studio_api_rules 8, studio_api_server 9, studio_api_host 8,
-remote_gate, remote_admission, remote_host, module_purity, settings_nav, app_wide_ipc, preload_fanout, booklet_build and
-setup_helper, 191/191; settings_render (the new place at four window sizes, every theme) 1/1. Hosted Windows CI green on
-e35b1db. The full `npm test` here, run while other sessions held the PC, failed only in suites that fail under load or
-on clean main: the git-heavy attempt_review_host, attempt_snapshots_host and board_store passed alone (220/220 with the
-rest); shell_render and performance_render passed alone; task_overview_render and unified_studio_render fail the same
-way on clean main 593633a (C:\wt\apimain); rust_parity_git and the Python `electron . --smoke` launcher test (a 120 s
-timeout, clean main timed out too) and the real-OpenCode routing test (OpenCode itself timed out) are load. Live: the
-MCP server under `ELECTRON_RUN_AS_NODE=1` with Studio's own electron.exe answered initialize and tools/call; the
-card was checked in the browser pane (switch, five connect rows, Copy setup prompt, Show it, a note's toast).
 
 ## Read Before Any Tests
 

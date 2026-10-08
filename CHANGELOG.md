@@ -7,6 +7,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Opening or starting a project no longer dead-ends while work is still
+  running.** If Studio refuses to switch because the assistant is still
+  finishing work in the open project, the launch screen now shows **Stop the
+  agents and switch** under the message (and the Vibe New app panel's button
+  becomes **Stop agents, open app and start building**). Each run keeps its
+  progress, so Resume picks up where it stopped. Start a new app opens the
+  folder it already made instead of asking for a new name.
+
 - **A wave of new accounts can't farm credits for someone.** When more than
   three members in their first 30 days in the server pay the same member in a
   week (by playing their project, starring it or buying their pack), the
