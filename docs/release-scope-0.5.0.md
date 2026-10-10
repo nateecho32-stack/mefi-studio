@@ -6,7 +6,10 @@ The candidate now includes the Friends room desktop in Social and Studio:
 Rooms, actual presence, the existing chat, the local build summary, the room
 player and the current Build Jam. Narrow panels reveal through buttons and
 offline drafts remain in place. The Lobby roundup and all existing Friends
-destinations remain reachable. Chat media embeds are not added by this layout.
+destinations remain reachable. Shared links show their destination and load
+supported players on request. Reviewed images and cosmetic swaps require a
+compatible private service that enforces room access and ownership; this
+desktop candidate does not deploy that service or grant credits or paid access.
 The hosted account, subscription and economy proposals remain private drafts;
 they are not activated by this candidate. Google social sign-in still needs
 registered OAuth configuration and a deployed identity adapter.

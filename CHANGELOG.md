@@ -7,6 +7,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Shop explains maker earnings without a stale weekly sales ceiling.**
+  Eligible makers earn a share of each sale; the service controls eligibility
+  and the current transaction details.
 - **Shared links wait for you.** Room cards show the real destination without
   fetching remote pictures. Players load on request, and following a room asks
   before contacting a new site. Obvious private addresses and token-bearing

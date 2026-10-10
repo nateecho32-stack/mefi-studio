@@ -39,6 +39,12 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-10 late morning — Final public release copy audit before shipping freeze
+
+The `dd174a7` full attempt was interrupted during its early Node stage, before Windows fixtures, to correct concrete misleading public copy. No assertion failure had been observed when it was stopped; the run was not complete and is not counted as green. Its complete captured output remains in external release evidence as `full-test-combined-dd174a7.log`. The earlier completed red full run and the other interrupted attempts remain recorded and retained.
+
+One bounded review covered the touched public Shop, trade, shared-content and launch-facing copy. Make a style now says eligible makers earn a share of each sale without promising a stale weekly seller-income ceiling. Release draft and scope now describe click-to-load supported players and compatible-service images/swaps without claiming service deployment, new credits or paid access. Existing activity limits, prices, style packs and service capability checks are preserved. The generated booklet is rebuilt. Focused Shop and client contracts pass 49/49 in 0.649 seconds, with no failures or skips. Check and audit pass; lint has zero errors and the same 48 existing warnings. A complete full gate on the final frozen source, fresh ZIP proof, private backups and the guarded local update are still required.
+
 ## 2026-10-10 late morning — Stage-limit fixture isolates its two-suite concurrency
 
 The combined public `aaf8420` full attempt ran at memory-safe width one and reported a concrete test-fixture failure: `run_node_tests_stage_limit` inherited `MEFI_TEST_WIDTH=1`, so its hanging synthetic suite blocked the quick suite from starting. The fixture asserts that the quick suite has finished and is absent from the remaining list. An unchanged focused reproduction at width one failed that exact assertion in 4.913 seconds, listing both suites. The full attempt was stopped before Electron rather than counted as a passing or completed full gate; its log is retained in external release evidence.
@@ -393,29 +399,6 @@ early, unified_studio "Renderer stopped"); each of the five passes alone (today_
 size_render 58 s, startup_render 15 s, unified_studio 227 s), and tabs_render passes again after the tab settings fix.
 Earlier in the branch sessions_render, size_render and startup_render failed once in a loaded lane and passed alone, and
 sessions_render passes on clean main c513838 too. check ok, lint 47 warnings (as main), audit 0 findings.
-
-## 2026-10-06 Sign in to GitHub can finish: setup windows get a console of their own; the Discord link checked live
-
-Branch `fix/github-sign-in-window` (6005533, on main 60ea94c), from the shared checkout on the owner's laptop (Node
-22.14 here, so the suites ran under Electron 44.4.1's Node 24.21 with ELECTRON_RUN_AS_NODE=1). Asked: fix Studio's
-GitHub and Discord linking. GitHub: `gh` was signed out on this PC (Git Credential Manager and GitHub Desktop were
-signed in, which Studio does not read), and Sign in to GitHub could never finish. pc-setup.cjs and cli-setup.cjs spawned
-PowerShell with stdio "ignore"; from Studio, which has no console, the window opened with NUL input and output, stayed
-blank, Read-Host returned in 17 ms, and gh 2.100.0 ran `auth login --web` non-interactively: its code and "Open this
-URL" went to NUL and no browser opened. Probed from a no-console Electron parent: before, PowerShell and a child saw
-input, output and error redirected (true x3); through scripts/setup-window.cjs (`cmd /d /s /c start "<title>" /wait
-powershell.exe`, detached cmd, verbatim arguments) none were (false x3), the title, cwd and environment arrived, and
-close fired (code 0, 7.3 s). Discord: checked, unchanged: linked 18:08 (member, 2 roles, refresh token encrypted in
-community-auth.json), and the relay session came back after each 1006 close (18:26, 20:19, 22:02, 22:08); the screen
-tool could not reach the portable build, so Check now was not pressed. resolveGithubToken's re-ask after a miss landed
-upstream in 71c45d6; release_channel_host now pins it. Here: setup_window 4/4 (a real minimized window; the old launch
-fails it), the 24 suites around the change 447 tests, 442 pass, 0 fail, 5 skipped; check ok; lint 47 warnings (as
-main); audit 0 findings; Python contracts 248, 1 failure that clean HEAD shares here (the analyzer's idea check reads
-`scanned: 0`). Not run here: the full `npm test`, since Electron's Node 24.21 rmSync cannot remove git's read-only
-objects on this PC (EPERM in the git suites' cleanup; Node 22 removes them) and Node 22 cancels git_actions.
-Hosted CI on the branch, green: Studio checks (Windows) run 37566212840, 9.5 min; the committed renderer
-current, check, lint, the behavioral and isolated desktop checks (setup_window's real window included), the
-application audit and the portable package all passed. Its logs need a GitHub sign-in, so no counts here.
 
 ## Read Before Any Tests
 
