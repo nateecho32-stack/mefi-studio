@@ -192,7 +192,7 @@
     }
     function push(kind, value) {
       if (gone) return;
-      if (kind === "projects") { if (value?.activeId !== project?.id) void readBuild(); else { project = value.projects?.find((item) => item.id === value.activeId) || project; schedule(); } }
+      if (kind === "projects") { if (value?.activeId !== project?.id) { project = null; tasks = null; workers = null; buildLoaded = false; buildError = ""; schedule(); void readBuild(); } else { project = value.projects?.find((item) => item.id === value.activeId) || project; schedule(); } }
       if (kind === "tasks" && Array.isArray(value) && project && !value.some((task) => task.projectId && task.projectId !== project.id)) { tasks = value; schedule(); }
       if (kind === "workers" && value?.projectId === project?.id && Array.isArray(value.running)) { workers = value.running; schedule(); }
     }

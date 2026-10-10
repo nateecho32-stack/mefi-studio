@@ -17788,6 +17788,7 @@ async function sweepSnapshotLocks() {
 // into its slot, and a push replaces all but the graph summary keys.
 function autopilotStatus() {
   return {
+    projectId: typeof projects !== "undefined" ? projects.current()?.id ?? null : null,
     enabled: autopilot.enabled,
     execute: autopilot.execute,
     held: autopilot.held === true, // launch hold: agents wait for the user's Start

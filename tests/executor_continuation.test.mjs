@@ -433,6 +433,7 @@ test("a legacy running request with no live worker goes back to the inbox; one a
 test("live worker status excludes finished entries and never exposes an invalid progress fraction", () => {
   const stopping = { since: 1000, reason: "time budget", error: "access denied", retryAt: 16000 };
   const env = vm.createContext({
+    projects: { current: () => ({ id: "status-project", path: "C:/private-project" }) },
     EXECUTOR_PARALLEL_CAP: 3, executorActivity, autopilot: { jobs: [
       { title: "Still running", taskId: "current", progress: .3, pid: 123, stopping,
         child: {}, routeLabel: "Codex CLI", activity: { text: "Checking collisions", at: 2000 }, lastOutputAt: 2000,
@@ -444,6 +445,8 @@ test("live worker status excludes finished entries and never exposes an invalid 
   });
   vm.runInContext(section("function autopilotStatus()", "function emitAutopilot()"), env);
   const status = env.autopilotStatus();
+  assert.equal(status.projectId, "status-project", "the actual host worker status carries its project scope");
+  assert.equal(JSON.stringify(status).includes("private-project"), false, "scope contains no project path");
   assert.equal(status.running.length, 3);
   assert.equal(status.running[0].progress, .3);
   assert.equal(status.running[0].pid, undefined);

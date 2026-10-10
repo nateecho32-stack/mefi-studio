@@ -39,6 +39,10 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-10 morning - Friends actual worker-status scope and project-switch race
+
+Static production-bridge review found that main's actual autopilotStatus omitted projectId, while the new Friends build card required scoped worker status; the synthetic renderer fixture already had that field. The bdb0c5d full gate was deliberately stopped before any source edit, and its interrupted log is retained rather than counted green. The existing bounded status now carries the current project ID, without a path. Project changes clear old summaries immediately; epoch guards reject late board reads. Actual-host status, late project-read, room/player, push batching and switch-settlement suites: 74 passed in the corrected run. The first regression fixture omitted the messages page shape and generated an asynchronous map error after its assertions; that failed log is preserved, and the real empty page contract is now supplied. check/lint/audit and a fresh exact-commit full gate follow this fix. Earlier Friends renderer (141.3 s) and two-window relay (40.3 s) remain focused evidence, not a substitute for the post-fix full run.
+
 ## 2026-10-10 dawn - Friends room desktop and RC validation checkpoint
 
 Node 24.15 on Windows, isolated candidate based on b73a22e. Friends renderer: 1 passed in 141.3 s, covering Studio and Social, 1440/1920/1100 desktop and 600x560 at 150%, quiet room navigation, avatars and actual-state cards, narrow panels/Escape, long room-list keyboard focus, 155 chat messages, unchanged-card identity, offline drafts, empty player and no device permission requests, all existing Friends/Shop/Your PCs routes and a light palette. Room/player/release-note units: 41 passed, including read-only posting and disposal during a pending presence read. Earlier failures remain in external evidence: nonexistent mode attribute, rail-state restoration, instant-scroll pointer hit testing and stale presence-chip selectors were fixture-contract fixes; missing-room player access was a runtime defect fixed with a guard. Two-window rerun and post-Friends full gates/package proof remain pending at this checkpoint.
@@ -459,27 +463,6 @@ scripts/paired-*.cjs are unchanged. Here: `npm run test:one -- tests/paired_reco
 first at a loaded moment: 13 s, the heartbeat test 9.8 s); check ok, lint 47 warnings (as main), audit 0 findings.
 Hosted CI on the branch, green: Studio checks (Windows) run 37534722660, Node stage 7590 tests, 0 fail, 34 skipped
 (the restart test 141 ms, the heartbeat test 470 ms), Python contracts 248 OK, audit and the portable package ok.
-
-## 2026-10-06 A more compact Studio: Today's board higher, 48 px page headers, the inspector's cards inside it
-
-Branch `ui/today-layout` (C:\wt\today, off main 149e770). The owner: "look at all this wasted space, stuff just
-floats", then "make sure that applies everywhere that we could save space, we want something compact as an app".
-Social's Today at 1920x1080: the board starts at y 489 instead of 636 (1440x900: 503 instead of 636); the keys moved
-into Talk it over and Build it, the whole-project scope line and the idle drop hint wait until they say something,
-"Decided for you" became a count chip, an empty status line under the box takes no room, the project picker is one
-line in the column. Board cards lost the empty row a one-line title kept (the title button inherited every button's 36
-px minimum). Studio's Today: greeting beside a 34 px orb, a 780 px column, keys in the buttons. Every page's header
-band is 48 px with an 18 px title (was 64 px and 22 px); Team's 0.5 head lost its 22 px band; Friends and Settings
-titles 18 px. The session list puts the Git chip and the worktree count on one row. Found on the way, on main too: the
-project inspector's cards ran past the window's right edge at 1920 (one-column grids with an automatic column; now
-minmax(0, 1fr)); confirmed against a clean-main capture (C:\wt\ctl2).
-
-Real windows, one at a time under the lease, on the final tree: today_render (five sizes, the Inbox popover and page,
-the drawer), sessions_render (Studio's Today, the inspector whole at 1920; one earlier run failed on its "waiting 4m"
-clock, which read 5m on a slow run, and passed again), team_render, settings_render, friends_render, planning_render,
-worktrees_render, skills_render, review_render and map_render all pass. Unit suites: 764/764 across today_*, vibe_*,
-sessions_*, settings_*, agents_*, team_*, friends_*, shell_frame_*, size_*, layout_contract_css, studio_ui, info_tips,
-file_inputs (a new test for the idle marker), booklet_build and module_purity; `npm run check` ok.
 
 ## Read Before Any Tests
 

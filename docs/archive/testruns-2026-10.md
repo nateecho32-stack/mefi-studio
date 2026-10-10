@@ -6,6 +6,27 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 A more compact Studio: Today's board higher, 48 px page headers, the inspector's cards inside it
+
+Branch `ui/today-layout` (C:\wt\today, off main 149e770). The owner: "look at all this wasted space, stuff just
+floats", then "make sure that applies everywhere that we could save space, we want something compact as an app".
+Social's Today at 1920x1080: the board starts at y 489 instead of 636 (1440x900: 503 instead of 636); the keys moved
+into Talk it over and Build it, the whole-project scope line and the idle drop hint wait until they say something,
+"Decided for you" became a count chip, an empty status line under the box takes no room, the project picker is one
+line in the column. Board cards lost the empty row a one-line title kept (the title button inherited every button's 36
+px minimum). Studio's Today: greeting beside a 34 px orb, a 780 px column, keys in the buttons. Every page's header
+band is 48 px with an 18 px title (was 64 px and 22 px); Team's 0.5 head lost its 22 px band; Friends and Settings
+titles 18 px. The session list puts the Git chip and the worktree count on one row. Found on the way, on main too: the
+project inspector's cards ran past the window's right edge at 1920 (one-column grids with an automatic column; now
+minmax(0, 1fr)); confirmed against a clean-main capture (C:\wt\ctl2).
+
+Real windows, one at a time under the lease, on the final tree: today_render (five sizes, the Inbox popover and page,
+the drawer), sessions_render (Studio's Today, the inspector whole at 1920; one earlier run failed on its "waiting 4m"
+clock, which read 5m on a slow run, and passed again), team_render, settings_render, friends_render, planning_render,
+worktrees_render, skills_render, review_render and map_render all pass. Unit suites: 764/764 across today_*, vibe_*,
+sessions_*, settings_*, agents_*, team_*, friends_*, shell_frame_*, size_*, layout_contract_css, studio_ui, info_tips,
+file_inputs (a new test for the idle marker), booklet_build and module_purity; `npm run check` ok.
+
 ## 2026-10-06 Linux CI: My PCs' battery and Resources stop asking Node for the platform
 
 Branch `fix/linux-ci-battery-resources` (b06201c, off main 8f84614, in C:\wt\lxci), with PR #7 open so

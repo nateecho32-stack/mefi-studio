@@ -145,6 +145,28 @@ test("closing a room while presence is pending does not start an event read afte
   assert.equal(env.window.MefiRoomLayout.navigation(), null);
 });
 
+test("project changes clear old summaries immediately and discard a late board read", async () => {
+  let activeId = "project-a", finishOld, finishProject;
+  const updates = {};
+  const list = () => ({ ok: true, activeId, projects: [{ id: activeId, name: activeId }] });
+  const env = environment({ desktop: true, rooms: [room()], replies: { messages: { ok: true, messages: [], hasMore: false } }, extra: {
+    projectsList: async () => activeId === "project-c" ? new Promise(resolve => { finishProject = resolve; }) : list(),
+    tasksList: async () => activeId === "project-a" ? new Promise(resolve => { finishOld = resolve; }) : ({ ok: true, projectId: activeId, tasks: [{ id: "new", title: `Task ${activeId}`, status: "todo" }] }),
+    assistantStatus: async () => ({ ok: true, status: { projectId: activeId, running: [] } }),
+    onProjects: fn => { updates.projects = fn; }, onTasks: fn => { updates.tasks = fn; },
+  } });
+  const panel = env.rooms.panel({ room: "room_mine" }); await flush();
+  activeId = "project-b"; updates.projects(list()); await flush();
+  assert.match(panel.byClass("room-desktop-build")[0].textContent, /project-b.*Task project-b/);
+  finishOld({ ok: true, projectId: "project-a", tasks: [{ id: "old", title: "Old project task", status: "done" }] }); await flush();
+  assert.doesNotMatch(panel.byClass("room-desktop-build")[0].textContent, /Old project task|project-a/);
+  activeId = "project-c"; updates.projects(list()); updates.tasks([{ id: "old", title: "Old project task", status: "done" }]); await flush();
+  assert.match(panel.byClass("room-desktop-build")[0].textContent, /Checking your project/);
+  assert.doesNotMatch(panel.byClass("room-desktop-build")[0].textContent, /project-b|Old project task/);
+  finishProject(list()); await flush();
+  assert.match(panel.byClass("room-desktop-build")[0].textContent, /project-c.*Task project-c/);
+});
+
 test("the panel explains itself until the hub is configured, linked and connected", async () => {
   const none = environment({ bridge: false }).rooms.panel();
   assert.equal(none.find("rooms-status").textContent, "Rooms work in the desktop app.");
