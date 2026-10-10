@@ -39,6 +39,17 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-10 Vibe Studio selected app icon
+
+- Scope: replace the shared `assets/icon-256.png` and `assets/icon.ico` with the owner's selected lime-and-mint V/spark artwork; preserve the full-resolution source as `assets/icon-source.png`. Existing Electron and Rust icon paths and app identifiers are unchanged.
+- Asset checks: the master is byte-identical to the supplied PNG; the runtime PNG is 256 x 256; ICO header/dimensions and embedded PNG payload match. The Windows executable's staged icon was decoded after stamping and its original name/version strings were preserved.
+- `npm run check`: pass (317 source targets, 645 spec registrations, CSS checks and TESTRUNS).
+- `npm run audit`: pass, zero findings/errors/warnings.
+- `npm run lint`: exit 0, zero errors and 48 existing warnings; no JavaScript changed.
+- `npm test`: started through the normal leased runner. The parallel stage reported the existing `command_toolbar` Map style assertion failure (`.walkthrough-easy-grid` waits for the frame). The remaining bulk run was interrupted after this blocker was reproduced; this is not a full-suite pass.
+- Baseline: `npm run test:one` on the same suite and on an isolated copy of its exact `origin/main` test/renderer blobs both fail the same assertion. No renderer or test sources differ from `origin/main`. Clean-main reproduction has 13 passes and this one failure.
+- No renderer edits, so booklet regeneration does not apply. No main landing while the existing gate is red; preserve the completed icon implementation on a pushed `wip/vibe-app-icon` branch.
+
 ## 2026-10-09 Scratch tier WP2: the JavaScript store, its settings and the Resources line
 
 Branch `feat/scratch-wp2` (C:\wt\scratch-wp2, off main b640d29, rebased onto a2aaa86 and then b4ff7d8 without a
@@ -487,34 +498,6 @@ branch, all green: Studio checks (Linux) run 37527676158 (PR #7), Node stage 758
 audit and the Xvfb smoke (45 cards), which had not run on Linux since c4b9e2e because the red Tests step stopped the
 job first; Studio checks (Windows) runs 37527647312 (push) and 37527676135 (PR), Node stage 7589 tests, 0 fail, 34
 skipped, Python contracts 248 OK, audit and the portable package ok.
-
-## 2026-10-06 The 0.5 polish pass: a full gate, every window failure checked against main, and the fixes
-
-Branches `polish/0.5` (C:\wt\v05, with `polish/names` and `polish/tour` merged in; the owner merged it as #6, feb4a29)
-and `polish/0.5-b` (C:\wt\v05b, landed here), found with a fresh-profile run of the real app (C:\wt\probe: isolated
-profile, coding CLIs blocked, driven over CDP: every place and page in both modes, 12 themes, interface scale, menus).
-Fixed: a blank Studio menu after Social to Studio, Configuration and Friends leaving their layer claims, the old tree
-strip over Settings, Plans laid out by its own room, key tips over the welcome, the welcome's AI choice never applied
-on Continue (and never re-read after a sign-in in its own window: now on window focus, Check again and Continue),
-queued tasks shown as running with agents off, Events in the menu, the Help sheet's links, a place row (picker below
-760 px, out of the way below 520 px of height), the first task carried from Start a new app into the welcome,
-GETTING_STARTED.md rewritten for 0.5.
-
-Full `npm test` on polish/0.5 (ab7d4ea, about 2 h at 700 MB free): Node stage 7587 tests, 7572 pass, 1 fail (a test
-still matching the old setup advice "is selected"; fixed on main as 0c4633c), 14 skipped; Python contracts pass;
-Electron lane 69 tests, 62 pass, 6 fail, plus command_render. Each failing window suite then ran alone on a control
-worktree of main before the polish (4d23e3c, C:\wt\ctl) and on the branch: all passed on the control, so all were
-the polish's. Causes and fixes: the menu's default pin moved to 1600 px changed every fixture's layout at 1100 and
-1440 px (Size went to two columns, Home's composer moved with its drawer, the project map's Browse stayed open,
-unified_studio's hover dwell) - reverted to main's 1100 px default; Team's place row took the row a 400 px window
-needs (agent_setup_render) - picker and short-window rule; the frame's right margin overrode styles.css's narrow one
-below 900 px - restored; Size's kept-in-view picture now stays within two thirds of the pane with its caption and
-buttons (507 of 715 px before); fixtures that pinned old words (the welcome's titles and buttons, "Folder mapped" now
-"Project mapped", the hidden tree strip that command_render waited to see painting on a tab page).
-
-On the landed tree, one window suite at a time under the lease: agent_setup_render (one missed click, then 2/2), project_map_render, size_render, workflow_render, team_render, friends_render, shell_render, settings_render, setup_helper_render, unified_studio_render and command_render (84 s) all pass. `npm run test:fast`:
-7589 tests, 7572 pass, 14 skipped, 3 failed under about 400 MB free with the Electron lane busy and all 3 pass alone (paired_reconnect 6/6, resource_helper_win 1/1, rust_parity_git 4/4 in 188 s). `npm run check` ok, `npm run audit` 0 findings. Not run here: a second full `npm test` (the lane
-results above cover every suite the fixes touch).
 
 ## Read Before Any Tests
 

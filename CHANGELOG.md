@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Vibe Studio's new app icon.** The selected lime-and-mint V and spark
+  replaces the old icon in the window, tray, notifications and Windows
+  executable for Electron and the Rust host. Existing app names and settings
+  stay compatible.
+
 - **Resources is easier to use.** The CPU and memory pill on the status bar
   opens Team › Resources, the list of apps on this PC. Each app now shows its
   CPU, its memory, Close and End, and a More button for Slow down, Pause, Free
