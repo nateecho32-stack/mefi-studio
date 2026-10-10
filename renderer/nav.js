@@ -299,7 +299,7 @@
       searchTerms: "resources resource manager memory ram cpu apps programs processes slow down pause suspend freeze close end kill free memory make room focus building performance priority efficiency mode task manager other apps auto manual machine load",
       showIn: showIn({ tools: true, palette: true, help: true }),
       element: "resources-overlay",
-      focus: "#resources-mode-manual",
+      focus: "#resources-filter",
       open: (params) => window.MefiResources?.open?.(params),
       close: () => window.MefiResources?.close?.(),
       isOpen: () => overlayOpen("resources-overlay"),
@@ -1265,6 +1265,9 @@
       dispatchNav(id, "open", params);
       return;
     }
+    // A page asked for while Shortcuts or Configuration is up (the rail, a tab) is where you meant to go: they close, or
+    // the page would open under them and the click looked stuck. The tour and the profiler stay over what opens.
+    if (dest.layer === "sheet" && (state.transient === "help" || state.transient === "config")) close(state.transient);
     // Overlays claim their layer from inside open(), so exclusivity holds no
     // matter who opened them — dock, key, palette, card, tour or module.
     return dest.open?.(params);

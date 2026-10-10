@@ -7,6 +7,14 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Resources is easier to use.** The CPU and memory pill on the status bar
+  opens Team › Resources, the list of apps on this PC. Each app now shows its
+  CPU, its memory, Close and End, and a More button for Slow down, Pause, Free
+  memory and what auto mode does with it. The page opens on Find an app, the
+  meters and the list come first, and the Manual | Auto switch and its settings
+  moved into an Auto mode fold under the list. Restore all only shows while
+  Studio is holding something back.
+
 - **The window reads like a desktop.** One bar runs across the whole top of
   the window, with the Social | Studio switch, the trail and Search in it; the
   menu rail, the session list and the project panel start under it, the same

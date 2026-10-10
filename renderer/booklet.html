@@ -13147,10 +13147,10 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
 }
 
 /* Resources (renderer/resources.js): Team's page for this PC's apps and what
-   Studio may do to them while agents build. The Manual | Auto switch, four
-   meters, then one card per app (heaviest first) with its CPU and memory, the
-   rule auto mode follows and the buttons; what is never touched, auto mode's
-   settings, the log and the manual fold below. Every colour is a theme token,
+   Studio may do to them while agents build. Four meters, find and sort, then
+   one row per app (heaviest first) with its CPU, memory, Close, End and More
+   (slow, pause, free memory, its auto rule); the Auto mode fold, the log and
+   the manual fold below. Every colour is a theme token,
    so light palettes keep their own; nothing reserves scrollbar width, no text
    is under 12 px, and numbers use tabular figures so a row does not jitter
    as its CPU moves. */
@@ -13180,6 +13180,7 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
 .resources-meter[data-tone="warn"] .resources-bar i { background: var(--warn); }
 .resources-meter[data-tone="bad"] .resources-bar i { background: var(--bad); }
 .resources-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.resources-tools-end { display: inline-flex; gap: 6px; margin-left: auto; }
 /* Over the page-wide input[type="search"] { flex: 1 } rule: a short box beside the buttons. */
 .resources-tools .resources-filter { flex: 0 1 240px; min-height: 30px; width: 240px; max-width: 100%; padding: 0 10px; border: 1px solid var(--line-strong, var(--hairline)); border-radius: var(--r-lg, 14px); background: var(--panel, transparent); color: var(--ivory); font: 13px/1.3 var(--font-ui); }
 .resources-tools .resources-filter:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
@@ -13189,8 +13190,9 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
 .resources-suggest-text { margin: 0; color: var(--ivory); font-size: 13px; line-height: 1.45; }
 .resources-suggest-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .resources-suggest-name { min-width: 0; color: var(--ivory); font: 600 13px/1.3 var(--font-ui); font-variant-numeric: tabular-nums; }
-.resources-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.resources-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; align-items: center; gap: 8px 16px; padding: 10px 14px; border: 1px solid var(--hairline); border-left: 3px solid var(--line-strong, var(--hairline)); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); }
+.resources-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+/* A fixed button column (room for Put back) keeps every row's numbers in one line. */
+.resources-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 240px; align-items: center; gap: 6px 16px; padding: 8px 12px; border: 1px solid var(--hairline); border-left: 3px solid var(--line-strong, var(--hairline)); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); }
 .resources-row[data-tone="warn"] { border-left-color: var(--warn); }
 .resources-row[data-tone="gold"] { border-left-color: var(--gold); }
 .resources-row[data-tone="info"] { border-left-color: var(--gold-bright); }
@@ -13213,7 +13215,15 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
 .resources-cpu { color: var(--muted); font: 600 13px/1.3 var(--font-ui); text-align: right; }
 .resources-mem { color: var(--ivory); font: 650 13px/1.3 var(--font-ui); }
 .resources-numbers .resources-bar { grid-column: 2; }
-.resources-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.resources-side { display: flex; align-items: center; justify-content: flex-end; }
+.resources-extra { display: flex; flex-wrap: wrap; grid-column: 1 / -1; align-items: center; gap: 6px 8px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+.resources-extra .resources-rule { margin-left: auto; }
+.resources-more-toggle[aria-expanded="true"] { color: var(--ivory); border-color: var(--gold); }
+.resources-auto-word { margin-left: 6px; padding: 1px 8px; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.resources-auto-word[data-on="true"] { border-color: var(--gold); color: var(--gold-bright); }
+.resources-settings > .resources-modes { margin-top: 8px; }
+.resources-settings > .resources-mode-note { margin-top: 6px; }
+.resources-about .resources-left { margin-top: 8px; }
 .resources-rule { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 12px; }
 .resources-rule-pick, .resources-setting-pick { min-height: 28px; max-width: 220px; padding: 0 6px; border: 1px solid var(--line-strong, var(--hairline)); border-radius: 8px; background: var(--panel, transparent); color: var(--ivory); font: 12.5px/1.3 var(--font-ui); }
 .resources-rule-pick:focus-visible, .resources-setting-pick:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
@@ -13243,7 +13253,7 @@ html[data-home-layout="sessions"] #workspace-layer .ws-composer .composer-mentio
 .resources-scratch[hidden] { display: none; }
 @media (max-width: 980px) {
   .resources-row { grid-template-columns: minmax(0, 1fr) 130px; }
-  .resources-side { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  .resources-side { grid-column: 1 / -1; justify-content: flex-start; }
 }
 @media (max-width: 640px) {
   .resources-row { grid-template-columns: 1fr; }
@@ -17230,33 +17240,34 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     </header>
     <div class="resources-body" id="resources-body">
       <section class="resources-top" aria-label="This PC right now">
-        <div class="resources-modes" id="resources-modes" role="radiogroup" aria-label="How Studio manages other apps">
-          <button type="button" class="resources-mode" id="resources-mode-manual" data-mode="manual" role="radio" aria-checked="true">Manual</button>
-          <button type="button" class="resources-mode" id="resources-mode-auto" data-mode="auto" role="radio" aria-checked="false" tabindex="-1">Auto</button>
-        </div>
-        <p id="resources-mode-note" class="resources-mode-note"></p>
+        <div id="resources-meters" class="resources-meters" role="group" aria-label="This PC's load"></div>
         <p id="resources-headline" class="resources-headline" role="status" aria-live="polite">Looking at this PC…</p>
         <p id="resources-problem" class="resources-problem" role="alert" hidden></p>
-        <div id="resources-meters" class="resources-meters" role="group" aria-label="This PC's load"></div>
         <!-- renderer/resources.js scratchLine: the open project's Scratch store (the slower memory tier) and Compact. -->
         <p id="resources-scratch" class="resources-scratch" role="status" hidden><span id="resources-scratch-text"></span><button id="resources-scratch-compact" class="ghost mini" type="button" title="Drop what no key uses any more and write a fresh index. Nothing you can still read is lost.">Compact</button></p>
         <div class="resources-tools" id="resources-tools">
-          <button id="resources-focus" class="mini" type="button" title="One round of what auto mode does while agents build: slow heavy apps you are not using, and give memory back if building is short of it">Make room now</button>
-          <button id="resources-restore" class="ghost mini" type="button" title="Every app Studio slowed or paused goes back to how it was">Restore all</button>
           <input id="resources-filter" class="resources-filter" type="search" placeholder="Find an app" aria-label="Find an app" autocomplete="off" spellcheck="false">
           <span class="resources-sorts" role="group" aria-label="Sort apps by">Sort by
             <button id="resources-sort-memory" class="ghost mini" type="button" aria-pressed="true">Memory</button>
             <button id="resources-sort-cpu" class="ghost mini" type="button" aria-pressed="false">CPU</button>
             <button id="resources-sort-name" class="ghost mini" type="button" aria-pressed="false">Name</button>
           </span>
+          <span class="resources-tools-end">
+            <button id="resources-restore" class="mini" type="button" title="Every app Studio slowed or paused goes back to how it was" hidden>Restore all</button>
+            <button id="resources-focus" class="ghost mini" type="button" title="One round of what auto mode does while agents build: slow heavy apps you are not using, and give memory back if building is short of it">Make room now</button>
+          </span>
         </div>
       </section>
       <div id="resources-suggest" class="resources-suggest" role="group" aria-label="What would free memory for building" hidden></div>
       <ol id="resources-list" class="resources-list" aria-label="Apps on this PC"></ol>
       <button id="resources-more" class="ghost mini" type="button" aria-expanded="false" aria-controls="resources-list" hidden>Show all apps</button>
-      <section id="resources-left" class="resources-left" aria-label="What Studio never touches" hidden></section>
       <details class="resources-settings" id="resources-settings">
-        <summary>How auto mode decides</summary>
+        <summary>Auto mode <span id="resources-auto-word" class="resources-auto-word">Off</span></summary>
+        <div class="resources-modes" id="resources-modes" role="radiogroup" aria-label="How Studio manages other apps">
+          <button type="button" class="resources-mode" id="resources-mode-manual" data-mode="manual" role="radio" aria-checked="true">Manual</button>
+          <button type="button" class="resources-mode" id="resources-mode-auto" data-mode="auto" role="radio" aria-checked="false" tabindex="-1">Auto</button>
+        </div>
+        <p id="resources-mode-note" class="resources-mode-note"></p>
         <div id="resources-settings-body" class="resources-settings-body"></div>
       </details>
       <details class="resources-log-box" id="resources-log-box">
@@ -17274,8 +17285,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <li><b>End</b> stops an app at once, after a second press. Anything unsaved in it is lost.</li>
           <li><b>Put back</b> and <b>Restore all</b> undo slowing and pausing.</li>
         </ul>
+        <p>Close and End sit on every app; More holds Slow down, Pause, Free memory and what auto mode does with that app.</p>
         <p><b>Auto mode</b> only acts while agents build or wait for the machine. It slows heavy apps you are not using, gives memory back when building runs short of the amount you chose, and pauses or closes only the apps whose menu says so. It never touches the app in front of you or one you used in the last two minutes, and it puts everything back once the agents finish. Calls, music, recording, remote access and terminals are left alone unless you choose otherwise.</p>
         <p><b>Always safe:</b> Studio never touches itself, its agents, Windows or its services, another person's apps, what Studio was started from, console windows or security software. A paused app runs again the moment you switch to it, and everything Studio slowed or paused goes back when Studio closes, even if it crashes.</p>
+        <section id="resources-left" class="resources-left" aria-label="What Studio never touches" hidden></section>
       </details>
     </div>
   </div>
@@ -25538,7 +25551,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       searchTerms: "resources resource manager memory ram cpu apps programs processes slow down pause suspend freeze close end kill free memory make room focus building performance priority efficiency mode task manager other apps auto manual machine load",
       showIn: showIn({ tools: true, palette: true, help: true }),
       element: "resources-overlay",
-      focus: "#resources-mode-manual",
+      focus: "#resources-filter",
       open: (params) => window.MefiResources?.open?.(params),
       close: () => window.MefiResources?.close?.(),
       isOpen: () => overlayOpen("resources-overlay"),
@@ -26504,6 +26517,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       dispatchNav(id, "open", params);
       return;
     }
+    // A page asked for while Shortcuts or Configuration is up (the rail, a tab) is where you meant to go: they close, or
+    // the page would open under them and the click looked stuck. The tour and the profiler stay over what opens.
+    if (dest.layer === "sheet" && (state.transient === "help" || state.transient === "config")) close(state.transient);
     // Overlays claim their layer from inside open(), so exclusivity holds no
     // matter who opened them — dock, key, palette, card, tour or module.
     return dest.open?.(params);
@@ -107640,7 +107656,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const TOP = 12;
   const TOAST_GAP_MS = 8000;
   const state = {
-    view: null, error: "", reading: null, busy: new Set(), notes: new Map(), armed: null,
+    view: null, error: "", reading: null, busy: new Set(), notes: new Map(), armed: null, more: new Set(),
     all: false, filter: "", sort: "memory", lease: 0, toasts: [], toastTimer: 0, scratch: null,
   };
   let initialized = false;
@@ -107779,47 +107795,59 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     bar.append(fill);
     numbers.append(cpu, mem, bar);
 
+    // Close and End on the row; More opens the rest (slow, pause, free memory, the app's rule) under it.
     const side = el("div", "resources-side");
+    let extra = null;
     if (!app.protected) {
-      const rule = el("label", "resources-rule");
-      rule.title = RULE_TITLES[app.rule] ?? "";
-      rule.append(el("span", "resources-rule-label", "In auto mode"));
-      const select = el("select", "resources-rule-pick");
-      select.dataset.rule = app.key;
-      select.disabled = busy;
-      select.setAttribute("aria-label", `What auto mode does with ${app.name}`);
-      for (const [value, words] of Object.entries(RULE_WORDS)) {
-        const option = el("option", "", words);
-        option.value = value;
-        // The attribute, not just the property: MefiPatch carries a choice by its markup.
-        if ((app.ruleSet ? app.rule : "auto") === value) { option.setAttribute("selected", ""); option.selected = true; }
-        select.append(option);
-      }
-      // A kind Studio leaves alone by default says so in the closed menu too.
-      if (!app.ruleSet && app.rule === "leave") select.options[0].textContent = "Auto decides (leave it alone)";
-      rule.append(select);
-      side.append(rule);
-      const buttons = el("div", "resources-buttons");
-      const add = (op, { disabled = false, primary = false, title = OP_TITLES[op] } = {}) => {
+      const expanded = state.more.has(app.key);
+      const button = (op, { disabled = false, primary = false, title = OP_TITLES[op] } = {}) => {
         const armed = state.armed && state.armed.key === app.key && state.armed.op === op;
-        const button = el("button", `${primary ? "" : "ghost "}mini${op === "end" ? " resources-danger" : ""}`, armed ? `${OP_WORDS[op]}: click again` : OP_WORDS[op]);
-        button.type = "button";
-        button.dataset.op = op;
-        button.disabled = busy || disabled;
-        button.title = title;
-        if (armed) button.dataset.armed = "";
-        buttons.append(button);
+        const node = el("button", `${primary ? "" : "ghost "}mini${op === "end" ? " resources-danger" : ""}`, armed ? `${OP_WORDS[op]}: click again` : OP_WORDS[op]);
+        node.type = "button";
+        node.dataset.op = op;
+        node.disabled = busy || disabled;
+        node.title = title;
+        if (armed) node.dataset.armed = "";
+        return node;
       };
       const held = Boolean(app.hold?.slow || app.hold?.pause || app.paused !== "none" || app.slowed !== "none");
-      if (held) add("restore", { primary: true });
-      if (!app.hold?.slow && app.slowed !== "all") add("slow");
-      if (!app.hold?.pause && app.paused !== "all") add("pause", { disabled: app.foreground, title: app.foreground ? "It is the app in front of you: pausing it would freeze it while you use it." : OP_TITLES.pause });
-      add("trim");
-      add("close");
-      add("end");
+      const buttons = el("div", "resources-buttons");
+      if (held) buttons.append(button("restore", { primary: true }));
+      buttons.append(button("close"), button("end"));
+      const toggle = el("button", "ghost mini resources-more-toggle", expanded ? "Less" : "More");
+      toggle.type = "button";
+      toggle.dataset.more = "";
+      toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+      toggle.title = expanded ? "Hide the other actions" : "Slow down, pause, free memory, and what auto mode does with it";
+      buttons.append(toggle);
       side.append(buttons);
+      if (expanded) {
+        extra = el("div", "resources-extra");
+        if (!app.hold?.slow && app.slowed !== "all") extra.append(button("slow"));
+        if (!app.hold?.pause && app.paused !== "all") extra.append(button("pause", { disabled: app.foreground, title: app.foreground ? "It is the app in front of you: pausing it would freeze it while you use it." : OP_TITLES.pause }));
+        extra.append(button("trim"));
+        const rule = el("label", "resources-rule");
+        rule.title = RULE_TITLES[app.rule] ?? "";
+        rule.append(el("span", "resources-rule-label", "In auto mode"));
+        const select = el("select", "resources-rule-pick");
+        select.dataset.rule = app.key;
+        select.disabled = busy;
+        select.setAttribute("aria-label", `What auto mode does with ${app.name}`);
+        for (const [value, words] of Object.entries(RULE_WORDS)) {
+          const option = el("option", "", words);
+          option.value = value;
+          // The attribute, not just the property: MefiPatch carries a choice by its markup.
+          if ((app.ruleSet ? app.rule : "auto") === value) { option.setAttribute("selected", ""); option.selected = true; }
+          select.append(option);
+        }
+        // A kind Studio leaves alone by default says so in the closed menu too.
+        if (!app.ruleSet && app.rule === "leave") select.options[0].textContent = "Auto decides (leave it alone)";
+        rule.append(select);
+        extra.append(rule);
+      }
     }
     item.append(main, numbers, side);
+    if (extra) item.append(extra);
     return item;
   }
 
@@ -108027,9 +108055,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       button.disabled = !supported || state.busy.has("mode");
     }
     $("mode-note").textContent = (view?.mode ?? "manual") === "auto"
-      ? "While agents build, Studio slows heavy apps you are not using, gives memory back when building runs short, and pauses or closes only the apps you allow below. Everything goes back when they finish."
+      ? "While agents build, Studio slows heavy apps you are not using, gives memory back when building runs short, and pauses or closes only the apps you allow (each app's More). Everything goes back when they finish."
       : "Studio changes nothing by itself. Use the buttons on each app, or Make room now for one round of what auto mode would do.";
+    const word = $("auto-word");
+    if (word) { word.textContent = (view?.mode ?? "manual") === "auto" ? "On" : "Off"; word.dataset.on = String((view?.mode ?? "manual") === "auto"); }
     const held = (view?.apps ?? []).some((app) => app.hold?.slow || app.hold?.pause);
+    // Restore all only shows while Studio holds something back.
+    $("restore").hidden = !held;
     $("restore").disabled = !held || state.busy.has("all");
     $("focus").disabled = !supported || state.busy.has("all");
     if (!view) { $("list").replaceChildren(); return; }
@@ -108138,7 +108170,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     void read({ quiet: Boolean(state.view) });
     void scratchRead();
     render();
-    if (params?.focus !== false) requestAnimationFrame(() => $(`mode-${state.view?.mode ?? "manual"}`)?.focus?.({ preventScroll: true }));
+    if (params?.focus !== false) requestAnimationFrame(() => $("filter")?.focus?.({ preventScroll: true }));
   }
   function close() {
     clearInterval(state.lease);
@@ -108176,12 +108208,13 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // Every row control through one listener, so a patched row keeps working.
     const body = $("body");
     body.addEventListener("click", (event) => {
-      const button = event.target.closest?.("button[data-op], button[data-set-rule]");
+      const button = event.target.closest?.("button[data-op], button[data-set-rule], button[data-more]");
       if (!button || button.disabled) return;
       const row = button.closest("[data-key]");
       const key = row?.dataset.key;
       if (!key) return;
-      if (button.dataset.setRule) void setPref({ rule: { app: key, value: button.dataset.setRule } }, key);
+      if ("more" in button.dataset) { if (state.more.has(key)) state.more.delete(key); else state.more.add(key); render(); }
+      else if (button.dataset.setRule) void setPref({ rule: { app: key, value: button.dataset.setRule } }, key);
       else void act(key, button.dataset.op);
     });
     body.addEventListener("change", (event) => {

@@ -1,8 +1,8 @@
 /* Resources (renderer/resources.js): Team's page for this PC's apps and what
-   Studio may do to them while agents build. The Manual | Auto switch, four
-   meters, then one card per app (heaviest first) with its CPU and memory, the
-   rule auto mode follows and the buttons; what is never touched, auto mode's
-   settings, the log and the manual fold below. Every colour is a theme token,
+   Studio may do to them while agents build. Four meters, find and sort, then
+   one row per app (heaviest first) with its CPU, memory, Close, End and More
+   (slow, pause, free memory, its auto rule); the Auto mode fold, the log and
+   the manual fold below. Every colour is a theme token,
    so light palettes keep their own; nothing reserves scrollbar width, no text
    is under 12 px, and numbers use tabular figures so a row does not jitter
    as its CPU moves. */
@@ -32,6 +32,7 @@
 .resources-meter[data-tone="warn"] .resources-bar i { background: var(--warn); }
 .resources-meter[data-tone="bad"] .resources-bar i { background: var(--bad); }
 .resources-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.resources-tools-end { display: inline-flex; gap: 6px; margin-left: auto; }
 /* Over the page-wide input[type="search"] { flex: 1 } rule: a short box beside the buttons. */
 .resources-tools .resources-filter { flex: 0 1 240px; min-height: 30px; width: 240px; max-width: 100%; padding: 0 10px; border: 1px solid var(--line-strong, var(--hairline)); border-radius: var(--r-lg, 14px); background: var(--panel, transparent); color: var(--ivory); font: 13px/1.3 var(--font-ui); }
 .resources-tools .resources-filter:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
@@ -41,8 +42,9 @@
 .resources-suggest-text { margin: 0; color: var(--ivory); font-size: 13px; line-height: 1.45; }
 .resources-suggest-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .resources-suggest-name { min-width: 0; color: var(--ivory); font: 600 13px/1.3 var(--font-ui); font-variant-numeric: tabular-nums; }
-.resources-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.resources-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; align-items: center; gap: 8px 16px; padding: 10px 14px; border: 1px solid var(--hairline); border-left: 3px solid var(--line-strong, var(--hairline)); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); }
+.resources-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+/* A fixed button column (room for Put back) keeps every row's numbers in one line. */
+.resources-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 240px; align-items: center; gap: 6px 16px; padding: 8px 12px; border: 1px solid var(--hairline); border-left: 3px solid var(--line-strong, var(--hairline)); border-radius: var(--r-lg, 14px); background: var(--surface-raised, var(--glass)); }
 .resources-row[data-tone="warn"] { border-left-color: var(--warn); }
 .resources-row[data-tone="gold"] { border-left-color: var(--gold); }
 .resources-row[data-tone="info"] { border-left-color: var(--gold-bright); }
@@ -65,7 +67,15 @@
 .resources-cpu { color: var(--muted); font: 600 13px/1.3 var(--font-ui); text-align: right; }
 .resources-mem { color: var(--ivory); font: 650 13px/1.3 var(--font-ui); }
 .resources-numbers .resources-bar { grid-column: 2; }
-.resources-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.resources-side { display: flex; align-items: center; justify-content: flex-end; }
+.resources-extra { display: flex; flex-wrap: wrap; grid-column: 1 / -1; align-items: center; gap: 6px 8px; padding-top: 8px; border-top: 1px solid var(--hairline); }
+.resources-extra .resources-rule { margin-left: auto; }
+.resources-more-toggle[aria-expanded="true"] { color: var(--ivory); border-color: var(--gold); }
+.resources-auto-word { margin-left: 6px; padding: 1px 8px; border: 1px solid var(--hairline); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 600; }
+.resources-auto-word[data-on="true"] { border-color: var(--gold); color: var(--gold-bright); }
+.resources-settings > .resources-modes { margin-top: 8px; }
+.resources-settings > .resources-mode-note { margin-top: 6px; }
+.resources-about .resources-left { margin-top: 8px; }
 .resources-rule { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 12px; }
 .resources-rule-pick, .resources-setting-pick { min-height: 28px; max-width: 220px; padding: 0 6px; border: 1px solid var(--line-strong, var(--hairline)); border-radius: 8px; background: var(--panel, transparent); color: var(--ivory); font: 12.5px/1.3 var(--font-ui); }
 .resources-rule-pick:focus-visible, .resources-setting-pick:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 1px; }
@@ -95,7 +105,7 @@
 .resources-scratch[hidden] { display: none; }
 @media (max-width: 980px) {
   .resources-row { grid-template-columns: minmax(0, 1fr) 130px; }
-  .resources-side { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  .resources-side { grid-column: 1 / -1; justify-content: flex-start; }
 }
 @media (max-width: 640px) {
   .resources-row { grid-template-columns: 1fr; }

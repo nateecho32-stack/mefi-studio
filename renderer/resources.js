@@ -21,7 +21,7 @@
   const TOP = 12;
   const TOAST_GAP_MS = 8000;
   const state = {
-    view: null, error: "", reading: null, busy: new Set(), notes: new Map(), armed: null,
+    view: null, error: "", reading: null, busy: new Set(), notes: new Map(), armed: null, more: new Set(),
     all: false, filter: "", sort: "memory", lease: 0, toasts: [], toastTimer: 0, scratch: null,
   };
   let initialized = false;
@@ -160,47 +160,59 @@
     bar.append(fill);
     numbers.append(cpu, mem, bar);
 
+    // Close and End on the row; More opens the rest (slow, pause, free memory, the app's rule) under it.
     const side = el("div", "resources-side");
+    let extra = null;
     if (!app.protected) {
-      const rule = el("label", "resources-rule");
-      rule.title = RULE_TITLES[app.rule] ?? "";
-      rule.append(el("span", "resources-rule-label", "In auto mode"));
-      const select = el("select", "resources-rule-pick");
-      select.dataset.rule = app.key;
-      select.disabled = busy;
-      select.setAttribute("aria-label", `What auto mode does with ${app.name}`);
-      for (const [value, words] of Object.entries(RULE_WORDS)) {
-        const option = el("option", "", words);
-        option.value = value;
-        // The attribute, not just the property: MefiPatch carries a choice by its markup.
-        if ((app.ruleSet ? app.rule : "auto") === value) { option.setAttribute("selected", ""); option.selected = true; }
-        select.append(option);
-      }
-      // A kind Studio leaves alone by default says so in the closed menu too.
-      if (!app.ruleSet && app.rule === "leave") select.options[0].textContent = "Auto decides (leave it alone)";
-      rule.append(select);
-      side.append(rule);
-      const buttons = el("div", "resources-buttons");
-      const add = (op, { disabled = false, primary = false, title = OP_TITLES[op] } = {}) => {
+      const expanded = state.more.has(app.key);
+      const button = (op, { disabled = false, primary = false, title = OP_TITLES[op] } = {}) => {
         const armed = state.armed && state.armed.key === app.key && state.armed.op === op;
-        const button = el("button", `${primary ? "" : "ghost "}mini${op === "end" ? " resources-danger" : ""}`, armed ? `${OP_WORDS[op]}: click again` : OP_WORDS[op]);
-        button.type = "button";
-        button.dataset.op = op;
-        button.disabled = busy || disabled;
-        button.title = title;
-        if (armed) button.dataset.armed = "";
-        buttons.append(button);
+        const node = el("button", `${primary ? "" : "ghost "}mini${op === "end" ? " resources-danger" : ""}`, armed ? `${OP_WORDS[op]}: click again` : OP_WORDS[op]);
+        node.type = "button";
+        node.dataset.op = op;
+        node.disabled = busy || disabled;
+        node.title = title;
+        if (armed) node.dataset.armed = "";
+        return node;
       };
       const held = Boolean(app.hold?.slow || app.hold?.pause || app.paused !== "none" || app.slowed !== "none");
-      if (held) add("restore", { primary: true });
-      if (!app.hold?.slow && app.slowed !== "all") add("slow");
-      if (!app.hold?.pause && app.paused !== "all") add("pause", { disabled: app.foreground, title: app.foreground ? "It is the app in front of you: pausing it would freeze it while you use it." : OP_TITLES.pause });
-      add("trim");
-      add("close");
-      add("end");
+      const buttons = el("div", "resources-buttons");
+      if (held) buttons.append(button("restore", { primary: true }));
+      buttons.append(button("close"), button("end"));
+      const toggle = el("button", "ghost mini resources-more-toggle", expanded ? "Less" : "More");
+      toggle.type = "button";
+      toggle.dataset.more = "";
+      toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+      toggle.title = expanded ? "Hide the other actions" : "Slow down, pause, free memory, and what auto mode does with it";
+      buttons.append(toggle);
       side.append(buttons);
+      if (expanded) {
+        extra = el("div", "resources-extra");
+        if (!app.hold?.slow && app.slowed !== "all") extra.append(button("slow"));
+        if (!app.hold?.pause && app.paused !== "all") extra.append(button("pause", { disabled: app.foreground, title: app.foreground ? "It is the app in front of you: pausing it would freeze it while you use it." : OP_TITLES.pause }));
+        extra.append(button("trim"));
+        const rule = el("label", "resources-rule");
+        rule.title = RULE_TITLES[app.rule] ?? "";
+        rule.append(el("span", "resources-rule-label", "In auto mode"));
+        const select = el("select", "resources-rule-pick");
+        select.dataset.rule = app.key;
+        select.disabled = busy;
+        select.setAttribute("aria-label", `What auto mode does with ${app.name}`);
+        for (const [value, words] of Object.entries(RULE_WORDS)) {
+          const option = el("option", "", words);
+          option.value = value;
+          // The attribute, not just the property: MefiPatch carries a choice by its markup.
+          if ((app.ruleSet ? app.rule : "auto") === value) { option.setAttribute("selected", ""); option.selected = true; }
+          select.append(option);
+        }
+        // A kind Studio leaves alone by default says so in the closed menu too.
+        if (!app.ruleSet && app.rule === "leave") select.options[0].textContent = "Auto decides (leave it alone)";
+        rule.append(select);
+        extra.append(rule);
+      }
     }
     item.append(main, numbers, side);
+    if (extra) item.append(extra);
     return item;
   }
 
@@ -408,9 +420,13 @@
       button.disabled = !supported || state.busy.has("mode");
     }
     $("mode-note").textContent = (view?.mode ?? "manual") === "auto"
-      ? "While agents build, Studio slows heavy apps you are not using, gives memory back when building runs short, and pauses or closes only the apps you allow below. Everything goes back when they finish."
+      ? "While agents build, Studio slows heavy apps you are not using, gives memory back when building runs short, and pauses or closes only the apps you allow (each app's More). Everything goes back when they finish."
       : "Studio changes nothing by itself. Use the buttons on each app, or Make room now for one round of what auto mode would do.";
+    const word = $("auto-word");
+    if (word) { word.textContent = (view?.mode ?? "manual") === "auto" ? "On" : "Off"; word.dataset.on = String((view?.mode ?? "manual") === "auto"); }
     const held = (view?.apps ?? []).some((app) => app.hold?.slow || app.hold?.pause);
+    // Restore all only shows while Studio holds something back.
+    $("restore").hidden = !held;
     $("restore").disabled = !held || state.busy.has("all");
     $("focus").disabled = !supported || state.busy.has("all");
     if (!view) { $("list").replaceChildren(); return; }
@@ -519,7 +535,7 @@
     void read({ quiet: Boolean(state.view) });
     void scratchRead();
     render();
-    if (params?.focus !== false) requestAnimationFrame(() => $(`mode-${state.view?.mode ?? "manual"}`)?.focus?.({ preventScroll: true }));
+    if (params?.focus !== false) requestAnimationFrame(() => $("filter")?.focus?.({ preventScroll: true }));
   }
   function close() {
     clearInterval(state.lease);
@@ -557,12 +573,13 @@
     // Every row control through one listener, so a patched row keeps working.
     const body = $("body");
     body.addEventListener("click", (event) => {
-      const button = event.target.closest?.("button[data-op], button[data-set-rule]");
+      const button = event.target.closest?.("button[data-op], button[data-set-rule], button[data-more]");
       if (!button || button.disabled) return;
       const row = button.closest("[data-key]");
       const key = row?.dataset.key;
       if (!key) return;
-      if (button.dataset.setRule) void setPref({ rule: { app: key, value: button.dataset.setRule } }, key);
+      if ("more" in button.dataset) { if (state.more.has(key)) state.more.delete(key); else state.more.add(key); render(); }
+      else if (button.dataset.setRule) void setPref({ rule: { app: key, value: button.dataset.setRule } }, key);
       else void act(key, button.dataset.op);
     });
     body.addEventListener("change", (event) => {

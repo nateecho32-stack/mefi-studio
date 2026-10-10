@@ -2,7 +2,7 @@
 // bridge: opening takes a watch lease and reads the picture; the rows, the
 // Manual | Auto switch, each app's buttons (End needs a second press) and its
 // rule, Make room now and Restore all, the settings, a push repainting, the
-// filter and sort, auto mode's toasts while the page is closed, and closing
+// filter and sort, More opening an app's other actions, auto mode's toasts while the page is closed, and closing
 // giving the lease back. Then the wiring around it: every element the script
 // asks for is in the template, the registry record, the build inventory, the
 // bridge and main's channels, and the status bar opening it.
@@ -78,7 +78,7 @@ class Node {
 let doc = null;
 
 // The page's fixed elements, as the template has them (checked against the template below).
-const IDS = ["overlay", "close", "body", "modes", "mode-manual", "mode-auto", "mode-note", "headline", "problem", "meters", "scratch", "scratch-text", "scratch-compact", "tools", "focus", "restore", "filter", "sort-memory", "sort-cpu", "sort-name", "suggest", "list", "more", "left", "settings", "settings-body", "log-box", "log"];
+const IDS = ["overlay", "close", "body", "modes", "mode-manual", "mode-auto", "mode-note", "auto-word", "headline", "problem", "meters", "scratch", "scratch-text", "scratch-compact", "tools", "focus", "restore", "filter", "sort-memory", "sort-cpu", "sort-name", "suggest", "list", "more", "left", "settings", "settings-body", "log-box", "log"];
 
 function page() {
   const nodes = new Map();
@@ -94,13 +94,13 @@ function page() {
   const tools = make("tools");
   tools.append(make("focus", "button"), make("restore", "button"), make("filter", "input"), make("sort-memory", "button"), make("sort-cpu", "button"), make("sort-name", "button"));
   const settings = make("settings", "details");
-  settings.append(make("settings-body"));
+  settings.append(make("auto-word", "span"), modes, make("mode-note", "p"), make("settings-body"));
   const logBox = make("log-box", "details");
   logBox.append(make("log", "ol"));
   const scratch = make("scratch", "p");
   scratch.hidden = true;
   scratch.append(make("scratch-text", "span"), make("scratch-compact", "button"));
-  body.append(modes, make("mode-note", "p"), make("headline", "p"), make("problem", "p"), make("meters"), scratch, tools, make("suggest"), make("list", "ol"), make("more", "button"), make("left", "section"), settings, logBox);
+  body.append(make("headline", "p"), make("problem", "p"), make("meters"), scratch, tools, make("suggest"), make("list", "ol"), make("more", "button"), make("left", "section"), settings, logBox);
   return nodes;
 }
 
@@ -225,19 +225,31 @@ test("each app says what it is and what Studio holds, and its buttons send one a
   assert.match(edge.textContent, /News - Edge/);
   assert.match(edge.textContent, /4\.2%/);
   assert.match(edge.textContent, /2\.1 GB/);
-  assert.deepEqual(edge.all().filter((node) => node.tagName === "BUTTON").map((node) => node.textContent), ["Slow down", "Pause", "Free memory", "Close", "End"]);
-  edge.buttons("Slow down")[0].click();
+  // Close and End on the row; More opens slow, pause, free memory and the app's rule under it.
+  const labels = (row) => row.all().filter((node) => node.tagName === "BUTTON").map((node) => node.textContent);
+  assert.deepEqual(labels(edge), ["Close", "End", "More"]);
+  assert.equal(edge.all().some((node) => node.tagName === "SELECT"), false, "the rule waits behind More");
+  edge.buttons("More")[0].click();
+  assert.deepEqual(labels(env.row("msedge")), ["Close", "End", "Less", "Slow down", "Pause", "Free memory"]);
+  assert.equal(env.row("msedge").buttons("Less")[0].getAttribute("aria-expanded"), "true");
+  env.row("msedge").buttons("Slow down")[0].click();
   await flush();
   assert.deepEqual(env.calls.find((call) => call[0] === "act"), ["act", "msedge", "slow"]);
   assert.match(env.row("msedge").textContent, /slow msedge/, "the answer shows under the row");
   // Steam is paused by auto: it offers Put back, not Pause.
   const steam = env.row("steam");
   assert.match(steam.textContent, /Paused by auto/);
-  assert.deepEqual(steam.all().filter((node) => node.tagName === "BUTTON").map((node) => node.textContent), ["Put back", "Slow down", "Free memory", "Close", "End"]);
+  assert.deepEqual(labels(steam), ["Put back", "Close", "End", "More"]);
+  steam.buttons("More")[0].click();
+  assert.deepEqual(labels(env.row("steam")), ["Put back", "Close", "End", "Less", "Slow down", "Free memory"]);
   // The app in front of you cannot be paused from here.
+  env.row("code").buttons("More")[0].click();
   const code = env.row("code");
   assert.match(code.textContent, /In use/);
   assert.equal(code.buttons("Pause")[0].disabled, true);
+  // Less folds it again.
+  env.row("msedge").buttons("Less")[0].click();
+  assert.deepEqual(labels(env.row("msedge")), ["Close", "End", "More"]);
   // A protected app says why and has no buttons.
   env.$("more").click();
   const admin = env.row("admintool");
@@ -262,6 +274,7 @@ test("an app's rule, the mode and the settings each save through resourcesSet", 
   const env = environment();
   env.resources.open();
   await flush();
+  for (const key of ["msedge", "discord", "steam"]) env.row(key).buttons("More")[0].click();
   const pick = env.row("msedge").all().find((node) => node.tagName === "SELECT");
   assert.deepEqual(pick.options.map((option) => option.value), ["auto", "leave", "slow", "pause", "close"]);
   assert.equal(pick.value, "auto");
@@ -274,6 +287,7 @@ test("an app's rule, the mode and the settings each save through resourcesSet", 
   env.$("mode-auto").click();
   await flush();
   assert.deepEqual(env.calls.filter((call) => call[0] === "set").at(-1)[1], { mode: "auto" });
+  assert.equal(env.$("auto-word").textContent, "Off", "the fold says auto mode is off until the host says otherwise");
   const keep = env.$("settings-body").all().find((node) => node.dataset.pref === "keepFreeMB");
   assert.equal(keep.value, "2048");
   // MefiPatch carries a choice by its markup: the chosen option and an on switch carry the attribute.
@@ -295,6 +309,7 @@ test("Make room now and Restore all go to the host and say what happened", async
   const env = environment({ answers: { act: { ok: true, text: "Made room: 2 changes to background apps." } } });
   env.resources.open();
   await flush();
+  assert.equal(env.$("restore").hidden, false, "Restore all shows while Steam is held");
   env.$("focus").click();
   await flush();
   assert.deepEqual(env.calls.find((call) => call[0] === "act"), ["act", "", "focus"]);
@@ -316,6 +331,7 @@ test("a push repaints in place; the filter and the sort change what is listed", 
   assert.equal(env.$("headline").textContent, "Agents are building, so Studio is making room.");
   assert.match(env.row("msedge").textContent, /Slowed by auto/);
   assert.equal(env.$("mode-auto").getAttribute("aria-checked"), "true");
+  assert.equal(env.$("auto-word").textContent, "On");
   env.$("filter").value = "disc";
   env.$("filter").dispatch("input");
   assert.deepEqual(env.keys(), ["discord"]);
@@ -429,6 +445,10 @@ test("every element the page asks for is in the template, inside the Resources o
   for (const id of IDS) asked.add(id);
   for (const id of asked) assert.ok(markup.includes(`id="resources-${id}"`), `the template has #resources-${id}`);
   assert.match(markup, /<summary>How it works<\/summary>/, "the manual is on the page");
+  // Meters and the app list come first; the Manual | Auto switch waits in the Auto mode fold under the list.
+  assert.ok(markup.indexOf('id="resources-meters"') < markup.indexOf('id="resources-list"'));
+  assert.ok(markup.indexOf('id="resources-list"') < markup.indexOf('id="resources-settings"'));
+  assert.ok(markup.indexOf('id="resources-settings"') < markup.indexOf('id="resources-modes"'));
 });
 
 test("the registry, the build, the bridge, main's channels and the status bar all know the page", () => {
@@ -446,6 +466,7 @@ test("the registry, the build, the bridge, main's channels and the status bar al
   assert.match(preload, /onResourcesActed: \(callback\) => ipcRenderer\.on\("resources:acted"/);
   assert.match(main, /if \(channel === "resources:update"\) send\("resources:update", payload\);\n\s+else if \(channel === "resources:acted"\) send\("resources:acted", payload\);/);
   assert.match(shellSource, /if \(n\?\.get\?\.\("resources"\)\) n\.go\?\.\("resources"\);/);
+  assert.match(navSource, /id: "resources",[\s\S]{0,1200}focus: "#resources-filter"/, "it opens on Find an app");
   // A test, capture or command-line launch never starts the helper.
   assert.match(main, /SMOKE \|\| CAPTURE \|\| CLI_MODE \? "The resource manager does not run in a test, capture or command-line launch\." : null/);
   assert.match(main, /if \(typeof resourceHostLoaded !== "undefined" && resourceHostLoaded\) resourceHostLoaded\.quit\(\);/);

@@ -1968,33 +1968,34 @@
     </header>
     <div class="resources-body" id="resources-body">
       <section class="resources-top" aria-label="This PC right now">
-        <div class="resources-modes" id="resources-modes" role="radiogroup" aria-label="How Studio manages other apps">
-          <button type="button" class="resources-mode" id="resources-mode-manual" data-mode="manual" role="radio" aria-checked="true">Manual</button>
-          <button type="button" class="resources-mode" id="resources-mode-auto" data-mode="auto" role="radio" aria-checked="false" tabindex="-1">Auto</button>
-        </div>
-        <p id="resources-mode-note" class="resources-mode-note"></p>
+        <div id="resources-meters" class="resources-meters" role="group" aria-label="This PC's load"></div>
         <p id="resources-headline" class="resources-headline" role="status" aria-live="polite">Looking at this PC…</p>
         <p id="resources-problem" class="resources-problem" role="alert" hidden></p>
-        <div id="resources-meters" class="resources-meters" role="group" aria-label="This PC's load"></div>
         <!-- renderer/resources.js scratchLine: the open project's Scratch store (the slower memory tier) and Compact. -->
         <p id="resources-scratch" class="resources-scratch" role="status" hidden><span id="resources-scratch-text"></span><button id="resources-scratch-compact" class="ghost mini" type="button" title="Drop what no key uses any more and write a fresh index. Nothing you can still read is lost.">Compact</button></p>
         <div class="resources-tools" id="resources-tools">
-          <button id="resources-focus" class="mini" type="button" title="One round of what auto mode does while agents build: slow heavy apps you are not using, and give memory back if building is short of it">Make room now</button>
-          <button id="resources-restore" class="ghost mini" type="button" title="Every app Studio slowed or paused goes back to how it was">Restore all</button>
           <input id="resources-filter" class="resources-filter" type="search" placeholder="Find an app" aria-label="Find an app" autocomplete="off" spellcheck="false">
           <span class="resources-sorts" role="group" aria-label="Sort apps by">Sort by
             <button id="resources-sort-memory" class="ghost mini" type="button" aria-pressed="true">Memory</button>
             <button id="resources-sort-cpu" class="ghost mini" type="button" aria-pressed="false">CPU</button>
             <button id="resources-sort-name" class="ghost mini" type="button" aria-pressed="false">Name</button>
           </span>
+          <span class="resources-tools-end">
+            <button id="resources-restore" class="mini" type="button" title="Every app Studio slowed or paused goes back to how it was" hidden>Restore all</button>
+            <button id="resources-focus" class="ghost mini" type="button" title="One round of what auto mode does while agents build: slow heavy apps you are not using, and give memory back if building is short of it">Make room now</button>
+          </span>
         </div>
       </section>
       <div id="resources-suggest" class="resources-suggest" role="group" aria-label="What would free memory for building" hidden></div>
       <ol id="resources-list" class="resources-list" aria-label="Apps on this PC"></ol>
       <button id="resources-more" class="ghost mini" type="button" aria-expanded="false" aria-controls="resources-list" hidden>Show all apps</button>
-      <section id="resources-left" class="resources-left" aria-label="What Studio never touches" hidden></section>
       <details class="resources-settings" id="resources-settings">
-        <summary>How auto mode decides</summary>
+        <summary>Auto mode <span id="resources-auto-word" class="resources-auto-word">Off</span></summary>
+        <div class="resources-modes" id="resources-modes" role="radiogroup" aria-label="How Studio manages other apps">
+          <button type="button" class="resources-mode" id="resources-mode-manual" data-mode="manual" role="radio" aria-checked="true">Manual</button>
+          <button type="button" class="resources-mode" id="resources-mode-auto" data-mode="auto" role="radio" aria-checked="false" tabindex="-1">Auto</button>
+        </div>
+        <p id="resources-mode-note" class="resources-mode-note"></p>
         <div id="resources-settings-body" class="resources-settings-body"></div>
       </details>
       <details class="resources-log-box" id="resources-log-box">
@@ -2012,8 +2013,10 @@
           <li><b>End</b> stops an app at once, after a second press. Anything unsaved in it is lost.</li>
           <li><b>Put back</b> and <b>Restore all</b> undo slowing and pausing.</li>
         </ul>
+        <p>Close and End sit on every app; More holds Slow down, Pause, Free memory and what auto mode does with that app.</p>
         <p><b>Auto mode</b> only acts while agents build or wait for the machine. It slows heavy apps you are not using, gives memory back when building runs short of the amount you chose, and pauses or closes only the apps whose menu says so. It never touches the app in front of you or one you used in the last two minutes, and it puts everything back once the agents finish. Calls, music, recording, remote access and terminals are left alone unless you choose otherwise.</p>
         <p><b>Always safe:</b> Studio never touches itself, its agents, Windows or its services, another person's apps, what Studio was started from, console windows or security software. A paused app runs again the moment you switch to it, and everything Studio slowed or paused goes back when Studio closes, even if it crashes.</p>
+        <section id="resources-left" class="resources-left" aria-label="What Studio never touches" hidden></section>
       </details>
     </div>
   </div>
