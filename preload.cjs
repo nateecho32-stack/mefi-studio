@@ -377,7 +377,7 @@ const api = {
   hubNowPlaying: (track) => ipcRenderer.invoke("hub:now-playing", { track: track && typeof track === "object" ? { label: String(track.label ?? ""), provider: String(track.provider ?? ""), ...(typeof track.url === "string" ? { url: track.url } : {}) } : null }),
   // This member's pet for the rooms they have open (main.cjs hubPet): { kind, skin, name }, or null (or { on: false })
   // for none. Only those fields cross; the room's pets come back on onHubEvent as { type: "roomPets", roomId, pets }.
-  hubPet: (pet) => ipcRenderer.invoke("hub:pet", { pet: pet && typeof pet === "object" && pet.on !== false ? { kind: String(pet.kind ?? ""), skin: String(pet.skin ?? ""), name: typeof pet.name === "string" ? pet.name.slice(0, 64) : "" } : null }),
+  hubPet: (pet) => ipcRenderer.invoke("hub:pet", { pet: pet && typeof pet === "object" && pet.on !== false ? { kind: String(pet.kind ?? ""), skin: String(pet.skin ?? ""), name: typeof pet.name === "string" ? pet.name.slice(0, 64) : "", ...(typeof pet.instanceId === "string" ? { instanceId: pet.instanceId.slice(0, 80) } : {}) } : null }),
   onHubEvent: (callback) => ipcRenderer.on("hub:event", (_event, payload) => callback(payload)),
   // Friends › Rooms (main.cjs HUB_ROOM_METHODS): a method name and plain
   // arguments (strings, numbers, booleans, one flat object); main allows only
@@ -403,6 +403,14 @@ const api = {
     method: typeof method === "string" ? method : "",
     args: args.slice(0, 3).map(shopArg),
   }),
+  hubCollectibles: (action, payload = {}) => {
+    // Sandboxed preloads cannot require arbitrary local modules. Copy only a
+    // small JSON request; main and the client apply the named action schema.
+    let copy;
+    try { const json = JSON.stringify(payload); if (json.length > 8192) throw new Error("large"); copy = JSON.parse(json); }
+    catch { return Promise.resolve({ ok: false, error: "bad-request" }); }
+    return ipcRenderer.invoke("hub:collectibles", { action: typeof action === "string" ? action.slice(0, 32) : "", payload: copy });
+  },
   // Companion friends (main.cjs "Companion friends"): what friends' companions
   // may see, the friends out now and playdates. Only named fields cross.
   hubFriends: (profile) => ipcRenderer.invoke("hub:friends", { ...(typeof profile?.name === "string" ? { name: profile.name.slice(0, 40) } : {}) }),

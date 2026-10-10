@@ -102,7 +102,7 @@
   const ABOUT = "New looks for Studio, for the credits you earn with friends. Credits are never bought, and everything Studio comes with stays free.";
   const KINDS = ["pet", "skin", "effect", "nodestyle", "pack"];
   // The views, in the row's order. "studio" (Home) and "packs" (Community) keep their old names for every way in.
-  const VIEWS = [["studio", "Home"], ["pets", "Pets"], ["effects", "Menu effects"], ["nodestyles", "Node styles"], ["themes", "Themes"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"]];
+  const VIEWS = [["studio", "Home"], ["pets", "Pets"], ["collectibles", "Pets & collectibles"], ["effects", "Menu effects"], ["nodestyles", "Node styles"], ["themes", "Themes"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"]];
   const STUDIO_VIEWS = ["studio", "pets", "effects", "nodestyles", "themes"];
   const viewOf = (wanted) => (VIEWS.some(([id]) => id === wanted) ? wanted : { home: "studio", community: "packs", mine: "make" }[wanted] ?? null);
   // Studio's categories: a heading and a line each. Pets and their scales share one.
@@ -724,6 +724,7 @@
     asked = null;
     lastView = view;
     let ready = false, me = null, balanceNow = null, canEarn = true, hold = null;
+    let collectiblesCard = null;
     // Studio's list: the relay's (signed in) or this PC's copy (the showroom), with the drops and the Featured shelf.
     let catalog = null; // { items, drops, featured, featuredUntil, local, at }
     let items = [], next = null, mine = [], busy = false, gone = false, seq = 0, autoConnected = false, loading = false;
@@ -1556,6 +1557,10 @@
       if (signIn && !signIn.disabled) signIn.click?.();
     }
     function viewParts() {
+      if (view === "collectibles" && window.MefiCollectibles?.card) {
+        collectiblesCard ??= window.MefiCollectibles.card();
+        return [collectiblesCard];
+      }
       if (!ready && !showroom()) return cataloguing ? [] : notReady();
       const lead = noticePart();
       const foot = showroom() && gateEl ? [gateEl] : [];
@@ -1880,6 +1885,7 @@
     }
     async function loadView({ more = false, fresh = false } = {}) {
       if (!ready) return;
+      if (view === "collectibles") { loading = false; paint(); return; }
       const mineSeq = ++seq;
       const wanted = view;
       const studio = STUDIO_VIEWS.includes(wanted);
@@ -2022,6 +2028,7 @@
       if (gone) return;
       gone = true;
       seq += 1;
+      collectiblesCard?.dispose?.();
       endTry();
       closeDetail({ focus: false });
       releaseLive();

@@ -60,6 +60,12 @@
     { id: "gold", item: "studio:skin-gold", name: "Gold scales" },
   ]);
   const DEFAULTS = Object.freeze({ on: false, kind: "dragon", skin: "theme", name: "Ember", calm: true, come: true, touch: true, size: 1 });
+  const COLLECTIBLE_SIZES = Object.freeze({ tiny: 0.55, small: 0.75, medium: 1, large: 1.2 });
+  const RARITIES = Object.freeze({
+    none: { rank: 0, colour: "#a7b5c4" }, common: { rank: 1, colour: "#c9d5e3" },
+    uncommon: { rank: 2, colour: "#74dfad" }, rare: { rank: 3, colour: "#79b8ff" },
+    epic: { rank: 4, colour: "#c09bff" }, legendary: { rank: 5, colour: "#ffd37b" },
+  });
   const TAU = Math.PI * 2;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -777,6 +783,38 @@
     return skin;
   }
   const skinColours = (skin) => (SKINS[skin] || themeSkin());
+  // Inventory is authoritative. This is only a bounded drawing description:
+  // no scripts, SVG, remote images or ownership decisions enter the painter.
+  function collectibleLook(value, requireId = false) {
+    if (!value || typeof value !== "object" || value.kind !== "pet" || !Object.hasOwn(KIND, value.visual?.body)) return null;
+    const id = typeof value.id === "string" && /^[\w:-]{1,160}$/.test(value.id) ? value.id : null;
+    if (requireId && !id) return null;
+    const stage = ["baby", "young", "adult"].includes(value.growth?.stage ?? value.stage) ? (value.growth?.stage ?? value.stage) : "baby";
+    const available = value.unlockedSizes ?? value.sizes;
+    const unlockedSizes = Array.isArray(available) ? Object.keys(COLLECTIBLE_SIZES).filter((size) => available.includes(size)) : ["tiny"];
+    if (!unlockedSizes.length) unlockedSizes.push("tiny");
+    const size = unlockedSizes.includes(value.size) ? value.size : unlockedSizes[0];
+    const count = (number) => Math.max(0, Math.min(100000, Math.floor(Number(number) || 0)));
+    const growth = { stage, careDays: count(value.growth?.careDays ?? value.careDays), ageDays: count(value.growth?.ageDays ?? value.ageDays) };
+    const next = Number(value.growth?.nextStageDays);
+    if (Number.isFinite(next) && next >= 0) growth.nextStageDays = count(next);
+    return {
+      id, kind: "pet", name: typeof value.name === "string" ? value.name.replace(/\s+/g, " ").trim().slice(0, 40) : "Little friend",
+      rarity: Object.hasOwn(RARITIES, value.rarity) ? value.rarity : "none",
+      visual: { body: value.visual.body,
+        primary: /^#[\da-f]{6}$/i.test(value.visual.primary) ? value.visual.primary : "#ff8c3c",
+        secondary: /^#[\da-f]{6}$/i.test(value.visual.secondary) ? value.visual.secondary : "#986bff",
+        motif: ["plain", "stars", "sparkles", "stripes"].includes(value.visual.motif) ? value.visual.motif : "plain" },
+      growth, size, unlockedSizes,
+      traits: Array.isArray(value.traits) ? [...new Set(value.traits.map((trait) => typeof trait === "string" ? trait : trait?.id).filter((trait) => ["playful", "curious", "gentle"].includes(trait)))].slice(0, 3) : [],
+    };
+  }
+  function collectibleColours(look) {
+    const primary = hex(look.visual.primary), secondary = hex(look.visual.secondary);
+    return { body: primary, body2: mix(primary, BLACK, 0.45), belly: mix(primary, WHITE, 0.67),
+      wing: secondary, edge: mix(secondary, WHITE, 0.55), horn: mix(primary, WHITE, 0.76),
+      eye: mix(secondary, WHITE, 0.75), fire: [mix(primary, WHITE, 0.88), secondary, primary] };
+  }
   // A light theme's page (html[data-studio-theme-tone="light"]): glows give way to edges there.
   const lightPage = () => { try { return document.documentElement?.dataset?.studioThemeTone === "light"; } catch { return false; } };
 
@@ -1100,7 +1138,8 @@
     ctx.save();
     ctx.translate(head.x + Math.cos(facing) * jerk, head.y + Math.sin(facing) * jerk);
     ctx.rotate(angle);
-    ctx.scale(scale * (1 + 0.08 * pet.yawn), scale * (1 + 0.08 * pet.yawn));
+    const maturity = pet.growthStage === "baby" ? 1.24 : pet.growthStage === "young" ? 1.1 : 1;
+    ctx.scale(scale * maturity * (1 + 0.08 * pet.yawn), scale * maturity * (1 + 0.08 * pet.yawn));
   }
   // An open mouth: wide for fire or a snap, rounder and pink inside for a yawn.
   function mouthOpen(ctx, pet, x, reach) {
@@ -1119,6 +1158,7 @@
   // Eyes: a soft glow, the eye, a slit; shut while asleep, blinking, yawning
   // or sneezing; happy arcs while it purrs.
   function eyes(ctx, pet, colours, at, { size = 1, slit = true } = {}) {
+    if (pet.growthStage === "baby") { size *= 1.12; slit = false; }
     const shut = eyesShut(pet);
     const happy = pet.purr > 0.45 && !shut;
     for (const side of [1, -1]) {
@@ -1712,7 +1752,7 @@
   // the way it goes, closed asleep, happy arcs while it purrs, and a little
   // round mouth for a yawn.
   function wispFace(ctx, pet, head, colours) {
-    const s = pet.size;
+    const s = pet.size * (pet.growthStage === "baby" ? 1.16 : pet.growthStage === "young" ? 1.06 : 1);
     const neck = pet.spine[1];
     const facing = Math.atan2(head.y - neck.y, head.x - neck.x) + pet.look;
     const lookX = Math.cos(facing) * 1.6 * s, lookY = Math.sin(facing) * 0.9 * s;
@@ -1749,16 +1789,98 @@
   }
 
   const PAINTERS = Object.freeze({ dragon: paintDragon, cloud: paintCloud, phoenix: paintPhoenix, wisp: paintWisp });
-  function paintPet(ctx, pet, skin, { detail = 1, label = "", name = "", light = null } = {}) {
+  function paintPet(ctx, pet, skin, { detail = 1, label = "", name = "", light = null, collectible = null } = {}) {
+    const look = collectibleLook(collectible);
+    if (look) {
+      // A young pet has a shorter, rounder body and a larger head. Work on a
+      // drawing copy so changing its look never disturbs its flight or hit tests.
+      const compact = look.growth.stage === "baby" ? 0.72 : look.growth.stage === "young" ? 0.88 : 1;
+      const head = pet.spine[0];
+      pet = { ...pet, growthStage: look.growth.stage,
+        spine: pet.spine.map((point) => ({ x: head.x + (point.x - head.x) * compact, y: head.y + (point.y - head.y) * compact })) };
+    }
     const body = shapeOf(pet.kind);
-    const colours = skinColours(skin);
+    const colours = look ? collectibleColours(look) : skinColours(skin);
     const onLight = light === null ? lightPage() : Boolean(light);
+    if (look) collectibleAura(ctx, pet, look, onLight);
     const chest = (PAINTERS[pet.kind] || paintDragon)(ctx, pet, colours, detail, body, onLight);
+    if (look) collectibleMarks(ctx, pet, look, colours, detail, onLight);
     if (chest) purrLines(ctx, pet, chest, colours, onLight);
     paintFirefly(ctx, pet, onLight);
     particles(ctx, pet, colours, onLight);
     if (label) nameTag(ctx, pet, label, 1, onLight);
     else if (name && pet.tag > 0.03) nameTag(ctx, pet, name, pet.tag, onLight);
+  }
+  function collectibleAura(ctx, pet, look, light) {
+    const rarity = RARITIES[look.rarity];
+    if (rarity.rank < 2) return;
+    const colour = hex(rarity.colour), at = pet.spine[Math.min(5, pet.spine.length - 1)];
+    const radius = (20 + rarity.rank * 5) * pet.size;
+    const glow = ctx.createRadialGradient(at.x, at.y, 0, at.x, at.y, radius);
+    glow.addColorStop(0, css(colour, light ? 0.13 : 0.18));
+    glow.addColorStop(0.5, css(colour, light ? 0.06 : 0.09)); glow.addColorStop(1, css(colour, 0));
+    ctx.save(); ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(at.x, at.y, radius, 0, TAU); ctx.fill();
+    if (rarity.rank >= 4) {
+      const time = motionMode() === "on" ? pet.clock : 0;
+      ctx.strokeStyle = css(light ? mix(colour, BLACK, 0.28) : colour, 0.45);
+      ctx.lineWidth = Math.max(0.6, pet.size);
+      ctx.beginPath(); ctx.ellipse(at.x, at.y, radius * 0.84, radius * 0.3, -0.3 + Math.sin(time * 0.5) * 0.14, 0, TAU); ctx.stroke();
+      if (rarity.rank === 5) {
+        ctx.beginPath(); ctx.ellipse(at.x, at.y, radius * 0.66, radius * 0.26, 0.65, 0, TAU); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+  function star(ctx, x, y, radius) {
+    ctx.beginPath();
+    for (let n = 0; n < 8; n += 1) {
+      const angle = n * Math.PI / 4, reach = radius * (n % 2 ? 0.3 : 1);
+      const px = x + Math.cos(angle) * reach, py = y + Math.sin(angle) * reach;
+      if (!n) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+  function collectibleMarks(ctx, pet, look, colours, detail, light) {
+    const rarity = RARITIES[look.rarity], body = shapeOf(pet.kind), s = pet.size;
+    const time = motionMode() === "on" ? pet.clock : 0;
+    ctx.save();
+    // Motifs sit on the body, so even an unranked custom pet has its own look.
+    for (let index = 3; index < pet.spine.length - 4; index += 4) {
+      const at = pet.spine[index], n = normalAt(pet.spine, index);
+      const radius = Math.max(1, body.radii[index] * s * 0.66);
+      ctx.fillStyle = css(colours.edge, 0.72);
+      if (look.visual.motif === "stripes") {
+        ctx.save(); ctx.translate(at.x, at.y); ctx.rotate(Math.atan2(n.fy, n.fx));
+        ctx.beginPath(); ctx.ellipse(0, 0, Math.max(0.65, s), radius, 0, 0, TAU); ctx.fill(); ctx.restore();
+      } else if (look.visual.motif === "stars" || look.visual.motif === "sparkles") {
+        star(ctx, at.x, at.y, Math.min(3.4 * s, radius));
+      } else if (rarity.rank > 0) {
+        ctx.beginPath(); ctx.arc(at.x + n.nx * radius * 0.5, at.y + n.ny * radius * 0.5, Math.max(0.55, s * 0.72), 0, TAU); ctx.fill();
+      }
+    }
+    // Rarity changes silhouette accents as well as colour; bounded sparkles
+    // use the drawing clock, with a still arrangement under Calm or Off.
+    const count = detail > 0 ? Math.max(0, rarity.rank - 2) * 3 : 0;
+    for (let index = 0; index < count; index += 1) {
+      const at = pet.spine[2 + (index * 3) % (pet.spine.length - 4)];
+      const angle = time * 0.65 + index * 2.399;
+      const radius = (14 + (index % 3) * 5) * s;
+      ctx.fillStyle = css(hex(rarity.colour), 0.52 + Math.sin(time * 1.7 + index) * 0.22);
+      star(ctx, at.x + Math.cos(angle) * radius, at.y + Math.sin(angle) * radius, (1.6 + index % 2) * s);
+    }
+    const head = pet.spine[0];
+    if (look.traits.includes("curious")) { ctx.fillStyle = css(colours.horn, 0.9); star(ctx, head.x, head.y - 5 * s, 3.2 * s); }
+    if (look.traits.includes("playful")) {
+      ctx.fillStyle = css([255, 143, 165], 0.8);
+      for (const side of [-1, 1]) { ctx.beginPath(); ctx.arc(head.x + side * 4 * s, head.y + 4 * s, 1.8 * s, 0, TAU); ctx.fill(); }
+    }
+    if (look.traits.includes("gentle")) {
+      const at = pet.spine[Math.min(5, pet.spine.length - 1)];
+      ctx.strokeStyle = css(light ? mix(colours.belly, BLACK, 0.3) : colours.belly, 0.75); ctx.lineWidth = Math.max(0.6, s);
+      ctx.beginPath(); ctx.arc(at.x, at.y, 6.5 * s, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
   }
   function particles(ctx, pet, colours, light) {
     if (!pet.particles.length) return;
@@ -1854,10 +1976,12 @@
       if (typeof saved.come === "boolean") out.come = saved.come;
       if (typeof saved.touch === "boolean") out.touch = saved.touch;
       if ([0.8, 1, 1.25].includes(Number(saved.size))) out.size = Number(saved.size);
+      if (typeof saved.instanceId === "string" && /^[\w:-]{1,160}$/.test(saved.instanceId)) out.instanceId = saved.instanceId;
     }
     return out;
   }
   let prefs = readStore();
+  let equipped = null; // a fresh authoritative inventory snapshot, never saved as an ownership claim
   const writeStore = () => { try { localStorage.setItem(STORE, JSON.stringify(prefs)); } catch { /* a private store: the choice lasts this session */ } };
   const owns = (item) => !item || window.MefiShop?.owns?.(item) === true;
   // Kill switches, per device, read once.
@@ -1868,6 +1992,7 @@
   let borrowed = null; // a Shop Try: { kind, skin, until, timer }
   function look() {
     if (borrowed) return { on: true, kind: borrowed.kind, skin: borrowed.skin, name: nameOf(borrowed.kind) };
+    if (equipped) return { on: prefs.on, kind: equipped.visual.body, skin: "theme", name: equipped.name, collectible: equipped };
     const kind = KIND[prefs.kind] || KIND.dragon;
     const skin = SKIN_LIST.find((item) => item.id === prefs.skin) || SKIN_LIST[0];
     // A pet or skin that is not owned (a lost Shop cache, a Try's leftover) is Ember in the theme's colours.
@@ -1892,23 +2017,23 @@
     if (window.MefiNav?.noMotion?.() === true || mode === "off") return "off";
     return mode === "calm" ? "calm" : "on";
   };
-  function makeView(id, { guest = false, kind = "dragon", skin = "theme", label = "", size = 1 } = {}) {
+  function makeView(id, { guest = false, kind = "dragon", skin = "theme", label = "", size = 1, collectible = null } = {}) {
     const canvas = document.createElement("canvas");
     if (!guest) canvas.id = "studio-pet";
     canvas.setAttribute("aria-hidden", "true");
     canvas.className = guest ? "studio-pet is-guest" : "studio-pet";
     document.body.append(canvas);
     readPage();
-    const view = { id, canvas, ctx: canvas.getContext?.("2d") || null, skin, label, guest,
+    const view = { id, canvas, ctx: canvas.getContext?.("2d") || null, skin, label, guest, collectible,
       sim: flight({ id, kind, seed: Math.floor(Math.random() * 1e9), size, width: world.width, height: world.height, arrive: guest }) };
     sizeCanvas(view);
     views.set(id, view);
     return view;
   }
   // Another kind for a pet already on screen: a new body where the old one was.
-  function reshape(view, kind) {
+  function reshape(view, kind, size = view.sim.pet.size) {
     const old = view.sim.pet;
-    view.sim = flight({ id: view.id, kind, seed: Math.floor(Math.random() * 1e9), size: old.size, width: world.width, height: world.height, at: { x: old.x, y: old.y, heading: old.heading } });
+    view.sim = flight({ id: view.id, kind, seed: Math.floor(Math.random() * 1e9), size, width: world.width, height: world.height, at: { x: old.x, y: old.y, heading: old.heading } });
   }
   function dropView(id) {
     const view = views.get(id);
@@ -2043,7 +2168,7 @@
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(loop.dpr, 0, 0, loop.dpr, -left * loop.dpr, -top * loop.dpr);
     const shown = view.guest ? null : look();
-    paintPet(ctx, pet, view.guest ? view.skin : shown.skin, { detail: loop.cost > 5 ? 0 : 1, label: view.guest ? view.label : "", name: shown?.name || "" });
+    paintPet(ctx, pet, view.guest ? view.skin : shown.skin, { detail: loop.cost > 5 ? 0 : 1, label: view.guest ? view.label : "", name: shown?.name || "", collectible: view.guest ? view.collectible : shown?.collectible });
     loop.cost = lerp(loop.cost, now() - started, 0.1);
     loop.painted += 1;
   }
@@ -2069,7 +2194,7 @@
   let announced = null;
   function announce() {
     const shown = look();
-    const pet = shown.on ? { kind: shown.kind, skin: shown.skin, name: shown.name } : null;
+    const pet = shown.on ? { kind: shown.kind, skin: shown.skin, name: shown.name, ...(shown.collectible ? { instanceId: shown.collectible.id } : {}) } : null;
     const key = JSON.stringify(pet);
     if (key === announced || typeof window.mefiStudio?.hubPet !== "function") return;
     announced = key;
@@ -2080,8 +2205,9 @@
     if (!borrowed) announce();
     if (headless()) return;
     const shown = look();
-    if (shown.on && !views.has("you")) makeView("you", { kind: shown.kind, size: prefs.size });
-    else if (shown.on && views.get("you").sim.pet.kind !== shown.kind) reshape(views.get("you"), shown.kind);
+    const size = shown.collectible ? COLLECTIBLE_SIZES[shown.collectible.size] : prefs.size;
+    if (shown.on && !views.has("you")) makeView("you", { kind: shown.kind, size });
+    else if (shown.on && (views.get("you").sim.pet.kind !== shown.kind || views.get("you").sim.pet.size !== size)) reshape(views.get("you"), shown.kind, size);
     if (!shown.on && views.has("you")) dropView("you");
     const visible = document.visibilityState !== "hidden";
     if (views.size && visible) start(); else stop();
@@ -2120,7 +2246,8 @@
         if (!id || id === "you" || !pet || typeof pet !== "object" || wanted.size >= MAX_GUESTS) continue;
         const owner = String(entry.name ?? "").trim().slice(0, 32);
         const name = String(pet.name ?? "").trim().slice(0, 24);
-        wanted.set(`guest:${id}`, { kind: KIND[pet.kind] ? pet.kind : "dragon", skin: SKINS_OK.has(pet.skin) ? pet.skin : "theme", label: owner && name ? `${name} · ${owner}` : name || owner });
+        const collectible = collectibleLook(pet.collectible, true);
+        wanted.set(`guest:${id}`, { kind: collectible?.visual.body || (KIND[pet.kind] ? pet.kind : "dragon"), skin: SKINS_OK.has(pet.skin) ? pet.skin : "theme", collectible, size: collectible ? COLLECTIBLE_SIZES[collectible.size] : 1, label: owner && name ? `${name} · ${owner}` : name || owner });
       }
     }
     for (const [id, view] of views) {
@@ -2131,8 +2258,8 @@
     for (const [id, guest] of wanted) {
       const view = views.get(id);
       if (view) {
-        view.skin = guest.skin; view.label = guest.label;
-        if (view.sim.pet.kind !== guest.kind) reshape(view, guest.kind);
+        view.skin = guest.skin; view.label = guest.label; view.collectible = guest.collectible;
+        if (view.sim.pet.kind !== guest.kind || view.sim.pet.size !== guest.size) reshape(view, guest.kind, guest.size);
         if (view.sim.pet.mode === "leave") view.sim.enter("wander", world);
         continue;
       }
@@ -2173,7 +2300,7 @@
   function set(patch = {}) {
     const next = { ...prefs, names: { ...prefs.names } };
     if (typeof patch.on === "boolean") next.on = patch.on;
-    if (KIND[patch.kind]) next.kind = patch.kind;
+    if (KIND[patch.kind]) { next.kind = patch.kind; equipped = null; delete next.instanceId; }
     if (SKIN_LIST.some((skin) => skin.id === patch.skin)) next.skin = patch.skin;
     if (typeof patch.name === "string") {
       // The name belongs to the pet it was given to: the one named in the patch, else the one on show.
@@ -2189,7 +2316,6 @@
     if ([0.8, 1, 1.25].includes(Number(patch.size))) next.size = Number(patch.size);
     prefs = next;
     writeStore();
-    if (views.has("you")) views.get("you").sim.pet.size = prefs.size;
     sync();
     if (roomList.length) guests(roomList);
     window.dispatchEvent?.(new CustomEvent("mefi:pet", { detail: state() }));
@@ -2198,11 +2324,35 @@
   function state() {
     const shown = look();
     return {
-      on: shown.on, kind: shown.kind, skin: shown.skin, name: shown.name, calm: prefs.calm, come: prefs.come, touch: prefs.touch, size: prefs.size,
+      on: shown.on, kind: shown.kind, skin: shown.skin, name: shown.name, calm: prefs.calm, come: prefs.come, touch: prefs.touch, size: shown.collectible ? COLLECTIBLE_SIZES[shown.collectible.size] : prefs.size,
       chosen: { ...prefs, names: { ...prefs.names } }, preview: Boolean(borrowed),
+      instance: equipped ? collectibleLook(equipped, true) : null,
       // The per-device kill switches, as read at load.
       antics: switches.antics, livePreview: switches.live,
     };
+  }
+  // The collection calls this after an inventory read, care action or size
+  // change. Only the instance id is remembered; reconnecting must recheck it.
+  // null also revokes a pet that was traded or is no longer in the inventory.
+  function equip(instance) {
+    const next = instance === null ? null : collectibleLook(instance, true);
+    if (instance !== null && !next) return false;
+    endPreview({ quiet: true });
+    equipped = next;
+    if (next) { prefs.instanceId = next.id; prefs.on = true; }
+    else delete prefs.instanceId;
+    writeStore(); sync();
+    if (roomList.length) guests(roomList);
+    window.dispatchEvent?.(new CustomEvent("mefi:pet", { detail: state() }));
+    return state();
+  }
+  function suspendCollectible() {
+    if (!equipped) return state();
+    equipped = null;
+    sync();
+    if (roomList.length) guests(roomList);
+    window.dispatchEvent?.(new CustomEvent("mefi:pet", { detail: state() }));
+    return state();
   }
   function preview(choice = {}, ms = 120000) {
     endPreview({ quiet: true });
@@ -2243,14 +2393,18 @@
     if (look.path === "eight") return (t) => { const a = t * look.rate; return { x: cx + Math.sin(a) * rx * 1.05, y: cy + Math.sin(a) * Math.cos(a) * ry * 1.6 + Math.sin(a * 2) * 2.5 * scale }; };
     return (t) => { const a = t * look.rate; return { x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry }; };
   }
-  function paintPreview(canvas, { kind = "dragon", skin = "theme", time = 0, pose = "fly", size = null } = {}) {
+  function paintPreview(canvas, options = {}) {
+    let { kind = "dragon", skin = "theme", time = 0, pose = "fly", size = null } = options;
+    const collectible = collectibleLook(options.collectible || options);
+    if (collectible) { kind = collectible.visual.body; size = null; }
     const ctx = canvas?.getContext?.("2d");
     if (!ctx || !BODIES[kind]) return false;
     const width = canvas.clientWidth || canvas.width, height = canvas.clientHeight || canvas.height;
     const dpr = Math.min(2, Math.max(1, Number(window.devicePixelRatio) || 1));
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) { canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); }
     const look = PREVIEW[kind];
-    const scale = Number(size) > 0 ? Number(size) : clamp(Math.min(width / look.span, height / (look.span * 0.6)), 0.3, 2);
+    const growthScale = collectible?.growth.stage === "baby" ? 0.8 : collectible?.growth.stage === "young" ? 0.9 : 1;
+    const scale = (Number(size) > 0 ? clamp(Number(size), 0.3, 2) : clamp(Math.min(width / look.span, height / (look.span * 0.6)), 0.3, 2)) * growthScale;
     const t = Number(time) || 0;
     const key = `${kind}|${pose}|${scale}|${width}|${height}`;
     let kept = previewed.get(canvas);
@@ -2297,7 +2451,7 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(dpr, 0, 0, dpr, shiftX * dpr, shiftY * dpr);
-    paintPet(ctx, pet, skin);
+    paintPet(ctx, pet, skin, { collectible });
     return true;
   }
   // A preview's trail, made from the clock so every frame agrees with the
@@ -2406,6 +2560,7 @@
     if (!card) return;
     const body = card.querySelector(".settings-flair-body");
     const shown = state();
+    const collectible = shown.preview ? null : shown.instance;
     const kind = KIND[shown.kind] || KIND.dragon;
     const rows = [];
     const save = fromCard((patch) => set(patch));
@@ -2413,17 +2568,22 @@
     const pet = el("div", "field settings-flair-pet");
     const stage = el("canvas", "settings-flair-preview");
     stage.setAttribute("role", "img");
-    stage.setAttribute("aria-label", `${shown.name} the ${kind.noun}`);
+    stage.setAttribute("aria-label", `${shown.name} the ${kind.noun}${collectible ? `, ${collectible.growth.stage}, ${collectible.rarity === "none" ? "original" : collectible.rarity}` : ""}`);
     const picks = el("div", "settings-flair-picks");
     const kinds = el("select");
+    if (collectible) {
+      const option = el("option", "", `${collectible.name} (your collection)`);
+      option.value = "collection"; kinds.append(option);
+    }
     for (const item of KINDS) {
       const option = el("option", "", owns(item.item) ? item.name : `${item.name} (in the Shop)`);
       option.value = item.id; option.disabled = !owns(item.item);
       kinds.append(option);
     }
-    kinds.value = shown.kind;
+    kinds.value = collectible ? "collection" : shown.kind;
     kinds.addEventListener("change", () => { save({ kind: kinds.value }); paintCard({ focus: "settings-pet-kind" }); });
     const name = el("input", "settings-flair-name"); name.type = "text"; name.maxLength = 24; name.value = shown.name; name.autocomplete = "off";
+    name.disabled = Boolean(collectible);
     const switchWords = el("span", "", lineFor(shown.name, kind));
     const hint = el("span", "field-hint", `Rest the pointer on ${shown.name} to pet it. Circle the pointer quickly near it to play chase.`);
     name.addEventListener("change", () => {
@@ -2440,9 +2600,22 @@
       skins.append(option);
     }
     skins.value = shown.skin;
+    skins.disabled = Boolean(collectible);
     skins.addEventListener("change", () => { save({ skin: skins.value }); cardShow?.set({ skin: state().skin }); });
     picks.append(labelled("Pet", kinds, "settings-pet-kind"), labelled("Name", name, "settings-pet-name"), labelled("Colours", skins, "settings-pet-skin"));
     pet.append(stage, picks);
+    if (collectible) {
+      const instance = collectible;
+      const words = [instance.growth.stage, instance.rarity === "none" ? "Original" : instance.rarity, `${instance.growth.careDays} days cared for`, `${instance.size} size`];
+      if (instance.traits.length) words.push(instance.traits.join(", "));
+      pet.append(el("span", "field-hint", words.join(" · ")));
+      const collection = el("button", "ghost mini", "Open your pet collection"); collection.type = "button";
+      collection.addEventListener("click", () => {
+        if (window.MefiCollectibles?.open) window.MefiCollectibles.open("collection");
+        else window.MefiShop?.open?.("collectibles");
+      });
+      pet.append(collection);
+    }
     pet.append(switchRow(switchWords, prefs.on, (on) => save({ on })));
     pet.append(switchRow("Stays on its perch while you type", prefs.calm, (calm) => save({ calm })));
     pet.append(switchRow("Comes to tell you when something needs you", prefs.come, (come) => save({ come })));
@@ -2492,7 +2665,7 @@
     body.replaceChildren(...rows);
     // The picture: a still frame now, moving while the card is on screen.
     cardShow?.stop();
-    cardShow = livePreview(stage, { kind: shown.kind, skin: shown.skin });
+    cardShow = livePreview(stage, { kind: shown.kind, skin: shown.skin, collectible });
     if (focus) document.getElementById?.(focus)?.focus?.({ preventScroll: true });
   }
   // A change made on the card is already shown there: repainting it would
@@ -2550,7 +2723,7 @@
   window.MefiPets = {
     kinds: () => KINDS.map((kind) => ({ ...kind })),
     skins: () => SKIN_LIST.map((skin) => ({ ...skin })),
-    state, set, preview, endPreview, react, paintPreview, livePreview, guests,
+    state, set, equip, suspendCollectible, preview, endPreview, react, paintPreview, livePreview, guests,
     // The pets on screen now: whose, what kind and what each is doing.
     flying: () => [...views.values()].map((view) => ({ id: view.id, kind: view.sim.pet.kind, mode: view.sim.pet.mode, guest: view.guest, x: view.sim.pet.x, y: view.sim.pet.y })),
     // For tests and the Shop: a pet's flight to step without the page.

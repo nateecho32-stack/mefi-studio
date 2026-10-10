@@ -23,6 +23,10 @@ owned items, reviews an immutable offer, and reviews acceptance separately.
 `scripts/social-client.cjs` validates the public `shop.trades` contract and stable
 receipts. The private service owns eligibility, inventory, atomic transfer,
 expiry and abuse controls. These client files cannot grant credits or ownership.
+Collectible swaps use the exact `item_` instance ID and show its immutable
+design, rarity and quality in both reviews. Catalog IDs remain supported.
+Inventory replies are bounded to 1,200 items per side, including up to 1,000
+unique collectibles; larger replies are refused instead of silently truncated.
 Old services return unsupported. The desktop does not set launch dates, Donor
 benefits or seller earning caps, and this change does not deploy server code.
 

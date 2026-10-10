@@ -39,6 +39,14 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-10 late morning — Public collectible clients combined before final shipping freeze
+
+Adopted the reviewed public-only client delta from `c2d9711` onto the release candidate by source hunks, preserving room images, safe links, existing swap routes and current Lobby chat/roundup expectations. No new relay implementation or backend tests enter this public branch; the mixed `74d16d4` checkpoint is not imported into its history. Conflicting message fields, room composer controls and stylesheet inputs were combined individually, then the booklet rebuilt. The separately staged private collectible service remains a prerequisite for ownership, membership and availability; installing the client grants no items or new authority.
+
+Integration review found that the existing swap client could not represent unique collectibles. It now accepts exact 96-bit instance IDs and stickers alongside catalog items, shows immutable design/instance identity, rarity and quality in both reviews, sends only IDs for offers/decisions, refreshes the collection after a successful action and refuses inventories over 1,200 entries per side instead of truncating them. The compatible private service owns the atomic transfer and enforces account eligibility plus each item's hold. Public request/display contracts cover the last of 1,000 unique instances, malformed metadata and oversized replies. Signed peer-history serialization retains both image and sticker fields.
+
+Focused combined client/renderer/host checks pass 146/146 in 2.584 seconds; the subsequent history/notes/client checks pass 36/36 in 1.185 seconds. Chromium image review and exact two-step catalog/unique-swap consent pass 1/1 in 0.951 seconds, with no passive network or requested permissions. Nine offscreen Chromium captures from the combined renderer have zero errors, network calls, broken images or horizontal overflow, including narrow sticker/market views and the light nursery; representative images were inspected. What's New and draft/scope notes now include compatible-service collectibles without deployment or ownership promises. External evidence retains the inherited failures from the separate source checkpoint and the earlier release attempts; these focused results do not replace the pending complete final-source gate, ZIP proof, private backups and guarded local update.
+
 ## 2026-10-10 late morning — Final public release copy audit before shipping freeze
 
 The `dd174a7` full attempt was interrupted during its early Node stage, before Windows fixtures, to correct concrete misleading public copy. No assertion failure had been observed when it was stopped; the run was not complete and is not counted as green. Its complete captured output remains in external release evidence as `full-test-combined-dd174a7.log`. The earlier completed red full run and the other interrupted attempts remain recorded and retained.
@@ -376,29 +384,6 @@ friends_events_ui, friends_front_ui, rooms_ui and project_hub_ui 127 pass, 0 fai
 findings; eslint on the changed files clean (npm run lint 47 warnings, as main, none in them). Not run here: the
 full `npm test` (this PC is shared; ci.yml on the pushed branch is the gate). The relay is not deployed: one deploy
 from main once feat/shop-season has landed too.
-
-## 2026-10-07 Social uses a wide window: Friends over the docked conversation at the right; menus without odd gaps
-
-Branch `ui/social-wide` in C:\wt\social-wide, off main c513838. The owner asked for Social Home's empty sides to be used
-(the column stopped at 1180 px), then for Friends to sit where the conversation is, compact, and for every menu to lose
-its odd spacing. A wide Home (layer 1440 px or wider) now has a column at the right: the Friends card over the docked
-conversation, the box at the foot of its thread (renderer/vibe.js syncDock, renderer/today.js placeBox). A menu audit
-captured about 30 Social surfaces and 25 of Studio's offscreen at 1920x1080 and 1440x900, and fixed what styles.css's
-page heading rule (every <header> without padding of its own: 9 found by a DOM sweep) and button minimum (36 px, nowrap)
-did to card titles, both What's new cards, the tab settings, the coach, the Model Lab's cards, the Layout switches, the
-Inbox's text links and the permission choices, plus panel gaps, stretched cards, the project menu on Home and the
-Friends places shown twice. Node here through `npm run test:one`: today_page, today_inbox, today_model,
-today_home, vibe_home, vibe_frame, vibe_model, vibe_panels, vibe_pipeline, vibe_flow, social, layout_contract_css,
-shell_frame_css, shell_frame_bars, key_tips, onboarding, tabs_strip and autonomy_ui 398/398 (213/213 again after the
-last header fixes); test:fast 7741 of 7756 with 14 skipped (306 MB free): its one failure, sync's "a session hook only
-reports recent lost work" at 61 s, and on a rerun two others (one a `git init` that failed), all pass alone, 23/23 on
-this branch and on clean main c513838; the branch changes nothing under scripts/ or in main.cjs.
-Windows: one lane run of 14 window files 9/14 under memory pressure (setup_helper "Escape closes the helper" timeout,
-size_render "the first control has the keyboard", startup_render workspace step error, today_render a Tab stop wrapping
-early, unified_studio "Renderer stopped"); each of the five passes alone (today_render 59 s, setup_helper 35 s,
-size_render 58 s, startup_render 15 s, unified_studio 227 s), and tabs_render passes again after the tab settings fix.
-Earlier in the branch sessions_render, size_render and startup_render failed once in a loaded lane and passed alone, and
-sessions_render passes on clean main c513838 too. check ok, lint 47 warnings (as main), audit 0 findings.
 
 ## Read Before Any Tests
 

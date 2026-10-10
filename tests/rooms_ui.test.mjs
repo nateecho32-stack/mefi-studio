@@ -36,6 +36,30 @@ class Element {
   byClass(name) { return this.all().filter((item) => item.className.split(" ").includes(name)); }
 }
 
+test("room sticker picker sends owned stickers and locks shared rare finishes without ownership", async () => {
+  const stickerCalls = [];
+  const env = environment({ rooms: [room()], replies: { messages: { ok: true, messages: [], hasMore: false } }, extra: {
+    hubCollectibles: async (action, payload) => {
+      stickerCalls.push([action, payload]);
+      return action === "stickers" ? { ok: true, stickers: [
+        { id: "item_owned", name: "Idea", ownerId: ME.id, rarity: "none", canUse: true },
+        { id: "item_rare", name: "Rare idea", ownerId: FRIEND.id, rarity: "rare", canUse: false },
+      ] } : { ok: true };
+    },
+  } });
+  const panel = env.rooms.panel(); await flush();
+  panel.buttons("Open")[0].click(); await flush();
+  panel.buttons("Stickers")[0].click(); await flush();
+  assert.equal(panel.buttons("Send Rare idea")[0].disabled, true);
+  panel.buttons("Send Idea")[0].click(); await flush();
+  assert.deepEqual(env.calls.find((entry) => entry[0] === "sendSticker"), ["sendSticker", "room_mine", "item_owned", "Idea"]);
+  assert.equal(stickerCalls[0][0], "stickers");
+  panel.buttons("Stickers")[0].click(); await flush();
+  panel.buttons("Share here")[0].click(); await flush();
+  assert.equal(stickerCalls.at(-1)[0], "share");
+  assert.equal(stickerCalls.at(-1)[1].shared, true);
+});
+
 const room = (overrides = {}) => ({ id: "room_mine", name: "Lo-fi corner", kind: "hangout", policy: "request", listed: true, status: "active", you: "owner", ownerId: ME.id, memberCount: 3, maxMembers: 25, ...overrides });
 const message = (overrides = {}) => ({ id: "423456789012345678", author: { id: FRIEND.id, name: "Aksana", viaStudio: true }, text: "hey <@123456789012345678>", createdAt: Date.UTC(2026, 8, 27, 20), editedAt: null, mentions: [{ id: ME.id, name: "Mefi" }], attachments: [], ...overrides });
 

@@ -1,5 +1,13 @@
 # How Studio is put together
 
+Shop's **Pets & collectibles** provides the desktop nursery, crate reveals,
+sticker book, market and creator forms. The private service supplies ownership,
+membership entitlements, odds and purchase results; it is deployed separately.
+`renderer/collectibles.js` owns the panels, `renderer/pets.js` paints bounded
+service-provided looks, and `scripts/collectibles-contract.cjs` bounds desktop
+requests. Nine free-pack sticker designs are bundled as artwork. See
+[collectibles.md](collectibles.md) for client behavior and the public API contract.
+
 Friends > Your PCs has an optional paired repository-check coordinator. The
 desktop adapter loads only when requested. Local IPC owns queueing, invitations,
 revocation and setup; the network protocol exposes only authenticated worker

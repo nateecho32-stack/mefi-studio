@@ -40,6 +40,12 @@ app.whenReady().then(async()=>{
     window.mefiStudio.hubStatus=async()=>({status:{user:{id:trade.recipient.id}}});window.mefiStudio.hubShop=async(method,...args)=>{calls.push([method,...args]);if(method==='trades')return {ok:true,enabled:true,trades:[trade]};if(method==='tradeDecide'){trade.status='accepted';return {ok:true,trade};}return {ok:false};};
     await MefiTrades.open();check(!calls.some(x=>x[0]==='tradeDecide'),'opening does not accept');find('Review swap').click();check(!calls.some(x=>x[0]==='tradeDecide'),'review does not accept');check(document.querySelector('dialog').textContent.includes('Give Frost to Alice and receive Cloud'),'exact terms visible');
     const bounds=document.querySelector('dialog').getBoundingClientRect();check(bounds.width<=innerWidth&&bounds.left>=0,'dialog fits narrow viewport');find('Accept this swap').click();await wait(()=>document.querySelector('dialog').textContent.includes('accepted'));check(calls.filter(x=>x[0]==='tradeDecide').length===1,'one decision');find('Close').click();check(!document.querySelector('dialog'),'close removes modal');
+    trade.status='pending';trade.offered={id:'item_Ab0123456789_-Cd',name:'Idea',kind:'sticker',definitionId:'studio:idea',rarity:'rare',quality:85};
+    let collectionRefreshes=0;window.MefiCollectibles={refresh:async()=>{collectionRefreshes++;}};
+    await MefiTrades.open();find('Review swap').click();
+    const uniqueReview=document.querySelector('.item-trades-review');check(uniqueReview.textContent.includes(trade.offered.id)&&uniqueReview.textContent.includes('rare')&&uniqueReview.textContent.includes('quality 85')&&uniqueReview.textContent.includes('studio:idea'),'exact unique instance and rarity visible');
+    check(calls.filter(x=>x[0]==='tradeDecide').length===1,'unique review still needs consent');check(document.querySelector('dialog').scrollWidth<=document.querySelector('dialog').clientWidth+1,'unique identity wraps at narrow width');
+    find('Accept this swap').click();await wait(()=>collectionRefreshes===1&&document.querySelector('dialog').textContent.includes('accepted'));check(calls.filter(x=>x[0]==='tradeDecide').length===2,'one unique decision');find('Close').click();
     localStorage.setItem('mefiStudio.trades','off');await MefiTrades.open();check(!document.querySelector('dialog'),'trade kill switch');
     return {pixels,calls:calls.map(x=>x[0]),links:opened.length};
   })()`);

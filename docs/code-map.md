@@ -1,5 +1,11 @@
 # Code map
 
+Pets and stickers: `scripts/collectibles-contract.cjs` bounds desktop API
+requests; `renderer/collectibles.js` and `.css` own the Shop collection panels;
+`renderer/pets.js` paints pet snapshots and `renderer/rooms.js` offers sticker
+chat. `assets/stickers/` contains the nine Studio illustrations. The collectible
+service implementation is private and separate. See [collectibles.md](collectibles.md).
+
 Where things live, folder by folder. [architecture.md](architecture.md) is the
 feature walkthrough and glossary, and [agent-loop.md](agent-loop.md) follows a
 chat message all the way to a verified task; this page answers the narrower

@@ -800,3 +800,91 @@ test("a pet's name sits on a nameplate in the page's own tone: dark words on a l
     assert.equal(tag.fill, light ? "#1c2333" : "#f3f5f9", "its words in the page's opposite tone, on a plate of its own");
   }
 });
+
+const collectiblePet = (patch = {}) => ({
+  id: "pet_example_1", kind: "pet", name: "Stardust", rarity: "rare",
+  visual: { body: "cloud", primary: "#8045cf", secondary: "#90eedd", motif: "stars" },
+  growth: { stage: "baby", ageDays: 0, careDays: 0 }, traits: [], size: "tiny", unlockedSizes: ["tiny"], ...patch,
+});
+
+test("equipping an inventory pet keeps its identity and unlocked size, preserves Ember and remembers only the selection", () => {
+  const sent = [];
+  const env = load({ bridge: { hubPet: (pet) => { sent.push(pet); return { ok: true }; } } });
+  env.pets.set({ on: true, name: "Ember home", size: 1.25 });
+  const original = collectiblePet();
+  const shown = env.pets.equip(original);
+  assert.deepEqual([shown.kind, shown.name, shown.size, shown.instance.id], ["cloud", "Stardust", 0.55, original.id]);
+  assert.equal(sent.at(-1).instanceId, original.id, "the relay receives an identity to resolve, not renderer rarity claims");
+  assert.deepEqual(Object.keys(sent.at(-1)).sort(), ["instanceId", "kind", "name", "skin"]);
+  const saved = JSON.parse(env.storage.get("mefiStudio.pet.v1"));
+  assert.equal(saved.instanceId, original.id);
+  for (const key of ["rarity", "growth", "traits", "visual", "instance"]) assert.equal(saved[key], undefined, `${key} is not a persisted ownership claim`);
+  original.name = "Changed outside";
+  shown.instance.visual.primary = "#ffffff";
+  assert.equal(env.pets.state().name, "Stardust", "inventory snapshots and returned state are copied");
+  assert.equal(env.pets.state().instance.visual.primary, "#8045cf");
+  env.pets.set({ size: 1.25 });
+  assert.equal(env.pets.state().size, 0.55, "legacy size settings do not bypass a collectible's unlocks");
+  const reloaded = load({ storage: env.storage }).pets.state();
+  assert.equal(reloaded.instance, null, "after reload the collection must obtain a fresh authoritative snapshot");
+  assert.equal(reloaded.chosen.instanceId, original.id, "the UI can restore the selection from that inventory");
+  env.pets.suspendCollectible();
+  assert.equal(env.pets.state().instance, null, "disconnecting clears the in-memory ownership snapshot");
+  assert.equal(env.pets.state().kind, "dragon");
+  assert.equal(env.pets.state().chosen.instanceId, original.id, "reconnecting can recover the choice only from fresh inventory");
+  env.pets.equip(collectiblePet());
+  env.pets.equip(null);
+  assert.deepEqual([env.pets.state().kind, env.pets.state().name, env.pets.state().size], ["dragon", "Ember home", 1.25]);
+  assert.equal(env.pets.state().chosen.instanceId, undefined, "trading or revoking the instance clears the selection");
+});
+
+test("care snapshots update growth and traits; invalid instances and locked sizes cannot replace the current pet", () => {
+  const { pets, document } = load();
+  pets.equip(collectiblePet());
+  for (const invalid of [{}, collectiblePet({ id: "<script>" }), collectiblePet({ kind: "sticker" }), collectiblePet({ visual: { body: "constructor" } })]) {
+    assert.equal(pets.equip(invalid), false);
+    assert.equal(pets.state().name, "Stardust");
+  }
+  pets.equip(collectiblePet({ size: "large" }));
+  assert.equal(pets.state().instance.size, "tiny", "a size not in the authoritative unlock list cannot be displayed");
+  pets.equip(collectiblePet({ growth: { stage: "adult", careDays: 14, ageDays: 20 }, size: "large", unlockedSizes: ["tiny", "small", "medium", "large"], traits: [{ id: "gentle", name: "Gentle", acquiredAt: 2 }, "playful", { id: "curious" }, "playful", "<script>"] }));
+  const shown = pets.state();
+  assert.equal(shown.size, 1.2);
+  assert.deepEqual(Array.from(shown.instance.traits), ["gentle", "playful", "curious"]);
+  const card = document.querySelector("#settings-flair");
+  assert.match(card.textContent, /adult · rare · 14 days cared for · large size · gentle, playful, curious/);
+  assert.equal(card.querySelector("#settings-pet-name").disabled, true, "local settings do not rename an owned item");
+  pets.set({ kind: "dragon" });
+  assert.equal(pets.state().instance, null, "selecting the free pet ends collection equip");
+});
+
+test("all collectible bodies, growth stages, rarities and motifs draw through the shared preview without changing ownership", () => {
+  const { pets } = load();
+  const before = JSON.stringify(pets.state());
+  for (const body of KINDS) for (const stage of ["baby", "young", "adult"]) for (const rarity of ["none", "common", "uncommon", "rare", "epic", "legendary"]) {
+    const paint = recorder();
+    const canvas = { clientWidth: 300, clientHeight: 200, width: 300, height: 200, getContext: () => paint.ctx };
+    const item = collectiblePet({ rarity, growth: { stage }, traits: ["gentle", "curious", "playful"], visual: { body, primary: "#5e84f7", secondary: "#f4b3df", motif: ["plain", "stripes", "stars", "sparkles"][KINDS.indexOf(body)] } });
+    assert.equal(pets.paintPreview(canvas, { ...item, time: 1.2 }), true, `${body} ${stage} ${rarity}`);
+    assert.ok(paint.fills() > 8);
+  }
+  assert.equal(JSON.stringify(pets.state()), before, "viewing someone else's rare pet never equips or grants it");
+});
+
+test("collectible quality adds bounded artwork, baby proportions differ, and drawing never mutates the flight", () => {
+  const { pets } = load();
+  const sim = pets.simulate({ kind: "dragon", seed: 5 });
+  fly(sim, 1, WORLD());
+  const before = JSON.stringify(sim.pet);
+  const draw = (rarity, stage) => {
+    const scales = [];
+    const paint = recorder({ scale: (...args) => scales.push(args) });
+    pets.paint(paint.ctx, sim.pet, "theme", { collectible: collectiblePet({ rarity, growth: { stage }, visual: { body: "dragon", primary: "#22aa77", secondary: "#88bbff", motif: "plain" } }) });
+    return { fills: paint.fills(), scales };
+  };
+  const adult = draw("none", "adult"), baby = draw("none", "baby"), rare = draw("rare", "adult"), legendary = draw("legendary", "adult");
+  assert.ok(baby.scales.some(([x], index) => x > (adult.scales[index]?.[0] || Infinity)), "baby heads are larger relative to their body");
+  assert.ok(legendary.fills > rare.fills && rare.fills > adult.fills, "rarity adds visible marks and sparkles");
+  assert.ok(legendary.fills - adult.fills < 30, "high quality remains bounded per pet");
+  assert.equal(JSON.stringify(sim.pet), before, "the drawing copy leaves the seeded simulation untouched");
+});

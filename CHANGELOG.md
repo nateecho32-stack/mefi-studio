@@ -7,6 +7,13 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Pets and stickers have a collection home.** The desktop client adds a
+  nursery with growth and rarity appearances, clear crate odds and skippable
+  reveals, a sticker book with nine bundled Studio designs, room sharing,
+  rarity-filtered market orders and member creator forms. These connected
+  features require the separately deployed private collectible service;
+  this client update does not deploy it or grant ownership or membership.
+  Swap reviews show each collectible's exact identity, rarity and quality.
 - **Shop explains maker earnings without a stale weekly sales ceiling.**
   Eligible makers earn a share of each sale; the service controls eligibility
   and the current transaction details.
@@ -2061,9 +2068,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [0.5.0-rc.1] - 2026-10-10
 
-- **Friends brings rooms, chat and your build together.** The existing room
+- **Friends brings rooms, chat, reviewed sharing and your build together.** The existing room
   chat gains Rooms and Here now, actual project and player summaries, and the
   current Build Jam. Narrow panels reveal through buttons; offline drafts stay.
+  Supported players load on request; reviewed images and exact item swaps
+  require a compatible private service.
+- **Pets and stickers have a collection home for compatible services.** The
+  nursery, sticker book, quoted crates, market and creator forms use the
+  private service's ownership and membership replies. Nine base designs are
+  bundled; installing the client does not grant items or enable the service.
 - **A simpler session sidebar.** One New task button sits beside the project;
   Sessions, Backlog and filtering remain reachable. Keyboard focus scrolls into
   view, and Escape clears the filter before closing a narrow drawer.

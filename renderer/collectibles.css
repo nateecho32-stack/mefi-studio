@@ -1,0 +1,78 @@
+/* A collection within the existing Shop. Theme colors stay readable in light,
+   dark and Chrome; rarity is also written as text, never conveyed by color alone. */
+.collectibles { display: grid; gap: 16px; min-width: 0; color: var(--ivory); }
+.collectibles-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; padding: 26px; border: 1px solid var(--line-strong); border-radius: 18px; background: radial-gradient(ellipse at 90% 0%, color-mix(in srgb, var(--gold) 13%, transparent), transparent 65%), var(--panel-solid); }
+.collectibles-hero h2 { margin: 5px 0 10px; font: 700 clamp(22px, 3vw, 32px)/1.15 var(--font-display); letter-spacing: -0.02em; }
+.collectibles-eyebrow { margin: 0; font: 650 12px/1.4 var(--font-ui); letter-spacing: 0.16em; color: var(--gold); }
+.collectibles-wallet { padding: 14px 18px; border: 1px solid var(--line); border-radius: 12px; font: 600 14px/1.7 var(--font-ui); white-space: pre-line; text-align: center; }
+.collectibles-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.collectibles-tabs, .collectibles-actions, .collectibles-filters, .collectibles-traits { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.collectibles-tabs { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.collectibles-tabs [aria-pressed="true"] { color: var(--gold); border-color: var(--gold); background: color-mix(in srgb, var(--gold) 9%, transparent); }
+.collectibles-status { margin: 0; line-height: 1.5; color: var(--ivory); font-size: 13px; }
+.collectibles-status:empty { display: none; }
+.collectibles-body, .collectibles-body > section { display: grid; gap: 18px; min-width: 0; }
+.collectibles-section-head { display: grid; gap: 6px; min-width: 0; }
+.collectibles-section-head h3 { margin: 0; font: 650 20px/1.25 var(--font-display); }
+.collectibles-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); align-items: start; gap: 16px; min-width: 0; }
+.collectibles-item, .collectibles-crate { border: 1px solid var(--line-strong); border-radius: 16px; background: var(--panel-solid); overflow: hidden; min-width: 0; }
+.collectibles-item-words { display: grid; gap: 8px; padding: 16px; min-width: 0; }
+.collectibles-item h4, .collectibles-crate h4 { margin: 0; font: 650 18px/1.25 var(--font-display); overflow-wrap: anywhere; }
+.collectibles-rarity { display: inline-flex; align-items: center; gap: 6px; width: fit-content; color: var(--ivory); font: 700 12px/1.4 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+.collectibles-rarity-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.collectibles-art { display: grid; place-items: center; height: 180px; padding: 12px; border-bottom: 1px solid var(--line); background: radial-gradient(ellipse at 50% 80%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 65%); overflow: hidden; }
+.collectibles-art[data-rarity="uncommon"] { background: radial-gradient(ellipse at 50% 70%, #56cba922, transparent 70%); }
+.collectibles-art[data-rarity="rare"] { background: radial-gradient(ellipse at 50% 70%, #68a8ff30, transparent 70%); }
+.collectibles-art[data-rarity="epic"] { background: radial-gradient(ellipse at 50% 70%, #bf7dff35, transparent 70%); }
+.collectibles-art[data-rarity="legendary"] { background: radial-gradient(ellipse at 50% 70%, #eac66a40, transparent 70%); }
+.collectibles-pet-canvas { width: 100%; max-width: 360px; height: 100%; object-fit: contain; }
+.collectibles-sticker { display: inline-grid; place-items: center; flex: none; width: 100px; height: 100px; border-radius: 26px; border: 3px solid color-mix(in srgb, var(--ivory) 80%, transparent); font: 700 62px/1 var(--font-ui); filter: drop-shadow(0 5px 8px #0003); }
+.collectibles-sticker img { width: 100%; height: 100%; object-fit: contain; }
+.collectibles-sticker[data-rarity="rare"] { outline: 2px solid #68a8ff; outline-offset: 3px; }
+.collectibles-sticker[data-rarity="epic"] { outline: 3px solid #bf7dff; outline-offset: 3px; }
+.collectibles-sticker[data-rarity="legendary"] { outline: 3px solid #eac66a; outline-offset: 4px; filter: drop-shadow(0 0 10px #eac66a55); }
+.collectibles-controls { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.collectibles-growth { margin: 0; font-size: 13px; font-weight: 600; }
+.collectibles-trait { display: inline-flex; padding: 3px 9px; border-radius: 20px; border: 1px solid var(--line); font-size: 12px; color: var(--ivory); }
+.collectibles-fold { display: grid; gap: 10px; padding-top: 8px; font-size: 13px; }
+.collectibles-fold summary { padding: 6px 0; color: var(--gold); cursor: pointer; }
+.collectibles-fold > .collectibles-field { margin: 10px 0; }
+.collectibles-empty { display: grid; gap: 7px; padding: 30px; border: 1px dashed var(--line-strong); border-radius: 16px; text-align: center; }
+.collectibles-empty strong { font: 600 20px/1.3 var(--font-display); }
+.collectibles-field { display: grid; flex: 1 1 130px; align-content: start; gap: 5px; min-width: 0; font-size: 12px; color: var(--muted); }
+.collectibles-field input, .collectibles-field select { width: 100%; min-height: 36px; min-width: 0; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ivory); background: var(--panel-solid); font: 13px/1.4 var(--font-ui); }
+.collectibles-field input[type="color"] { padding: 3px; }
+.collectibles-field input:focus-visible, .collectibles-field select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.collectibles-crate { display: grid; gap: 12px; padding: 22px; }
+.collectibles-crate > p { margin: 0; font-size: 13px; }
+.collectibles-crate-mark { display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--line)); border-radius: 18px; background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--gold); font-size: 40px; }
+.collectibles-odds { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 12px 0; margin: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 12px; }
+.collectibles-odds dt { color: var(--muted); }
+.collectibles-odds dd { margin: 0; font-variant-numeric: tabular-nums; }
+.collectibles-optin { display: flex; align-items: start; gap: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.collectibles-optin input { margin-top: 3px; flex: none; accent-color: var(--gold); }
+.collectibles-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px; border: 1px solid var(--gold); border-radius: 12px; background: var(--panel-solid); }
+.collectibles-confirm[hidden] { display: none; }
+.collectibles-confirm p { flex: 1 1 100%; margin: 0; font-size: 14px; line-height: 1.5; }
+.collectibles-order, .collectibles-editor { display: grid; gap: 18px; padding: 22px; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--panel-solid); }
+.collectibles-creator-preview { width: min(100%, 420px); justify-self: center; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.collectibles-market-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; overflow-wrap: anywhere; }
+.collectibles-notification { margin: 0; padding: 12px; border-left: 3px solid var(--gold); color: var(--ivory); font-size: 13px; }
+.collectibles-reveal { width: min(780px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 28px; overflow: auto; border: 1px solid var(--gold); border-radius: 20px; color: var(--ivory); background: var(--panel-solid); box-shadow: var(--shadow-3); text-align: center; }
+.collectibles-reveal::backdrop { background: color-mix(in srgb, var(--scrim) 82%, transparent); }
+.collectibles-reveal h3 { margin: 0 0 20px; font: 650 24px/1.3 var(--font-display); }
+.collectibles-reveal > button { margin-top: 18px; }
+.collectibles-opening { display: grid; place-items: center; height: 260px; color: var(--gold); font-size: 96px; animation: collectibles-hatch 900ms ease-out both; }
+.collectibles-reveal[data-phase="opening"] .collectibles-grid, .collectibles-reveal[data-phase="opening"] > .friends-shop-primary { display: none; }
+.collectibles-reveal[data-phase="revealed"] .collectibles-opening { display: none; }
+@keyframes collectibles-hatch { from { transform: scale(0.7); opacity: 0.3; } 60% { transform: scale(1.05); opacity: 1; } to { transform: scale(1.2); opacity: 0; } }
+@media (max-width: 650px) { .collectibles-hero { grid-template-columns: minmax(0, 1fr); padding: 20px; gap: 14px; } .collectibles-wallet { text-align: left; } .collectibles-order, .collectibles-editor { padding: 16px; } }
+@media (prefers-reduced-motion: reduce) { .collectibles-opening { animation: none; } }
+[data-motion="off"] .collectibles-opening, [data-motion="calm"] .collectibles-opening { animation: none; }
+/* Sticker picker remains within the room composer, including short windows. */
+.rooms-sticker-tray { display: grid; grid-column: 1 / -1; flex: 1 1 100%; gap: 8px; width: 100%; min-width: 0; max-height: min(360px, 42vh); overflow-y: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel-solid); }
+.rooms-sticker-tray[hidden] { display: none; }
+.rooms-sticker-tray > p { margin: 0 0 4px; font-size: 12px; line-height: 1.5; }
+.rooms-sticker-option { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.rooms-sticker-option > .collectibles-sticker { width: 48px; height: 48px; font-size: 28px; border-radius: 12px; }
+.rooms-sticker-option button { min-width: 0; min-height: 32px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }

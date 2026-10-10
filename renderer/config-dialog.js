@@ -253,7 +253,7 @@
     check.checked = state.onTop !== false;
     check.disabled = !api()?.uiStayOnTop;
     label.append(el("span", "config-scale-name", "Keep Studio on top"), check);
-    const hint = el("p", "config-pane-about", api()?.uiStayOnTop ? "Studio stays above the apps and tests it opens. Minimize it to see them; Ctrl+Shift+T toggles it." : "Keeping Studio on top is set in the desktop app.");
+    const hint = el("p", "config-pane-about", api()?.uiStayOnTop ? "Studio stays above the apps and tests it opens. Minimize it to see them." : "Keeping Studio on top is set in the desktop app.");
     check.addEventListener("change", async () => {
       try {
         const result = await api().uiStayOnTop({ on: check.checked });

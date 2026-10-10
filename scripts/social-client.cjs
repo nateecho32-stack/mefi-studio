@@ -3,10 +3,13 @@
 "use strict";
 const ID = /^trade_[a-f0-9]{32}$/;
 const UID = /^\d{17,20}$/;
-const ITEM = /^studio:[a-z0-9-]{1,40}$/;
+const INSTANCE = /^item_[A-Za-z0-9_-]{16}$/;
+const ITEM = /^(?:studio:[a-z0-9-]{1,40}|item_[A-Za-z0-9_-]{16})$/;
 const RECEIPT = /^[A-Za-z0-9_-]{16,64}$/;
 const STATES = new Set(["pending", "accepted", "declined", "cancelled", "expired", "superseded"]);
-const KINDS = new Set(["pet", "skin", "effect", "nodestyle", "pack"]);
+const KINDS = new Set(["pet", "skin", "effect", "nodestyle", "pack", "sticker"]);
+const RARITIES = new Set(["none", "common", "uncommon", "rare", "epic", "legendary"]);
+const INVENTORY_LIMIT = 1200; // 1000 unique collectibles plus the catalog; never silently hide an instance.
 const ROOM = /^[A-Za-z0-9_-]{1,64}$/;
 const IMAGE = /^image_[a-f0-9]{32}$/;
 const REPORT = /^rep_[A-Za-z0-9_-]{1,60}$/;
@@ -14,7 +17,14 @@ const JPEG = /^[A-Za-z0-9+/]+={0,2}$/;
 const imageRef = value => value && IMAGE.test(value.id) && Number.isInteger(value.width) && value.width > 0 && value.width <= 1280 && Number.isInteger(value.height) && value.height > 0 && value.height <= 1280 ? {id:value.id,width:value.width,height:value.height} : null;
 const text = value => String(value ?? "").replace(/[\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/g, " ").slice(0, 100);
 const person = value => UID.test(value?.id ?? "") ? { id: value.id, name: text(value.name) } : null;
-const item = value => ITEM.test(value?.id ?? "") && KINDS.has(value.kind) ? { id: value.id, kind: value.kind, name: text(value.name) } : null;
+function item(value) {
+  if (!ITEM.test(value?.id ?? "") || !KINDS.has(value.kind)) return null;
+  const base = { id: value.id, kind: value.kind, name: text(value.name) };
+  if (!INSTANCE.test(value.id)) return base;
+  if (!["pet", "sticker"].includes(value.kind) || !/^[A-Za-z0-9_:-]{1,80}$/.test(value.definitionId ?? "")
+    || !RARITIES.has(value.rarity) || !Number.isInteger(value.quality) || value.quality < 0 || value.quality > 100) return null;
+  return { ...base, definitionId: value.definitionId, rarity: value.rarity, quality: value.quality };
+}
 function trade(value) {
   if (!ID.test(value?.id ?? "") || !STATES.has(value.status) || !Number.isFinite(value.createdAt) || !Number.isFinite(value.expiresAt)) return null;
   const sender = person(value.sender), recipient = person(value.recipient), offered = item(value.offered), requested = item(value.requested);
@@ -35,7 +45,7 @@ function createSocialClient({ request, supported }) {
     trades: () => call("GET", "/v1/trades", undefined, data => Array.isArray(data?.trades) ? { trades: data.trades.slice(0, 50).map(trade).filter(Boolean), enabled: data.enabled === true } : null),
     tradeInventory: uid => UID.test(uid ?? "") ? call("GET", `/v1/trades/with/${uid}`, undefined, data => {
       const member = person(data?.member);
-      return member && member.id === uid && Array.isArray(data.mine) && Array.isArray(data.theirs) ? { member, mine: data.mine.slice(0, 200).map(item).filter(Boolean), theirs: data.theirs.slice(0, 200).map(item).filter(Boolean) } : null;
+      return member && member.id === uid && Array.isArray(data.mine) && data.mine.length <= INVENTORY_LIMIT && Array.isArray(data.theirs) && data.theirs.length <= INVENTORY_LIMIT ? { member, mine: data.mine.map(item).filter(Boolean), theirs: data.theirs.map(item).filter(Boolean) } : null;
     }) : bad(),
     tradeOffer: body => body && UID.test(body.recipient ?? "") && ITEM.test(body.offered ?? "") && ITEM.test(body.requested ?? "") && body.offered !== body.requested && RECEIPT.test(body.receipt ?? "") ? call("POST", "/v1/trades", { recipient: body.recipient, offered: body.offered, requested: body.requested, receipt: body.receipt }, one) : bad(),
     tradeDecide: (id, action) => ID.test(id ?? "") && ["accept", "decline", "cancel"].includes(action) ? call("POST", `/v1/trades/${id}/${action}`, {}, one) : bad(),

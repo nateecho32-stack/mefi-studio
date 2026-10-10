@@ -2552,7 +2552,7 @@ const hubNowPlaying = (track) => hubCall((client) => ({ ok: client.setNowPlaying
 // it). The hub client keeps it and says it again after every reconnect; the
 // room's pets come back as hub:event { type: "roomPets", roomId, pets }.
 const hubPet = (pet) => hubCall((client) => ({
-  ok: client.setPet(pet && typeof pet === "object" && pet.on !== false ? { kind: String(pet.kind ?? ""), skin: String(pet.skin ?? ""), name: typeof pet.name === "string" ? pet.name : "" } : null),
+  ok: client.setPet(pet && typeof pet === "object" && pet.on !== false ? { kind: String(pet.kind ?? ""), skin: String(pet.skin ?? ""), name: typeof pet.name === "string" ? pet.name : "", ...(typeof pet.instanceId === "string" ? { instanceId: pet.instanceId.slice(0, 80) } : {}) } : null),
 }));
 // Friends › Rooms (renderer/rooms.js): creating rooms, joining by request or
 // invite, deciding requests, and room chat. The renderer names a method from
@@ -2560,7 +2560,7 @@ const hubPet = (pet) => hubCall((client) => ({
 // against the protocol again before anything leaves.
 const HUB_ROOM_METHODS = Object.freeze({
   createRoom: 1, requestJoin: 2, requests: 0, decide: 2, cancelRequest: 1, invite: 2, invites: 0, acceptInvite: 1, declineInvite: 1,
-  leave: 1, removeMember: 2, lock: 1, unlock: 1, close: 1, searchMembers: 1, messages: 2, report: 3, sendMessage: 2, editMessage: 3, deleteMessage: 2,
+  leave: 1, removeMember: 2, lock: 1, unlock: 1, close: 1, searchMembers: 1, messages: 2, report: 3, sendMessage: 2, sendSticker: 3, editMessage: 3, deleteMessage: 2,
   roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1, front: 0,
   sendImage: 2, roomImage: 2,
   // Friends › Moderation (renderer/friends-mod.js); the relay refuses anyone who is not a moderator.
@@ -2773,6 +2773,12 @@ function hubShop(method, args) {
   if (method === "shopOwned" && SHOP_ALL) return hubShopAll();
   if (method === "shopCatalog") return Promise.resolve(hubShopCatalog());
   return hubCall((client) => client[method](...plain));
+}
+function hubCollectibles(action, payload) {
+  if (process.env.MEFI_STUDIO_COLLECTIBLES === "0") return Promise.resolve({ ok: false, error: "disabled" });
+  const contract = require("./scripts/collectibles-contract.cjs");
+  if (!contract.request(action, payload)) return Promise.resolve({ ok: false, error: "bad-request" });
+  return hubCall((client) => typeof client.collectibles === "function" ? client.collectibles(action, payload) : { ok: false, error: "unsupported" });
 }
 async function hubShopAll() {
   const items = SHOP_STUDIO_ITEMS.map((item) => ({ id: item.id, kind: item.kind, name: item.name, data: item.data ? JSON.parse(JSON.stringify(item.data)) : null, updatedAt: null }));
@@ -27786,6 +27792,7 @@ function registerIpc() {
   ipcMain.handle("hub:events", async (_event, payload) => hubEvents(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   // Friends › Shop: one channel, HUB_SHOP_METHODS decides what it may call.
   ipcMain.handle("hub:shop", async (_event, payload) => hubShop(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
+  ipcMain.handle("hub:collectibles", async (_event, payload) => hubCollectibles(String(payload?.action ?? ""), payload?.payload ?? {}));
   // Companion friends (the "Companion friends" block): what friends' companions
   // may see, the friends out now, and playdates.
   ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));

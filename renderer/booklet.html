@@ -10675,6 +10675,85 @@ html[data-motion="off"] .friends-shop-item:hover { translate: none; }
 .item-trades-field { display: grid; gap: 6px; }
 .item-trades-field select { width: 100%; min-width: 0; }
 
+/* A collection within the existing Shop. Theme colors stay readable in light,
+   dark and Chrome; rarity is also written as text, never conveyed by color alone. */
+.collectibles { display: grid; gap: 16px; min-width: 0; color: var(--ivory); }
+.collectibles-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; padding: 26px; border: 1px solid var(--line-strong); border-radius: 18px; background: radial-gradient(ellipse at 90% 0%, color-mix(in srgb, var(--gold) 13%, transparent), transparent 65%), var(--panel-solid); }
+.collectibles-hero h2 { margin: 5px 0 10px; font: 700 clamp(22px, 3vw, 32px)/1.15 var(--font-display); letter-spacing: -0.02em; }
+.collectibles-eyebrow { margin: 0; font: 650 12px/1.4 var(--font-ui); letter-spacing: 0.16em; color: var(--gold); }
+.collectibles-wallet { padding: 14px 18px; border: 1px solid var(--line); border-radius: 12px; font: 600 14px/1.7 var(--font-ui); white-space: pre-line; text-align: center; }
+.collectibles-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.collectibles-tabs, .collectibles-actions, .collectibles-filters, .collectibles-traits { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-width: 0; }
+.collectibles-tabs { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.collectibles-tabs [aria-pressed="true"] { color: var(--gold); border-color: var(--gold); background: color-mix(in srgb, var(--gold) 9%, transparent); }
+.collectibles-status { margin: 0; line-height: 1.5; color: var(--ivory); font-size: 13px; }
+.collectibles-status:empty { display: none; }
+.collectibles-body, .collectibles-body > section { display: grid; gap: 18px; min-width: 0; }
+.collectibles-section-head { display: grid; gap: 6px; min-width: 0; }
+.collectibles-section-head h3 { margin: 0; font: 650 20px/1.25 var(--font-display); }
+.collectibles-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); align-items: start; gap: 16px; min-width: 0; }
+.collectibles-item, .collectibles-crate { border: 1px solid var(--line-strong); border-radius: 16px; background: var(--panel-solid); overflow: hidden; min-width: 0; }
+.collectibles-item-words { display: grid; gap: 8px; padding: 16px; min-width: 0; }
+.collectibles-item h4, .collectibles-crate h4 { margin: 0; font: 650 18px/1.25 var(--font-display); overflow-wrap: anywhere; }
+.collectibles-rarity { display: inline-flex; align-items: center; gap: 6px; width: fit-content; color: var(--ivory); font: 700 12px/1.4 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; }
+.collectibles-rarity-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; }
+.collectibles-art { display: grid; place-items: center; height: 180px; padding: 12px; border-bottom: 1px solid var(--line); background: radial-gradient(ellipse at 50% 80%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 65%); overflow: hidden; }
+.collectibles-art[data-rarity="uncommon"] { background: radial-gradient(ellipse at 50% 70%, #56cba922, transparent 70%); }
+.collectibles-art[data-rarity="rare"] { background: radial-gradient(ellipse at 50% 70%, #68a8ff30, transparent 70%); }
+.collectibles-art[data-rarity="epic"] { background: radial-gradient(ellipse at 50% 70%, #bf7dff35, transparent 70%); }
+.collectibles-art[data-rarity="legendary"] { background: radial-gradient(ellipse at 50% 70%, #eac66a40, transparent 70%); }
+.collectibles-pet-canvas { width: 100%; max-width: 360px; height: 100%; object-fit: contain; }
+.collectibles-sticker { display: inline-grid; place-items: center; flex: none; width: 100px; height: 100px; border-radius: 26px; border: 3px solid color-mix(in srgb, var(--ivory) 80%, transparent); font: 700 62px/1 var(--font-ui); filter: drop-shadow(0 5px 8px #0003); }
+.collectibles-sticker img { width: 100%; height: 100%; object-fit: contain; }
+.collectibles-sticker[data-rarity="rare"] { outline: 2px solid #68a8ff; outline-offset: 3px; }
+.collectibles-sticker[data-rarity="epic"] { outline: 3px solid #bf7dff; outline-offset: 3px; }
+.collectibles-sticker[data-rarity="legendary"] { outline: 3px solid #eac66a; outline-offset: 4px; filter: drop-shadow(0 0 10px #eac66a55); }
+.collectibles-controls { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.collectibles-growth { margin: 0; font-size: 13px; font-weight: 600; }
+.collectibles-trait { display: inline-flex; padding: 3px 9px; border-radius: 20px; border: 1px solid var(--line); font-size: 12px; color: var(--ivory); }
+.collectibles-fold { display: grid; gap: 10px; padding-top: 8px; font-size: 13px; }
+.collectibles-fold summary { padding: 6px 0; color: var(--gold); cursor: pointer; }
+.collectibles-fold > .collectibles-field { margin: 10px 0; }
+.collectibles-empty { display: grid; gap: 7px; padding: 30px; border: 1px dashed var(--line-strong); border-radius: 16px; text-align: center; }
+.collectibles-empty strong { font: 600 20px/1.3 var(--font-display); }
+.collectibles-field { display: grid; flex: 1 1 130px; align-content: start; gap: 5px; min-width: 0; font-size: 12px; color: var(--muted); }
+.collectibles-field input, .collectibles-field select { width: 100%; min-height: 36px; min-width: 0; padding: 6px 10px; border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ivory); background: var(--panel-solid); font: 13px/1.4 var(--font-ui); }
+.collectibles-field input[type="color"] { padding: 3px; }
+.collectibles-field input:focus-visible, .collectibles-field select:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.collectibles-crate { display: grid; gap: 12px; padding: 22px; }
+.collectibles-crate > p { margin: 0; font-size: 13px; }
+.collectibles-crate-mark { display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid color-mix(in srgb, var(--gold) 55%, var(--line)); border-radius: 18px; background: color-mix(in srgb, var(--gold) 10%, transparent); color: var(--gold); font-size: 40px; }
+.collectibles-odds { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 12px 0; margin: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 12px; }
+.collectibles-odds dt { color: var(--muted); }
+.collectibles-odds dd { margin: 0; font-variant-numeric: tabular-nums; }
+.collectibles-optin { display: flex; align-items: start; gap: 8px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.collectibles-optin input { margin-top: 3px; flex: none; accent-color: var(--gold); }
+.collectibles-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 16px; border: 1px solid var(--gold); border-radius: 12px; background: var(--panel-solid); }
+.collectibles-confirm[hidden] { display: none; }
+.collectibles-confirm p { flex: 1 1 100%; margin: 0; font-size: 14px; line-height: 1.5; }
+.collectibles-order, .collectibles-editor { display: grid; gap: 18px; padding: 22px; border: 1px solid var(--line-strong); border-radius: 16px; background: var(--panel-solid); }
+.collectibles-creator-preview { width: min(100%, 420px); justify-self: center; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.collectibles-market-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; overflow-wrap: anywhere; }
+.collectibles-notification { margin: 0; padding: 12px; border-left: 3px solid var(--gold); color: var(--ivory); font-size: 13px; }
+.collectibles-reveal { width: min(780px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 28px; overflow: auto; border: 1px solid var(--gold); border-radius: 20px; color: var(--ivory); background: var(--panel-solid); box-shadow: var(--shadow-3); text-align: center; }
+.collectibles-reveal::backdrop { background: color-mix(in srgb, var(--scrim) 82%, transparent); }
+.collectibles-reveal h3 { margin: 0 0 20px; font: 650 24px/1.3 var(--font-display); }
+.collectibles-reveal > button { margin-top: 18px; }
+.collectibles-opening { display: grid; place-items: center; height: 260px; color: var(--gold); font-size: 96px; animation: collectibles-hatch 900ms ease-out both; }
+.collectibles-reveal[data-phase="opening"] .collectibles-grid, .collectibles-reveal[data-phase="opening"] > .friends-shop-primary { display: none; }
+.collectibles-reveal[data-phase="revealed"] .collectibles-opening { display: none; }
+@keyframes collectibles-hatch { from { transform: scale(0.7); opacity: 0.3; } 60% { transform: scale(1.05); opacity: 1; } to { transform: scale(1.2); opacity: 0; } }
+@media (max-width: 650px) { .collectibles-hero { grid-template-columns: minmax(0, 1fr); padding: 20px; gap: 14px; } .collectibles-wallet { text-align: left; } .collectibles-order, .collectibles-editor { padding: 16px; } }
+@media (prefers-reduced-motion: reduce) { .collectibles-opening { animation: none; } }
+[data-motion="off"] .collectibles-opening, [data-motion="calm"] .collectibles-opening { animation: none; }
+/* Sticker picker remains within the room composer, including short windows. */
+.rooms-sticker-tray { display: grid; grid-column: 1 / -1; flex: 1 1 100%; gap: 8px; width: 100%; min-width: 0; max-height: min(360px, 42vh); overflow-y: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--panel-solid); }
+.rooms-sticker-tray[hidden] { display: none; }
+.rooms-sticker-tray > p { margin: 0 0 4px; font-size: 12px; line-height: 1.5; }
+.rooms-sticker-option { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+.rooms-sticker-option > .collectibles-sticker { width: 48px; height: 48px; font-size: 28px; border-radius: 12px; }
+.rooms-sticker-option button { min-width: 0; min-height: 32px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+
 /* Vibe: the calm front door (renderer/vibe.js), the Vibe / Build switch and
    the one-time "what's new" card. Inlined last, so it wins ties. Every colour
    comes from the active theme's tokens (--gold is the accent, --ivory the
@@ -67730,7 +67809,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     check.checked = state.onTop !== false;
     check.disabled = !api()?.uiStayOnTop;
     label.append(el("span", "config-scale-name", "Keep Studio on top"), check);
-    const hint = el("p", "config-pane-about", api()?.uiStayOnTop ? "Studio stays above the apps and tests it opens. Minimize it to see them; Ctrl+Shift+T toggles it." : "Keeping Studio on top is set in the desktop app.");
+    const hint = el("p", "config-pane-about", api()?.uiStayOnTop ? "Studio stays above the apps and tests it opens. Minimize it to see them." : "Keeping Studio on top is set in the desktop app.");
     check.addEventListener("change", async () => {
       try {
         const result = await api().uiStayOnTop({ on: check.checked });
@@ -83125,6 +83204,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   "use strict";
   const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
   const button = (text, run) => { const el = node("button", "ghost rooms-button", text); el.type = "button"; el.addEventListener("click", run); return el; };
+  const describe = item => item?.definitionId ? `${item.name} · ${item.rarity === "none" ? "Original" : item.rarity} · quality ${item.quality} · design ${item.definitionId} · instance ${item.id}` : item?.name || "item";
   const reasons = { unsupported: "Trading is not available on this room service yet.", offline: "Reconnect to view or send trades.", network: "The service did not answer. Refresh to check the offer before trying again.", hold: "Both members must be eligible to trade. Check your account standing in the Project hub.", "not-found": "Choose someone who shares an active room with you. The Lobby alone does not count.", "ownership-changed": "An item changed hands. Refresh and make a new offer.", "already-owned": "One of you already owns the item they would receive.", "trades-paused": "Trading is temporarily paused. Pending offers can still be cancelled.", "trade-limit": "Too many offers. Clear pending offers or try again tomorrow.", expired: "This offer expired.", superseded: "An item in this offer has already changed hands.", "room-left": "Both members must still share an active room.", "receipt-conflict": "The earlier offer has different terms. Refresh before making a new one." };
   let active = null;
   async function open() {
@@ -83133,6 +83213,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const api = window.mefiStudio;
     reasons["trade-policy-unavailable"] = "Trading is waiting for the private account service to confirm eligibility.";
     reasons["trade-wait"] = "New accounts joining after launch month wait three days to trade. A verified permanent Donor benefit removes that wait.";
+    reasons["trade-hold"] = "An item is still on its transfer hold. Original items wait 15 minutes; rarity items wait one hour after transfer.";
     const dialog = node("dialog", "item-trades"); active = dialog;
     const returnTo = document.activeElement;
     let epoch = 0, choiceEpoch = 0, busy = false, me = null;
@@ -83143,7 +83224,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const head = node("div", "rooms-row-actions");
     head.append(node("h2", "", "Trade with a room-mate"), button("Close", close));
     dialog.setAttribute("aria-label", "Trade with a room-mate");
-    dialog.append(head, node("p", "muted", "Swap one owned Studio pet or cosmetic for another. Both items move together when the recipient accepts. No credits, rank or rewards change. Offers expire in 24 hours."), status, button("Refresh trades", () => { void refresh(); }), list, compose);
+    dialog.append(head, node("p", "muted", "Swap one eligible owned pet, sticker or cosmetic for another. Both items move together when the recipient accepts. Account eligibility and item holds still apply. No credits, rank or rewards change. Offers expire in 24 hours."), status, button("Refresh trades", () => { void refresh(); }), list, compose);
     dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
     document.body.append(dialog); dialog.showModal();
     const alive = token => active === dialog && token === epoch;
@@ -83156,6 +83237,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         if (!answer?.ok) { status.textContent = reasons[answer?.error] || "The trade did not go through. Refresh and check its status."; return; }
         status.textContent = answer.trade ? `Offer ${answer.trade.status}.` : "Updated.";
         await window.MefiShop?.refresh?.();
+        try { await window.MefiCollectibles?.refresh?.(); } catch { /* committed trade remains visible if collection refresh is unavailable */ }
         await refresh();
       } catch { if (alive(token)) status.textContent = reasons.network; }
       finally { busy = false; }
@@ -83177,10 +83259,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const peer = incoming ? trade.sender : trade.recipient;
         const give = incoming ? trade.requested : trade.offered, get = incoming ? trade.offered : trade.requested;
         const row = node("section", "item-trades-row");
-        row.append(node("strong", "", `${peer.name} · ${peer.id.slice(-6)}`), node("p", "", `You give ${give.name}. You receive ${get.name}.`), node("span", "muted", trade.status === "pending" ? `Pending · expires ${new Date(trade.expiresAt).toLocaleString()}` : trade.status));
+        row.append(node("strong", "", `${peer.name} · ${peer.id.slice(-6)}`), node("p", "", `You give ${describe(give)}. You receive ${describe(get)}.`), node("span", "muted", trade.status === "pending" ? `Pending · expires ${new Date(trade.expiresAt).toLocaleString()}` : trade.status));
         const controls = node("div", "rooms-row-actions");
         if (trade.status === "pending") {
-          if (incoming && answer.enabled) controls.append(button("Review swap", () => confirm(controls, `Give ${give.name} to ${peer.name} and receive ${get.name}? This transfers ownership of both items.`, "Accept this swap", () => call("tradeDecide", trade.id, "accept"))));
+          if (incoming && answer.enabled) controls.append(button("Review swap", () => confirm(controls, `Give ${describe(give)} to ${peer.name} and receive ${describe(get)}? This transfers ownership of both exact items.`, "Accept this swap", () => call("tradeDecide", trade.id, "accept"))));
           controls.append(button(incoming ? "Decline" : "Cancel offer", () => { void action(() => call("tradeDecide", trade.id, incoming ? "decline" : "cancel")); }));
         }
         row.append(controls); list.append(row);
@@ -83204,7 +83286,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       let answer; try { answer = await call("tradeInventory", uid); } catch { answer = null; }
       if (!alive(token) || choice !== choiceEpoch) return;
       if (!answer?.ok) { status.textContent = reasons[answer?.error] || "Inventory could not be loaded."; return; }
-      const select = (label, items) => { const wrap = node("label", "item-trades-field", label), input = node("select", ""); for (const item of items) { const option = node("option", "", item.name); option.value = item.id; input.append(option); } wrap.append(input); return { wrap, input }; };
+      const select = (label, items) => { const wrap = node("label", "item-trades-field", label), input = node("select", ""); for (const item of items) { const option = node("option", "", describe(item)); option.value = item.id; input.append(option); } wrap.append(input); return { wrap, input }; };
       const mine = answer.mine.filter(item => !answer.theirs.some(theirs => theirs.id === item.id));
       const theirs = answer.theirs.filter(item => !answer.mine.some(own => own.id === item.id));
       if (!mine.length || !theirs.length) { status.textContent = "You both need an eligible item the other does not already own."; return; }
@@ -83212,7 +83294,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       compose.replaceChildren(node("h3", "", `Offer to ${answer.member.name} · ${uid.slice(-6)}`), give.wrap, get.wrap, button("Review offer", () => {
         const offered = give.input.value, requested = get.input.value;
         const receipt = crypto.randomUUID().replaceAll("-", "");
-        confirm(review, `Offer ${mine.find(x => x.id === offered)?.name} for ${theirs.find(x => x.id === requested)?.name} with ${answer.member.name}? They must accept these exact items. You can cancel while it is pending.`, "Send this offer", () => call("tradeOffer", { recipient: uid, offered, requested, receipt }));
+        confirm(review, `Offer ${describe(mine.find(x => x.id === offered))} for ${describe(theirs.find(x => x.id === requested))} with ${answer.member.name}? They must accept these exact items. You can cancel while it is pending.`, "Send this offer", () => call("tradeOffer", { recipient: uid, offered, requested, receipt }));
       }), review);
     }
     try { me = (await api?.hubStatus?.())?.status?.user?.id ?? null; } catch { /* list explains connection */ }
@@ -83926,6 +84008,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const text = window.MefiPlaylists?.card?.(String(message.text ?? "")) || window.MefiSocialContent?.content?.(readable(message, nameOf)) || node("p", "rooms-message-text", readable(message, nameOf));
       item.append(head, text);
       if (message.image && window.MefiRoomImages) item.append(window.MefiRoomImages.card(message.image,roomId));
+      if (message.sticker && window.MefiCollectibles?.renderSticker) {
+        item.append(window.MefiCollectibles.renderSticker(message.sticker));
+        const claim = button("Claim base sticker", () => guard("Claiming…", async () => {
+          const answer = await api.hubCollectibles?.("claim", { instanceId: message.sticker.id, roomId });
+          status.textContent = answer?.ok ? "Base design added to your book. Rare variants keep their own ownership." : "That sticker must still be shared by an owner present in this room.";
+        }));
+        item.append(claim);
+      }
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
       if (messageMenus.has(message.id)) {
         const actions = node("div", "rooms-row-actions rooms-message-actions");
@@ -84150,6 +84240,49 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       });
       wrap.append(box, send);
       if (flags.images && window.MefiRoomImages) { const picture=button("Image",()=>window.MefiRoomImages.choose(room.id,room.name));picture.disabled=box.disabled;picture.setAttribute("aria-label",`Share an image to ${room.name}`);wrap.append(picture); }
+      if (typeof api.hubCollectibles === "function") {
+        const tray = node("div", "rooms-sticker-tray");
+        tray.hidden = true;
+        tray.setAttribute("aria-label", "Your stickers and stickers shared here");
+        const pick = button("Stickers", async () => {
+          tray.hidden = !tray.hidden;
+          pick.setAttribute("aria-expanded", String(!tray.hidden));
+          if (tray.hidden) return;
+          const seq = openSeq;
+          tray.replaceChildren(node("p", "muted", "Loading sticker book…"));
+          let answer;
+          try { answer = await api.hubCollectibles("stickers", { roomId: room.id }); } catch { answer = null; }
+          if (seq !== openSeq || openRoom?.id !== room.id || tray.hidden) return;
+          const items = answer?.ok ? answer.stickers || answer.items || [] : [];
+          tray.replaceChildren(node("p", "muted", "Shared base stickers work while their owner is here. Rare finishes require that sticker's rarity in your collection."));
+          if (!items.length) tray.append(node("p", "muted", "No stickers available. Open Shop › Pets & collectibles to load your free pack."));
+          for (const sticker of items) {
+            const row = node("div", "rooms-sticker-option");
+            if (window.MefiCollectibles?.renderSticker) row.append(window.MefiCollectibles.renderSticker(sticker));
+            const sendSticker = button(`Send ${sticker.name}`, () => guard(null, async () => {
+              const sent = await call("sendSticker", room.id, sticker.id, sticker.name);
+              status.textContent = sent?.ok ? "Sticker sent." : why(sent, "This sticker is no longer available to you.");
+              if (sent?.ok) tray.hidden = true;
+            }));
+            sendSticker.disabled = sticker.canUse === false;
+            if (sticker.canUse === false) sendSticker.title = "Own this sticker's rarity to use this finish.";
+            row.append(sendSticker);
+            if (sticker.ownerId === me?.id) row.append(button(sticker.shared ? "Stop sharing" : "Share here", () => guard(null, async () => {
+              const shared = await api.hubCollectibles("share", { instanceId: sticker.id, roomId: room.id, shared: !sticker.shared });
+              status.textContent = shared?.ok ? "Sticker sharing updated." : "This sticker could not be shared.";
+              tray.hidden = true;
+            })));
+            else row.append(button("Claim base", () => guard(null, async () => {
+              const claimed = await api.hubCollectibles("claim", { instanceId: sticker.id, roomId: room.id });
+              status.textContent = claimed?.ok ? "Base sticker added to your book." : "That sticker is no longer shared here.";
+            })));
+            tray.append(row);
+          }
+        });
+        pick.disabled = box.disabled;
+        pick.setAttribute("aria-expanded", "false");
+        wrap.append(pick, tray);
+      }
       return wrap;
     }
 
@@ -86431,7 +86564,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const ABOUT = "New looks for Studio, for the credits you earn with friends. Credits are never bought, and everything Studio comes with stays free.";
   const KINDS = ["pet", "skin", "effect", "nodestyle", "pack"];
   // The views, in the row's order. "studio" (Home) and "packs" (Community) keep their old names for every way in.
-  const VIEWS = [["studio", "Home"], ["pets", "Pets"], ["effects", "Menu effects"], ["nodestyles", "Node styles"], ["themes", "Themes"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"]];
+  const VIEWS = [["studio", "Home"], ["pets", "Pets"], ["collectibles", "Pets & collectibles"], ["effects", "Menu effects"], ["nodestyles", "Node styles"], ["themes", "Themes"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"]];
   const STUDIO_VIEWS = ["studio", "pets", "effects", "nodestyles", "themes"];
   const viewOf = (wanted) => (VIEWS.some(([id]) => id === wanted) ? wanted : { home: "studio", community: "packs", mine: "make" }[wanted] ?? null);
   // Studio's categories: a heading and a line each. Pets and their scales share one.
@@ -87053,6 +87186,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     asked = null;
     lastView = view;
     let ready = false, me = null, balanceNow = null, canEarn = true, hold = null;
+    let collectiblesCard = null;
     // Studio's list: the relay's (signed in) or this PC's copy (the showroom), with the drops and the Featured shelf.
     let catalog = null; // { items, drops, featured, featuredUntil, local, at }
     let items = [], next = null, mine = [], busy = false, gone = false, seq = 0, autoConnected = false, loading = false;
@@ -87885,6 +88019,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (signIn && !signIn.disabled) signIn.click?.();
     }
     function viewParts() {
+      if (view === "collectibles" && window.MefiCollectibles?.card) {
+        collectiblesCard ??= window.MefiCollectibles.card();
+        return [collectiblesCard];
+      }
       if (!ready && !showroom()) return cataloguing ? [] : notReady();
       const lead = noticePart();
       const foot = showroom() && gateEl ? [gateEl] : [];
@@ -88209,6 +88347,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
     async function loadView({ more = false, fresh = false } = {}) {
       if (!ready) return;
+      if (view === "collectibles") { loading = false; paint(); return; }
       const mineSeq = ++seq;
       const wanted = view;
       const studio = STUDIO_VIEWS.includes(wanted);
@@ -88351,6 +88490,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (gone) return;
       gone = true;
       seq += 1;
+      collectiblesCard?.dispose?.();
       endTry();
       closeDetail({ focus: false });
       releaseLive();
@@ -88478,6 +88618,449 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const whenReady = (run) => { if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run, { once: true }); else run(); };
   whenReady(() => { mountSettings(); });
   try { window.addEventListener?.("mefi:nav", (event) => { if (event?.detail?.id === "studio") mountSettings(); }); } catch { /* no navigation here */ }
+})();
+
+// Pets & collectibles inside the Shop: an authoritative inventory, transparent
+// crate odds, growing pets, owned stickers, the market and the supporter studio.
+// The relay owns all credits, rolls, rights, traits and holds. This renderer never
+// mints an item or infers ownership from a downloaded visual. Custom art is data
+// only; neither HTML nor creator-provided URLs are rendered. One bounded reveal
+// follows a confirmed result; it can be skipped and respects reduced motion.
+(function () {
+  "use strict";
+  const VIEWS = [["collection", "Nursery"], ["crates", "Crates"], ["stickers", "Sticker book"], ["market", "Market"], ["creator", "Creator studio"]];
+  const GLYPHS = { heart: "♥", star: "★", moon: "☾", spark: "✦", leaf: "❧", wave: "≈" };
+  const STICKER_ASSETS = ["idea", "rest", "celebrate", "code", "happy", "plan", "curious", "love", "sleep"];
+  const RARITIES = ["none", "common", "uncommon", "rare", "epic", "legendary"];
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const cleanColor = (color, fallback = "#8b7cf6") => HEX.test(String(color)) ? color : fallback;
+  const node = (tag, cls = "", text = null) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+  const btn = (text, run, primary = false) => { const el = node("button", primary ? "friends-shop-primary" : "ghost friends-shop-button", text); el.type = "button"; el.addEventListener("click", run); return el; };
+  const word = (value) => String(value || "").replace(/^./, (letter) => letter.toUpperCase());
+  const credits = (n) => `${Number.isFinite(n) ? n : "—"} credits`;
+  const chanceText = (value) => {
+    const chance = Number(value);
+    if (!Number.isFinite(chance) || chance < 0 || chance > 100) return "—";
+    const rounded = Number(chance.toPrecision(6));
+    return `${rounded !== chance ? "≈ " : ""}${rounded.toLocaleString(undefined, { maximumSignificantDigits: 6, useGrouping: false })}%`;
+  };
+  const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
+  let state = null, readFlight = null, epoch = 0, identityEpoch = 0, requestedView = "collection", dirty = false, accountId = null, connectionReady = true;
+  const listeners = new Set();
+  const cards = new Set();
+  // An uncertain acquisition keeps its id across tab changes and inventory
+  // repaints. Only a confirmed response (or an invalidated quote) releases it.
+  const pendingAcquisitions = new Map();
+  const acquisitionKey = (kind, id, price, version = "") => `${accountId || state?.inventory?.[0]?.ownerId || "current"}:${kind}:${id}:${price}:${version}`;
+  function acquisition(key, payload) {
+    if (!pendingAcquisitions.has(key)) pendingAcquisitions.set(key, { ...payload, requestId: globalThis.crypto?.randomUUID?.() || `acquire-${Date.now()}-${Math.random().toString(36).slice(2)}` });
+    return pendingAcquisitions.get(key);
+  }
+  const interested = () => Boolean(window.MefiPets?.state?.()?.chosen?.instanceId) || [...cards].some((root) => root.isConnected !== false && !root.closest?.("[hidden]") && document.visibilityState !== "hidden");
+  const ERRORS = {
+    "monthly-required": "An active monthly membership is needed to make new pets or stickers. Your existing creations stay yours.",
+    "supporter-required": "Selling requires supporter history. Adding rarity requires an active monthly membership.",
+    "trade-hold": "This item is still on trade hold. Check the time shown on its card.",
+    "short": "You do not have enough earned credits for this.",
+    "pool-changed": "The community pool changed. Review the updated odds and opt in again.",
+    "price-changed": "The price changed. Review the current price before confirming again.",
+    "not-owner": "This item belongs to another member now. Your collection has been refreshed.",
+    "listed": "Unlist this item before caring for it, changing it or trading it.",
+    "size-locked": "That size has not been unlocked yet.",
+    "already-cared": "You already cared for this pet today. It will keep growing over time.",
+    "limit": "You have reached this feature's current limit.",
+    "starter-claimed": "Your welcome crate has already been opened.",
+    "already-claimed": "Your welcome crate has already been opened. Its rewards stay in your collection.",
+    "collectibles-disabled": "Pets & collectibles is paused on this community service right now.",
+    "credit-hold": "Earned-credit trading is waiting for your account to be in good standing with the community.",
+    "rarity-limits": "Rarity designs cost at least 10 credits. Common must be at least 50%; Rare at most 20%, Epic at most 5%, Legendary at most 1%.",
+    "rarity-price-min": "A design with rarity chances must cost at least 10 earned credits.",
+    "not-found": "That item is no longer available.",
+    "offline": "Connect to Friends to load your collection.",
+    "not-linked": "Sign in with Discord in Friends to start collecting.",
+    "not-configured": "This copy of Studio has no room service configured.",
+    "unsupported": "Pets & collectibles needs the updated community service.",
+    "incomplete-inventory": "Your complete collection could not be read. Your equipped pet has been kept; try again to refresh.",
+  };
+  const errorWords = (answer) => ERRORS[answer?.error] || (typeof answer?.why === "string" ? answer.why : "The community service could not complete that. Try again.");
+  const call = async (action, payload = {}) => {
+    if (typeof window.mefiStudio?.hubCollectibles !== "function") return { ok: false, error: "unsupported" };
+    try { return await window.mefiStudio.hubCollectibles(action, payload); } catch { return { ok: false, error: "network" }; }
+  };
+  function accept(answer) {
+    if (!answer?.ok || !Array.isArray(answer.inventory)) return false;
+    state = clone(answer);
+    const equipped = window.MefiPets?.state?.()?.chosen?.instanceId;
+    if (equipped) window.MefiPets?.equip?.(state.inventory.find((item) => item.id === equipped && item.kind === "pet") ?? null);
+    for (const listener of listeners) listener();
+    try { window.dispatchEvent(new CustomEvent("mefi-collectibles-changed", { detail: clone(state) })); } catch { /* standalone preview */ }
+    return true;
+  }
+  async function refresh() {
+    if (readFlight) return readFlight;
+    dirty = false;
+    const ownEpoch = epoch;
+    readFlight = (async () => {
+      const answer = await call("list");
+      if (ownEpoch !== epoch) return { ok: false, error: "stale" };
+      if (!answer?.ok || !Array.isArray(answer.inventory)) return answer;
+      const inventory = new Map(answer.inventory.map((item) => [item.id, item]));
+      let cursor = answer.inventoryNext || null, pages = 0;
+      const seen = new Set();
+      while (cursor) {
+        if (pages++ >= 5 || seen.has(cursor)) return { ok: false, error: "incomplete-inventory" };
+        seen.add(cursor);
+        const page = await call("inventory", { cursor });
+        if (ownEpoch !== epoch) return { ok: false, error: "stale" };
+        if (!page?.ok || !Array.isArray(page.inventory)) return page?.ok ? { ok: false, error: "incomplete-inventory" } : page;
+        for (const item of page.inventory) inventory.set(item.id, item);
+        cursor = page.next || null;
+      }
+      const complete = { ...answer, inventory: [...inventory.values()], inventoryNext: null };
+      accept(complete); return complete;
+    })().finally(() => { readFlight = null; if (dirty && connectionReady && interested()) void refresh(); });
+    return readFlight;
+  }
+  const rarityOf = (id) => state?.rarities?.find((entry) => entry.id === id) || { id, name: id === "none" ? "Original" : word(id), color: "#a7afbd" };
+  const stickerGlyph = (item) => GLYPHS[item?.visual?.glyph] || "✦";
+  const stickerSource = (item) => STICKER_ASSETS.includes(item?.visual?.asset) ? `../assets/stickers/studio-${item.visual.asset}.png` : null;
+  function renderSticker(item) {
+    const art = node("span", "collectibles-sticker", stickerGlyph(item));
+    art.style.color = cleanColor(item?.visual?.primary);
+    art.style.backgroundColor = cleanColor(item?.visual?.secondary, "#172039");
+    art.dataset.rarity = RARITIES.includes(item?.rarity) ? item.rarity : "none";
+    art.setAttribute("role", "img"); art.setAttribute("aria-label", item?.name || "Sticker");
+    const source = stickerSource(item);
+    if (source) { const image = node("img"); image.src = source; image.alt = item?.name || "Sticker"; image.loading = "lazy"; art.replaceChildren(image); }
+    return art;
+  }
+  function downloadSticker(item) {
+    let source = stickerSource(item);
+    if (!source) {
+      const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 512;
+      const ctx = canvas.getContext?.("2d"); if (!ctx) return;
+      ctx.fillStyle = cleanColor(item?.visual?.secondary, "#172039"); ctx.fillRect(0, 0, 512, 512);
+      ctx.fillStyle = cleanColor(item?.visual?.primary); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "bold 330px sans-serif"; ctx.fillText(stickerGlyph(item), 256, 256);
+      source = canvas.toDataURL("image/png");
+    }
+    const link = node("a"); link.href = source; link.download = `${String(item?.name || "sticker").replace(/[^a-z0-9_-]/gi, "-").slice(0, 50)}.png`; document.body.append(link); link.click(); link.remove();
+  }
+  const motionOff = () => document.documentElement?.dataset?.motion === "off" || document.documentElement?.dataset?.motion === "calm" || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  function field(label, input) { const wrap = node("label", "collectibles-field"); wrap.append(node("span", "", label), input); return wrap; }
+  function input(type, value = "", min = null, max = null) {
+    const el = node("input"); el.type = type; el.value = String(value);
+    if (min != null) el.min = String(min); if (max != null) el.max = String(max);
+    if (type === "number") el.step = "1";
+    return el;
+  }
+  function select(entries, value) {
+    const el = node("select");
+    for (const entry of entries) { const [id, label] = Array.isArray(entry) ? entry : [entry, word(entry)]; const option = node("option", "", label); option.value = id; el.append(option); }
+    el.value = value ?? (Array.isArray(entries[0]) ? entries[0][0] : entries[0]); return el;
+  }
+  function title(name, line) { const box = node("div", "collectibles-section-head"); box.append(node("h3", "", name), node("p", "collectibles-note", line)); return box; }
+  function empty(name, line) { const box = node("div", "collectibles-empty"); box.append(node("strong", "", name), node("p", "collectibles-note", line)); return box; }
+  function stamp(item) {
+    const rarity = rarityOf(item.rarity), el = node("span", "collectibles-rarity");
+    const dot = node("span", "collectibles-rarity-dot"); dot.style.backgroundColor = cleanColor(rarity.color, "#a7afbd"); dot.setAttribute("aria-hidden", "true");
+    el.append(dot, document.createTextNode(rarity.name)); return el;
+  }
+  function tradeWords(item) {
+    if (item.bound) return "Base sticker · stays in your book";
+    if (item.listingId) return "Listed in the market";
+    if (item.tradeHoldUntil > Date.now()) return `Trade hold until ${new Date(item.tradeHoldUntil).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+    return "Ready to trade";
+  }
+  function preview(item) {
+    const art = node("div", "collectibles-art"); art.dataset.rarity = RARITIES.includes(item.rarity) ? item.rarity : "none";
+    if (item.kind === "sticker") art.append(renderSticker(item));
+    else {
+      const canvas = node("canvas", "collectibles-pet-canvas"); canvas.width = 360; canvas.height = 200;
+      canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", `${item.name}, ${item.stage || "baby"} pet`);
+      art.append(canvas);
+      // Static previews cost no idle animation loop. The opened pet lives on the desktop.
+      try { window.MefiPets?.paintPreview?.(canvas, { ...item, time: 0 }); } catch { /* unavailable in browser preview */ }
+    }
+    return art;
+  }
+  function itemCard(item) {
+    const card = node("article", "collectibles-item"); card.dataset.instance = item.id || "";
+    const words = node("div", "collectibles-item-words"); words.append(stamp(item), node("h4", "", item.name), node("p", "collectibles-note", item.blurb || (item.kind === "pet" ? "A little companion with a story of its own." : "A collectible mark for your conversations.")));
+    card.append(preview(item), words); return { card, words };
+  }
+  function open(view = "collection") { requestedView = VIEWS.some(([id]) => id === view) ? view : "collection"; window.MefiShop?.open?.("collectibles"); for (const listener of listeners) listener(requestedView); }
+  function card() {
+    let view = requestedView, gone = false, busy = false, loaded = false, revealTimer = null;
+    let crateKind = "all", topic = "studio";
+    const inventoryShown = { pet: 40, sticker: 60 };
+    const root = node("section", "collectibles"); root.setAttribute("aria-label", "Pets and collectibles");
+    const hero = node("div", "collectibles-hero"); const intro = node("div");
+    intro.append(node("p", "collectibles-eyebrow", "COLLECT · CARE · SHARE"), node("h2", "", "Small companions. Big personalities."), node("p", "collectibles-note", "Bring home a baby pet, grow together, and pass its story on. Collect stickers and trade with friends using credits earned in the community."));
+    const balance = node("div", "collectibles-wallet"); hero.append(intro, balance);
+    const tabs = node("div", "collectibles-tabs"); tabs.setAttribute("aria-label", "Collectible views");
+    for (const [id, label] of VIEWS) { const tab = btn(label, () => { view = id; requestedView = id; confirmation.hidden = true; paint(); }); tab.dataset.view = id; tabs.append(tab); }
+    const status = node("p", "collectibles-status", "Loading your collection…"); status.setAttribute("role", "status");
+    const body = node("div", "collectibles-body"); const confirmation = node("div", "collectibles-confirm"); confirmation.hidden = true;
+    const reveal = node("dialog", "collectibles-reveal"); reveal.setAttribute("aria-label", "Your crate rewards");
+    root.append(hero, tabs, status, confirmation, body, reveal);
+    const say = (message) => { status.textContent = message; };
+    const focusRestore = (active) => { if (active?.dataset?.focus) body.querySelector(`[data-focus="${active.dataset.focus}"]`)?.focus?.(); };
+    function ask(message, label, run) {
+      confirmation.hidden = false; confirmation.replaceChildren(node("p", "", message), btn(label, async () => { if (busy) return; confirmation.hidden = true; await run(); }, true), btn("Cancel", () => { confirmation.hidden = true; }));
+      confirmation.querySelector("button")?.focus?.();
+    }
+    async function act(action, payload, success, after = null) {
+      if (busy || gone) return null;
+      const actionIdentity = identityEpoch, actionView = view;
+      busy = true; root.setAttribute("aria-busy", "true"); say("Saving with the community service…");
+      let answer;
+      try {
+        answer = await call(action, payload);
+        if (gone || actionIdentity !== identityEpoch) return answer;
+        if (answer?.ok) { epoch += 1; if (readFlight) await readFlight; await refresh(); if (!gone && actionIdentity === identityEpoch) { say(success); if (view === actionView) after?.(answer); } }
+        else { say(errorWords(answer)); if (["price-changed", "pool-changed", "not-owner", "not-found", "trade-hold"].includes(answer?.error)) await refresh(); }
+      } finally { busy = false; root.removeAttribute("aria-busy"); }
+      return answer;
+    }
+    function controls(item, { sticker = false } = {}) {
+      const box = node("div", "collectibles-controls");
+      box.append(node("p", "collectibles-note", tradeWords(item)));
+      const row = node("div", "collectibles-actions");
+      if (!sticker) {
+        const using = window.MefiPets?.state?.()?.chosen?.instanceId === item.id;
+        row.append(btn(using ? "Return to Ember" : "Keep me company", () => { window.MefiPets?.equip?.(using ? null : item); paint(); }, !using));
+        const care = select([["play", "Play · playful"], ["explore", "Explore · curious"], ["rest", "Rest · gentle"]], "play");
+        const careButton = btn(item.caredToday ? "Cared for today" : "Care today", () => act("care", { instanceId: item.id, action: care.value }, "Care saved. Your pet carries its traits wherever it goes."));
+        careButton.disabled = Boolean(item.listingId || item.caredToday); row.append(field("Time together", care), careButton);
+        const sizes = item.unlockedSizes || ["tiny"];
+        const size = select(sizes, item.size || "tiny"); size.disabled = Boolean(item.listingId);
+        size.addEventListener("change", () => act("updateInstance", { instanceId: item.id, size: size.value }, "Pet size updated."));
+        row.append(field("Unlocked sizes", size));
+      }
+      box.append(row);
+      if (!item.listingId && !item.bound) {
+        const trade = node("details", "collectibles-fold"); trade.append(node("summary", "", "Trade or sell"));
+        const recipient = input("text"); recipient.placeholder = "Discord user ID"; recipient.maxLength = 24;
+        const send = btn("Review transfer", () => {
+          const userId = recipient.value.trim();
+          if (!/^\d{5,24}$/.test(userId)) { say("Enter the recipient's Discord user ID."); return; }
+          ask(`Transfer ${item.name} to member ${userId}? Ownership, growth and traits move with it. ${item.rarity === "none" ? "15-minute" : "One-hour"} hold after the transfer.`, "Transfer this item", () => act("transfer", { instanceId: item.id, userId }, "Item transferred. Its story goes with it."));
+        }); send.disabled = item.tradeHoldUntil > Date.now();
+        trade.append(field("Send to a friend", recipient), send);
+        const price = input("number", 20, 1, 250);
+        const sell = btn("Review listing", () => {
+          const amount = Number(price.value);
+          if (!Number.isSafeInteger(amount) || amount < 1 || amount > 250) { say("Choose a whole-number price from 1 to 250 earned credits."); return; }
+          ask(`List ${item.name} for ${credits(amount)}? A matching automatic order can buy it immediately.`, "List for sale", () => act("listItem", { instanceId: item.id, price: amount }, "Listing saved."));
+        });
+        sell.disabled = !state?.entitlements?.canSell || item.tradeHoldUntil > Date.now();
+        trade.append(field("Price in earned credits", price), sell);
+        if (!state?.entitlements?.canSell) trade.append(node("p", "collectibles-note", "Current and past supporters can sell. Everyone can collect and trade."));
+        box.append(trade);
+      }
+      return box;
+    }
+    function collection(stickers = false) {
+      const section = node("section"); section.append(title(stickers ? "Your sticker book" : "The nursery", stickers ? "Owned stickers are yours to use in chat. Room sharing lasts only while the owner stays in the room; downloading a visual does not transfer ownership." : "Every pet begins as a baby. Age and daily care unlock new stages and sizes. Play, explore or rest to give it traits that travel with it."));
+      const items = (state?.inventory || []).filter((item) => item.kind === (stickers ? "sticker" : "pet"));
+      if (!items.length) { section.append(empty(stickers ? "Your first page is waiting" : "A little friend is waiting", "Open your free welcome crate to begin, or find a companion in the market."), btn("Browse crates", () => { view = "crates"; paint(); })); return section; }
+      const grid = node("div", "collectibles-grid");
+      const itemKind = stickers ? "sticker" : "pet";
+      for (const item of items.slice(0, inventoryShown[itemKind])) {
+        const { card: itemEl, words } = itemCard(item);
+        if (!stickers) {
+          words.append(node("p", "collectibles-growth", `${word(item.growth?.stage || item.stage || "baby")} · ${item.careDays ?? item.growth?.careDays ?? 0} days cared for`));
+          const traits = node("div", "collectibles-traits"); for (const trait of item.traits || []) traits.append(node("span", "collectibles-trait", trait.name || word(trait.id))); words.append(traits);
+          if (item.growth?.nextStageDays) words.append(node("p", "collectibles-note", `Next stage from day ${item.growth.nextStageDays}, with regular care.`));
+        } else words.append(node("p", "collectibles-note", item.bound ? "Your free sticker. Use it in Friends chat; its base design stays in your book." : "Use the sticker button in a Friends chat to send or share this sticker."), btn("Download image", () => { downloadSticker(item); say("Image downloaded. Ownership stays with you."); }));
+        words.append(controls(item, { sticker: stickers })); grid.append(itemEl);
+      }
+      section.append(grid);
+      if (items.length > inventoryShown[itemKind]) section.append(btn(`Show more ${stickers ? "stickers" : "pets"} (${items.length - inventoryShown[itemKind]} more)`, () => { inventoryShown[itemKind] += 60; paint(); }));
+      return section;
+    }
+    function showRewards(items) {
+      clearTimeout(revealTimer); reveal.replaceChildren(); reveal.dataset.phase = motionOff() ? "revealed" : "opening";
+      const heading = node("h3", "", "A new chapter for your collection");
+      const opening = node("div", "collectibles-opening", "✦"); opening.setAttribute("aria-hidden", "true");
+      const rewards = node("div", "collectibles-grid");
+      for (const item of items || []) { const { card: itemEl, words } = itemCard(item); words.append(node("p", "collectibles-note", item.kind === "pet" ? "Born today. Ready to grow with you." : "A new page in your sticker book.")); rewards.append(itemEl); }
+      const revealNow = () => { clearTimeout(revealTimer); reveal.dataset.phase = "revealed"; skip.hidden = true; done.focus?.(); };
+      const skip = btn("Skip animation", revealNow); skip.hidden = motionOff();
+      const done = btn("Add to my day", () => { reveal.close?.(); view = "collection"; paint(); }, true);
+      reveal.append(heading, opening, rewards, skip, done); reveal.showModal?.();
+      if (!motionOff()) revealTimer = setTimeout(revealNow, 950); else done.focus?.();
+    }
+    function crates() {
+      const section = node("section"); section.append(title("Choose your next surprise", "One opening, real published odds, earned credits only. The animation never changes the result. The welcome crate is free once per account."));
+      const filters = node("div", "collectibles-filters");
+      const kind = select([["all", "All rewards"], ["pet", "Pets"], ["sticker", "Stickers"]], crateKind);
+      const source = select([["studio", "Studio originals"], ["community", "Community creations"]], topic);
+      kind.addEventListener("change", () => { crateKind = kind.value; paint(); }); source.addEventListener("change", () => { topic = source.value; paint(); });
+      filters.append(field("Reward type", kind), field("Collection", source)); section.append(filters);
+      const grid = node("div", "collectibles-grid");
+      const available = (state?.crates || []).filter((crate) => (topic === "community" ? crate.requiresOptIn : !crate.requiresOptIn) && (crateKind === "all" || crate.kind === crateKind || crate.kind === "mixed" || crate.kind === "any"));
+      for (const crate of available) {
+        const cardEl = node("article", "collectibles-crate"); cardEl.append(node("div", "collectibles-crate-mark", crate.requiresOptIn ? "✧" : "✦"), node("h4", "", crate.name), node("p", "", `${crate.count} ${crate.count === 1 ? "reward" : "rewards"} · ${crate.price === 0 ? "Free" : credits(crate.price)}`));
+        const odds = node("dl", "collectibles-odds");
+        for (const entry of crate.odds || []) { odds.append(node("dt", "", rarityOf(entry.rarity).name), node("dd", "", chanceText(entry.chance))); }
+        cardEl.append(odds);
+        let consent = null;
+        if (crate.requiresOptIn) { consent = input("checkbox"); consent.checked = false; const opt = node("label", "collectibles-optin"); opt.append(consent, node("span", "", "Include this community pool. I have reviewed the current odds and price.")); cardEl.append(opt); }
+        const openButton = btn(crate.price === 0 ? "Open free welcome crate" : `Review opening · ${credits(crate.price)}`, () => {
+          if (consent && !consent.checked) { say("Opt in to the current community pool before opening it."); return; }
+          ask(`Open ${crate.name} for ${credits(crate.price)} and receive ${crate.count} random ${crate.count === 1 ? "item" : "items"}? The odds above apply to this opening.`, crate.price === 0 ? "Open free crate" : `Spend ${credits(crate.price)}`, async () => {
+            const key = acquisitionKey("crate", crate.id, crate.price, crate.poolVersion);
+            const payload = acquisition(key, { crateId: crate.id, price: crate.price, ...(crate.poolVersion ? { poolVersion: crate.poolVersion } : {}), ...(crate.requiresOptIn ? { communityOptIn: true } : {}) });
+            const answer = await act("open", payload, "Your rewards are in your collection.", (reply) => showRewards(reply.items || []));
+            if (answer?.ok || ["pool-changed", "price-changed"].includes(answer?.error)) pendingAcquisitions.delete(key);
+          });
+        }, true);
+        if (crate.available === false || crate.claimed === true) { openButton.disabled = true; openButton.textContent = crate.claimed ? "Already claimed" : "No eligible items yet"; }
+        cardEl.append(openButton); grid.append(cardEl);
+      }
+      section.append(available.length ? grid : empty("No matching crate right now", "Try another reward type or collection. Community pools need eligible creators to opt their work in.")); return section;
+    }
+    function market() {
+      const section = node("section"); section.append(title("The community market", "Find a look you love, or leave one order for a match. Original items have a 15-minute trade hold after transfer; every rarity tier has a one-hour hold. Growth and traits stay with the pet."));
+      const listings = node("div", "collectibles-grid");
+      for (const listing of state?.listings || []) {
+        const item = listing.item || {}; const { card: itemEl, words } = itemCard(item);
+        words.append(node("p", "", `${credits(listing.price)} · ${listing.sellerName || "Community member"}`));
+        const owned = (state.inventory || []).some((entry) => entry.id === listing.instanceId);
+        words.append(owned ? btn("Unlist", () => act("cancelListing", { listingId: listing.id }, "Item returned to your collection.")) : btn("Review purchase", () => ask(`Buy ${item.name} for ${credits(listing.price)}? Its ${item.rarity === "none" ? "15-minute" : "one-hour"} trade hold starts on purchase.`, `Buy · ${credits(listing.price)}`, () => act("buy", { listingId: listing.id, price: listing.price }, "Purchased. Your collection has been updated.")), true));
+        listings.append(itemEl);
+      }
+      section.append(listings.children.length ? listings : empty("The market has room to grow", "List an eligible item from your collection, or save a matching order below."));
+      if (state?.marketNext) section.append(btn("Load more listings", async () => {
+        if (busy || gone) return;
+        const before = state, identity = identityEpoch, cursor = state.marketNext;
+        busy = true; say("Reading more listings…");
+        try {
+          const answer = await call("market", { cursor });
+          if (gone || identity !== identityEpoch || before !== state) return;
+          if (!answer?.ok) { say(errorWords(answer)); return; }
+          const combined = new Map((state.listings || []).map((entry) => [entry.id, entry]));
+          for (const entry of answer.listings || []) combined.set(entry.id, entry);
+          state.listings = [...combined.values()]; state.marketNext = answer.next || null;
+          say("More listings loaded."); paint();
+        } finally { busy = false; }
+      }));
+      const order = node("div", "collectibles-order"); order.append(title("Find my next favorite", "Orders do not reserve credits. Auto buy checks your balance when it finds one matching item at or below your maximum. Notify leaves your credits untouched."));
+      const kind = select(["pet", "sticker"], "pet"), minimum = select(RARITIES, "none"), maximum = select(RARITIES, "legendary"), price = input("number", 25, 1, 250), mode = select([["notify", "Notify me"], ["auto", "Auto buy one item"]], "notify");
+      const definitions = select([["", "Any design"], ...(state.catalog || []).map((entry) => [entry.id, entry.name])], "");
+      const form = node("div", "collectibles-filters"); form.append(field("Kind", kind), field("Design", definitions), field("Minimum rarity", minimum), field("Maximum rarity", maximum), field("Maximum credits", price), field("When a match appears", mode)); order.append(form);
+      order.append(btn("Review order", () => {
+        if (RARITIES.indexOf(minimum.value) > RARITIES.indexOf(maximum.value)) { say("Minimum rarity cannot be above maximum rarity."); return; }
+        const payload = { kind: kind.value, minRarity: minimum.value, maxRarity: maximum.value, maxPrice: Number(price.value), mode: mode.value, ...(definitions.value ? { definitionId: definitions.value } : {}) };
+        ask(mode.value === "auto" ? `Automatically buy one matching ${kind.value} for up to ${credits(payload.maxPrice)}? No credits are reserved; your balance is checked when the order fills. It may fill immediately.` : `Notify you when a ${kind.value} in your rarity range is listed for up to ${credits(payload.maxPrice)}?`, mode.value === "auto" ? "Create auto-buy order" : "Create notification", () => act("order", payload, "Order saved."));
+      }, true)); section.append(order);
+      for (const entry of state?.orders || []) { const row = node("div", "collectibles-market-row"); row.append(node("span", "", `${entry.mode === "auto" ? "Auto buy" : "Notify"} · ${entry.kind} · ${word(entry.minRarity)}–${word(entry.maxRarity)} · up to ${credits(entry.maxPrice)} · ${entry.status || "open"}`)); if (!entry.status || entry.status === "open") row.append(btn("Cancel order", () => act("cancelOrder", { orderId: entry.id }, "Order cancelled."))); section.append(row); }
+      for (const notice of state?.notifications || []) section.append(node("p", "collectibles-notification", `Match found: ${notice.itemName} · ${credits(notice.price)}. Check current listings above.`));
+      const designs = (state?.catalog || []).filter((entry) => entry.listed && entry.maker);
+      if (designs.length) {
+        section.append(title("Creator originals", "Buy a new copy of a community creation. Its published rarity chances determine its finish."));
+        const grid = node("div", "collectibles-grid");
+        for (const design of designs) {
+          const { card: el, words } = itemCard({ ...design, rarity: "none" });
+          words.append(node("p", "collectibles-note", Object.entries(design.rarityWeights || {}).filter(([, weight]) => weight > 0).map(([rarity, weight]) => `${rarityOf(rarity).name} ${weight / 100}%`).join(" · ")));
+          words.append(btn(`Review · ${credits(design.price)}`, () => ask(`Get a new ${design.name} for ${credits(design.price)}? Its finish follows the chances shown on its card.`, `Get · ${credits(design.price)}`, async () => {
+            const key = acquisitionKey("design", design.id, design.price);
+            const payload = acquisition(key, { definitionId: design.id, price: design.price });
+            const result = await act("buyCreation", payload, "Your creator original is in your collection.", (reply) => showRewards([reply.item]));
+            if (result?.ok || result?.error === "price-changed") pendingAcquisitions.delete(key);
+          }), true)); grid.append(el);
+        }
+        section.append(grid);
+      }
+      if (state?.catalogNext) section.append(btn("Load more creator designs", async () => {
+        if (busy || gone) return;
+        const before = state, identity = identityEpoch, cursor = state.catalogNext;
+        busy = true; say("Reading more creator designs…");
+        try {
+          const answer = await call("catalog", { cursor });
+          if (gone || identity !== identityEpoch || before !== state) return;
+          if (!answer?.ok) { say(errorWords(answer)); return; }
+          const combined = new Map((state.catalog || []).map((entry) => [entry.id, entry]));
+          for (const entry of answer.catalog || []) combined.set(entry.id, entry);
+          state.catalog = [...combined.values()]; state.catalogNext = answer.next || null;
+          say("More creator designs loaded."); paint();
+        } finally { busy = false; }
+      }));
+      return section;
+    }
+    function creator() {
+      const section = node("section"); section.append(title("Give your imagination a home", "Monthly members can create pets and stickers and choose their rarity chances. Price, visuals and rarity chances are permanently locked when created. Past members keep their existing rarity items and trading rights, and can list or take down their designs."));
+      const allowed = state?.entitlements?.canCreate === true;
+      if (!allowed) section.append(empty("A monthly member's studio", "Active monthly membership unlocks creation and rarity editing. Your existing collection and free community participation stay available."));
+      else {
+        const editor = node("div", "collectibles-editor");
+        const kind = select(["pet", "sticker"], "pet"), name = input("text", "My little companion"), blurb = input("text"), bodyChoice = select(["dragon", "cloud", "phoenix", "wisp"], "dragon"), glyph = select(Object.entries(GLYPHS).map(([id, value]) => [id, `${value} ${word(id)}`]), "star"), primary = input("color", "#8b7cf6"), secondary = input("color", "#73d6cf"), motif = select(["plain", "stars", "sparkles", "stripes"], "stars"), price = input("number", 0, 0, 250);
+        name.maxLength = 40; blurb.maxLength = 160;
+        const form = node("div", "collectibles-filters"); form.append(field("Create a", kind), field("Name", name), field("About it", blurb), field("Pet shape", bodyChoice), field("Sticker symbol", glyph), field("Main color", primary), field("Second color", secondary), field("Visual finish", motif), field("Price in earned credits", price));
+        const live = node("div", "collectibles-creator-preview");
+        const paintDraft = () => { live.replaceChildren(preview({ kind: kind.value, name: name.value, rarity: "none", stage: "baby", visual: { body: bodyChoice.value, glyph: glyph.value, primary: primary.value, secondary: secondary.value, motif: motif.value } })); };
+        for (const control of [kind, name, bodyChoice, glyph, primary, secondary, motif]) control.addEventListener("input", paintDraft);
+        paintDraft(); editor.append(form, live);
+        const odds = node("div", "collectibles-filters"); const weights = new Map();
+        for (const rarity of RARITIES) { const chance = input("number", rarity === "none" ? 100 : 0, 0, 100); chance.step = "0.01"; chance.disabled = !state.entitlements.canSetRarity && rarity !== "none"; weights.set(rarity, chance); odds.append(field(`${rarityOf(rarity).name} %`, chance)); }
+        editor.append(title("Publish the chances", "Use 100% Original, or percentages totaling 100% with Common at least 50%, Rare at most 20%, Epic at most 5%, and Legendary at most 1%. Rarity designs cost at least 10 earned credits."), odds);
+        const preset = btn("Use community rarity chances", () => { for (const [rarity, value] of Object.entries({ none: 0, common: 60, uncommon: 26, rare: 10, epic: 3.5, legendary: 0.5 })) weights.get(rarity).value = String(value); if (Number(price.value) < 10) price.value = "10"; }); preset.disabled = !state.entitlements.canSetRarity; editor.append(preset);
+        const listed = input("checkbox"); listed.checked = true;
+        const listedLabel = node("label", "collectibles-optin"); listedLabel.append(listed, node("span", "", "List in the community shop.")); editor.append(listedLabel);
+        const inCrates = input("checkbox"); inCrates.checked = false;
+        const cratesLabel = node("label", "collectibles-optin"); cratesLabel.append(inCrates, node("span", "", "Permanently allow this design in opt-in community crates while listed. The crate's credits are split across rewards and creators receive their share, subject to community earning limits.")); editor.append(cratesLabel);
+        editor.append(btn("Review creation", () => {
+          if ([...weights.values()].some((chance) => { const value = Number(chance.value); return !Number.isFinite(value) || value < 0 || value > 100 || Math.abs(value * 100 - Math.round(value * 100)) > 0.000001; })) { say("Each rarity chance must be from 0 to 100%, with at most two decimal places."); return; }
+          const rarityWeights = Object.fromEntries([...weights].map(([rarity, chance]) => [rarity, Math.round(Number(chance.value) * 100)]).filter(([, weight]) => weight > 0));
+          if (Object.values(rarityWeights).reduce((sum, weight) => sum + weight, 0) !== 10000) { say("Rarity percentages must total exactly 100%."); return; }
+          if (rarityWeights.none && rarityWeights.none !== 10000) { say("Choose 100% Original, or divide 100% among the rarity tiers. Original cannot be mixed with rarity rolls."); return; }
+          if (!rarityWeights.none && (Number(price.value) < 10 || (rarityWeights.common || 0) < 5000 || (rarityWeights.rare || 0) > 2000 || (rarityWeights.epic || 0) > 500 || (rarityWeights.legendary || 0) > 100)) { say(ERRORS["rarity-limits"]); return; }
+          if (name.value.trim().length < 2) { say("Give your creation a name of at least two characters."); return; }
+          const payload = { kind: kind.value, name: name.value.trim(), blurb: blurb.value.trim(), visual: { body: bodyChoice.value, glyph: glyph.value, primary: primary.value, secondary: secondary.value, motif: motif.value }, rarityWeights, price: Number(price.value), listed: listed.checked, inCrates: inCrates.checked };
+          const chances = Object.entries(rarityWeights).map(([rarity, weight]) => `${rarityOf(rarity).name} ${weight / 100}%`).join(", ");
+          ask(`Create ${payload.name}${payload.listed ? " and publish it" : " privately"}? Permanent price: ${credits(payload.price)}. Permanent chances: ${chances}. Community crate permission: ${payload.inCrates ? "yes, while listed" : "no"}. Price, visuals, chances and crate permission cannot be changed later. To own a copy, you pay the same price and receive the same roll as everyone else.`, "Create with these permanent terms", () => act("create", payload, "Design saved. Get a copy from Creator originals in the market at its published price and chances."));
+        }, true)); section.append(editor);
+      }
+      section.append(title("Your published designs", "Taking a design down stops new copies. Everyone who already owns one keeps it."));
+      for (const definition of state?.creations || []) { const row = node("div", "collectibles-market-row"); row.append(node("span", "", `${definition.name} · ${credits(definition.price)} · ${definition.listed ? "Listed" : "Unlisted"}`), btn(definition.listed ? "Take down" : "List again", () => act("updateCreation", { definitionId: definition.id, listed: !definition.listed }, definition.listed ? "Design unlisted. Existing copies remain owned." : "Design listed again."))); section.append(row); }
+      return section;
+    }
+    function paint(nextView = null) {
+      if (gone) return;
+      if (typeof nextView === "string") { view = nextView; confirmation.hidden = true; }
+      const active = document.activeElement;
+      balance.textContent = state ? `${credits(state.balance)}\nEarned, never bought` : "Earned credits only";
+      for (const tab of tabs.children) { tab.setAttribute("aria-pressed", String(tab.dataset.view === view)); }
+      if (!state) { confirmation.hidden = true; body.replaceChildren(empty(loaded ? "Connect to your collection" : "Getting your collection ready", "Your inventory, credits and trading rights are verified by the community service."), btn("Try again", () => void load()), btn("Open Friends", () => window.MefiNav?.go?.("friends-page")) ); return; }
+      const content = view === "collection" ? collection() : view === "stickers" ? collection(true) : view === "crates" ? crates() : view === "market" ? market() : creator();
+      body.replaceChildren(content); focusRestore(active);
+    }
+    async function load() { const answer = await refresh(); if (gone || answer?.error === "stale") return; loaded = true; say(answer?.ok ? "" : errorWords(answer)); paint(); }
+    listeners.add(paint); cards.add(root);
+    root.dispose = () => { gone = true; listeners.delete(paint); cards.delete(root); clearTimeout(revealTimer); reveal.close?.(); };
+    paint(); void load(); return root;
+  }
+  window.MefiCollectibles = { card, open, refresh, snapshot: () => clone(state), stickerGlyph, renderSticker, stickers: (roomId) => call("stickers", { roomId }), share: (instanceId, roomId, shared) => call("share", { instanceId, roomId, shared }), errorWords };
+  function invalidate() { epoch += 1; dirty = true; if (connectionReady && interested()) void refresh(); }
+  window.mefiStudio?.onHubEvent?.((event) => {
+    if (event?.type === "status") {
+      connectionReady = event.status?.state === "ready";
+      const nextAccount = event.status?.user?.id || null;
+      if (!connectionReady || (accountId && nextAccount !== accountId)) {
+        epoch += 1; identityEpoch += 1; state = null; dirty = false;
+        if (accountId && nextAccount && nextAccount !== accountId) pendingAcquisitions.clear();
+        window.MefiPets?.suspendCollectible?.();
+        for (const listener of listeners) listener();
+      }
+      if (nextAccount) accountId = nextAccount;
+      if (connectionReady && (interested() || dirty)) invalidate();
+    } else if (event?.type === "credits" || event?.type === "collectibles") invalidate();
+  });
+  document.addEventListener?.("visibilitychange", () => { if (dirty && connectionReady && interested()) void refresh(); });
+  const restore = () => { if (window.MefiPets?.state?.()?.chosen?.instanceId) void refresh(); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", restore, { once: true });
+  else Promise.resolve().then(restore);
 })();
 
 // Project-local decisions and reviewed task handoffs. Mefi interviews you here
@@ -117658,6 +118241,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     { id: "gold", item: "studio:skin-gold", name: "Gold scales" },
   ]);
   const DEFAULTS = Object.freeze({ on: false, kind: "dragon", skin: "theme", name: "Ember", calm: true, come: true, touch: true, size: 1 });
+  const COLLECTIBLE_SIZES = Object.freeze({ tiny: 0.55, small: 0.75, medium: 1, large: 1.2 });
+  const RARITIES = Object.freeze({
+    none: { rank: 0, colour: "#a7b5c4" }, common: { rank: 1, colour: "#c9d5e3" },
+    uncommon: { rank: 2, colour: "#74dfad" }, rare: { rank: 3, colour: "#79b8ff" },
+    epic: { rank: 4, colour: "#c09bff" }, legendary: { rank: 5, colour: "#ffd37b" },
+  });
   const TAU = Math.PI * 2;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const lerp = (a, b, t) => a + (b - a) * t;
@@ -118375,6 +118964,38 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return skin;
   }
   const skinColours = (skin) => (SKINS[skin] || themeSkin());
+  // Inventory is authoritative. This is only a bounded drawing description:
+  // no scripts, SVG, remote images or ownership decisions enter the painter.
+  function collectibleLook(value, requireId = false) {
+    if (!value || typeof value !== "object" || value.kind !== "pet" || !Object.hasOwn(KIND, value.visual?.body)) return null;
+    const id = typeof value.id === "string" && /^[\w:-]{1,160}$/.test(value.id) ? value.id : null;
+    if (requireId && !id) return null;
+    const stage = ["baby", "young", "adult"].includes(value.growth?.stage ?? value.stage) ? (value.growth?.stage ?? value.stage) : "baby";
+    const available = value.unlockedSizes ?? value.sizes;
+    const unlockedSizes = Array.isArray(available) ? Object.keys(COLLECTIBLE_SIZES).filter((size) => available.includes(size)) : ["tiny"];
+    if (!unlockedSizes.length) unlockedSizes.push("tiny");
+    const size = unlockedSizes.includes(value.size) ? value.size : unlockedSizes[0];
+    const count = (number) => Math.max(0, Math.min(100000, Math.floor(Number(number) || 0)));
+    const growth = { stage, careDays: count(value.growth?.careDays ?? value.careDays), ageDays: count(value.growth?.ageDays ?? value.ageDays) };
+    const next = Number(value.growth?.nextStageDays);
+    if (Number.isFinite(next) && next >= 0) growth.nextStageDays = count(next);
+    return {
+      id, kind: "pet", name: typeof value.name === "string" ? value.name.replace(/\s+/g, " ").trim().slice(0, 40) : "Little friend",
+      rarity: Object.hasOwn(RARITIES, value.rarity) ? value.rarity : "none",
+      visual: { body: value.visual.body,
+        primary: /^#[\da-f]{6}$/i.test(value.visual.primary) ? value.visual.primary : "#ff8c3c",
+        secondary: /^#[\da-f]{6}$/i.test(value.visual.secondary) ? value.visual.secondary : "#986bff",
+        motif: ["plain", "stars", "sparkles", "stripes"].includes(value.visual.motif) ? value.visual.motif : "plain" },
+      growth, size, unlockedSizes,
+      traits: Array.isArray(value.traits) ? [...new Set(value.traits.map((trait) => typeof trait === "string" ? trait : trait?.id).filter((trait) => ["playful", "curious", "gentle"].includes(trait)))].slice(0, 3) : [],
+    };
+  }
+  function collectibleColours(look) {
+    const primary = hex(look.visual.primary), secondary = hex(look.visual.secondary);
+    return { body: primary, body2: mix(primary, BLACK, 0.45), belly: mix(primary, WHITE, 0.67),
+      wing: secondary, edge: mix(secondary, WHITE, 0.55), horn: mix(primary, WHITE, 0.76),
+      eye: mix(secondary, WHITE, 0.75), fire: [mix(primary, WHITE, 0.88), secondary, primary] };
+  }
   // A light theme's page (html[data-studio-theme-tone="light"]): glows give way to edges there.
   const lightPage = () => { try { return document.documentElement?.dataset?.studioThemeTone === "light"; } catch { return false; } };
 
@@ -118698,7 +119319,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     ctx.save();
     ctx.translate(head.x + Math.cos(facing) * jerk, head.y + Math.sin(facing) * jerk);
     ctx.rotate(angle);
-    ctx.scale(scale * (1 + 0.08 * pet.yawn), scale * (1 + 0.08 * pet.yawn));
+    const maturity = pet.growthStage === "baby" ? 1.24 : pet.growthStage === "young" ? 1.1 : 1;
+    ctx.scale(scale * maturity * (1 + 0.08 * pet.yawn), scale * maturity * (1 + 0.08 * pet.yawn));
   }
   // An open mouth: wide for fire or a snap, rounder and pink inside for a yawn.
   function mouthOpen(ctx, pet, x, reach) {
@@ -118717,6 +119339,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // Eyes: a soft glow, the eye, a slit; shut while asleep, blinking, yawning
   // or sneezing; happy arcs while it purrs.
   function eyes(ctx, pet, colours, at, { size = 1, slit = true } = {}) {
+    if (pet.growthStage === "baby") { size *= 1.12; slit = false; }
     const shut = eyesShut(pet);
     const happy = pet.purr > 0.45 && !shut;
     for (const side of [1, -1]) {
@@ -119310,7 +119933,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // the way it goes, closed asleep, happy arcs while it purrs, and a little
   // round mouth for a yawn.
   function wispFace(ctx, pet, head, colours) {
-    const s = pet.size;
+    const s = pet.size * (pet.growthStage === "baby" ? 1.16 : pet.growthStage === "young" ? 1.06 : 1);
     const neck = pet.spine[1];
     const facing = Math.atan2(head.y - neck.y, head.x - neck.x) + pet.look;
     const lookX = Math.cos(facing) * 1.6 * s, lookY = Math.sin(facing) * 0.9 * s;
@@ -119347,16 +119970,98 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
 
   const PAINTERS = Object.freeze({ dragon: paintDragon, cloud: paintCloud, phoenix: paintPhoenix, wisp: paintWisp });
-  function paintPet(ctx, pet, skin, { detail = 1, label = "", name = "", light = null } = {}) {
+  function paintPet(ctx, pet, skin, { detail = 1, label = "", name = "", light = null, collectible = null } = {}) {
+    const look = collectibleLook(collectible);
+    if (look) {
+      // A young pet has a shorter, rounder body and a larger head. Work on a
+      // drawing copy so changing its look never disturbs its flight or hit tests.
+      const compact = look.growth.stage === "baby" ? 0.72 : look.growth.stage === "young" ? 0.88 : 1;
+      const head = pet.spine[0];
+      pet = { ...pet, growthStage: look.growth.stage,
+        spine: pet.spine.map((point) => ({ x: head.x + (point.x - head.x) * compact, y: head.y + (point.y - head.y) * compact })) };
+    }
     const body = shapeOf(pet.kind);
-    const colours = skinColours(skin);
+    const colours = look ? collectibleColours(look) : skinColours(skin);
     const onLight = light === null ? lightPage() : Boolean(light);
+    if (look) collectibleAura(ctx, pet, look, onLight);
     const chest = (PAINTERS[pet.kind] || paintDragon)(ctx, pet, colours, detail, body, onLight);
+    if (look) collectibleMarks(ctx, pet, look, colours, detail, onLight);
     if (chest) purrLines(ctx, pet, chest, colours, onLight);
     paintFirefly(ctx, pet, onLight);
     particles(ctx, pet, colours, onLight);
     if (label) nameTag(ctx, pet, label, 1, onLight);
     else if (name && pet.tag > 0.03) nameTag(ctx, pet, name, pet.tag, onLight);
+  }
+  function collectibleAura(ctx, pet, look, light) {
+    const rarity = RARITIES[look.rarity];
+    if (rarity.rank < 2) return;
+    const colour = hex(rarity.colour), at = pet.spine[Math.min(5, pet.spine.length - 1)];
+    const radius = (20 + rarity.rank * 5) * pet.size;
+    const glow = ctx.createRadialGradient(at.x, at.y, 0, at.x, at.y, radius);
+    glow.addColorStop(0, css(colour, light ? 0.13 : 0.18));
+    glow.addColorStop(0.5, css(colour, light ? 0.06 : 0.09)); glow.addColorStop(1, css(colour, 0));
+    ctx.save(); ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(at.x, at.y, radius, 0, TAU); ctx.fill();
+    if (rarity.rank >= 4) {
+      const time = motionMode() === "on" ? pet.clock : 0;
+      ctx.strokeStyle = css(light ? mix(colour, BLACK, 0.28) : colour, 0.45);
+      ctx.lineWidth = Math.max(0.6, pet.size);
+      ctx.beginPath(); ctx.ellipse(at.x, at.y, radius * 0.84, radius * 0.3, -0.3 + Math.sin(time * 0.5) * 0.14, 0, TAU); ctx.stroke();
+      if (rarity.rank === 5) {
+        ctx.beginPath(); ctx.ellipse(at.x, at.y, radius * 0.66, radius * 0.26, 0.65, 0, TAU); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+  function star(ctx, x, y, radius) {
+    ctx.beginPath();
+    for (let n = 0; n < 8; n += 1) {
+      const angle = n * Math.PI / 4, reach = radius * (n % 2 ? 0.3 : 1);
+      const px = x + Math.cos(angle) * reach, py = y + Math.sin(angle) * reach;
+      if (!n) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+  function collectibleMarks(ctx, pet, look, colours, detail, light) {
+    const rarity = RARITIES[look.rarity], body = shapeOf(pet.kind), s = pet.size;
+    const time = motionMode() === "on" ? pet.clock : 0;
+    ctx.save();
+    // Motifs sit on the body, so even an unranked custom pet has its own look.
+    for (let index = 3; index < pet.spine.length - 4; index += 4) {
+      const at = pet.spine[index], n = normalAt(pet.spine, index);
+      const radius = Math.max(1, body.radii[index] * s * 0.66);
+      ctx.fillStyle = css(colours.edge, 0.72);
+      if (look.visual.motif === "stripes") {
+        ctx.save(); ctx.translate(at.x, at.y); ctx.rotate(Math.atan2(n.fy, n.fx));
+        ctx.beginPath(); ctx.ellipse(0, 0, Math.max(0.65, s), radius, 0, 0, TAU); ctx.fill(); ctx.restore();
+      } else if (look.visual.motif === "stars" || look.visual.motif === "sparkles") {
+        star(ctx, at.x, at.y, Math.min(3.4 * s, radius));
+      } else if (rarity.rank > 0) {
+        ctx.beginPath(); ctx.arc(at.x + n.nx * radius * 0.5, at.y + n.ny * radius * 0.5, Math.max(0.55, s * 0.72), 0, TAU); ctx.fill();
+      }
+    }
+    // Rarity changes silhouette accents as well as colour; bounded sparkles
+    // use the drawing clock, with a still arrangement under Calm or Off.
+    const count = detail > 0 ? Math.max(0, rarity.rank - 2) * 3 : 0;
+    for (let index = 0; index < count; index += 1) {
+      const at = pet.spine[2 + (index * 3) % (pet.spine.length - 4)];
+      const angle = time * 0.65 + index * 2.399;
+      const radius = (14 + (index % 3) * 5) * s;
+      ctx.fillStyle = css(hex(rarity.colour), 0.52 + Math.sin(time * 1.7 + index) * 0.22);
+      star(ctx, at.x + Math.cos(angle) * radius, at.y + Math.sin(angle) * radius, (1.6 + index % 2) * s);
+    }
+    const head = pet.spine[0];
+    if (look.traits.includes("curious")) { ctx.fillStyle = css(colours.horn, 0.9); star(ctx, head.x, head.y - 5 * s, 3.2 * s); }
+    if (look.traits.includes("playful")) {
+      ctx.fillStyle = css([255, 143, 165], 0.8);
+      for (const side of [-1, 1]) { ctx.beginPath(); ctx.arc(head.x + side * 4 * s, head.y + 4 * s, 1.8 * s, 0, TAU); ctx.fill(); }
+    }
+    if (look.traits.includes("gentle")) {
+      const at = pet.spine[Math.min(5, pet.spine.length - 1)];
+      ctx.strokeStyle = css(light ? mix(colours.belly, BLACK, 0.3) : colours.belly, 0.75); ctx.lineWidth = Math.max(0.6, s);
+      ctx.beginPath(); ctx.arc(at.x, at.y, 6.5 * s, 0, TAU); ctx.stroke();
+    }
+    ctx.restore();
   }
   function particles(ctx, pet, colours, light) {
     if (!pet.particles.length) return;
@@ -119452,10 +120157,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (typeof saved.come === "boolean") out.come = saved.come;
       if (typeof saved.touch === "boolean") out.touch = saved.touch;
       if ([0.8, 1, 1.25].includes(Number(saved.size))) out.size = Number(saved.size);
+      if (typeof saved.instanceId === "string" && /^[\w:-]{1,160}$/.test(saved.instanceId)) out.instanceId = saved.instanceId;
     }
     return out;
   }
   let prefs = readStore();
+  let equipped = null; // a fresh authoritative inventory snapshot, never saved as an ownership claim
   const writeStore = () => { try { localStorage.setItem(STORE, JSON.stringify(prefs)); } catch { /* a private store: the choice lasts this session */ } };
   const owns = (item) => !item || window.MefiShop?.owns?.(item) === true;
   // Kill switches, per device, read once.
@@ -119466,6 +120173,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   let borrowed = null; // a Shop Try: { kind, skin, until, timer }
   function look() {
     if (borrowed) return { on: true, kind: borrowed.kind, skin: borrowed.skin, name: nameOf(borrowed.kind) };
+    if (equipped) return { on: prefs.on, kind: equipped.visual.body, skin: "theme", name: equipped.name, collectible: equipped };
     const kind = KIND[prefs.kind] || KIND.dragon;
     const skin = SKIN_LIST.find((item) => item.id === prefs.skin) || SKIN_LIST[0];
     // A pet or skin that is not owned (a lost Shop cache, a Try's leftover) is Ember in the theme's colours.
@@ -119490,23 +120198,23 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (window.MefiNav?.noMotion?.() === true || mode === "off") return "off";
     return mode === "calm" ? "calm" : "on";
   };
-  function makeView(id, { guest = false, kind = "dragon", skin = "theme", label = "", size = 1 } = {}) {
+  function makeView(id, { guest = false, kind = "dragon", skin = "theme", label = "", size = 1, collectible = null } = {}) {
     const canvas = document.createElement("canvas");
     if (!guest) canvas.id = "studio-pet";
     canvas.setAttribute("aria-hidden", "true");
     canvas.className = guest ? "studio-pet is-guest" : "studio-pet";
     document.body.append(canvas);
     readPage();
-    const view = { id, canvas, ctx: canvas.getContext?.("2d") || null, skin, label, guest,
+    const view = { id, canvas, ctx: canvas.getContext?.("2d") || null, skin, label, guest, collectible,
       sim: flight({ id, kind, seed: Math.floor(Math.random() * 1e9), size, width: world.width, height: world.height, arrive: guest }) };
     sizeCanvas(view);
     views.set(id, view);
     return view;
   }
   // Another kind for a pet already on screen: a new body where the old one was.
-  function reshape(view, kind) {
+  function reshape(view, kind, size = view.sim.pet.size) {
     const old = view.sim.pet;
-    view.sim = flight({ id: view.id, kind, seed: Math.floor(Math.random() * 1e9), size: old.size, width: world.width, height: world.height, at: { x: old.x, y: old.y, heading: old.heading } });
+    view.sim = flight({ id: view.id, kind, seed: Math.floor(Math.random() * 1e9), size, width: world.width, height: world.height, at: { x: old.x, y: old.y, heading: old.heading } });
   }
   function dropView(id) {
     const view = views.get(id);
@@ -119641,7 +120349,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(loop.dpr, 0, 0, loop.dpr, -left * loop.dpr, -top * loop.dpr);
     const shown = view.guest ? null : look();
-    paintPet(ctx, pet, view.guest ? view.skin : shown.skin, { detail: loop.cost > 5 ? 0 : 1, label: view.guest ? view.label : "", name: shown?.name || "" });
+    paintPet(ctx, pet, view.guest ? view.skin : shown.skin, { detail: loop.cost > 5 ? 0 : 1, label: view.guest ? view.label : "", name: shown?.name || "", collectible: view.guest ? view.collectible : shown?.collectible });
     loop.cost = lerp(loop.cost, now() - started, 0.1);
     loop.painted += 1;
   }
@@ -119667,7 +120375,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   let announced = null;
   function announce() {
     const shown = look();
-    const pet = shown.on ? { kind: shown.kind, skin: shown.skin, name: shown.name } : null;
+    const pet = shown.on ? { kind: shown.kind, skin: shown.skin, name: shown.name, ...(shown.collectible ? { instanceId: shown.collectible.id } : {}) } : null;
     const key = JSON.stringify(pet);
     if (key === announced || typeof window.mefiStudio?.hubPet !== "function") return;
     announced = key;
@@ -119678,8 +120386,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!borrowed) announce();
     if (headless()) return;
     const shown = look();
-    if (shown.on && !views.has("you")) makeView("you", { kind: shown.kind, size: prefs.size });
-    else if (shown.on && views.get("you").sim.pet.kind !== shown.kind) reshape(views.get("you"), shown.kind);
+    const size = shown.collectible ? COLLECTIBLE_SIZES[shown.collectible.size] : prefs.size;
+    if (shown.on && !views.has("you")) makeView("you", { kind: shown.kind, size });
+    else if (shown.on && (views.get("you").sim.pet.kind !== shown.kind || views.get("you").sim.pet.size !== size)) reshape(views.get("you"), shown.kind, size);
     if (!shown.on && views.has("you")) dropView("you");
     const visible = document.visibilityState !== "hidden";
     if (views.size && visible) start(); else stop();
@@ -119718,7 +120427,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         if (!id || id === "you" || !pet || typeof pet !== "object" || wanted.size >= MAX_GUESTS) continue;
         const owner = String(entry.name ?? "").trim().slice(0, 32);
         const name = String(pet.name ?? "").trim().slice(0, 24);
-        wanted.set(`guest:${id}`, { kind: KIND[pet.kind] ? pet.kind : "dragon", skin: SKINS_OK.has(pet.skin) ? pet.skin : "theme", label: owner && name ? `${name} · ${owner}` : name || owner });
+        const collectible = collectibleLook(pet.collectible, true);
+        wanted.set(`guest:${id}`, { kind: collectible?.visual.body || (KIND[pet.kind] ? pet.kind : "dragon"), skin: SKINS_OK.has(pet.skin) ? pet.skin : "theme", collectible, size: collectible ? COLLECTIBLE_SIZES[collectible.size] : 1, label: owner && name ? `${name} · ${owner}` : name || owner });
       }
     }
     for (const [id, view] of views) {
@@ -119729,8 +120439,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     for (const [id, guest] of wanted) {
       const view = views.get(id);
       if (view) {
-        view.skin = guest.skin; view.label = guest.label;
-        if (view.sim.pet.kind !== guest.kind) reshape(view, guest.kind);
+        view.skin = guest.skin; view.label = guest.label; view.collectible = guest.collectible;
+        if (view.sim.pet.kind !== guest.kind || view.sim.pet.size !== guest.size) reshape(view, guest.kind, guest.size);
         if (view.sim.pet.mode === "leave") view.sim.enter("wander", world);
         continue;
       }
@@ -119771,7 +120481,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function set(patch = {}) {
     const next = { ...prefs, names: { ...prefs.names } };
     if (typeof patch.on === "boolean") next.on = patch.on;
-    if (KIND[patch.kind]) next.kind = patch.kind;
+    if (KIND[patch.kind]) { next.kind = patch.kind; equipped = null; delete next.instanceId; }
     if (SKIN_LIST.some((skin) => skin.id === patch.skin)) next.skin = patch.skin;
     if (typeof patch.name === "string") {
       // The name belongs to the pet it was given to: the one named in the patch, else the one on show.
@@ -119787,7 +120497,6 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if ([0.8, 1, 1.25].includes(Number(patch.size))) next.size = Number(patch.size);
     prefs = next;
     writeStore();
-    if (views.has("you")) views.get("you").sim.pet.size = prefs.size;
     sync();
     if (roomList.length) guests(roomList);
     window.dispatchEvent?.(new CustomEvent("mefi:pet", { detail: state() }));
@@ -119796,11 +120505,35 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function state() {
     const shown = look();
     return {
-      on: shown.on, kind: shown.kind, skin: shown.skin, name: shown.name, calm: prefs.calm, come: prefs.come, touch: prefs.touch, size: prefs.size,
+      on: shown.on, kind: shown.kind, skin: shown.skin, name: shown.name, calm: prefs.calm, come: prefs.come, touch: prefs.touch, size: shown.collectible ? COLLECTIBLE_SIZES[shown.collectible.size] : prefs.size,
       chosen: { ...prefs, names: { ...prefs.names } }, preview: Boolean(borrowed),
+      instance: equipped ? collectibleLook(equipped, true) : null,
       // The per-device kill switches, as read at load.
       antics: switches.antics, livePreview: switches.live,
     };
+  }
+  // The collection calls this after an inventory read, care action or size
+  // change. Only the instance id is remembered; reconnecting must recheck it.
+  // null also revokes a pet that was traded or is no longer in the inventory.
+  function equip(instance) {
+    const next = instance === null ? null : collectibleLook(instance, true);
+    if (instance !== null && !next) return false;
+    endPreview({ quiet: true });
+    equipped = next;
+    if (next) { prefs.instanceId = next.id; prefs.on = true; }
+    else delete prefs.instanceId;
+    writeStore(); sync();
+    if (roomList.length) guests(roomList);
+    window.dispatchEvent?.(new CustomEvent("mefi:pet", { detail: state() }));
+    return state();
+  }
+  function suspendCollectible() {
+    if (!equipped) return state();
+    equipped = null;
+    sync();
+    if (roomList.length) guests(roomList);
+    window.dispatchEvent?.(new CustomEvent("mefi:pet", { detail: state() }));
+    return state();
   }
   function preview(choice = {}, ms = 120000) {
     endPreview({ quiet: true });
@@ -119841,14 +120574,18 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (look.path === "eight") return (t) => { const a = t * look.rate; return { x: cx + Math.sin(a) * rx * 1.05, y: cy + Math.sin(a) * Math.cos(a) * ry * 1.6 + Math.sin(a * 2) * 2.5 * scale }; };
     return (t) => { const a = t * look.rate; return { x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry }; };
   }
-  function paintPreview(canvas, { kind = "dragon", skin = "theme", time = 0, pose = "fly", size = null } = {}) {
+  function paintPreview(canvas, options = {}) {
+    let { kind = "dragon", skin = "theme", time = 0, pose = "fly", size = null } = options;
+    const collectible = collectibleLook(options.collectible || options);
+    if (collectible) { kind = collectible.visual.body; size = null; }
     const ctx = canvas?.getContext?.("2d");
     if (!ctx || !BODIES[kind]) return false;
     const width = canvas.clientWidth || canvas.width, height = canvas.clientHeight || canvas.height;
     const dpr = Math.min(2, Math.max(1, Number(window.devicePixelRatio) || 1));
     if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) { canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr); }
     const look = PREVIEW[kind];
-    const scale = Number(size) > 0 ? Number(size) : clamp(Math.min(width / look.span, height / (look.span * 0.6)), 0.3, 2);
+    const growthScale = collectible?.growth.stage === "baby" ? 0.8 : collectible?.growth.stage === "young" ? 0.9 : 1;
+    const scale = (Number(size) > 0 ? clamp(Number(size), 0.3, 2) : clamp(Math.min(width / look.span, height / (look.span * 0.6)), 0.3, 2)) * growthScale;
     const t = Number(time) || 0;
     const key = `${kind}|${pose}|${scale}|${width}|${height}`;
     let kept = previewed.get(canvas);
@@ -119895,7 +120632,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(dpr, 0, 0, dpr, shiftX * dpr, shiftY * dpr);
-    paintPet(ctx, pet, skin);
+    paintPet(ctx, pet, skin, { collectible });
     return true;
   }
   // A preview's trail, made from the clock so every frame agrees with the
@@ -120004,6 +120741,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!card) return;
     const body = card.querySelector(".settings-flair-body");
     const shown = state();
+    const collectible = shown.preview ? null : shown.instance;
     const kind = KIND[shown.kind] || KIND.dragon;
     const rows = [];
     const save = fromCard((patch) => set(patch));
@@ -120011,17 +120749,22 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const pet = el("div", "field settings-flair-pet");
     const stage = el("canvas", "settings-flair-preview");
     stage.setAttribute("role", "img");
-    stage.setAttribute("aria-label", `${shown.name} the ${kind.noun}`);
+    stage.setAttribute("aria-label", `${shown.name} the ${kind.noun}${collectible ? `, ${collectible.growth.stage}, ${collectible.rarity === "none" ? "original" : collectible.rarity}` : ""}`);
     const picks = el("div", "settings-flair-picks");
     const kinds = el("select");
+    if (collectible) {
+      const option = el("option", "", `${collectible.name} (your collection)`);
+      option.value = "collection"; kinds.append(option);
+    }
     for (const item of KINDS) {
       const option = el("option", "", owns(item.item) ? item.name : `${item.name} (in the Shop)`);
       option.value = item.id; option.disabled = !owns(item.item);
       kinds.append(option);
     }
-    kinds.value = shown.kind;
+    kinds.value = collectible ? "collection" : shown.kind;
     kinds.addEventListener("change", () => { save({ kind: kinds.value }); paintCard({ focus: "settings-pet-kind" }); });
     const name = el("input", "settings-flair-name"); name.type = "text"; name.maxLength = 24; name.value = shown.name; name.autocomplete = "off";
+    name.disabled = Boolean(collectible);
     const switchWords = el("span", "", lineFor(shown.name, kind));
     const hint = el("span", "field-hint", `Rest the pointer on ${shown.name} to pet it. Circle the pointer quickly near it to play chase.`);
     name.addEventListener("change", () => {
@@ -120038,9 +120781,22 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       skins.append(option);
     }
     skins.value = shown.skin;
+    skins.disabled = Boolean(collectible);
     skins.addEventListener("change", () => { save({ skin: skins.value }); cardShow?.set({ skin: state().skin }); });
     picks.append(labelled("Pet", kinds, "settings-pet-kind"), labelled("Name", name, "settings-pet-name"), labelled("Colours", skins, "settings-pet-skin"));
     pet.append(stage, picks);
+    if (collectible) {
+      const instance = collectible;
+      const words = [instance.growth.stage, instance.rarity === "none" ? "Original" : instance.rarity, `${instance.growth.careDays} days cared for`, `${instance.size} size`];
+      if (instance.traits.length) words.push(instance.traits.join(", "));
+      pet.append(el("span", "field-hint", words.join(" · ")));
+      const collection = el("button", "ghost mini", "Open your pet collection"); collection.type = "button";
+      collection.addEventListener("click", () => {
+        if (window.MefiCollectibles?.open) window.MefiCollectibles.open("collection");
+        else window.MefiShop?.open?.("collectibles");
+      });
+      pet.append(collection);
+    }
     pet.append(switchRow(switchWords, prefs.on, (on) => save({ on })));
     pet.append(switchRow("Stays on its perch while you type", prefs.calm, (calm) => save({ calm })));
     pet.append(switchRow("Comes to tell you when something needs you", prefs.come, (come) => save({ come })));
@@ -120090,7 +120846,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     body.replaceChildren(...rows);
     // The picture: a still frame now, moving while the card is on screen.
     cardShow?.stop();
-    cardShow = livePreview(stage, { kind: shown.kind, skin: shown.skin });
+    cardShow = livePreview(stage, { kind: shown.kind, skin: shown.skin, collectible });
     if (focus) document.getElementById?.(focus)?.focus?.({ preventScroll: true });
   }
   // A change made on the card is already shown there: repainting it would
@@ -120148,7 +120904,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   window.MefiPets = {
     kinds: () => KINDS.map((kind) => ({ ...kind })),
     skins: () => SKIN_LIST.map((skin) => ({ ...skin })),
-    state, set, preview, endPreview, react, paintPreview, livePreview, guests,
+    state, set, equip, suspendCollectible, preview, endPreview, react, paintPreview, livePreview, guests,
     // The pets on screen now: whose, what kind and what each is doing.
     flying: () => [...views.values()].map((view) => ({ id: view.id, kind: view.sim.pet.kind, mode: view.sim.pet.mode, guest: view.guest, x: view.sim.pet.x, y: view.sim.pet.y })),
     // For tests and the Shop: a pet's flight to step without the page.

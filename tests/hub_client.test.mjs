@@ -111,7 +111,7 @@ test("connecting trades the Discord token for a hub session once, says hello and
   assert.equal(h.socket().url, "wss://hub.example.test/v1/ws");
   assert.equal(h.client.status().state, "connecting");
   h.socket().open();
-  assert.deepEqual(h.socket().sent, [{ type: "hello", session: "hub-session-1", protocol: 1, oldest: 1, features: ["history.peer", "keepalive", "friend.online", "pcs", "pets", "pets.2"] }], "hello names what this Studio can do and the oldest protocol it speaks; an older hub drops both fields");
+  assert.deepEqual(h.socket().sent, [{ type: "hello", session: "hub-session-1", protocol: 1, oldest: 1, features: ["history.peer", "keepalive", "friend.online", "pcs", "pets", "pets.2", "collectibles.1"] }], "hello names what this Studio can do and the oldest protocol it speaks; an older hub drops both fields");
   h.socket().receive({ type: "ready", user: USER, protocol: 1 });
   await settle();
   const status = h.client.status();
@@ -387,6 +387,11 @@ test("peer history: ask the room, answer an ask from the kept copy within one fr
   assert.deepEqual(await old.client.historyAsk(ROOM), { ok: false, reason: "unsupported" }, "never asked of a hub without the feature");
 });
 
+test("image and sticker snapshots both survive signed peer history serialization", () => {
+  const input={id:"200000000000000010",author:{id:"200000000000000001",name:"Alice"},text:"Shared keepsake",createdAt:10,v:2,image:{id:"image_"+"a".repeat(32),width:8,height:8},sticker:{id:"item_Ab0123456789_-Cd",ownerId:"200000000000000001",name:"Idea",rarity:"rare",visual:{body:"dragon",primary:"#ffeedd",secondary:"#88eeaa",motif:"stars",asset:"idea"}},sig:"abcdefghijklmnopqrstuv"};
+  const message=hub.roomMessage(input), wire=hub.wireMessage(message);
+  assert.deepEqual(wire.image,input.image);assert.equal(wire.v,2);assert.deepEqual(wire.sticker,input.sticker);assert.equal(wire.sig,input.sig);
+});
 test("an id the relay left out is refused, never read as the word \"undefined\"", () => {
   assert.equal(hub.roomSummary({ name: "No id", kind: "hangout" }), null);
   assert.equal(hub.roomSummary({ id: 12345678, name: "Number id" }), null, "ids are strings");

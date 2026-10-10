@@ -97,7 +97,7 @@ const PRESENCE_EVERY_MS = 30_000;
 const KEEPALIVE_EVERY_MS = 30_000;
 const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
 // What this Studio tells the hub it can do (hello.features); "pets.2": it draws the Shop's pets too.
-const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs", "pets", "pets.2"]);
+const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs", "pets", "pets.2", "collectibles.1"]);
 // A historyReply must fit the hub's 16 KB frame limit.
 const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
@@ -256,6 +256,7 @@ function roomMessage(value) {
     attachments: Array.isArray(value.attachments) ? value.attachments.filter(object).slice(0, 10).map((item) => ({ name: text(item.name, 200) || "file", size: count(item.size, 1e12) ?? 0 })) : [],
     replyTo: SNOWFLAKE.test(String(value.replyTo)) ? String(value.replyTo) : null,
     ...(image ? { v: 2, image } : {}),
+    ...(value.sticker && require("./collectibles-contract.cjs").sticker(value.sticker) ? { sticker: require("./collectibles-contract.cjs").sticker(value.sticker) } : {}),
     // The relay's signature (feature "messages.signed"), kept so this copy can
     // later fill another member's gap or back a report.
     ...(opaqueId(value.sig) ? { sig: value.sig } : {}),
@@ -277,6 +278,7 @@ function wireMessage(value) {
     attachments: message.attachments.map((item) => ({ name: item.name.replace(/[\x00-\x1f\x7f]/g, " ") || "file", size: item.size })),
     replyTo: message.replyTo,
     ...(message.v === 2 ? { v: 2, image: message.image } : {}),
+    ...(message.sticker ? { sticker: message.sticker } : {}),
     ...(message.sig ? { sig: message.sig } : {}),
   };
 }
@@ -658,7 +660,14 @@ function packFields(fields, { required = false } = {}) {
 function petLook(value) {
   if (!object(value) || !PET_KINDS.includes(value.kind) || !PET_SKINS.includes(value.skin)) return null;
   const name = typeof value.name === "string" ? value.name.replace(/[\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim().slice(0, PET_NAME_MAX).trim() : "";
-  return { kind: value.kind, skin: value.skin, name };
+  const instanceId = typeof value.instanceId === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(value.instanceId) ? value.instanceId : null;
+  const raw = value.collectible, look = raw && require("./collectibles-contract.cjs").visual(raw.visual);
+  const collectible = look && raw.id === instanceId && require("./collectibles-contract.cjs").RARITIES.includes(raw.rarity)
+    && ["baby", "young", "adult"].includes(raw.stage) && ["tiny", "small", "medium", "large"].includes(raw.size)
+    ? { id: raw.id, kind: "pet", name: text(raw.name, 40), visual: look, rarity: raw.rarity, quality: count(raw.quality, 100) ?? 0,
+      stage: raw.stage, size: raw.size, sizes: Array.isArray(raw.sizes) ? raw.sizes.filter((size) => ["tiny", "small", "medium", "large"].includes(size)).slice(0, 4) : ["tiny"],
+      traits: Array.isArray(raw.traits) ? raw.traits.slice(0, 12).filter(object).map((trait) => ({ id: text(trait.id, 64), name: text(trait.name, 40), acquiredAt: timeOf(trait.acquiredAt) })) : [] } : null;
+  return { kind: value.kind, skin: value.skin, name, ...(instanceId ? { instanceId } : {}), ...(collectible ? { collectible } : {}) };
 }
 // The newest pets generation a features list names ("pets" alone is the first), or 0.
 function petsGenerationOf(features) {
@@ -768,7 +777,7 @@ function createHubClient(options = {}) {
       events: features.includes("events"),
       lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"), building: features.includes("building"),
       pcs: features.includes("pcs"), pcOn: Boolean(pc) && features.includes("pcs"),
-      shop: features.includes("shop"), pets: features.includes("pets"), images: features.includes("messages.images"), trades: features.includes("shop.trades"),
+      shop: features.includes("shop"), pets: features.includes("pets"), images: features.includes("messages.images"), trades: features.includes("shop.trades"), collectibles: features.includes("collectibles.1"),
     };
   }
   function setState(next, nextError = null) {
@@ -1081,6 +1090,10 @@ function createHubClient(options = {}) {
         return;
       }
       // A room's pets (feature "pets"): the members there with a pet, this member's own included.
+      case "collectibles": {
+        if (features.includes("collectibles.1")) emit({ type: "collectibles" });
+        return;
+      }
       case "roomPets": {
         const pets = features.includes("pets") && opaqueId(frame.roomId) ? roomPetsOf(frame.pets) : null;
         if (pets) emit({ type: "roomPets", roomId: frame.roomId, pets });
@@ -1291,6 +1304,11 @@ function createHubClient(options = {}) {
     // Room chat over the socket: an ack (with the Discord message id) or a
     // nack with the hub's reason, or "timeout" after 10 s. Nothing retries
     // on its own.
+    sendSticker(roomId, instanceId, name = "Sticker") {
+      if (!features.includes("collectibles.1")) return Promise.resolve({ ok: false, reason: "unsupported" });
+      if (!id(roomId) || !/^[A-Za-z0-9_:-]{1,80}$/.test(String(instanceId ?? ""))) return bad();
+      return withAck({ type: "send", roomId, text: `[Sticker: ${text(name, 40)}]`, stickerId: instanceId });
+    },
     sendMessage(roomId, message) {
       const body = postText(message);
       if (!id(roomId) || !body) return Promise.resolve({ ok: false, reason: "bad-request" });
@@ -1599,6 +1617,17 @@ function createHubClient(options = {}) {
     // with needs, price, balance and hold kept (shopRefused).
     // A list: "studio", "new", "top", "owned" or "mine" (anything else is
     // "studio"); `cursor` is the `next` of the page before.
+    async collectibles(action = "list", payload = {}) {
+      if (!features.includes("collectibles.1")) return { ok: false, error: "unsupported" };
+      const call = require("./collectibles-contract.cjs").request(action, payload);
+      if (!call) return { ok: false, error: "bad-request" };
+      const answer = await authed(call.method, call.path, call.body);
+      if (!answer.ok) return { ...refused(answer), ...Object.fromEntries(["price", "balance", "until", "poolVersion"].filter((key) => ["number", "string"].includes(typeof answer.data?.[key])).map((key) => [key, answer.data[key]])) };
+      // JSON from the authenticated relay; surfaces render only text and
+      // allowlisted visuals. Cap before crossing IPC into the renderer.
+      if (!object(answer.data) || JSON.stringify(answer.data).length > 1024 * 1024) return { ok: false, error: "bad-response" };
+      return { ...answer.data, ok: true };
+    },
     async shop(view = "studio", cursor = null) {
       if (!features.includes("shop")) return { ok: false, error: "unsupported" };
       const which = SHOP_VIEWS.includes(view) ? view : "studio";

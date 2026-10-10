@@ -10,6 +10,10 @@ destinations remain reachable. Shared links show their destination and load
 supported players on request. Reviewed images and cosmetic swaps require a
 compatible private service that enforces room access and ownership; this
 desktop candidate does not deploy that service or grant credits or paid access.
+The public pet/sticker client adds a collection home, care and rarity
+appearances, reviewed crate quotes, market orders and creator forms, with nine
+bundled sticker designs. Item ownership and membership rights remain
+capability-gated by the separately staged private service.
 The hosted account, subscription and economy proposals remain private drafts;
 they are not activated by this candidate. Google social sign-in still needs
 registered OAuth configuration and a deployed identity adapter.

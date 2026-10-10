@@ -248,7 +248,7 @@ test("Home: the month's drop as a banner made from its own data, its pieces, the
   assert.equal(card.querySelector("#friends-shop-balance").hidden, false);
   await one(card, "How to earn credits").click();
   assert.deepEqual(env.went.at(-1), ["friends-page", { place: "events" }], "how to earn credits is Friends › Events");
-  assert.deepEqual(card.querySelectorAll('[role="tab"]').map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]), [["Home", "true"], ["Pets", "false"], ["Menu effects", "false"], ["Node styles", "false"], ["Themes", "false"], ["Community", "false"], ["Owned", "false"], ["Make a style", "false"]]);
+  assert.deepEqual(card.querySelectorAll('[role="tab"]').map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]), [["Home", "true"], ["Pets", "false"], ["Pets & collectibles", "false"], ["Menu effects", "false"], ["Node styles", "false"], ["Themes", "false"], ["Community", "false"], ["Owned", "false"], ["Make a style", "false"]]);
   // The banner: the drop's colours as custom properties, a text colour that reads on them, its month and time left.
   const hero = card.querySelector("#friends-shop-hero");
   assert.ok(hero, "the drop's banner");

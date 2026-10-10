@@ -488,6 +488,14 @@
       const text = window.MefiPlaylists?.card?.(String(message.text ?? "")) || window.MefiSocialContent?.content?.(readable(message, nameOf)) || node("p", "rooms-message-text", readable(message, nameOf));
       item.append(head, text);
       if (message.image && window.MefiRoomImages) item.append(window.MefiRoomImages.card(message.image,roomId));
+      if (message.sticker && window.MefiCollectibles?.renderSticker) {
+        item.append(window.MefiCollectibles.renderSticker(message.sticker));
+        const claim = button("Claim base sticker", () => guard("Claiming…", async () => {
+          const answer = await api.hubCollectibles?.("claim", { instanceId: message.sticker.id, roomId });
+          status.textContent = answer?.ok ? "Base design added to your book. Rare variants keep their own ownership." : "That sticker must still be shared by an owner present in this room.";
+        }));
+        item.append(claim);
+      }
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
       if (messageMenus.has(message.id)) {
         const actions = node("div", "rooms-row-actions rooms-message-actions");
@@ -712,6 +720,49 @@
       });
       wrap.append(box, send);
       if (flags.images && window.MefiRoomImages) { const picture=button("Image",()=>window.MefiRoomImages.choose(room.id,room.name));picture.disabled=box.disabled;picture.setAttribute("aria-label",`Share an image to ${room.name}`);wrap.append(picture); }
+      if (typeof api.hubCollectibles === "function") {
+        const tray = node("div", "rooms-sticker-tray");
+        tray.hidden = true;
+        tray.setAttribute("aria-label", "Your stickers and stickers shared here");
+        const pick = button("Stickers", async () => {
+          tray.hidden = !tray.hidden;
+          pick.setAttribute("aria-expanded", String(!tray.hidden));
+          if (tray.hidden) return;
+          const seq = openSeq;
+          tray.replaceChildren(node("p", "muted", "Loading sticker book…"));
+          let answer;
+          try { answer = await api.hubCollectibles("stickers", { roomId: room.id }); } catch { answer = null; }
+          if (seq !== openSeq || openRoom?.id !== room.id || tray.hidden) return;
+          const items = answer?.ok ? answer.stickers || answer.items || [] : [];
+          tray.replaceChildren(node("p", "muted", "Shared base stickers work while their owner is here. Rare finishes require that sticker's rarity in your collection."));
+          if (!items.length) tray.append(node("p", "muted", "No stickers available. Open Shop › Pets & collectibles to load your free pack."));
+          for (const sticker of items) {
+            const row = node("div", "rooms-sticker-option");
+            if (window.MefiCollectibles?.renderSticker) row.append(window.MefiCollectibles.renderSticker(sticker));
+            const sendSticker = button(`Send ${sticker.name}`, () => guard(null, async () => {
+              const sent = await call("sendSticker", room.id, sticker.id, sticker.name);
+              status.textContent = sent?.ok ? "Sticker sent." : why(sent, "This sticker is no longer available to you.");
+              if (sent?.ok) tray.hidden = true;
+            }));
+            sendSticker.disabled = sticker.canUse === false;
+            if (sticker.canUse === false) sendSticker.title = "Own this sticker's rarity to use this finish.";
+            row.append(sendSticker);
+            if (sticker.ownerId === me?.id) row.append(button(sticker.shared ? "Stop sharing" : "Share here", () => guard(null, async () => {
+              const shared = await api.hubCollectibles("share", { instanceId: sticker.id, roomId: room.id, shared: !sticker.shared });
+              status.textContent = shared?.ok ? "Sticker sharing updated." : "This sticker could not be shared.";
+              tray.hidden = true;
+            })));
+            else row.append(button("Claim base", () => guard(null, async () => {
+              const claimed = await api.hubCollectibles("claim", { instanceId: sticker.id, roomId: room.id });
+              status.textContent = claimed?.ok ? "Base sticker added to your book." : "That sticker is no longer shared here.";
+            })));
+            tray.append(row);
+          }
+        });
+        pick.disabled = box.disabled;
+        pick.setAttribute("aria-expanded", "false");
+        wrap.append(pick, tray);
+      }
       return wrap;
     }
 
