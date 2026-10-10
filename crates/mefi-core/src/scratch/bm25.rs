@@ -10,46 +10,22 @@
 use std::collections::HashMap;
 
 use super::journal::crc32;
+use crate::js;
 
 pub const K1: f64 = 1.2;
 pub const B: f64 = 0.75;
 /// Heap the postings may take before old documents leave.
 pub const BUDGET: usize = 32 * 1024 * 1024;
-const MIN_TOKEN: usize = 3;
 const SNIPPET_CHARS: usize = 160;
 const SNIPPET_LEAD: usize = 40;
 const MAGIC: &[u8; 4] = b"MFPS";
+const ELLIPSIS: &str = "…";
 
-/// The index's tokens of a text, with each token's first character index.
-pub fn tokens_at(text: &str) -> Vec<(String, usize)> {
-    let mut out = Vec::new();
-    let mut current = String::new();
-    let mut start = 0usize;
-    let mut count = 0usize;
-    for (index, c) in text.chars().enumerate() {
-        if c.is_alphanumeric() {
-            if count == 0 {
-                start = index;
-            }
-            current.extend(c.to_lowercase());
-            count += 1;
-        } else if count > 0 {
-            if count >= MIN_TOKEN {
-                out.push((std::mem::take(&mut current), start));
-            } else {
-                current.clear();
-            }
-            count = 0;
-        }
-    }
-    if count >= MIN_TOKEN {
-        out.push((current, start));
-    }
-    out
-}
-
+/// The index's tokens of a text: the lowercased text split on every run of
+/// characters that is neither alphabetic nor numeric, keeping the pieces
+/// longer than two characters (scripts/scratch-rules.cjs tokenize).
 pub fn tokens(text: &str) -> Vec<String> {
-    tokens_at(text).into_iter().map(|(token, _)| token).collect()
+    text.to_lowercase().split(|c: char| !c.is_alphanumeric()).filter(|part| part.chars().count() > 2).map(str::to_string).collect()
 }
 
 /// The query's terms, each once, in the order first seen.
@@ -63,45 +39,39 @@ pub fn query_terms(query: &str) -> Vec<String> {
     seen
 }
 
-/// Where the first query term starts in the text, in characters.
-fn first_hit(text: &str, terms: &[String]) -> Option<usize> {
-    let mut current = String::new();
-    let mut start = 0usize;
-    let mut count = 0usize;
-    let mut index = 0usize;
-    for c in text.chars().chain(std::iter::once(' ')) {
-        if c.is_alphanumeric() {
-            if count == 0 {
-                start = index;
-            }
-            current.extend(c.to_lowercase());
-            count += 1;
-        } else if count > 0 {
-            if count >= MIN_TOKEN && terms.contains(&current) {
-                return Some(start);
-            }
-            current.clear();
-            count = 0;
-        }
-        index += 1;
+/// `haystack.indexOf(needle)` on UTF-16 units.
+fn index_of(haystack: &[u16], needle: &[u16]) -> Option<usize> {
+    if needle.is_empty() || needle.len() > haystack.len() {
+        return None;
     }
-    None
+    (0..=haystack.len() - needle.len()).find(|at| &haystack[*at..*at + needle.len()] == needle)
 }
 
-/// A window of the text around its first query term, whitespace folded.
-pub fn snippet(text: &str, terms: &[String]) -> String {
-    let hit = first_hit(text, terms).unwrap_or(0);
-    let start = hit.saturating_sub(SNIPPET_LEAD);
-    let window: Vec<char> = text.chars().skip(start).take(SNIPPET_CHARS + SNIPPET_LEAD).collect();
-    // Begin on a whole word: a word the window cut in two is left out.
-    let mut skip = 0usize;
-    if start > 0 && text.chars().nth(start - 1).is_some_and(|c| !c.is_whitespace()) {
-        while skip < window.len() && start + skip < hit && !window[skip].is_whitespace() {
-            skip += 1;
+/// A window of the text around the first query token found in it (the
+/// earliest position among the tokens), collapsed to one line, with an
+/// ellipsis where the text goes on (scratch-rules.cjs snippet).
+pub fn snippet(text: &str, query: &str) -> String {
+    let lower: Vec<u16> = text.to_lowercase().encode_utf16().collect();
+    let first = tokens(query).iter().filter_map(|token| index_of(&lower, &token.encode_utf16().collect::<Vec<_>>())).min();
+    let start = first.map_or(0, |at| at.saturating_sub(SNIPPET_LEAD));
+    let length = js::utf16_len(text);
+    let end = length.min(start + SNIPPET_CHARS);
+    let piece = js::slice(text, start as isize, Some(end as isize));
+    let mut folded = String::new();
+    let mut in_space = false;
+    for c in piece.chars() {
+        if js::is_space(c) {
+            if !in_space {
+                folded.push(' ');
+            }
+            in_space = true;
+        } else {
+            folded.push(c);
+            in_space = false;
         }
     }
-    let text: String = window.iter().skip(skip).take(SNIPPET_CHARS).collect();
-    text.split_whitespace().collect::<Vec<_>>().join(" ")
+    let piece = js::trim(&folded);
+    format!("{}{piece}{}", if start > 0 { ELLIPSIS } else { "" }, if end < length { ELLIPSIS } else { "" })
 }
 
 struct Doc {
@@ -199,34 +169,42 @@ impl Postings {
         }
     }
 
-    /// Every live document a term of the query appears in, with its score.
-    pub fn search(&self, query: &str) -> Vec<(String, f64)> {
+    /// Every candidate document a term of the query appears in, with its
+    /// score: N, the average length and each term's df count the candidates
+    /// (the live documents `candidate` accepts), as the JavaScript twin
+    /// scores the documents it selected.
+    pub fn search(&self, query: &str, candidate: &dyn Fn(&str) -> bool) -> Vec<(String, f64)> {
         let terms = query_terms(query);
         if terms.is_empty() || self.alive == 0 {
             return Vec::new();
         }
-        let n = self.alive as f64;
-        let avgdl = self.total_len as f64 / n;
+        let chosen: Vec<bool> = self.docs.iter().map(|doc| doc.alive && candidate(&doc.key)).collect();
+        let n = chosen.iter().filter(|yes| **yes).count() as f64;
+        if n == 0.0 {
+            return Vec::new();
+        }
+        let total: u64 = self.docs.iter().zip(&chosen).filter(|(_, yes)| **yes).map(|(doc, _)| u64::from(doc.len)).sum();
+        let avgdl = total as f64 / n;
         let mut scores: HashMap<u32, f64> = HashMap::new();
         for term in &terms {
             let Some(list) = self.terms.get(term) else { continue };
-            let df = list.iter().filter(|(id, _)| self.docs[*id as usize].alive).count() as f64;
+            let df = list.iter().filter(|(id, _)| chosen[*id as usize]).count() as f64;
             if df == 0.0 {
                 continue;
             }
             let idf = (1.0 + (n - df + 0.5) / (df + 0.5)).ln();
             for (id, tf) in list {
-                let doc = &self.docs[*id as usize];
-                if !doc.alive {
+                if !chosen[*id as usize] {
                     continue;
                 }
                 let tf = f64::from(*tf);
-                let dl = f64::from(doc.len);
-                let part = idf * (tf * (K1 + 1.0)) / (tf + K1 * (1.0 - B + B * dl / avgdl));
+                let dl = f64::from(self.docs[*id as usize].len);
+                let ratio = if avgdl > 0.0 { dl / avgdl } else { 0.0 };
+                let part = idf * (tf * (K1 + 1.0)) / (tf + K1 * (1.0 - B + B * ratio));
                 *scores.entry(*id).or_insert(0.0) += part;
             }
         }
-        scores.into_iter().map(|(id, score)| (self.docs[id as usize].key.clone(), score)).collect()
+        scores.into_iter().filter(|(_, score)| *score > 0.0).map(|(id, score)| (self.docs[id as usize].key.clone(), score)).collect()
     }
 
     /// postings.bin: the live documents and their terms, with the snapshot's
@@ -338,18 +316,19 @@ mod tests {
         assert_eq!(tokens("The quick-brown fox's 42 jumps, ÉTÉ à Zürich! ab abc"), vec!["the", "quick", "brown", "fox", "jumps", "été", "zürich", "abc"]);
         assert_eq!(tokens(""), Vec::<String>::new());
         assert_eq!(tokens("a b cd"), Vec::<String>::new());
-        assert_eq!(tokens_at("  Hello, World"), vec![("hello".to_string(), 2), ("world".to_string(), 9)]);
         assert_eq!(query_terms("Fox fox FOX hound"), vec!["fox", "hound"]);
     }
 
     #[test]
     fn snippet_centres_on_the_first_term() {
         let text = format!("{} needle in the haystack {}", "lead ".repeat(30), "tail ".repeat(60));
-        let out = snippet(&text, &["needle".to_string()]);
-        assert!(out.starts_with("lead lead"), "{out}");
+        let out = snippet(&text, "Needle");
+        assert!(out.starts_with(ELLIPSIS), "{out}");
         assert!(out.contains("needle in the haystack"));
-        assert!(out.chars().count() <= SNIPPET_CHARS);
-        assert_eq!(snippet("short\n\ntext   here", &["zzz".to_string()]), "short text here");
+        assert!(out.ends_with(ELLIPSIS));
+        assert!(out.chars().count() <= SNIPPET_CHARS + 2);
+        assert_eq!(snippet("short\n\ntext   here", "zzz"), "short text here");
+        assert_eq!(snippet("", "zzz"), "");
     }
 
     fn corpus() -> Postings {
@@ -363,7 +342,7 @@ mod tests {
     }
 
     fn ranked(postings: &Postings, query: &str) -> Vec<(String, f64)> {
-        let mut hits = postings.search(query);
+        let mut hits = postings.search(query, &|_| true);
         hits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal).then_with(|| a.0.cmp(&b.0)));
         hits
     }
@@ -386,8 +365,13 @@ mod tests {
         let expected = idf * (1.0 * 2.2) / (1.0 + 1.2 * (0.25 + 0.75 * 5.0 / 6.0));
         let hits = ranked(&postings, "cat");
         assert!((hits[0].1 - expected).abs() < 1e-12, "{} vs {expected}", hits[0].1);
-        assert!(postings.search("zebra").is_empty());
-        assert!(postings.search("").is_empty());
+        assert!(postings.search("zebra", &|_| true).is_empty());
+        assert!(postings.search("", &|_| true).is_empty());
+        // Statistics follow the candidates: alone, a's "cat" has df 1 of 1.
+        let only_a = postings.search("cat", &|key| key == "a");
+        assert_eq!(only_a.len(), 1);
+        let idf_alone = (1.0_f64 + 0.5 / 1.5).ln();
+        assert!((only_a[0].1 - idf_alone * 2.2 / (1.0 + 1.2 * (0.25 + 0.75))).abs() < 1e-12);
     }
 
     #[test]

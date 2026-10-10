@@ -519,7 +519,8 @@ impl Arena {
         Ok(json!({ "ok": true, "hash": hex(&hash), "bytes": bytes.len(), "dedup": dedup }))
     }
 
-    /// get: by key, or by hash (the most recently touched key holding it).
+    /// get: by key (which refreshes the key's place in the LRU order), or by
+    /// hash (the most recently touched key holding it, which stays where it is).
     pub fn get(&mut self, key: Option<&str>, hash: Option<&str>, now: f64) -> Value {
         let found: Option<String> = match (key, hash) {
             (Some(key), _) => self.index.keys.contains_key(key).then(|| key.to_string()),
@@ -533,15 +534,17 @@ impl Arena {
             }),
             _ => None,
         };
-        let Some(key) = found else {
+        let Some(found) = found else {
             self.index.misses += 1;
             return json!({ "ok": false, "reason": "missing" });
         };
         self.index.hits += 1;
-        let Some(entry) = self.index.keys.get_mut(&key) else {
+        let Some(entry) = self.index.keys.get_mut(&found) else {
             return json!({ "ok": false, "reason": "missing" });
         };
-        entry.at = now;
+        if key.is_some() {
+            entry.at = now;
+        }
         let entry = entry.clone();
         let text = self.index.blobs.get(&entry.hash).map(|blob| self.text_of(blob)).unwrap_or_default();
         json!({ "ok": true, "text": text, "kind": entry.kind, "at": js::num(entry.at), "meta": entry.meta })
@@ -570,26 +573,18 @@ impl Arena {
         json!({ "ok": true, "items": items })
     }
 
-    /// search: BM25 over the searchable keys, best first; ties by last touch
-    /// (newest first), then key.
+    /// search: BM25 over the searchable keys the kind and prefix select,
+    /// best first; ties by last touch (newest first), then key.
     pub fn search(&self, query: &str, kind: Option<&str>, prefix: Option<&str>, limit: usize) -> Value {
-        let terms = bm25::query_terms(query);
-        let mut hits: Vec<(String, f64, &Entry)> = self
-            .postings
-            .search(query)
-            .into_iter()
-            .filter_map(|(key, score)| {
-                let entry = self.index.keys.get(&key)?;
-                Arena::matches(entry, &key, prefix, kind).then_some((key, score, entry))
-            })
-            .collect();
+        let candidate = |key: &str| self.index.keys.get(key).is_some_and(|entry| Arena::matches(entry, key, prefix, kind));
+        let mut hits: Vec<(String, f64, &Entry)> = self.postings.search(query, &candidate).into_iter().filter_map(|(key, score)| self.index.keys.get(&key).map(|entry| (key, score, entry))).collect();
         hits.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal).then_with(|| b.2.at.partial_cmp(&a.2.at).unwrap_or(std::cmp::Ordering::Equal)).then_with(|| a.0.cmp(&b.0)));
         let items: Vec<Value> = hits
             .into_iter()
             .take(limit)
             .map(|(key, score, entry)| {
                 let text = self.index.blobs.get(&entry.hash).map(|blob| self.text_of(blob)).unwrap_or_default();
-                json!({ "key": key, "hash": hex(&entry.hash), "score": js::num(score), "snippet": bm25::snippet(&text, &terms), "at": js::num(entry.at) })
+                json!({ "key": key, "hash": hex(&entry.hash), "score": js::num(score), "snippet": bm25::snippet(&text, query), "at": js::num(entry.at) })
             })
             .collect();
         json!({ "ok": true, "items": items })

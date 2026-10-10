@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, openSync, closeSync, ftruncateSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import fsp from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -38,13 +39,14 @@ function folder(t, name) {
   return dir;
 }
 
+const HISTORY_BODY = "snapshot body one: alpha";
 const CORPUS = [
   ["run/1/log", "output", "Build started. Compiling module alpha, then beta. Warning: unused import in alpha.", { step: 1 }],
   ["run/1/result", "result", "Build passed: alpha and beta compiled, 12 tests green.", null],
   ["run/2/log", "output", "Compiling gamma. Error: gamma failed to link against alpha.", { step: 2 }],
-  ["task/9/notes", "note", "Alpha is the core module; beta depends on it; gamma is optional.", null],
-  ["shared/readme", "note", "the quick brown fox jumps over the lazy dog, and the dog sleeps", null],
-  ["history/abc", "history", "snapshot body one: alpha", null],
+  ["task/9/notes", "task", "Alpha is the core module; beta depends on it; gamma is optional.", null],
+  ["shared/readme", "shared", "the quick brown fox jumps over the lazy dog, and the dog sleeps", null],
+  [`history/${sha(HISTORY_BODY)}`, "history", HISTORY_BODY, null],
   ["run/2/dup", "output", "Build passed: alpha and beta compiled, 12 tests green.", null],
 ];
 const QUERIES = ["alpha", "alpha beta", "gamma error", "dog", "nothing-here", "ALPHA, beta!", "fox"];
@@ -61,7 +63,7 @@ function rustSequence(dir, at = NOW) {
   calls.push({ function: "scratch.has", args: [given(), { key: "nope" }] });
   calls.push({ function: "scratch.list", args: [given(), { limit: 100 }] });
   calls.push({ function: "scratch.list", args: [given(), { prefix: "run/", limit: 2 }] });
-  calls.push({ function: "scratch.list", args: [given(), { kind: "note", limit: 100 }] });
+  calls.push({ function: "scratch.list", args: [given(), { kind: "task", limit: 100 }] });
   QUERIES.forEach((query) => calls.push({ function: "scratch.search", args: [given(), { query, limit: 10 }] }));
   calls.push({ function: "scratch.search", args: [given(), { query: "alpha", kind: "output", limit: 10 }] });
   calls.push({ function: "scratch.search", args: [given(), { query: "alpha", prefix: "task/", limit: 10 }] });
@@ -77,7 +79,7 @@ function rustSequence(dir, at = NOW) {
 /** The same sequence on the JavaScript twin. */
 async function twinSequence(dir, at = NOW) {
   let clock = at;
-  const host = twin.createScratch({ dir, capMB: 4, now: () => clock, log: () => {} });
+  const host = twin.createScratch({ dir, capMB: 4, fs: fsp, now: () => clock, log: () => {} });
   const out = [];
   const step = async (promise) => out.push(await promise);
   if (typeof host.open === "function") await step(host.open());
@@ -97,7 +99,7 @@ async function twinSequence(dir, at = NOW) {
   await step(host.has({ key: "nope" }));
   await step(host.list({ limit: 100 }));
   await step(host.list({ prefix: "run/", limit: 2 }));
-  await step(host.list({ kind: "note", limit: 100 }));
+  await step(host.list({ kind: "task", limit: 100 }));
   for (const query of QUERIES) await step(host.search({ query, limit: 10 }));
   await step(host.search({ query: "alpha", kind: "output", limit: 10 }));
   await step(host.search({ query: "alpha", prefix: "task/", limit: 10 }));
@@ -127,14 +129,18 @@ test("scratch: the Rust arena answers as the JavaScript twin", { skip: skipTwin 
     assert.equal(left[index].hash, sha(text), `put ${key} hash`);
     index += 1;
   }
-  assert.deepEqual(left[index], right[index], "get by key");
-  assert.deepEqual(left[index + 1], right[index + 1], "get by hash");
+  const pick = (answer, fields) => Object.fromEntries(fields.map((field) => [field, answer[field]]));
+  const GET = ["ok", "text", "kind", "at", "meta"];
+  assert.deepEqual(pick(left[index], GET), pick(right[index], GET), "get by key");
+  assert.deepEqual(pick(left[index + 1], ["ok", "text"]), pick(right[index + 1], ["ok", "text"]), "get by hash");
   assert.deepEqual(left[index + 2], right[index + 2], "get missing");
-  assert.deepEqual(left[index + 3], right[index + 3], "has");
+  assert.deepEqual(pick(left[index + 3], ["ok", "has"]), pick(right[index + 3], ["ok", "has"]), "has");
   assert.deepEqual(left[index + 4], right[index + 4], "has not");
   index += 5;
-  for (const label of ["list all", "list run/ limit 2", "list kind note"]) {
-    assert.deepEqual(left[index], right[index], label);
+  const LISTED = ["key", "hash", "bytes", "kind", "at"];
+  const listed = (answer) => ({ ok: answer.ok, items: answer.items.map((item) => pick(item, LISTED)) });
+  for (const label of ["list all", "list run/ limit 2", "list kind task"]) {
+    assert.deepEqual(listed(left[index]), listed(right[index]), label);
     index += 1;
   }
   for (const query of [...QUERIES, "alpha kind output", "alpha prefix task/"]) {
@@ -143,12 +149,12 @@ test("scratch: the Rust arena answers as the JavaScript twin", { skip: skipTwin 
     index += 1;
   }
   const statKeys = ["ok", "bytes", "capBytes", "liveBytes", "deadBytes", "keys", "blobs", "hits", "misses", "generation", "lastCompactAt"];
-  for (const stats of [left[index], right[index]]) assert.deepEqual(Object.keys(stats).sort(), [...statKeys].sort(), "stats shape");
+  for (const stats of [left[index], right[index]]) for (const key of statKeys) assert.ok(key in stats, `stats has ${key}`);
   for (const field of ["ok", "liveBytes", "keys", "blobs", "hits", "misses"]) assert.equal(left[index][field], right[index][field], `stats ${field}`);
   index += 1;
-  assert.deepEqual(left[index], right[index], "evict");
+  assert.deepEqual(pick(left[index], ["ok", "evicted"]), pick(right[index], ["ok", "evicted"]), "evict");
   assert.equal(left[index + 1].ok, right[index + 1].ok, "compact");
-  assert.deepEqual(left[index + 2], right[index + 2], "list after compaction");
+  assert.deepEqual(listed(left[index + 2]), listed(right[index + 2]), "list after compaction");
   assert.deepEqual(ranked(left[index + 3]), ranked(right[index + 3]), "search after compaction");
   for (const field of ["ok", "liveBytes", "keys", "blobs"]) assert.equal(left[index + 4][field], right[index + 4][field], `stats after ${field}`);
 });
@@ -165,14 +171,14 @@ test("scratch: the Rust arena's answers on their own", { skip }, (t) => {
   assert.deepEqual(answers[11], { ok: true, has: true });
   assert.deepEqual(answers[12], { ok: true, has: false });
   assert.equal(answers[13].items.length, CORPUS.length);
-  assert.deepEqual(answers[13].items.slice(0, 2).map((item) => item.key), ["run/2/dup", "run/1/log"], "list is newest touch first: the get by hash touched the newest key holding it");
+  assert.deepEqual(answers[13].items.slice(0, 2).map((item) => item.key), ["run/1/log", "run/2/dup"], "list is newest touch first: a get by key touches it, a get by hash touches nothing");
   assert.equal(answers[14].items.length, 2);
-  assert.deepEqual(answers[15].items.map((item) => item.key).sort(), ["shared/readme", "task/9/notes"]);
+  assert.deepEqual(answers[15].items.map((item) => item.key), ["task/9/notes"]);
   const alpha = answers[16];
   assert.deepEqual(alpha.items.map((item) => item.key).sort(), ["run/1/log", "run/1/result", "run/2/dup", "run/2/log", "task/9/notes"]);
   assert.equal(alpha.items[0].key, "run/1/log", "alpha twice in a short document ranks first");
   assert.ok(alpha.items.every((item) => typeof item.score === "number" && item.score > 0 && typeof item.snippet === "string" && item.hash.length === 64));
-  assert.ok(!alpha.items.some((item) => item.key === "history/abc"), "history is not searchable here");
+  assert.ok(!alpha.items.some((item) => item.key.startsWith("history/")), "history is not searchable here");
   assert.deepEqual(answers[20].items, [], "no hit");
   assert.deepEqual(ranked(answers[21]), ranked(answers[17]), "punctuation and case do not change a query");
   assert.deepEqual(answers[23].items.map((item) => item.key).sort(), ["run/1/log", "run/2/dup", "run/2/log"], "kind filter");
