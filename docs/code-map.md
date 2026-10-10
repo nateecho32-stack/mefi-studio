@@ -5,6 +5,11 @@ feature walkthrough and glossary, and [agent-loop.md](agent-loop.md) follows a
 chat message all the way to a verified task; this page answers the narrower
 question *which file?*
 
+The social content client is described in [social-client.md](social-client.md):
+`renderer/social-content.js` handles opt-in link cards, `room-images.js` prepares
+and displays shared images, and `item-trades.js` reviews offers from Shop.
+`scripts/social-client.cjs` is their validated public service contract.
+
 Each purpose below is condensed from that file's own header comment, so when a
 file's role changes, change its header first and this page after it. Line
 counts were taken on 28 September 2026 and drift; they are here to show where

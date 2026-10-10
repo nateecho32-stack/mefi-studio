@@ -370,6 +370,8 @@
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         void guard("Sharing…", async () => {
+          const policy = window.MefiSocialContent;
+          if (policy && (!policy.inspect(url.value.trim()).ok || !policy.checkPost(blurb.value).ok)) { status.textContent = "Use a public HTTPS link without private addresses or access tokens."; return; }
           const answer = await call("shareProject", { url: url.value.trim(), title: name.value.trim(), blurb: blurb.value.trim(), kind: kind.value });
           if (!answer?.ok) { status.textContent = why(answer, "That could not be shared."); return; }
           Object.assign(draft, { url: "", title: "", blurb: "" });
@@ -414,6 +416,11 @@
     async function play(project) {
       // A playlist plays in Studio's own player; the play counts the same way.
       const playlist = window.MefiPlaylists?.fromLink?.(project.url, project.title);
+      if (!playlist && window.MefiSocialContent) {
+        const destination = window.MefiSocialContent.inspect(project.url);
+        if (!destination.ok) { status.textContent = "This link is hidden because it may expose a private address or access token."; return; }
+        if (!window.confirm(`Open ${destination.host}?\n\nThe website will receive your IP address.\n${destination.url}`)) return;
+      }
       await guard("Opening…", async () => {
         const answer = playlist ? await call("playProject", project.id, { here: true }) : await call("playProject", project.id);
         const minutes = Math.round((answer?.minMs ?? 120000) / 60000), counts = project.owner.id === me?.user?.id ? "" : " for you both";

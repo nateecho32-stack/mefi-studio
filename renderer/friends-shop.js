@@ -653,6 +653,7 @@
         up = ready;
       }
       current?.hear(event);
+      if (event?.type === "credits" && event.reason === "trade") void refresh();
     });
   }
 
@@ -691,6 +692,7 @@
     balance.hidden = true;
     const earn = button("How to earn credits", () => window.MefiNav?.go?.("friends-page", { place: "events" }), "friends-shop-earn", "friends-shop-link");
     headTools.append(balance, earn);
+    if (window.MefiTrades) headTools.append(button("Trade items", () => { void window.MefiTrades.open(); }, "friends-shop-trades", "friends-shop-link"));
     head.append(headWords, headTools);
     // Friends' places as a row, for when the list column is not showing them (Social, a small window).
     if (onPage) window.MefiShell?.placeBar?.(head, "friends");

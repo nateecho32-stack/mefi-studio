@@ -648,12 +648,14 @@
     if (!api || !parsed?.items?.length) return null;
     const card = element("section", "music-pl-shared");
     card.setAttribute("aria-label", `Playlist: ${parsed.name}`);
-    cover(card, parsed, "music-pl-cover music-pl-shared-cover");
+    // Room cards do not fetch artwork before the reader chooses to play.
+    element("div", "music-pl-cover music-pl-shared-cover", "♫", card);
     const words = element("div", "music-pl-shared-words", null, card);
     if (title) { element("small", "music-pl-kicker", "Playlist", words); element("strong", null, parsed.name, words); }
     const length = lengthLabel(parsed.items);
     element("small", "music-pl-meta", [count(parsed.items.length), length && `about ${length}`, from && `shared by ${from}`].filter(Boolean).join(" · "), words);
     const tools = element("div", "music-link-tools", null, words);
+    element("small", "music-pl-meta", "Playing connects to YouTube and shares your IP address with it.", words);
     if (play) actionButton("play", "Play", "primary mini", tools, () => api.play(parsed.items, parsed.name)).setAttribute("aria-label", `Play ${parsed.name}`);
     const saved = store.lists.some((list) => sameList(list, parsed));
     const keep = button(saved ? "Saved" : "Save", "ghost mini", tools, () => {

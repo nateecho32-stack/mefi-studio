@@ -6,6 +6,24 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 paired_reconnect waits for the resumed worker's first poll and for missed heartbeats, not fixed sleeps
+
+Branch `fix/paired-reconnect-wait` (9da2cc1, off main 149e770, in C:\wt\rcwait), fast-forwarded onto main. Hosted
+Windows CI failed paired_reconnect's "a started worker and coordinator come back by themselves after a restart" once
+(run 37529114511 on main 9d38169: `'connecting'` where `'connected'` was expected at line 138). The test slept 50 ms
+and then expected the resumed worker's first poll over real HTTP to have answered; it now waits for the link to read
+connected (`until()` takes an async check, as the host's `status()` is one) and asserts as before. The file's other
+fixed sleep, 40 ms in the heartbeat test, is now a wait for three missed heartbeats, and that test's "the check
+starts" waits for `finish` (the check waiting on its abort, after its first progress line) instead of `signal`: an
+abort that came first went unseen and the test hung. A scratch copy whose coordinators take 200 ms per write
+(`createCoordinator`'s `write` option) reproduced both on the old file, the restart test failing exactly as CI did and
+the heartbeat test hanging until the test timeout; the new file passes 6/6 at 200 and 500 ms per write and exits by
+itself, its longest wait ("the check starts", about three coordinator writes) 1.6 s against the 5 s budget.
+scripts/paired-*.cjs are unchanged. Here: `npm run test:one -- tests/paired_reconnect.test.mjs` 5 runs, 6/6 each (the
+first at a loaded moment: 13 s, the heartbeat test 9.8 s); check ok, lint 47 warnings (as main), audit 0 findings.
+Hosted CI on the branch, green: Studio checks (Windows) run 37534722660, Node stage 7590 tests, 0 fail, 34 skipped
+(the restart test 141 ms, the heartbeat test 470 ms), Python contracts 248 OK, audit and the portable package ok.
+
 ## 2026-10-06 A more compact Studio: Today's board higher, 48 px page headers, the inspector's cards inside it
 
 Branch `ui/today-layout` (C:\wt\today, off main 149e770). The owner: "look at all this wasted space, stuff just

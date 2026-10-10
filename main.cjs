@@ -2562,8 +2562,9 @@ const HUB_ROOM_METHODS = Object.freeze({
   createRoom: 1, requestJoin: 2, requests: 0, decide: 2, cancelRequest: 1, invite: 2, invites: 0, acceptInvite: 1, declineInvite: 1,
   leave: 1, removeMember: 2, lock: 1, unlock: 1, close: 1, searchMembers: 1, messages: 2, report: 3, sendMessage: 2, editMessage: 3, deleteMessage: 2,
   roomCode: 1, newRoomCode: 1, joinCode: 1, online: 0, setOnlineVisible: 1, front: 0,
+  sendImage: 2, roomImage: 2,
   // Friends › Moderation (renderer/friends-mod.js); the relay refuses anyone who is not a moderator.
-  modFlags: 0, modReview: 1, modRevoke: 2, modReports: 0, modResolve: 1, modSuspend: 2,
+  modFlags: 0, modReview: 1, modRevoke: 2, modReports: 0, modResolve: 1, modSuspend: 2, modReportImage: 1, modRemoveMessage: 1,
   modSwitches: 0, modSwitch: 2, modJam: 0, modJamVoid: 2, modJamRelease: 1, modHeld: 0, modHeldDecide: 3,
   // The Lobby's "Share what I'm building" switch (hubBuildingShare below), not a hub-client method.
   shareBuilding: 1,
@@ -2644,7 +2645,7 @@ function hubEvents(method, args) {
 // shopCatalog never asks the relay either: it is the signed-out showroom's
 // list (Studio's items on sale now, with their prices and lines, the drops
 // and the week's Featured shelf), from SHOP_STUDIO_ITEMS and SHOP_DROPS.
-const HUB_SHOP_METHODS = Object.freeze({ shop: 2, shopOwned: 0, shopBuy: 3, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2, shopCatalog: 0 });
+const HUB_SHOP_METHODS = Object.freeze({ shop: 2, shopOwned: 0, shopBuy: 3, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2, shopCatalog: 0, trades: 0, tradeInventory: 1, tradeOffer: 1, tradeDecide: 2 });
 // Read guarded: tests run slices of this file in a vm with no process.
 const SHOP_ALL = typeof process !== "undefined" && process.env.MEFI_STUDIO_SHOP_ALL === "1";
 // `drop` names the monthly drop an item comes out in (SHOP_DROPS); an item without one is classic, always on sale.

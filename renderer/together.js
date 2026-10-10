@@ -62,6 +62,9 @@
   const state = { hub: null, rooms: [], roomsLoaded: false, session: null, receivedAt: 0, sentAt: null, inStudio: [], note: "", noteError: false,
     applyingUntil: 0, shared: null, shareTimer: 0, watched: null, busy: false, ticker: 0 };
   const els = {};
+  // Consent lasts only for this view. A host changing sites cannot make a
+  // follower contact a fresh origin, even when Follow was saved earlier.
+  const approvedOrigins = new Set();
   let built = false;
 
   function element(tag, className, text, parent) {
@@ -224,6 +227,14 @@
     const info = player?.linkInfo?.(session.url);
     if (!info?.playable) { note("This room's link can't play in Studio.", true); return; }
     if (info.kind === "media" && !publicHost(info.url)) { note("This room's file is on a private network address, so Studio won't fetch it.", true); return; }
+    if (window.MefiSocialContent) {
+      const destination = window.MefiSocialContent.inspect(session.url);
+      if (!destination.ok || !approvedOrigins.has(new URL(destination.url).origin)) {
+        prefs.following = false; save();
+        note(destination.ok ? `Choose Follow to allow this room to connect to ${destination.host}.` : "This room's link may contain a private address or access token, so it cannot load.", true);
+        return;
+      }
+    }
     state.applyingUntil = Date.now() + APPLY_QUIET_MS;
     const loaded = loadedFor(session);
     if (loaded) { drive(loaded); return; }
@@ -316,6 +327,15 @@
     return loaded?.kind === "media" ? Number(loaded.element.currentTime) * 1000 : position();
   }
   function follow(on) {
+    if (on && state.session && window.MefiSocialContent) {
+      const destination = window.MefiSocialContent.inspect(state.session.url);
+      if (!destination.ok) { note("This room's link cannot load safely. Ask the host for a public HTTPS link.", true); render(); return; }
+      const origin = new URL(destination.url).origin;
+      if (!approvedOrigins.has(origin)) {
+        if (window.confirm?.(`Listen from ${destination.host}?\n\nThe website receives your IP address. The room can change tracks on this site while you follow.\n${destination.url}`) !== true) { render(); return; }
+        approvedOrigins.add(origin);
+      }
+    }
     prefs.following = Boolean(on) && Boolean(prefs.roomId); save();
     if (prefs.following) apply();
     render();

@@ -10654,6 +10654,27 @@ html[data-motion="off"] .friends-shop-item:hover { translate: none; }
   .friends-shop-item:hover { translate: none; }
 }
 
+/* Room links share the app's surfaces and type; no remote image or favicon. */
+.rooms-social-content { min-width: 0; display: grid; gap: 8px; }
+.rooms-link-card { display: grid; gap: 7px; max-width: 560px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-solid); }
+.rooms-link-destination { overflow-wrap: anywhere; color: var(--muted); font-size: 12px; }
+.rooms-link-player { display: block; width: 100%; aspect-ratio: 16 / 9; min-height: 160px; border: 0; border-radius: 8px; background: #101015; }
+
+.room-image-review { width:min(600px,90vw); max-height:85vh; overflow:auto; color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px; }
+.room-image-review::backdrop { background:#0009; }
+.room-image-review .rooms-compose { width:100%; margin-block:12px; }
+.room-image-preview { display:block; max-width:100%; width:auto; max-height:460px; height:auto; object-fit:contain; border-radius:10px; margin-block:10px; }
+.room-image-card { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding-block:8px; }
+.room-image-card .room-image-preview { flex-basis:100%; }
+
+.item-trades { width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; box-sizing: border-box; padding: 24px; color: var(--ivory); background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 16px; box-shadow: var(--shadow-2); }
+.item-trades::backdrop { background: #05070bcc; }
+.item-trades-list, .item-trades-compose { display: grid; gap: 12px; margin-top: 16px; min-width: 0; }
+.item-trades-row, .item-trades-review { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; overflow-wrap: anywhere; }
+.item-trades-row p, .item-trades-review p { margin: 0; }
+.item-trades-field { display: grid; gap: 6px; }
+.item-trades-field select { width: 100%; min-width: 0; }
+
 /* Vibe: the calm front door (renderer/vibe.js), the Vibe / Build switch and
    the one-time "what's new" card. Inlined last, so it wins ties. Every colour
    comes from the active theme's tokens (--gold is the accent, --ivory the
@@ -78579,6 +78600,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const state = { hub: null, rooms: [], roomsLoaded: false, session: null, receivedAt: 0, sentAt: null, inStudio: [], note: "", noteError: false,
     applyingUntil: 0, shared: null, shareTimer: 0, watched: null, busy: false, ticker: 0 };
   const els = {};
+  // Consent lasts only for this view. A host changing sites cannot make a
+  // follower contact a fresh origin, even when Follow was saved earlier.
+  const approvedOrigins = new Set();
   let built = false;
 
   function element(tag, className, text, parent) {
@@ -78741,6 +78765,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const info = player?.linkInfo?.(session.url);
     if (!info?.playable) { note("This room's link can't play in Studio.", true); return; }
     if (info.kind === "media" && !publicHost(info.url)) { note("This room's file is on a private network address, so Studio won't fetch it.", true); return; }
+    if (window.MefiSocialContent) {
+      const destination = window.MefiSocialContent.inspect(session.url);
+      if (!destination.ok || !approvedOrigins.has(new URL(destination.url).origin)) {
+        prefs.following = false; save();
+        note(destination.ok ? `Choose Follow to allow this room to connect to ${destination.host}.` : "This room's link may contain a private address or access token, so it cannot load.", true);
+        return;
+      }
+    }
     state.applyingUntil = Date.now() + APPLY_QUIET_MS;
     const loaded = loadedFor(session);
     if (loaded) { drive(loaded); return; }
@@ -78833,6 +78865,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return loaded?.kind === "media" ? Number(loaded.element.currentTime) * 1000 : position();
   }
   function follow(on) {
+    if (on && state.session && window.MefiSocialContent) {
+      const destination = window.MefiSocialContent.inspect(state.session.url);
+      if (!destination.ok) { note("This room's link cannot load safely. Ask the host for a public HTTPS link.", true); render(); return; }
+      const origin = new URL(destination.url).origin;
+      if (!approvedOrigins.has(origin)) {
+        if (window.confirm?.(`Listen from ${destination.host}?\n\nThe website receives your IP address. The room can change tracks on this site while you follow.\n${destination.url}`) !== true) { render(); return; }
+        approvedOrigins.add(origin);
+      }
+    }
     prefs.following = Boolean(on) && Boolean(prefs.roomId); save();
     if (prefs.following) apply();
     render();
@@ -79660,12 +79701,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (!api || !parsed?.items?.length) return null;
     const card = element("section", "music-pl-shared");
     card.setAttribute("aria-label", `Playlist: ${parsed.name}`);
-    cover(card, parsed, "music-pl-cover music-pl-shared-cover");
+    // Room cards do not fetch artwork before the reader chooses to play.
+    element("div", "music-pl-cover music-pl-shared-cover", "♫", card);
     const words = element("div", "music-pl-shared-words", null, card);
     if (title) { element("small", "music-pl-kicker", "Playlist", words); element("strong", null, parsed.name, words); }
     const length = lengthLabel(parsed.items);
     element("small", "music-pl-meta", [count(parsed.items.length), length && `about ${length}`, from && `shared by ${from}`].filter(Boolean).join(" · "), words);
     const tools = element("div", "music-link-tools", null, words);
+    element("small", "music-pl-meta", "Playing connects to YouTube and shares your IP address with it.", words);
     if (play) actionButton("play", "Play", "primary mini", tools, () => api.play(parsed.items, parsed.name)).setAttribute("aria-label", `Play ${parsed.name}`);
     const saved = store.lists.some((list) => sameList(list, parsed));
     const keep = button(saved ? "Saved" : "Save", "ghost mini", tools, () => {
@@ -82902,6 +82945,282 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   window.MefiCompanionFriends = { card };
 })();
 
+// Shared room content. A message never contacts an author's website merely by
+// being displayed. Links show their real destination and embeds require a click.
+// No fetched HTML, favicons, remote thumbnails or executable markup is accepted.
+(function () {
+  "use strict";
+  const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+  const button = (label, run) => { const el = node("button", "ghost rooms-button", label); el.type = "button"; el.addEventListener("click", run); return el; };
+  const privateEnd = /(?:^|\.)(?:localhost|local|lan|internal|home|arpa|intranet|test|invalid|example)$/i;
+  const secretKey = /^(?:access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|key|token|secret|password|passwd|authorization|auth|code|session|sessionid|jwt|signature|sig|x-amz-signature)$/i;
+  function inspect(value) {
+    if (typeof value !== "string" || value.length > 2048 || /[\s\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069\\]/.test(value)) return { ok: false, reason: "This link contains hidden characters or is too long." };
+    let url;
+    try { url = new URL(value); } catch { return { ok: false, reason: "This link is incomplete." }; }
+    const host = url.hostname.toLowerCase().replace(/\.$/, "");
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return { ok: false, reason: "Only HTTPS links without a login or custom port can open here." };
+    if (!host.includes(".") || host.startsWith("[") || /^\d+(?:\.\d+)*$/.test(host) || privateEnd.test(host)) return { ok: false, reason: "Private-network addresses cannot open from chat." };
+    if ([...url.searchParams.keys()].some((key) => secretKey.test(key)) || /(?:token|password|secret|access_token|api_key)=/i.test(url.hash)) return { ok: false, reason: "This link may contain a login or secret. Ask for a public share link." };
+    const label = host; // ASCII/punycode from URL, never a member-supplied label.
+    let embed = null;
+    if (["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].includes(host)) {
+      const id = host === "youtu.be" ? url.pathname.slice(1) : url.pathname === "/watch" ? url.searchParams.get("v") : /^\/(?:shorts|embed)\/([^/]+)$/.exec(url.pathname)?.[1];
+      if (/^[A-Za-z0-9_-]{11}$/.test(id || "")) embed = { provider: "YouTube", host: "www.youtube-nocookie.com", url: `https://www.youtube-nocookie.com/embed/${id}` };
+    } else if (["vimeo.com", "www.vimeo.com"].includes(host) && /^\/\d{1,12}$/.test(url.pathname)) {
+      embed = { provider: "Vimeo", host: "player.vimeo.com", url: `https://player.vimeo.com/video${url.pathname}?dnt=1` };
+    } else if (host === "open.spotify.com" && /^\/(track|album|playlist|episode|show)\/[A-Za-z0-9]{22}$/.test(url.pathname)) {
+      embed = { provider: "Spotify", host, url: `https://open.spotify.com/embed${url.pathname}` };
+    }
+    return { ok: true, url: url.href, host: label, embed };
+  }
+  const links = words => [...String(words??"").matchAll(/https?:\/\/[^\s<>]+/gi)].map(match=>({raw:match[0],checked:inspect(match[0].replace(/[.,!?;:)\]}]+$/, ""))}));
+  function checkPost(text) {
+    const unsafe=links(text).find(link=>!link.checked.ok);
+    return unsafe ? {ok:false,reason:`Remove or replace the unsafe link before sending. ${unsafe.checked.reason}`} : {ok:true};
+  }
+  function content(text) {
+    const body = node("div", "rooms-social-content");
+    const words = String(text ?? "");
+    const matches = links(words);
+    let displayed=words;
+    for(const match of matches)if(!match.checked.ok)displayed=displayed.replace(match.raw,"[Link hidden: use a public HTTPS share link]");
+    body.append(node("p", "rooms-message-text", displayed));
+    try { if (localStorage.getItem("mefiStudio.social.content") === "off") return body; } catch { /* default: click-to-load */ }
+    for (const match of matches.slice(0,4)) {
+      const checked = match.checked;
+      const card = node("div", "rooms-link-card");
+      if (!checked.ok) { card.append(node("span", "muted", checked.reason)); body.append(card); continue; }
+      card.append(node("strong", "", checked.host));
+      const destination = node("span", "rooms-link-destination", checked.url);
+      card.append(destination);
+      const actions = node("div", "rooms-row-actions");
+      const open = button("Open link…", () => {
+        if (window.confirm?.(`Open ${checked.host} in your browser?\n\n${checked.url}\n\nThe site can see your IP address and browser details. Studio has not checked its contents. Never enter a password just because someone shared a link.`) !== true) return;
+        void Promise.resolve(window.mefiStudio?.openExternal?.(checked.url)).catch(() => {});
+      });
+      actions.append(open);
+      if (checked.embed) {
+        const preview = button(`Load ${checked.embed.provider} player`, () => {
+          if (card.querySelector?.("iframe")) return;
+          const frame = node("iframe", "rooms-link-player");
+          frame.title = `${checked.embed.provider} player`;
+          frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation");
+          frame.setAttribute("referrerpolicy", "no-referrer");
+          frame.setAttribute("allow", "encrypted-media; fullscreen; picture-in-picture");
+          frame.loading = "lazy";
+          frame.src = checked.embed.url;
+          card.append(frame);
+          preview.disabled = true;
+          const stop = button("Close player", () => { frame.remove(); stop.remove(); preview.disabled = false; });
+          actions.append(stop);
+        });
+        actions.append(preview);
+        card.append(node("span", "muted", `Loading the player connects to ${checked.embed.host} and shares your IP address. Nothing loads before you choose.`));
+      }
+      card.append(actions); body.append(card);
+    }
+    return body;
+  }
+  window.MefiSocialContent = { inspect, content, checkPost };
+})();
+
+// Room images are read through the authenticated host bridge only after a click.
+// A local re-encode drops camera/file metadata before the review and upload.
+(function () {
+  "use strict";
+  const node = (tag, cls, text) => { const el=document.createElement(tag); if(cls)el.className=cls; if(text!=null)el.textContent=text; return el; };
+  const button = (label,run) => { const el=node("button","ghost rooms-button",label); el.type="button";el.addEventListener("click",run);return el; };
+  const reasons = { unsupported:"Image sharing is not available on this room service yet.", "image-expired":"This image has expired or was removed.", "not-member":"You no longer have access to this room.", "image-limit":"Image limit reached. Try again later.", "image-storage-full":"Image storage is full. Try again later.", "links-not-allowed":"New room members can share images after their first day.", "images-paused":"Image sharing is temporarily paused.", "invalid-image":"Choose a smaller JPEG or PNG image." };
+  let reviewing=false;
+  const enabled=()=>{try{return localStorage.getItem("mefiStudio.social.images")!=="off";}catch{return true;}};
+  function dimensions(bytes) {
+    const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
+    if(bytes.length>=24 && view.getUint32(0)===0x89504e47 && view.getUint32(4)===0x0d0a1a0a && view.getUint32(12)===0x49484452)return {width:view.getUint32(16),height:view.getUint32(20)};
+    if(bytes[0]!==255 || bytes[1]!==216)return null;
+    for(let at=2;at+4<=bytes.length;) {
+      if(bytes[at++]!==255)return null;
+      while(bytes[at]===255)at++;
+      const marker=bytes[at++];if(marker===218||marker===217)return null;
+      const size=view.getUint16(at);if(size<2||at+size>bytes.length)return null;
+      if([192,193,194].includes(marker))return size>=8 ? {width:view.getUint16(at+5),height:view.getUint16(at+3)} : null;
+      at+=size;
+    }
+    return null;
+  }
+  async function prepare(file) {
+    if(!file || !["image/png","image/jpeg"].includes(file.type) || file.size>12*1024*1024)throw new Error("Choose a JPEG or PNG smaller than 12 MB.");
+    const size=dimensions(new Uint8Array(await file.arrayBuffer()));
+    if(!size || size.width<1 || size.height<1 || size.width*size.height>16_000_000)throw new Error("Choose an image with at most 16 million pixels.");
+    const bitmap=await window.createImageBitmap(file,{imageOrientation:"from-image"});
+    try {
+      const canvas=document.createElement("canvas");let scale=Math.min(1,1280/Math.max(bitmap.width,bitmap.height));
+      for(let pass=0;pass<8;pass++) {
+        canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+        const ctx=canvas.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+        const uri=canvas.toDataURL("image/jpeg",Math.max(.4,.85-pass*.08));
+        if(uri.startsWith("data:image/jpeg;base64,") && uri.length-23<=131072)return uri.slice(23);
+        scale*=.8;
+      }
+      throw new Error("This image is too detailed. Crop it or choose a smaller one.");
+    } finally {bitmap.close();}
+  }
+  function choose(roomId,roomName) {
+    if(reviewing || !enabled())return;
+    const input=node("input");input.type="file";input.accept="image/jpeg,image/png";
+    input.addEventListener("change",async()=>{
+      if(!input.files?.[0] || reviewing)return; reviewing=true;
+      const dialog=node("dialog","room-image-review"),returnTo=document.activeElement;
+      const status=node("p","muted","Preparing a private copy…");status.setAttribute("role","status");
+      const close=()=>{dialog.close();dialog.remove();reviewing=false;returnTo?.focus?.();};
+      dialog.setAttribute("aria-label",`Share an image to ${roomName}`);
+      dialog.append(node("h2","",`Share to ${roomName}`),status,button("Cancel",close));document.body.append(dialog);dialog.showModal();
+      dialog.addEventListener("cancel",event=>{event.preventDefault();close();});
+      try {
+        const jpeg=await prepare(input.files[0]);if(!dialog.isConnected)return;
+        const preview=node("img","room-image-preview");preview.src=`data:image/jpeg;base64,${jpeg}`;preview.alt="Your image before sharing";
+        const caption=node("textarea","rooms-compose");caption.maxLength=2000;caption.placeholder="Add a caption (optional)";caption.setAttribute("aria-label","Image caption");
+        status.textContent="Filename and camera metadata are removed. Check the picture itself for faces, addresses, private chats, keys or other details you don't want to share. Room members can save copies; the service keeps images for seven days and reported evidence for 30 days.";
+        const receipt=crypto.randomUUID().replaceAll("-","");let sentCaption=null;
+        const share=button("Share image",async()=>{
+          if(share.disabled)return;
+          const checked=window.MefiSocialContent?.checkPost?.(caption.value);if(checked && !checked.ok){status.textContent=checked.reason;return;}
+          // A retry has identical terms, so it cannot accidentally create two posts.
+          if(sentCaption===null)sentCaption=caption.value;caption.disabled=true;share.disabled=true;
+          try {
+            const answer=await window.mefiStudio?.hubRoom?.("sendImage",roomId,{jpeg,caption:sentCaption,receipt});
+            if(!dialog.isConnected)return;
+            if(answer?.ok){close();return;}
+            status.textContent=reasons[answer?.error]||"Not shared. Retry checks the same post before sending another copy.";
+          }catch{if(dialog.isConnected)status.textContent="Connection lost. Retry checks the same post before sending another copy.";}
+          finally{share.disabled=false;}
+        });
+        dialog.append(preview,caption,share);
+      }catch(error){if(dialog.isConnected)status.textContent=error.message||"The image could not be prepared.";}
+    });
+    input.click();
+  }
+  function card(reference,roomId,reportId=null) {
+    if(!enabled())return node("span","muted","Images are turned off on this device.");
+    const box=node("div","room-image-card"),status=node("span","muted",reportId?"Reported image · may contain sensitive or upsetting content":"Shared image · loads only when you choose");
+    const show=button("Show image",async()=>{
+      if(show.disabled)return;show.disabled=true;
+      try {
+        const answer=reportId ? await window.mefiStudio?.hubRoom?.("modReportImage",reportId) : await window.mefiStudio?.hubRoom?.("roomImage",roomId,reference.id);
+        if(box.isConnected===false)return;
+        if(!answer?.ok){status.textContent=reasons[answer?.error]||"The image could not be loaded.";show.disabled=false;return;}
+        const img=node("img","room-image-preview");img.alt=reportId?"Reported image evidence":"Image shared in this room";img.width=answer.width;img.height=answer.height;img.src=`data:image/jpeg;base64,${answer.jpeg}`;
+        img.addEventListener("error",()=>{img.remove();status.textContent="This image could not be displayed.";show.disabled=false;});
+        const hide=button("Hide image",()=>{img.remove();hide.remove();show.disabled=false;});box.append(img,hide);status.textContent=reportId?"Private moderator evidence · retained for 30 days from its first report.":"Room members can save copies.";
+      }catch{status.textContent="The image could not be loaded.";show.disabled=false;}
+    });
+    box.append(status,show);return box;
+  }
+  window.MefiRoomImages={choose,card,prepare,dimensions,reportCard:reportId=>card(null,null,reportId)};
+})();
+
+// Public UI for immutable offers; the private service transfers ownership.
+// Per-device kill switch: localStorage['mefiStudio.trades'] = 'off'.
+(function () {
+  "use strict";
+  const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+  const button = (text, run) => { const el = node("button", "ghost rooms-button", text); el.type = "button"; el.addEventListener("click", run); return el; };
+  const reasons = { unsupported: "Trading is not available on this room service yet.", offline: "Reconnect to view or send trades.", network: "The service did not answer. Refresh to check the offer before trying again.", hold: "Both members must be eligible to trade. Check your account standing in the Project hub.", "not-found": "Choose someone who shares an active room with you. The Lobby alone does not count.", "ownership-changed": "An item changed hands. Refresh and make a new offer.", "already-owned": "One of you already owns the item they would receive.", "trades-paused": "Trading is temporarily paused. Pending offers can still be cancelled.", "trade-limit": "Too many offers. Clear pending offers or try again tomorrow.", expired: "This offer expired.", superseded: "An item in this offer has already changed hands.", "room-left": "Both members must still share an active room.", "receipt-conflict": "The earlier offer has different terms. Refresh before making a new one." };
+  let active = null;
+  async function open() {
+    try { if (localStorage.getItem("mefiStudio.trades") === "off") return; } catch { /* defaults on */ }
+    if (active) { active.focus(); return; }
+    const api = window.mefiStudio;
+    reasons["trade-policy-unavailable"] = "Trading is waiting for the private account service to confirm eligibility.";
+    reasons["trade-wait"] = "New accounts joining after launch month wait three days to trade. A verified permanent Donor benefit removes that wait.";
+    const dialog = node("dialog", "item-trades"); active = dialog;
+    const returnTo = document.activeElement;
+    let epoch = 0, choiceEpoch = 0, busy = false, me = null;
+    const status = node("p", "muted", "Loading trades…"); status.setAttribute("role", "status");
+    const list = node("div", "item-trades-list"), compose = node("div", "item-trades-compose");
+    const call = (method, ...args) => api?.hubShop?.(method, ...args);
+    const close = () => { epoch += 1; dialog.close(); dialog.remove(); active = null; returnTo?.focus?.(); };
+    const head = node("div", "rooms-row-actions");
+    head.append(node("h2", "", "Trade with a room-mate"), button("Close", close));
+    dialog.setAttribute("aria-label", "Trade with a room-mate");
+    dialog.append(head, node("p", "muted", "Swap one owned Studio pet or cosmetic for another. Both items move together when the recipient accepts. No credits, rank or rewards change. Offers expire in 24 hours."), status, button("Refresh trades", () => { void refresh(); }), list, compose);
+    dialog.addEventListener("cancel", event => { event.preventDefault(); close(); });
+    document.body.append(dialog); dialog.showModal();
+    const alive = token => active === dialog && token === epoch;
+    async function action(run) {
+      if (busy) return; busy = true;
+      const token = epoch;
+      try {
+        const answer = await run();
+        if (!alive(token)) return;
+        if (!answer?.ok) { status.textContent = reasons[answer?.error] || "The trade did not go through. Refresh and check its status."; return; }
+        status.textContent = answer.trade ? `Offer ${answer.trade.status}.` : "Updated.";
+        await window.MefiShop?.refresh?.();
+        await refresh();
+      } catch { if (alive(token)) status.textContent = reasons.network; }
+      finally { busy = false; }
+    }
+    function confirm(container, sentence, label, run) {
+      const review = node("div", "item-trades-review");
+      review.append(node("p", "", sentence), button(label, () => { if (!busy) void action(run); }), button("Keep looking", () => review.remove()));
+      container.replaceChildren(review);
+    }
+    async function refresh() {
+      const token = ++epoch;
+      let answer;
+      try { answer = await call("trades"); } catch { answer = { ok: false, error: "network" }; }
+      if (!alive(token)) return;
+      if (!answer?.ok) { status.textContent = reasons[answer?.error] || "Trades could not be loaded."; compose.replaceChildren(); return; }
+      list.replaceChildren();
+      for (const trade of answer.trades) {
+        const incoming = trade.recipient.id === me;
+        const peer = incoming ? trade.sender : trade.recipient;
+        const give = incoming ? trade.requested : trade.offered, get = incoming ? trade.offered : trade.requested;
+        const row = node("section", "item-trades-row");
+        row.append(node("strong", "", `${peer.name} · ${peer.id.slice(-6)}`), node("p", "", `You give ${give.name}. You receive ${get.name}.`), node("span", "muted", trade.status === "pending" ? `Pending · expires ${new Date(trade.expiresAt).toLocaleString()}` : trade.status));
+        const controls = node("div", "rooms-row-actions");
+        if (trade.status === "pending") {
+          if (incoming && answer.enabled) controls.append(button("Review swap", () => confirm(controls, `Give ${give.name} to ${peer.name} and receive ${get.name}? This transfers ownership of both items.`, "Accept this swap", () => call("tradeDecide", trade.id, "accept"))));
+          controls.append(button(incoming ? "Decline" : "Cancel offer", () => { void action(() => call("tradeDecide", trade.id, incoming ? "decline" : "cancel")); }));
+        }
+        row.append(controls); list.append(row);
+      }
+      if (!answer.trades.length) list.append(node("p", "muted", "No offers yet. Find a room-mate below to make one."));
+      compose.replaceChildren();
+      if (!answer.enabled) { status.textContent = reasons["trades-paused"]; return; }
+      const search = node("input", "rooms-note"); search.type = "search"; search.maxLength = 32; search.placeholder = "Find a room-mate"; search.setAttribute("aria-label", "Find a room-mate by name");
+      const found = node("div", "item-trades-list");
+      compose.append(search, button("Find", async () => {
+        const term = search.value.trim(); if (term.length < 2) return;
+        let results; try { results = await api.hubRoom("searchMembers", term); } catch { results = null; }
+        if (!alive(token) || search.value.trim() !== term) return;
+        found.replaceChildren();
+        for (const member of results?.members ?? []) if (member.id !== me) found.append(button(`${member.name} · ${member.id.slice(-6)}`, () => { void choose(member.id, token); }));
+        if (!found.children.length) found.append(node("p", "muted", "No matching members."));
+      }), found);
+    }
+    async function choose(uid, token) {
+      const choice = ++choiceEpoch;
+      let answer; try { answer = await call("tradeInventory", uid); } catch { answer = null; }
+      if (!alive(token) || choice !== choiceEpoch) return;
+      if (!answer?.ok) { status.textContent = reasons[answer?.error] || "Inventory could not be loaded."; return; }
+      const select = (label, items) => { const wrap = node("label", "item-trades-field", label), input = node("select", ""); for (const item of items) { const option = node("option", "", item.name); option.value = item.id; input.append(option); } wrap.append(input); return { wrap, input }; };
+      const mine = answer.mine.filter(item => !answer.theirs.some(theirs => theirs.id === item.id));
+      const theirs = answer.theirs.filter(item => !answer.mine.some(own => own.id === item.id));
+      if (!mine.length || !theirs.length) { status.textContent = "You both need an eligible item the other does not already own."; return; }
+      const give = select("You give", mine), get = select("You receive", theirs), review = node("div", "");
+      compose.replaceChildren(node("h3", "", `Offer to ${answer.member.name} · ${uid.slice(-6)}`), give.wrap, get.wrap, button("Review offer", () => {
+        const offered = give.input.value, requested = get.input.value;
+        const receipt = crypto.randomUUID().replaceAll("-", "");
+        confirm(review, `Offer ${mine.find(x => x.id === offered)?.name} for ${theirs.find(x => x.id === requested)?.name} with ${answer.member.name}? They must accept these exact items. You can cancel while it is pending.`, "Send this offer", () => call("tradeOffer", { recipient: uid, offered, requested, receipt }));
+      }), review);
+    }
+    try { me = (await api?.hubStatus?.())?.status?.user?.id ?? null; } catch { /* list explains connection */ }
+    if (active === dialog) await refresh();
+  }
+  window.MefiTrades = { open };
+})();
+
 // Friends' room desktop: the existing room chat remains responsible for messages,
 // membership and permissions. This view adds navigation and small summaries of
 // actual project, room-player and jam state. It never starts a worker or player.
@@ -83604,8 +83923,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         head.append(more);
       }
       // A shared playlist shows as one to play or save (renderer/playlists.js).
-      const text = window.MefiPlaylists?.card?.(String(message.text ?? "")) || node("p", "rooms-message-text", readable(message, nameOf));
+      const text = window.MefiPlaylists?.card?.(String(message.text ?? "")) || window.MefiSocialContent?.content?.(readable(message, nameOf)) || node("p", "rooms-message-text", readable(message, nameOf));
       item.append(head, text);
+      if (message.image && window.MefiRoomImages) item.append(window.MefiRoomImages.card(message.image,roomId));
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
       if (messageMenus.has(message.id)) {
         const actions = node("div", "rooms-row-actions rooms-message-actions");
@@ -83810,6 +84130,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const send = button("Send", () => {
         const text = box.value;
         if (!text.trim()) return;
+        const checked = window.MefiSocialContent?.checkPost?.(text);
+        if (checked && !checked.ok) { status.textContent=checked.reason; return; }
         void guard(null, async () => {
           const answer = await call("sendMessage", room.id, text);
           if (answer?.ok) { box.value = ""; grow(); status.textContent = ""; }
@@ -83827,6 +84149,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         send.click();
       });
       wrap.append(box, send);
+      if (flags.images && window.MefiRoomImages) { const picture=button("Image",()=>window.MefiRoomImages.choose(room.id,room.name));picture.disabled=box.disabled;picture.setAttribute("aria-label",`Share an image to ${room.name}`);wrap.append(picture); }
       return wrap;
     }
 
@@ -83836,8 +84159,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const back = button("‹ Rooms", close, "rooms-back");
       back.setAttribute("aria-label", "Back to all rooms");
       const title = node("div", "rooms-room-title");
-      // Who reads a room: the relay passes messages to the room's members and keeps none.
-      const privacy = node("span", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in from the Void Engine server is here." : flags.lobby ? "Only the people in this room get its messages. The room service keeps none." : "Void Engine moderators can read every room.");
+      // Text history lives on members' PCs; optional images have bounded service retention.
+      const privacy = node("span", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in from the Void Engine server is here. People can save what you share." : flags.lobby ? `Only members receive this room's messages. People can save copies.${flags.images ? " Images stay on the room service for up to 7 days." : ""} Reported messages are kept for review.` : "Void Engine moderators can read every room.");
       privacy.id = "rooms-privacy";
       title.append(node("strong", "rooms-room-name", room.name), privacy);
       if (layout) { const caption = node("span", "muted rooms-room-caption", `${room.kind === "cowork" ? "Cowork" : "Hangout"} · ${room.memberCount} members`); caption.id = "rooms-room-caption"; title.insertBefore(caption, privacy); }
@@ -83953,7 +84276,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       root.dataset.state = "ready";
       me = hub.user ?? me;
       canPost = hub.paused !== true && hub.readOnly !== true;
-      flags = { lobby: hub.lobby === true, joinCodes: hub.joinCodes === true, online: hub.online === true, front: hub.front === true, events: hub.events === true };
+      flags = { lobby: hub.lobby === true, joinCodes: hub.joinCodes === true, online: hub.online === true, front: hub.front === true, events: hub.events === true, images: hub.images === true };
       void layout?.capabilities(flags);
       return true;
     }
@@ -84423,6 +84746,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       form.addEventListener("submit", (event) => {
         event.preventDefault();
         void guard("Sharing…", async () => {
+          const policy = window.MefiSocialContent;
+          if (policy && (!policy.inspect(url.value.trim()).ok || !policy.checkPost(blurb.value).ok)) { status.textContent = "Use a public HTTPS link without private addresses or access tokens."; return; }
           const answer = await call("shareProject", { url: url.value.trim(), title: name.value.trim(), blurb: blurb.value.trim(), kind: kind.value });
           if (!answer?.ok) { status.textContent = why(answer, "That could not be shared."); return; }
           Object.assign(draft, { url: "", title: "", blurb: "" });
@@ -84467,6 +84792,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     async function play(project) {
       // A playlist plays in Studio's own player; the play counts the same way.
       const playlist = window.MefiPlaylists?.fromLink?.(project.url, project.title);
+      if (!playlist && window.MefiSocialContent) {
+        const destination = window.MefiSocialContent.inspect(project.url);
+        if (!destination.ok) { status.textContent = "This link is hidden because it may expose a private address or access token."; return; }
+        if (!window.confirm(`Open ${destination.host}?\n\nThe website will receive your IP address.\n${destination.url}`)) return;
+      }
       await guard("Opening…", async () => {
         const answer = playlist ? await call("playProject", project.id, { here: true }) : await call("playProject", project.id);
         const minutes = Math.round((answer?.minMs ?? 120000) / 60000), counts = project.owner.id === me?.user?.id ? "" : " for you both";
@@ -85363,6 +85693,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     function reportList() {
       return section("Reports", "friends-mod-reports", reports.map((report) => {
         const tools = [];
+        if (report.imageAvailable && report.verified) tools.push(confirmed("Remove message", "Remove it from the room?", "Remove this reported message and image from the room? Private report evidence is retained for 30 days.", () => guard("Removing…", async () => {
+          const answer = await call("modRemoveMessage", report.id);
+          status.textContent = answer?.ok ? "The message and image are removed from the room." : why(answer, "They could not be removed.");
+          await load();
+        })));
         tools.push(confirmed("Resolve", "Mark it handled?", "Mark this report as handled?", () => guard("Resolving…", async () => {
           const answer = await call("modResolve", report.id);
           status.textContent = answer?.ok ? "Marked as handled." : why(answer, "It could not be resolved.");
@@ -85389,7 +85724,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           status.textContent = answer?.ok ? `${report.author.name} is suspended for 7 days.` : why(answer, "The suspension did not go through.");
         })));
         const what = report.kind === "project" ? "Project" : pack || report.roomId === "shop" ? `Style pack${pack?.name ? ` “${pack.name}”` : ""}` : report.verified ? "Message (signed copy)" : "Message";
-        return row(`${what}: ${report.reason}`, `${report.text ? `“${report.text.slice(0, 200)}” · ` : ""}reported by ${report.reporter?.name ?? "a member"}${report.author ? ` · by ${report.author.name}` : ""}`, tools);
+        const entry = row(`${what}: ${report.reason}`, `${report.text ? `“${report.text.slice(0, 200)}” · ` : ""}reported by ${report.reporter?.name ?? "a member"}${report.author ? ` · by ${report.author.name}` : ""}`, tools);
+        if (report.imageAvailable && window.MefiRoomImages?.reportCard) entry.append(window.MefiRoomImages.reportCard(report.id));
+        return entry;
       }), "No open reports.");
     }
 
@@ -86645,6 +86982,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         up = ready;
       }
       current?.hear(event);
+      if (event?.type === "credits" && event.reason === "trade") void refresh();
     });
   }
 
@@ -86683,6 +87021,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     balance.hidden = true;
     const earn = button("How to earn credits", () => window.MefiNav?.go?.("friends-page", { place: "events" }), "friends-shop-earn", "friends-shop-link");
     headTools.append(balance, earn);
+    if (window.MefiTrades) headTools.append(button("Trade items", () => { void window.MefiTrades.open(); }, "friends-shop-trades", "friends-shop-link"));
     head.append(headWords, headTools);
     // Friends' places as a row, for when the list column is not showing them (Social, a small window).
     if (onPage) window.MefiShell?.placeBar?.(head, "friends");

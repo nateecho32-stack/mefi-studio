@@ -485,8 +485,9 @@
         head.append(more);
       }
       // A shared playlist shows as one to play or save (renderer/playlists.js).
-      const text = window.MefiPlaylists?.card?.(String(message.text ?? "")) || node("p", "rooms-message-text", readable(message, nameOf));
+      const text = window.MefiPlaylists?.card?.(String(message.text ?? "")) || window.MefiSocialContent?.content?.(readable(message, nameOf)) || node("p", "rooms-message-text", readable(message, nameOf));
       item.append(head, text);
+      if (message.image && window.MefiRoomImages) item.append(window.MefiRoomImages.card(message.image,roomId));
       if (message.attachments?.length) item.append(node("p", "muted", `Attachments in Discord: ${message.attachments.map((file) => file.name).join(", ")}`));
       if (messageMenus.has(message.id)) {
         const actions = node("div", "rooms-row-actions rooms-message-actions");
@@ -691,6 +692,8 @@
       const send = button("Send", () => {
         const text = box.value;
         if (!text.trim()) return;
+        const checked = window.MefiSocialContent?.checkPost?.(text);
+        if (checked && !checked.ok) { status.textContent=checked.reason; return; }
         void guard(null, async () => {
           const answer = await call("sendMessage", room.id, text);
           if (answer?.ok) { box.value = ""; grow(); status.textContent = ""; }
@@ -708,6 +711,7 @@
         send.click();
       });
       wrap.append(box, send);
+      if (flags.images && window.MefiRoomImages) { const picture=button("Image",()=>window.MefiRoomImages.choose(room.id,room.name));picture.disabled=box.disabled;picture.setAttribute("aria-label",`Share an image to ${room.name}`);wrap.append(picture); }
       return wrap;
     }
 
@@ -717,8 +721,8 @@
       const back = button("‹ Rooms", close, "rooms-back");
       back.setAttribute("aria-label", "Back to all rooms");
       const title = node("div", "rooms-room-title");
-      // Who reads a room: the relay passes messages to the room's members and keeps none.
-      const privacy = node("span", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in from the Void Engine server is here." : flags.lobby ? "Only the people in this room get its messages. The room service keeps none." : "Void Engine moderators can read every room.");
+      // Text history lives on members' PCs; optional images have bounded service retention.
+      const privacy = node("span", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in from the Void Engine server is here. People can save what you share." : flags.lobby ? `Only members receive this room's messages. People can save copies.${flags.images ? " Images stay on the room service for up to 7 days." : ""} Reported messages are kept for review.` : "Void Engine moderators can read every room.");
       privacy.id = "rooms-privacy";
       title.append(node("strong", "rooms-room-name", room.name), privacy);
       if (layout) { const caption = node("span", "muted rooms-room-caption", `${room.kind === "cowork" ? "Cowork" : "Hangout"} · ${room.memberCount} members`); caption.id = "rooms-room-caption"; title.insertBefore(caption, privacy); }
@@ -834,7 +838,7 @@
       root.dataset.state = "ready";
       me = hub.user ?? me;
       canPost = hub.paused !== true && hub.readOnly !== true;
-      flags = { lobby: hub.lobby === true, joinCodes: hub.joinCodes === true, online: hub.online === true, front: hub.front === true, events: hub.events === true };
+      flags = { lobby: hub.lobby === true, joinCodes: hub.joinCodes === true, online: hub.online === true, front: hub.front === true, events: hub.events === true, images: hub.images === true };
       void layout?.capabilities(flags);
       return true;
     }
