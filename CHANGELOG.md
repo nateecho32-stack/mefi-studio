@@ -7,6 +7,10 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Studio opens fullscreen.** The Windows title bar and taskbar stay hidden
+  while you work. Press **F11** to switch to a normal window or back; **Alt+F4**
+  closes it and **Ctrl+Q** quits. Electron and the Rust host use the same default.
+
 - **Resources is easier to use.** The CPU and memory pill on the status bar
   opens Team › Resources, the list of apps on this PC. Each app now shows its
   CPU, its memory, Close and End, and a More button for Slow down, Pause, Free

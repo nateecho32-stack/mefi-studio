@@ -379,7 +379,7 @@ class BrowserWindow extends EventEmitter {
     const width = Number(options.width) || 800;
     const height = Number(options.height) || 600;
     this._state = {
-      visible: options.show !== false, focused: false, minimized: false, maximized: false, fullscreen: false,
+      visible: options.show !== false, focused: false, minimized: false, maximized: false, fullscreen: options.fullscreen === true,
       bounds: { x: Number.isFinite(options.x) ? options.x : 0, y: Number.isFinite(options.y) ? options.y : 0, width, height },
     };
     this.webContents = new WebContents(this);
@@ -406,6 +406,7 @@ class BrowserWindow extends EventEmitter {
       minWidth: Number(options.minWidth) || null, minHeight: Number(options.minHeight) || null,
       x: Number.isFinite(options.x) ? options.x : null, y: Number.isFinite(options.y) ? options.y : null,
       show: options.show !== false,
+      fullscreen: options.fullscreen === true,
       title: String(options.title ?? ""),
       backgroundColor: typeof options.backgroundColor === "string" ? options.backgroundColor : null,
       icon: typeof options.icon === "string" ? options.icon : null,

@@ -61,13 +61,13 @@ ipcMain.handle("wrapped", () => "through the wrapper");
 let kept = false;
 app.on("window-all-closed", () => app.quit());
 app.whenReady().then(() => {
-  win = new BrowserWindow({ width: 800, height: 600, minWidth: 600, minHeight: 560, show: false, title: "Probe" });
+  win = new BrowserWindow({ width: 800, height: 600, minWidth: 600, minHeight: 560, show: false, fullscreen: true, title: "Probe" });
   win.on("close", (event) => { if (!kept) { kept = true; event.preventDefault(); win.webContents.send("note", "kept once"); } });
   win.webContents.ipc.on("eyes:assistant-sync", () => win.webContents.send("note", "synced"));
   const secret = safeStorage.encryptString("synthetic secret");
   const tiny = nativeImage.createFromBuffer(Buffer.from("89504e470d0a1a0a0000000d4948445200000002000000030806000000", "hex"));
   win.webContents.send("ready", {
-    userData: app.getPath("userData"), version: app.getVersion(), packaged: app.isPackaged,
+    userData: app.getPath("userData"), version: app.getVersion(), packaged: app.isPackaged, fullscreen: win.isFullScreen(),
     available: safeStorage.isEncryptionAvailable(), roundTrip: safeStorage.decryptString(secret), prefix: secret.subarray(0, 3).toString(),
     clip: clipboard.readText(), size: tiny.getSize(), blob: Buffer.from([1, 2, 3]),
   });
@@ -151,6 +151,7 @@ test("the engine's Electron shim talks to the host over the pipe", { timeout: 60
     const create = await host.next((f) => f.t === "cast" && f.api === "window.create", "window.create");
     assert.equal(create.body[0].minWidth, 600);
     assert.equal(create.body[0].show, false);
+    assert.equal(create.body[0].fullscreen, true, "the native host receives fullscreen at creation");
 
     const ready = await host.next((f) => f.t === "push" && f.ch === "ready", "the ready push");
     assert.equal(ready.tagged, true, "a push holding bytes is marked");
@@ -158,6 +159,7 @@ test("the engine's Electron shim talks to the host over the pipe", { timeout: 60
     assert.equal(state.userData, info.paths.userData);
     assert.equal(state.version, "9.9.9");
     assert.equal(state.packaged, false);
+    assert.equal(state.fullscreen, true, "fullscreen is known before the native state reply");
     assert.equal(state.available, true);
     assert.equal(state.roundTrip, "synthetic secret");
     assert.equal(state.prefix, "v10", "Chromium's OSCrypt format");

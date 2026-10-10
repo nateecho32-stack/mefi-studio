@@ -1,5 +1,12 @@
 # How Studio is put together
 
+The desktop window opens in native fullscreen on both Electron and the Rust
+host, covering the Windows title bar and taskbar. **F11** toggles fullscreen;
+**Alt+F4** uses the usual close flow and **Ctrl+Q** requests Quit. A Start with
+Windows launch still stays hidden in the tray until opened. Smoke and capture
+runs keep their fixed window sizes. `MEFI_STUDIO_FULLSCREEN=0` restores the
+normal window launch for troubleshooting.
+
 Friends > Your PCs has an optional paired repository-check coordinator. The
 desktop adapter loads only when requested. Local IPC owns queueing, invitations,
 revocation and setup; the network protocol exposes only authenticated worker

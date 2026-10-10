@@ -39,6 +39,45 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-09 Codex fullscreen startup: both hosts cover the title bar and taskbar
+
+Studio opens in native fullscreen by default. F11 keeps its existing toggle;
+SMOKE/CAPTURE keep their fixed sizes, a login launch remains hidden, and
+`MEFI_STUDIO_FULLSCREEN=0` restores the normal window launch. Saved maximize
+cannot override the fullscreen launch. The Electron shim forwards fullscreen
+at window creation and knows its initial state; Rust's window builder applies
+it. No new startup I/O, polling, renderer work or data format was introduced.
+
+Validation: window guards, Rust bridge and application menu **15/15 pass** on
+the isolated checkout based on GitHub main b73a22e; the two changed suites
+also pass **12/12** on the primary checkout. `npm run check` and `npm run audit`
+pass in both checkouts. `npm run lint` exits 0 (48 existing warnings; the
+changed files have the same five main.cjs warnings as before). `npm run
+host:build` passes, dev profile, 48m 39s, with its target outside OneDrive.
+
+Full `npm test` was run on the primary checkout with its pre-existing local
+edits preserved. Node parallel: **7857 tests, 7817 pass, 2 fail, 38 skip**;
+Electron lane: **69 tests, 59 pass, 6 fail, 3 cancelled, 1 skip**. The exclusive
+Command fixture fails with no report after 133.5s; eyes visibility passes;
+occlusion has one pass and its documented capability skip. Python **248/248**
+and all six normalized-path checks pass. Overall exit 1 (Node leg 2752s).
+
+The Map toolbar's CSS-scope assertion (`.walkthrough-easy-grid`) and tab host's
+existing Ctrl+Shift+T menu conflict reproduce against GitHub main's unchanged
+inputs. Desktop failures: agent_setup_render (install control unreachable),
+media_window_render and planning_render (outer timeouts), node_views_render
+and task_overview_render (no report), performance_render (fixture timeout),
+today_render (focus order), tree_dynamics_render and unified_navigation_render;
+command_render also has no report. These renderer fixtures do not use the new
+fullscreen launch path. This is a red full gate, not a green landing claim.
+Full output stays locally at `%TEMP%/mefi-fullscreen-npm-test.log`.
+
+The running portable copy's main.cjs also received only the startup patch and
+passes `node --check`; its previous code is backed up in Temp. Neither data
+store nor settings were changed, and no app restart was forced. Source changes
+and this evidence are parked on `wip/fullscreen-startup`; main landing is
+pending the existing Node gate failures. No release or tag was published.
+
 ## 2026-10-09 Scratch tier WP2: the JavaScript store, its settings and the Resources line
 
 Branch `feat/scratch-wp2` (C:\wt\scratch-wp2, off main b640d29, rebased onto a2aaa86 and then b4ff7d8 without a
@@ -487,34 +526,6 @@ branch, all green: Studio checks (Linux) run 37527676158 (PR #7), Node stage 758
 audit and the Xvfb smoke (45 cards), which had not run on Linux since c4b9e2e because the red Tests step stopped the
 job first; Studio checks (Windows) runs 37527647312 (push) and 37527676135 (PR), Node stage 7589 tests, 0 fail, 34
 skipped, Python contracts 248 OK, audit and the portable package ok.
-
-## 2026-10-06 The 0.5 polish pass: a full gate, every window failure checked against main, and the fixes
-
-Branches `polish/0.5` (C:\wt\v05, with `polish/names` and `polish/tour` merged in; the owner merged it as #6, feb4a29)
-and `polish/0.5-b` (C:\wt\v05b, landed here), found with a fresh-profile run of the real app (C:\wt\probe: isolated
-profile, coding CLIs blocked, driven over CDP: every place and page in both modes, 12 themes, interface scale, menus).
-Fixed: a blank Studio menu after Social to Studio, Configuration and Friends leaving their layer claims, the old tree
-strip over Settings, Plans laid out by its own room, key tips over the welcome, the welcome's AI choice never applied
-on Continue (and never re-read after a sign-in in its own window: now on window focus, Check again and Continue),
-queued tasks shown as running with agents off, Events in the menu, the Help sheet's links, a place row (picker below
-760 px, out of the way below 520 px of height), the first task carried from Start a new app into the welcome,
-GETTING_STARTED.md rewritten for 0.5.
-
-Full `npm test` on polish/0.5 (ab7d4ea, about 2 h at 700 MB free): Node stage 7587 tests, 7572 pass, 1 fail (a test
-still matching the old setup advice "is selected"; fixed on main as 0c4633c), 14 skipped; Python contracts pass;
-Electron lane 69 tests, 62 pass, 6 fail, plus command_render. Each failing window suite then ran alone on a control
-worktree of main before the polish (4d23e3c, C:\wt\ctl) and on the branch: all passed on the control, so all were
-the polish's. Causes and fixes: the menu's default pin moved to 1600 px changed every fixture's layout at 1100 and
-1440 px (Size went to two columns, Home's composer moved with its drawer, the project map's Browse stayed open,
-unified_studio's hover dwell) - reverted to main's 1100 px default; Team's place row took the row a 400 px window
-needs (agent_setup_render) - picker and short-window rule; the frame's right margin overrode styles.css's narrow one
-below 900 px - restored; Size's kept-in-view picture now stays within two thirds of the pane with its caption and
-buttons (507 of 715 px before); fixtures that pinned old words (the welcome's titles and buttons, "Folder mapped" now
-"Project mapped", the hidden tree strip that command_render waited to see painting on a tab page).
-
-On the landed tree, one window suite at a time under the lease: agent_setup_render (one missed click, then 2/2), project_map_render, size_render, workflow_render, team_render, friends_render, shell_render, settings_render, setup_helper_render, unified_studio_render and command_render (84 s) all pass. `npm run test:fast`:
-7589 tests, 7572 pass, 14 skipped, 3 failed under about 400 MB free with the Electron lane busy and all 3 pass alone (paired_reconnect 6/6, resource_helper_win 1/1, rust_parity_git 4/4 in 188 s). `npm run check` ok, `npm run audit` 0 findings. Not run here: a second full `npm test` (the lane
-results above cover every suite the fixes touch).
 
 ## Read Before Any Tests
 
