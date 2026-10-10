@@ -1,0 +1,7 @@
+.item-trades { width: min(680px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; box-sizing: border-box; padding: 24px; color: var(--ivory); background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 16px; box-shadow: var(--shadow-2); }
+.item-trades::backdrop { background: #05070bcc; }
+.item-trades-list, .item-trades-compose { display: grid; gap: 12px; margin-top: 16px; min-width: 0; }
+.item-trades-row, .item-trades-review { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; overflow-wrap: anywhere; }
+.item-trades-row p, .item-trades-review p { margin: 0; }
+.item-trades-field { display: grid; gap: 6px; }
+.item-trades-field select { width: 100%; min-width: 0; }

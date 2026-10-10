@@ -8,6 +8,7 @@ import vm from "node:vm";
 // hand-turned timers and clock, and a tiny DOM. Nothing here talks to a hub.
 
 const source = await readFile(new URL("../renderer/together.js", import.meta.url), "utf8");
+const socialSource = await readFile(new URL("../renderer/social-content.js", import.meta.url), "utf8");
 const T0 = 1_800_000_000_000;
 const ME = { id: "111111111111111111", name: "Mefi" };
 const AKSANA = { id: "222222222222222222", name: "Aksana" };
@@ -25,7 +26,7 @@ function session(overrides = {}) {
   return { id: "lis_1", url: YT, label: "YouTube video", title: null, provider: "youtube", host: AKSANA, playing: true, positionMs: 30_000, startedAt: T0, updatedAt: T0, ...overrides };
 }
 
-function environment({ status = {}, saved = null, search = "", bridge: bridgeOn = true, listen = () => ({ ok: true }), ui = null } = {}) {
+function environment({ status = {}, saved = null, search = "", bridge: bridgeOn = true, listen = () => ({ ok: true }), ui = null, social = false } = {}) {
   let now = T0;
   let seq = 0;
   const timers = new Map();
@@ -93,6 +94,7 @@ function environment({ status = {}, saved = null, search = "", bridge: bridgeOn 
       clearInterval: (id) => timers.delete(id),
     },
   });
+  if (social) { context.window.confirm = () => true; vm.runInContext(socialSource, context); }
   vm.runInContext(source, context);
   const advance = async (ms) => {
     const end = now + ms;
@@ -120,6 +122,18 @@ function environment({ status = {}, saved = null, search = "", bridge: bridgeOn 
   };
 }
 const kinds = (env, kind) => env.calls.filter((call) => call[0] === kind);
+
+test("saved following needs fresh consent; a host changing sites stops automatic network contact", async () => {
+  const env = environment({ saved: { roomId: "room_lofi", following: true }, social: true });
+  await flush(); await env.ready();
+  await env.hub({ type: "listen", roomId: "room_lofi", session: session(), sentAt: T0 });
+  assert.equal(env.player.played.length, 0); assert.equal(env.saved().following, false);
+  env.find("music-together-follow").click(); await flush(); assert.equal(env.player.played.length, 1);
+  await env.hub({ type: "listen", roomId: "room_lofi", session: session({ url: FILE, provider: "discord", updatedAt: T0+1000 }), sentAt: T0+1000 });
+  assert.equal(env.player.played.length, 1); assert.equal(env.saved().following, false);
+  env.context.window.confirm = () => false;
+  env.find("music-together-follow").click(); await flush(); assert.equal(env.player.played.length, 1);
+});
 
 test("without the desktop bridge the section stays hidden", async () => {
   const env = environment({ bridge: false });

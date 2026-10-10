@@ -193,6 +193,11 @@
     function reportList() {
       return section("Reports", "friends-mod-reports", reports.map((report) => {
         const tools = [];
+        if (report.imageAvailable && report.verified) tools.push(confirmed("Remove message", "Remove it from the room?", "Remove this reported message and image from the room? Private report evidence is retained for 30 days.", () => guard("Removing…", async () => {
+          const answer = await call("modRemoveMessage", report.id);
+          status.textContent = answer?.ok ? "The message and image are removed from the room." : why(answer, "They could not be removed.");
+          await load();
+        })));
         tools.push(confirmed("Resolve", "Mark it handled?", "Mark this report as handled?", () => guard("Resolving…", async () => {
           const answer = await call("modResolve", report.id);
           status.textContent = answer?.ok ? "Marked as handled." : why(answer, "It could not be resolved.");
@@ -219,7 +224,9 @@
           status.textContent = answer?.ok ? `${report.author.name} is suspended for 7 days.` : why(answer, "The suspension did not go through.");
         })));
         const what = report.kind === "project" ? "Project" : pack || report.roomId === "shop" ? `Style pack${pack?.name ? ` “${pack.name}”` : ""}` : report.verified ? "Message (signed copy)" : "Message";
-        return row(`${what}: ${report.reason}`, `${report.text ? `“${report.text.slice(0, 200)}” · ` : ""}reported by ${report.reporter?.name ?? "a member"}${report.author ? ` · by ${report.author.name}` : ""}`, tools);
+        const entry = row(`${what}: ${report.reason}`, `${report.text ? `“${report.text.slice(0, 200)}” · ` : ""}reported by ${report.reporter?.name ?? "a member"}${report.author ? ` · by ${report.author.name}` : ""}`, tools);
+        if (report.imageAvailable && window.MefiRoomImages?.reportCard) entry.append(window.MefiRoomImages.reportCard(report.id));
+        return entry;
       }), "No open reports.");
     }
 

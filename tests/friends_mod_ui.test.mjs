@@ -41,7 +41,7 @@ const review = {
   givers: [{ ...BOB, amount: 30, events: 9, share: 75, accountCreatedAt: Date.now() - 40 * DAY, joinedAt: Date.now() - 8 * DAY }, { id: null, name: "a member who used Forget me", amount: 10, events: 2, share: 25, accountCreatedAt: null, joinedAt: null }],
 };
 
-function environment({ moderator = true, confirm = true, extraReports = [], packNames = {}, switches = null, jam = null, flags = null, reviewed = review, holds = null } = {}) {
+function environment({ moderator = true, confirm = true, extraReports = [], packNames = {}, switches = null, jam = null, flags = null, reviewed = review, holds = null, images = null } = {}) {
   const calls = [];
   // The switches a moderator turned off, as the relay keeps them (null: a relay from before the switches).
   let off = switches;
@@ -74,10 +74,21 @@ function environment({ moderator = true, confirm = true, extraReports = [], pack
   };
   // The Shop's names for packs it has read (renderer/friends-shop.js packName).
   const window = { mefiStudio: api, confirm: () => confirm, MefiShop: { packName: (id) => packNames[id] ?? null } };
+  if (images) window.MefiRoomImages=images;
   const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String, Math });
   vm.runInContext(source, context);
   return { window, mod: window.MefiFriendsMod, calls };
 }
+
+test("reported images stay behind explicit review and removal asks before changing the room",async()=>{
+  const shown=[];
+  const options={extraReports:[{id:"rep_image",kind:"message",roomId:"room",messageId:"300000000000000003",imageAvailable:true,verified:true,reason:"Private details",reporter:ALICE}],images:{reportCard:id=>{shown.push(id);return new Element("div");}}};
+  const refused=environment({...options,confirm:false}),first=refused.mod.card();await flush();
+  assert.equal(refused.calls.some(x=>x[0]==="modReportImage"),false,"listing never retrieves pixels");
+  first.buttons("Remove message")[0].click();await flush();assert.equal(refused.calls.some(x=>x[0]==="modRemoveMessage"),false);
+  const allowed=environment(options),card=allowed.mod.card();await flush();card.buttons("Remove message")[0].click();await flush();
+  assert.deepEqual(allowed.calls.find(x=>x[0]==="modRemoveMessage"),["modRemoveMessage","rep_image"]);assert.ok(shown.includes("rep_image"));
+});
 
 test("only a moderator sees the tools; everyone else is told what the place is", async () => {
   const member = environment({ moderator: false });

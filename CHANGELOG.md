@@ -7,6 +7,15 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Shared links wait for you.** Room cards show the real destination without
+  fetching remote pictures. Players load on request, and following a room asks
+  before contacting a new site. Obvious private addresses and token-bearing
+  links are hidden and refused before posting.
+- **Room images and item swaps are ready for compatible services.** Image
+  sharing removes camera metadata, shows a local review, and loads received
+  pictures only on request. Shop trades show the exact items before both members
+  consent. Availability and account eligibility come from the private service;
+  this desktop update does not deploy it.
 - **Friends opens a room desktop.** Rooms and people sit beside the existing
   chat, with readable author initials and a rounded composer. Your build,
   the room player and the week's Build Jam show actual app and service state.

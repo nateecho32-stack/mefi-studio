@@ -1,0 +1,5 @@
+/* Room links share the app's surfaces and type; no remote image or favicon. */
+.rooms-social-content { min-width: 0; display: grid; gap: 8px; }
+.rooms-link-card { display: grid; gap: 7px; max-width: 560px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-solid); }
+.rooms-link-destination { overflow-wrap: anywhere; color: var(--muted); font-size: 12px; }
+.rooms-link-player { display: block; width: 100%; aspect-ratio: 16 / 9; min-height: 160px; border: 0; border-radius: 8px; background: #101015; }

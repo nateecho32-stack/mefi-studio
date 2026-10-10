@@ -20,7 +20,7 @@ const from = main.indexOf("// ---- Rooms hub: listen together and now playing");
 const to = main.indexOf("// ---- end of the rooms hub", from);
 assert.ok(from > 0 && to > from, "main.cjs has a Rooms hub block");
 const block = main.slice(from, to);
-const METHODS = ["shop", "shopOwned", "shopBuy", "shopPublish", "shopUpdate", "shopUnlist", "shopReport", "modShopRemove", "shopCatalog"];
+const METHODS = ["shop", "shopOwned", "shopBuy", "shopPublish", "shopUpdate", "shopUnlist", "shopReport", "modShopRemove", "shopCatalog", "trades", "tradeInventory", "tradeOffer", "tradeDecide"];
 
 function host(env = {}) {
   const calls = [];
@@ -41,7 +41,7 @@ function host(env = {}) {
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
 test("main lets the renderer call only the Shop's methods, with the hub client's own arity", async () => {
-  assert.match(main, /const HUB_SHOP_METHODS = Object\.freeze\(\{ shop: 2, shopOwned: 0, shopBuy: 3, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2, shopCatalog: 0 \}\);/);
+  assert.match(main, /const HUB_SHOP_METHODS = Object\.freeze\(\{ shop: 2, shopOwned: 0, shopBuy: 3, shopPublish: 1, shopUpdate: 2, shopUnlist: 1, shopReport: 2, modShopRemove: 2, shopCatalog: 0, trades: 0, tradeInventory: 1, tradeOffer: 1, tradeDecide: 2 \}\);/);
   assert.match(main, /ipcMain\.handle\("hub:shop", async \(_event, payload\) => hubShop\(String\(payload\?\.method \?\? ""\), Array\.isArray\(payload\?\.args\) \? payload\.args : \[\]\)\);/);
   assert.match(preload, /hubShop: \(method, \.\.\.args\) => ipcRenderer\.invoke\("hub:shop", \{/);
   assert.equal((main.match(/process\.env\.MEFI_STUDIO_SHOP_ALL/g) ?? []).length, 1, "the switch is read once");

@@ -39,6 +39,31 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-10 social-readiness - Safe shared content, image review and item-swap client checkpoint
+
+Windows Node 24.15, isolated public client branch on 4d3c3d5. Shared links render
+without passive requests and require explicit navigation/player consent. Image
+review re-encodes synthetic JPEG/PNG, strips metadata, bounds dimensions/bytes,
+and defers room/moderator pixels until chosen. Owned-item swaps review exact
+terms separately from acceptance. Features require a compatible private service;
+this checkpoint deploys no server and grants no credits or ownership.
+
+Focused client/room/shop/companion and compatible-service Shop checks: 95 tests,
+94 passed, 1 existing skip, no failures. Moderator/client/service focused checks:
+27 passed. The actual Chromium fixture passed in 5.79 s (6.07 s total), covering
+no passive HTTP or permission requests, metadata removal, resize/oversize refusal,
+review before upload, lazy room/moderator image reveal/hide, exact two-step swap
+consent, narrow dialog and kill switches. Its 1,384 s wait was the shared Electron
+lease, not fixture execution. build-booklet/check passed (322 targets, 648 specs);
+lint: 0 errors, 48 existing warnings; audit: 0 findings.
+
+The attempted full npm test was deliberately interrupted while another chat held
+the Electron gate and available RAM fell to 121–432 MB. Its log is preserved and
+is not a passing gate. The release-readiness chat owns the one final combined
+public-source full gate after adopting this checkpoint and its corrected Unified
+navigation fixture. This is a WIP checkpoint pending that gate, packaging and
+landing; no stable release or live new-social-feature claim is made here.
+
 ## 2026-10-10 morning - Friends actual worker-status scope and project-switch race
 
 Static production-bridge review found that main's actual autopilotStatus omitted projectId, while the new Friends build card required scoped worker status; the synthetic renderer fixture already had that field. The bdb0c5d full gate was deliberately stopped before any source edit, and its interrupted log is retained rather than counted green. The existing bounded status now carries the current project ID, without a path. Project changes clear old summaries immediately; epoch guards reject late board reads. Actual-host status, late project-read, room/player, push batching and switch-settlement suites: 74 passed in the corrected run. The first regression fixture omitted the messages page shape and generated an asynchronous map error after its assertions; that failed log is preserved, and the real empty page contract is now supplied. check/lint/audit and a fresh exact-commit full gate follow this fix. Earlier Friends renderer (141.3 s) and two-window relay (40.3 s) remain focused evidence, not a substitute for the post-fix full run.
@@ -445,24 +470,6 @@ task_overview_render's 35 s kill timer is too tight on this loaded PC for main t
 this branch 38 s and 30 s); shell_render failed once at "the saved widths are the launch's" with 604 MB free and
 passed alone. check ok, lint 47 warnings (as main), audit 0 findings. Hosted CI: run 37551601070 failed on the
 three CSS contract pins (fixed in 3e7a6b9), run 37554612664 green on 5c8f2ef, run 37556171702 green on 63da96c.
-
-## 2026-10-06 paired_reconnect waits for the resumed worker's first poll and for missed heartbeats, not fixed sleeps
-
-Branch `fix/paired-reconnect-wait` (9da2cc1, off main 149e770, in C:\wt\rcwait), fast-forwarded onto main. Hosted
-Windows CI failed paired_reconnect's "a started worker and coordinator come back by themselves after a restart" once
-(run 37529114511 on main 9d38169: `'connecting'` where `'connected'` was expected at line 138). The test slept 50 ms
-and then expected the resumed worker's first poll over real HTTP to have answered; it now waits for the link to read
-connected (`until()` takes an async check, as the host's `status()` is one) and asserts as before. The file's other
-fixed sleep, 40 ms in the heartbeat test, is now a wait for three missed heartbeats, and that test's "the check
-starts" waits for `finish` (the check waiting on its abort, after its first progress line) instead of `signal`: an
-abort that came first went unseen and the test hung. A scratch copy whose coordinators take 200 ms per write
-(`createCoordinator`'s `write` option) reproduced both on the old file, the restart test failing exactly as CI did and
-the heartbeat test hanging until the test timeout; the new file passes 6/6 at 200 and 500 ms per write and exits by
-itself, its longest wait ("the check starts", about three coordinator writes) 1.6 s against the 5 s budget.
-scripts/paired-*.cjs are unchanged. Here: `npm run test:one -- tests/paired_reconnect.test.mjs` 5 runs, 6/6 each (the
-first at a loaded moment: 13 s, the heartbeat test 9.8 s); check ok, lint 47 warnings (as main), audit 0 findings.
-Hosted CI on the branch, green: Studio checks (Windows) run 37534722660, Node stage 7590 tests, 0 fail, 34 skipped
-(the restart test 141 ms, the heartbeat test 470 ms), Python contracts 248 OK, audit and the portable package ok.
 
 ## Read Before Any Tests
 

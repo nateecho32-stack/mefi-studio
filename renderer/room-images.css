@@ -1,0 +1,6 @@
+.room-image-review { width:min(600px,90vw); max-height:85vh; overflow:auto; color:var(--text); background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px; }
+.room-image-review::backdrop { background:#0009; }
+.room-image-review .rooms-compose { width:100%; margin-block:12px; }
+.room-image-preview { display:block; max-width:100%; width:auto; max-height:460px; height:auto; object-fit:contain; border-radius:10px; margin-block:10px; }
+.room-image-card { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding-block:8px; }
+.room-image-card .room-image-preview { flex-basis:100%; }

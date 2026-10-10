@@ -245,6 +245,8 @@ const text = (value, max) => (typeof value === "string" ? value.replace(/[\x00-\
 function roomMessage(value) {
   if (!object(value) || !SNOWFLAKE.test(String(value.id)) || !object(value.author) || !SNOWFLAKE.test(String(value.author.id))) return null;
   if (typeof value.text !== "string" || !Number.isFinite(value.createdAt)) return null;
+  const image = value.v === 2 ? require("./social-client.cjs").imageRef(value.image) : null;
+  if (value.v === 2 && !image) return null;
   return {
     id: String(value.id),
     author: { id: String(value.author.id), name: text(value.author.name, 100), viaStudio: value.author.viaStudio === true },
@@ -253,6 +255,7 @@ function roomMessage(value) {
     mentions: Array.isArray(value.mentions?.users) ? value.mentions.users.map((item) => (object(item) && SNOWFLAKE.test(String(item.id)) ? { id: String(item.id), name: text(item.name, 100) } : null)).filter(Boolean).slice(0, 50) : [],
     attachments: Array.isArray(value.attachments) ? value.attachments.filter(object).slice(0, 10).map((item) => ({ name: text(item.name, 200) || "file", size: count(item.size, 1e12) ?? 0 })) : [],
     replyTo: SNOWFLAKE.test(String(value.replyTo)) ? String(value.replyTo) : null,
+    ...(image ? { v: 2, image } : {}),
     // The relay's signature (feature "messages.signed"), kept so this copy can
     // later fill another member's gap or back a report.
     ...(opaqueId(value.sig) ? { sig: value.sig } : {}),
@@ -273,6 +276,7 @@ function wireMessage(value) {
     mentions: { users: message.mentions.map((item) => ({ id: item.id, name: item.name.replace(/[\x00-\x1f\x7f]/g, " ") })), roles: [], everyone: false },
     attachments: message.attachments.map((item) => ({ name: item.name.replace(/[\x00-\x1f\x7f]/g, " ") || "file", size: item.size })),
     replyTo: message.replyTo,
+    ...(message.v === 2 ? { v: 2, image: message.image } : {}),
     ...(message.sig ? { sig: message.sig } : {}),
   };
 }
@@ -764,7 +768,7 @@ function createHubClient(options = {}) {
       events: features.includes("events"),
       lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"), building: features.includes("building"),
       pcs: features.includes("pcs"), pcOn: Boolean(pc) && features.includes("pcs"),
-      shop: features.includes("shop"), pets: features.includes("pets"),
+      shop: features.includes("shop"), pets: features.includes("pets"), images: features.includes("messages.images"), trades: features.includes("shop.trades"),
     };
   }
   function setState(next, nextError = null) {
@@ -1160,6 +1164,8 @@ function createHubClient(options = {}) {
     };
   };
   const bad = () => Promise.resolve({ ok: false, error: "bad-request" });
+  // Loaded when the social client starts, never during app boot.
+  const trades = require("./social-client.cjs").createSocialClient({ request: authed, supported: (feature) => features.includes(feature) });
   const id = (value) => opaqueId(value);
   async function simple(method, path, body) {
     const answer = await authed(method, path, body);
@@ -1424,6 +1430,7 @@ function createHubClient(options = {}) {
           packId: isPackId(item.packId) ? item.packId : null,
           author: user(item.author), reporter: user(item.reporter), reason: text(item.reason, 500), text: typeof item.text === "string" ? text(item.text, 2000) : null,
           verified: item.verified === true, createdAt: Number.isFinite(item.createdAt) ? item.createdAt : null,
+          ...(item.imageAvailable === true ? {imageAvailable:true} : {}),
         };
       }).filter(Boolean).slice(0, 100) : [];
       return { ok: true, reports };
@@ -1611,6 +1618,7 @@ function createHubClient(options = {}) {
         featuredUntil: shopTime(data.featuredUntil),
       };
     },
+    ...trades,
     // Everything this member owns, to put back on a new PC: { items: [{ id, kind, name, data, updatedAt }] }.
     async shopOwned() {
       if (!features.includes("shop")) return { ok: false, error: "unsupported" };
