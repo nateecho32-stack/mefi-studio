@@ -20,7 +20,7 @@
   const plain = (error, fallback) => (window.MefiUi?.plainError ? window.MefiUi.plainError(error, fallback) : (error?.name === "Error" && error.message) || fallback);
   const button = (label, id = null, cls = "ghost pc-sync-run") => { const el = node("button", cls, label); el.type = "button"; if (id) el.id = id; return el; };
   const WATCH_MS = 45_000;
-  // Where Studio is downloaded: the releases page renderer/demo-panel.js links too.
+  // Where Studio is downloaded: the releases page.
   const DOWNLOAD_URL = "https://github.com/nateecho32-stack/mefi-studio/releases/latest";
   const DOWNLOAD_SHOWN = "github.com/nateecho32-stack/mefi-studio/releases";
   // Connect another PC, opened or folded by the owner's own press (null until

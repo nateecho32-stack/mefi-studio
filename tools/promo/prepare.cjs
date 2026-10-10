@@ -170,7 +170,7 @@ seed.brainPlaybook = {ok:true,recipes,shelf:recipes.map(r=>({...r,tone:"good",th
 seed.companionState = {ok:true,state:"working",look:"wisp",scope:"project",queue:{counts:{total:1},items:[]},digest:{text:"Two builders are working on your Notes app."}};
 seed.brainSettings = {ok:true,lead:{provider:"zen",model:"gpt-6-sol",effort:"medium"},desk:{provider:"zen",model:"gpt-6-sol",effort:"medium"}};
 seed.projectPreviewStatus = {ok:true,phase:"stopped",available:true,kind:"static",message:"Preview is ready to start",logs:[]};
-seed.prefsGet.prefs = {commandHome:false,autoReference:false,demoPanel:false};
+seed.prefsGet.prefs = {commandHome:false,autoReference:false};
 seed.getAiRouting = {...seed.getAiRouting,provider:"openrouter",hasOpenRouter:true,openrouterModel:"openrouter/free"};
 seed.openrouterModels = {ok:true,models:[{id:"openrouter/free",name:"Free router"}]};
 seed.backlogStatus.taskStates = seed.tasksList.tasks.map((task,i)=>({id:task.id,stage:i<2?"running":i===2?"awaiting_verification":i===5?"done":"ready",reason:i<2?"Worker running":""}));

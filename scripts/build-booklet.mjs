@@ -93,7 +93,6 @@ export const BOOKLET_INPUTS = {
     "planning.js",
     "onboarding.js",
     "community.js",
-    "demo-panel.js",
     "autonomy-ui.js",
     "chat-tools.js",
     "companion-ui.js",
