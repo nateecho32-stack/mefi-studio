@@ -6,6 +6,30 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Social is about people: the QA pass's findings, on ui/social-simple, with Your PCs' Connect another PC
+
+Branch `ui/social-simple` (71c45d6, 3e7a6b9, merge 5c8f2ef of `ui/pcs-walkthrough` 0a35dcb built by a subagent in
+C:\wt\social-pcs, and 63da96c), off main da9b951, in C:\wt\social. A QA pass on the installed build found Social
+reading as a development dashboard; Studio's controls leave Social (renderer/social.js studioOnly, asked by nav.js
+go()), Social's rail stands on its Home, the box has one action, Your work is a list beside a Friends card, and
+Activity and Projects are pages of Social's own. Fixtures follow the new behaviour: today_render (a task opened from
+Social opens in Studio; the Tab walk has no Build it or starters), sessions_render (trail "Home", a group only while
+it holds something, Send; the press check looks past the toasts earlier steps leave up), tabs_render (Social opens
+Social's tabs; a Studio tab switches modes) and the CSS contract pins (three no-rail offsets left the layout ledger).
+The window runs found two real bugs, fixed in 63da96c: Home's three-row cap counted Decided lines, so answers could
+hide the next question behind "N more", and a card rebuilt under the focus dropped the keyboard to the page.
+Node here through `npm run test:one`: social 6/6 (new), today_page 25, today_inbox 39, today_model and today_home
+pass (Today set 94/94), vibe_home 10, vibe_frame 9, onboarding, key_tips 7, tabs_strip, briefing_fix_requests 3,
+layout_contract_css and shell_frame_css 18, the Your PCs set with tabs and social 275/275. Windows: today_render
+3 runs in a row after 63da96c, sessions_render, shell_render, tabs_render, friends_render, companion_hub_render,
+team_render, map_render, settings_render, size_render, autonomy_render and friends_two_render pass; the other 40
+window files 115/129 in a loaded lane, their 12 failures rerun 29/32 with 2 skips. Not ours: builder_render fails
+identically on clean main da9b951 ("the greeting has a size at 1920x1080@1"; task chip offered);
+task_overview_render's 35 s kill timer is too tight on this loaded PC for main too (timer raised: main 45 s and 37 s,
+this branch 38 s and 30 s); shell_render failed once at "the saved widths are the launch's" with 604 MB free and
+passed alone. check ok, lint 47 warnings (as main), audit 0 findings. Hosted CI: run 37551601070 failed on the
+three CSS contract pins (fixed in 3e7a6b9), run 37554612664 green on 5c8f2ef, run 37556171702 green on 63da96c.
+
 ## 2026-10-06 paired_reconnect waits for the resumed worker's first poll and for missed heartbeats, not fixed sleeps
 
 Branch `fix/paired-reconnect-wait` (9da2cc1, off main 149e770, in C:\wt\rcwait), fast-forwarded onto main. Hosted

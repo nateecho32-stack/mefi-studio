@@ -354,7 +354,7 @@ app.whenReady().then(async () => {
   const friendsMotionWasOff=await run("const off=document.body.classList.contains('no-motion');document.body.classList.add('no-motion');return off;");
   report.friendsNavigation=[];
   // Friends is a page of its own (renderer/companion-hub.js openPlace), not the companion's bubble: each way in opens it at its place.
-  for (const [id, heading, place] of [['the-lobby','#friends-front','lobby'],['rooms','#rooms-title','rooms'],['your-pcs','#pc-sync-title','pcs'],['playground','#friends-title','playground'],['project-hub','#project-hub-title','hub']]) {
+  for (const [id, heading, place] of [['the-lobby','#rooms-title','lobby'],['rooms','#rooms-title','rooms'],['your-pcs','#pc-sync-title','pcs'],['playground','#friends-title','playground'],['project-hub','#project-hub-title','hub']]) {
     const keyboard = await run(`
       const rail=document.getElementById('app-rail'),head=rail.querySelector('.app-rail-head[data-section=friends]');
       document.documentElement.dataset.railDrawer='';head.focus();
@@ -367,14 +367,21 @@ app.whenReady().then(async () => {
     `);
     assert.equal(keyboard.id,id);assert.ok(keyboard.height>=28&&keyboard.top>=0&&keyboard.bottom<=keyboard.viewport+1&&keyboard.hit,'Friends keyboard target is reachable: '+JSON.stringify(keyboard));
     await run("document.activeElement.click();");
-    // The page's own title names the place and takes the focus (the card's heading steps aside under it; on The Lobby the
-    // page's title steps aside for the front page's masthead, still focused); the card is the place's own.
+    // The route title retains focus. Lobby chat supplies its room heading;
+    // the other places keep their own cards under the route title.
     await until(`!document.getElementById('friends-overlay')?.hidden&&document.getElementById('friends-overlay').dataset.place===${JSON.stringify(place)}&&document.querySelector(${JSON.stringify(heading)})&&document.activeElement?.id==='friends-place-title'`,`Friends opens ${id}`);
     assert.ok(await reachable(place==='lobby'?'#friends-place-body':'#friends-place-title'),'Friends place is named on screen: '+id);
     assert.ok(await run(`const card=document.querySelector(${JSON.stringify(heading)})?.closest('#friends-place-body > *');const r=card?.getBoundingClientRect();return Boolean(r&&r.width>100&&r.height>${place==='lobby'?1:28}&&r.top<innerHeight);`),'Friends card is visible: '+id);
     report.friendsNavigation.push(id);
     await run("window.MefiNav.closeAll();await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
   }
+  // The default Lobby now opens chat; the original roundup remains an explicit
+  // destination. Check both rather than requiring the roundup on the chat route.
+  await run("await window.MefiNav.go('friends-page',{place:'lobby',view:'roundup'});");
+  await until("!document.getElementById('friends-overlay').hidden&&document.getElementById('friends-overlay').dataset.place==='lobby'&&document.querySelector('#friends-front')&&document.activeElement?.id==='friends-place-title'",'explicit Lobby roundup');
+  assert.ok(await reachable('#friends-place-body'),'Lobby roundup is visible at the minimum scaled window');
+  report.friendsRoundup=true;
+  await run("window.MefiNav.closeAll();await window.MefiNav.go('agents',{section:'setup',pane:'team'});");
   if(!friendsMotionWasOff) await run("document.body.classList.remove('no-motion');");
   await require('./studio-background-checks.cjs')({ session, window, contents, run, until, capture, reachable, report });
   await run("window.unifiedFixture.project('second-project');");

@@ -39,6 +39,12 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-10 morning — Unified Friends navigation follows Lobby chat and preserves roundup
+
+The frozen `4d3c3d5` full run completed with one failure, not a clean pass: CPU-only Node 7,869 pass / 38 skip / zero failures; serial Electron 67 pass / one fail / one skip / zero cancellations. The failure was Unified's obsolete `#friends-front` expectation for the default Lobby destination, which now opens room chat. Command, Eyes and path-lock checks passed; the occlusion capability check skipped honestly on this attended desktop. Python ran 248 tests with one skip and no failures. The failed full log remains in external release evidence.
+
+The Unified fixture now checks `#rooms-title` on the same keyboard-opened default Lobby route while retaining its narrow-window target, focus and card geometry assertions. It also opens the explicit Lobby roundup route and verifies that its original `#friends-front` is visible at the minimum scaled viewport. This changes test expectations only; no renderer code changes. Its first focused run verified all five Friends routes and explicit roundup, then reached 54 of 90 background-layout cases before the existing 240-second child limit stopped it (242.306 seconds overall); no renderer assertion or navigation failure was recorded. This timeout is retained separately from the original obsolete-route failure. A clean-main comparison and combined-public full gate remain pending before packaging or local installation.
+
 ## 2026-10-10 social-readiness - Safe shared content, image review and item-swap client checkpoint
 
 Windows Node 24.15, isolated public client branch on 4d3c3d5. Shared links render
@@ -446,30 +452,6 @@ woke when motion came back; Moderation's Remove pack sent a report's many-line r
 small tree's fill eases both ways, and the rings and the fill have kill switches (`mefiStudio.mapRings`,
 `mefiStudio.mapFill`). check ok, lint 47 warnings (as main), audit ok; the relay's `wrangler deploy --dry-run` bundles
 278 KiB.
-
-## 2026-10-06 Social is about people: the QA pass's findings, on ui/social-simple, with Your PCs' Connect another PC
-
-Branch `ui/social-simple` (71c45d6, 3e7a6b9, merge 5c8f2ef of `ui/pcs-walkthrough` 0a35dcb built by a subagent in
-C:\wt\social-pcs, and 63da96c), off main da9b951, in C:\wt\social. A QA pass on the installed build found Social
-reading as a development dashboard; Studio's controls leave Social (renderer/social.js studioOnly, asked by nav.js
-go()), Social's rail stands on its Home, the box has one action, Your work is a list beside a Friends card, and
-Activity and Projects are pages of Social's own. Fixtures follow the new behaviour: today_render (a task opened from
-Social opens in Studio; the Tab walk has no Build it or starters), sessions_render (trail "Home", a group only while
-it holds something, Send; the press check looks past the toasts earlier steps leave up), tabs_render (Social opens
-Social's tabs; a Studio tab switches modes) and the CSS contract pins (three no-rail offsets left the layout ledger).
-The window runs found two real bugs, fixed in 63da96c: Home's three-row cap counted Decided lines, so answers could
-hide the next question behind "N more", and a card rebuilt under the focus dropped the keyboard to the page.
-Node here through `npm run test:one`: social 6/6 (new), today_page 25, today_inbox 39, today_model and today_home
-pass (Today set 94/94), vibe_home 10, vibe_frame 9, onboarding, key_tips 7, tabs_strip, briefing_fix_requests 3,
-layout_contract_css and shell_frame_css 18, the Your PCs set with tabs and social 275/275. Windows: today_render
-3 runs in a row after 63da96c, sessions_render, shell_render, tabs_render, friends_render, companion_hub_render,
-team_render, map_render, settings_render, size_render, autonomy_render and friends_two_render pass; the other 40
-window files 115/129 in a loaded lane, their 12 failures rerun 29/32 with 2 skips. Not ours: builder_render fails
-identically on clean main da9b951 ("the greeting has a size at 1920x1080@1"; task chip offered);
-task_overview_render's 35 s kill timer is too tight on this loaded PC for main too (timer raised: main 45 s and 37 s,
-this branch 38 s and 30 s); shell_render failed once at "the saved widths are the launch's" with 604 MB free and
-passed alone. check ok, lint 47 warnings (as main), audit 0 findings. Hosted CI: run 37551601070 failed on the
-three CSS contract pins (fixed in 3e7a6b9), run 37554612664 green on 5c8f2ef, run 37556171702 green on 63da96c.
 
 ## Read Before Any Tests
 
