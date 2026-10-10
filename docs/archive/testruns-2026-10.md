@@ -6,6 +6,81 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-07 The Map at a glance: state ripples, a legend that points at its nodes, a hover card, the four states apart in every theme
+
+Branch `feat/map-glance` (4d923fa and ec3784a, from origin/main c513838), worktree C:\wt\s-map on the owner's laptop
+(Node 24.15, 170 MB to 1.6 GB free, other sessions gating beside it). Asked: make the Map easier to read at a glance: a
+ripple when a task's state changes, legend pills that count and point at their nodes (hover, click to hold, Esc), a
+hover card with the title, the state and how long, and a polish pass at 1920x1080 and 1440x900 in Chrome and Daylight;
+the coordinator added that Daylight's Running and Review dots were the same blue. Built: noteGlance/drawStateRipple
+(0.8 s, none on first sight, the quiet entry, motion Off, rings off or Home's scenery), the legend pills with counts,
+stepLegendPoint's eased dim and aria-pressed/#cmd-announce, nav.js's Escape letting go of a held state before it opens
+the companion (which took Esc on the Map before), the #cmd-tip hover card ("Running · for 40 min", kept off the legend),
+and glancePalette: the four states at least 40 degrees of hue apart in every built-in theme (Review violet on Daylight
+and Midnight, Done lime on Forest and Aurora, Needs you rose on Studio gold and Eclipse, yellow on Ember and Paper;
+Chrome's grey accent exempt), light-page inks at 4.5:1, and coloured canvas words (callout numbers, status lines, work
+labels) at 4.5:1 on the page and on a number chip. Kill switches mefiStudio.mapRipple, mapLegendPoint, mapHoverCard and
+mapStateHues, each pinned by a test. Frame cost (tools/profile_studio.mjs command-150-3d, interleaved pairs against
+c513838): 6 pairs, command.frame mean 5.94 -> 5.81 ms (paired median -0.17), p95 9.2 -> 8.2; with the legend holding
+Running lit, 5 pairs, 5.11 -> 4.96 ms (-0.37), p95 6.9 -> 6.2; the added per-frame JavaScript timed alone for the
+288-node board about 0.09 ms. Node: command_graph and command_toolbar 132/132, every suite that loads idle.js 1077/1077,
+every suite that loads nav.js 677/677; check ok; lint 47 warnings (as main); audit 0 findings; Python contracts 248 OK
+(1 skipped). Electron, one at a time, each run under a 600 s tree kill (GNU timeout in Git Bash ends only npm, not the
+lease or Electron under it) with a free-memory guard: node_paint_cache 1/1 (1.7 s); map_render passed in 26 s
+(electron.exe 1.0-1.4 GB, flat); command_render first stopped at its 120 s limit after the fixture had passed every
+check in 80 s (exit code null, free memory down to 197 MB), then passed alone in 97 s; node_views_render first stopped
+at its 150 s limit with no report while the PC was starved (the memory sampler itself got no answer for 147 s), then
+passed alone in 115 s with all 48 captures. An earlier map_render held the Electron lane for 2 h 44 min until a
+watchdog stopped it: its waiter had been orphaned by GNU timeout, waited 124 min, and the lease's escape hatch then ran
+it beside three holders that were each "running 0 min", four Electron runs at once with 38 MB free; it had reached its
+last capture. The same code alone takes 26 s, and no loop or promise in the new code can spin. Not run here: the full
+`npm test`. Left open: the canvas's own 9 to 11 px callout and label type predates this work and still reads under 12
+px; dimmed labels and cards (search, Running only, the legend's dim) fall under 4.5:1 on a light page by design; the
+lease's running-anyway escape should not admit a waiter beside holders that have only just started.
+
+## 2026-10-07 Pets: petting and the chase, little things, three Shop pets, a live pet card; relay pets generations
+
+Branch `feat/pets-more` (C:\wt\s-pets, from origin/main c513838; 414c7f6, cdda867, 3d93d0f, d78b331, 17c954d).
+Asked: pet Ember (rest the pointer on it: it stops, looks, purrs, hearts, its name; quick circles: a chase), rare
+little things (stretch and yawn on waking, tail flick, spark sneeze, a firefly), a cloud dragon for the Shop, then
+"add more pets" (a phoenix and a will-o'-wisp), Shop catalog entries left to the Shop's rotation work, relay kinds with
+compatibility, and Settings' pet card with a live preview and a name. Not deployed: the relay changes are code only.
+
+Measured (perf lab, the page's own paint path, 4 interleaved rounds of 20 s at 60 fps with a loop, fireflies and
+petting, main's Ember beside the new code; Chromium's timer is 0.1 ms): dpr 1.25 main's Ember mean 0.13/0.11 ms
+(theme/gold), now 0.12/0.12; cloud 0.15/0.12, phoenix 0.16/0.16, wisp 0.11/0.10; dpr 2 every kind 0.10 to 0.14;
+every p95 0.3 ms or less. A rest with a purr, stretch, flick or firefly paints at 60 fps (15 before), one with a
+drifting trail at 30; sleep keeps 6; motion Off one still pose; a live preview draws nothing until it is on screen.
+
+Tests, each through `npm run test:one` (Node suites) or the Electron lane with a 600 s limit: pets 25/25 (11 before),
+relay_pets 14/14 and hub_client_pets 5/5, hub_client 18/18, friends_shop_ui 29/29 (Ember's switch now sets kind
+dragon; a Shop pet's card; previews on seconds, they were given milliseconds), setup_helper 33/33, rooms_ui, shop_host,
+hub_client_shop, relay_shop and pets_host green (80/80 together); Electron: setup_helper_render 1/1 (34 s),
+settings_render 1/1 (57 s), one run each. check ok; lint 47 warnings (as main); audit 0 findings; Python contracts
+248 OK (1 skipped). Contact sheets (dark Chrome and light Daylight; poses, skins, 96x64 to 360x240) and frame strips
+of petting, waking, sneezing, the flick, fireflies and the chase were rendered offscreen and kept locally in
+C:\wt\s-pets-lab\out. Not run: the full `npm test`.
+
+## 2026-10-07 The Shop as a page of its own, monthly drops with a Featured shelf, the signed-out showroom and sale pop-ups
+
+Branch `feat/shop-showroom` (C:\wt\s-shop, from origin/main c513838; 906cfbe..448f311, not pushed), on the owner's
+laptop with Node 24.15 and 250 to 900 MB free. Asked: a showroom while signed out, a pop-up when a member gets one of
+your packs, then (the owner) "make the shop its own whole page, make it clean, nice, like discords shop almost, lets
+have the shop rotate in and out styles". Built: relay/src/shop-drops.mjs (DROPS, the windows, the Featured shelf;
+feature shop.drops, refusal not-available) mirrored by main.cjs (SHOP_DROPS, shopCatalog); the route "shop" (the month's
+drop as a banner made from its data, Featured this week, categories, a detail dialog per item, the showroom with Sign in
+to get it); Friends' sale pop-up; the page's head and card names clear of styles.css's header and button rules.
+Relay not deployed (the owner decides). Every Electron run went through the lane with a 600 s limit.
+
+Results: relay_shop_drops 8/8, relay_shop 18/18, shop_host 6/6 (main's rules equal the relay's at 130 times),
+hub_client_shop 8/8, friends_shop_ui 33/33, friends_front_ui 15/15, friends_navigation 13/13; the 20 suites around the
+change 258/258; friends_render (Electron) passed at 34c96d7 (101 s) and on 448f311 (160 s), now walking the Shop's own page
+at 1920x1080 and 1440x900 in Studio and Social, 1100x720 and 600x560@1.5, the showroom and a light palette, with even card
+columns and the column filling the page beside the list. By hand in a real window: no text under 4.5:1 in Daylight,
+Paper or the dark default; Tab reaches a card with a 2 px ring round it, Enter opens its detail, Esc closes only the
+detail. check ok; lint 47 warnings (as main); audit 0 findings; Python contracts 248 OK, 1 skipped. Not run here: the
+full `npm test`.
+
 ## 2026-10-07 Shop node styles Lanterns and Neon; eight style packs for October's drop and the classic shelf
 
 Branch `feat/styles-more` (C:\wt\s-styles, from main c513838): dc3c06a (the painters), 3c55da2 (Settings gating and

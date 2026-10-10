@@ -39,6 +39,26 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-10 late morning — Concurrent booklet snapshots and native Eyes readiness corrected
+
+Same-root booklet builds now take turns for the complete HTML/source-map snapshot, releasing the queue after success or failure. Unique exclusive temporary files, atomic replacement and existing bounded cross-process rename retries remain intact. The actual eight-way regression and failed-build-followed-by-valid-build recovery pass; all six booklet cases pass in 15.822 seconds. No renderer source or generated application behavior changes.
+
+An isolated shared-Windows-lane Command-to-Eyes diagnostic recorded native visibility, focus, topmost state, renderer visibility, poll state and predecessor cleanup. No Electron processes remained after Command. With the original hidden launch, Eyes' first native show remained invisible despite a briefly visible document; polling correctly stopped when Chromium marked it hidden. A visible launch alone passed baseline and the immediate show refresh, then failed resumed cadence with native topmost false despite the constructor option. Explicit native topmost setting after each show and verified native-visible/topmost renderer readiness passed the original assertions: Command 73.370 seconds, Eyes 3.456 seconds, baseline two fetches/307 ms, hidden zero/1,200 ms, one immediate refresh, resumed three/606 ms. The installed libuv 1.51.0 implementation supplies `SW_HIDE` for the hidden launch; Windows startup visibility can override the first show request.
+
+The original Eyes suite now intentionally launches its GUI visibly, explicitly sets native topmost after show, records native state and verifies native visibility together with `document.hidden`. It passes in 3.780 seconds overall (3.668 seconds fixture): baseline two/296 ms, hidden zero/1,200 ms, one refresh, resumed three/602 ms, six total fetches and gaps 296–1,305 ms. All original baseline/resumed 15-second deadlines, show/hide five-second deadlines, hidden duration, cadence, duplicate checks, child/test limits and production background throttling are retained. Shipped `boot.js` and `eyes.js` are unchanged. The failed full runs and both failed diagnostic variants remain in external evidence; the initial diagnostic helper's zero exit based only on the child exit was corrected to require a successful report, as the original suite does. A fresh complete frozen-head gate is still required before packaging and installation.
+
+## 2026-10-10 late morning — Same-source 9a8b598 retry completes with two diagnosed failures
+
+The complete unchanged-source retry at width one finished with exit 1. CPU: 7,905 pass, 38 skip, one failure, zero cancellations (1,561.174 seconds). The eight-way overlapping booklet build exhausted the existing bounded Windows `EPERM` rename retries for `booklet.sources.json`; the builder write logic and test are unchanged from clean main except for the larger renderer inventory. Main Windows: 69 pass, one skip, zero failures or cancellations (1,649.382 seconds). Two-Studio consent passed in 24.982 seconds, Unified in 151.407 seconds, and social-content Chromium in 0.679 seconds. Dedicated Command passed in 62.540 seconds overall. Eyes passed baseline and hidden stop but failed its unchanged five-second visible-after-show deadline: `document.hidden` stayed true, three fetches had occurred, the poll was stopped, and the window was not minimized (7.768 seconds overall).
+
+Actual occlusion passed both cases without skips (10.628 seconds): covered animation-frame growth zero, worker drift 154 ms, MessageChannel lag zero, no console errors. Python passed 248 contracts with one skip in 61.196 seconds; normalized-path locking passed. The full log `full-test-final-9a8b598-retry.log` remains in external evidence. The tabs fixture again could not verify window-close behavior through synthetic Ctrl+W on this machine. This is a complete failed gate; no passing validation receipt, new shipping ZIP, local update or main landing is claimed.
+
+## 2026-10-10 morning — First 9a8b598 full gate completes with an Eyes visibility failure
+
+Frozen public source `9a8b59838edce7918fe0f436c2e905f57489d5ec` completed every required leg at Node/Electron width one. CPU: 7,906 pass, 38 skip, zero failures or cancellations (1,533.628 seconds). Main Windows: 69 pass, one skip, zero failures or cancellations (1,650.109 seconds). Corrected two-Studio website-consent coverage passed in 23.804 seconds; Unified passed in 155.962 seconds; the image-review and unique-catalog-swap Chromium case passed in 0.736 seconds. Dedicated Command passed in 63.192 seconds. Eyes failed because no baseline fetches landed within its unchanged 15-second deadline (15.899 seconds overall). Actual occlusion passed both checks without skips: covered animation-frame growth zero, worker drift 151 ms, MessageChannel lag 1 ms, no console errors (10.241 seconds overall).
+
+Python passed 248 contracts with one skip (62.315 seconds); normalized-path locking passed. Complete `npm test` exited 1. The unchanged Eyes suite passed alone against clean main `b73a22e` (3.527 seconds fixture) and the candidate (3.442 seconds fixture). Those solo passes do not turn the complete failed run into a passing release. The full log `full-test-final-9a8b598.log` and both solo logs remain in external evidence. No fresh package, installed update or main landing was performed.
+
 ## 2026-10-10 morning — Renderer fixtures exercise website consent and actual painted readiness
 
 Clean baseline `b73a22e` passed both unchanged renderer files: two-Studio relay/render 33.481 seconds and Command 63.676 seconds, no failures or skips. The candidate's unchanged Command then failed alone in 10.654 seconds. A copied, externally instrumented two-Studio fixture traced the stalled step to project Play's new native website-confirmation prompt; the existing fixture never answered it. That diagnostic was stopped only after isolating its own temporary process and identifying the blocked modal. The fixture now explicitly declines the exact host/URL/IP-address disclosure and proves no browser opening or earning timer, then explicitly approves the identical destination. Its corrected run passes in 24.725 seconds with the original child/test bounds, seven end-to-end steps and no renderer/network/process errors.
@@ -260,81 +280,6 @@ shell_frame_state: 210/210; earlier on the branch 20 suites around the change 44
 tabs_render, sessions_render, shell_render, autonomy_render, friends_render, today_render pass. check ok; lint 47
 warnings (baseline); audit 0 findings; Python contracts 248 OK, 1 skipped. Frame strips (dark and light) in
 C:\wt\s-fx-lab\out\*-final.png. Not run: the full `npm test`.
-
-## 2026-10-07 The Map at a glance: state ripples, a legend that points at its nodes, a hover card, the four states apart in every theme
-
-Branch `feat/map-glance` (4d923fa and ec3784a, from origin/main c513838), worktree C:\wt\s-map on the owner's laptop
-(Node 24.15, 170 MB to 1.6 GB free, other sessions gating beside it). Asked: make the Map easier to read at a glance: a
-ripple when a task's state changes, legend pills that count and point at their nodes (hover, click to hold, Esc), a
-hover card with the title, the state and how long, and a polish pass at 1920x1080 and 1440x900 in Chrome and Daylight;
-the coordinator added that Daylight's Running and Review dots were the same blue. Built: noteGlance/drawStateRipple
-(0.8 s, none on first sight, the quiet entry, motion Off, rings off or Home's scenery), the legend pills with counts,
-stepLegendPoint's eased dim and aria-pressed/#cmd-announce, nav.js's Escape letting go of a held state before it opens
-the companion (which took Esc on the Map before), the #cmd-tip hover card ("Running · for 40 min", kept off the legend),
-and glancePalette: the four states at least 40 degrees of hue apart in every built-in theme (Review violet on Daylight
-and Midnight, Done lime on Forest and Aurora, Needs you rose on Studio gold and Eclipse, yellow on Ember and Paper;
-Chrome's grey accent exempt), light-page inks at 4.5:1, and coloured canvas words (callout numbers, status lines, work
-labels) at 4.5:1 on the page and on a number chip. Kill switches mefiStudio.mapRipple, mapLegendPoint, mapHoverCard and
-mapStateHues, each pinned by a test. Frame cost (tools/profile_studio.mjs command-150-3d, interleaved pairs against
-c513838): 6 pairs, command.frame mean 5.94 -> 5.81 ms (paired median -0.17), p95 9.2 -> 8.2; with the legend holding
-Running lit, 5 pairs, 5.11 -> 4.96 ms (-0.37), p95 6.9 -> 6.2; the added per-frame JavaScript timed alone for the
-288-node board about 0.09 ms. Node: command_graph and command_toolbar 132/132, every suite that loads idle.js 1077/1077,
-every suite that loads nav.js 677/677; check ok; lint 47 warnings (as main); audit 0 findings; Python contracts 248 OK
-(1 skipped). Electron, one at a time, each run under a 600 s tree kill (GNU timeout in Git Bash ends only npm, not the
-lease or Electron under it) with a free-memory guard: node_paint_cache 1/1 (1.7 s); map_render passed in 26 s
-(electron.exe 1.0-1.4 GB, flat); command_render first stopped at its 120 s limit after the fixture had passed every
-check in 80 s (exit code null, free memory down to 197 MB), then passed alone in 97 s; node_views_render first stopped
-at its 150 s limit with no report while the PC was starved (the memory sampler itself got no answer for 147 s), then
-passed alone in 115 s with all 48 captures. An earlier map_render held the Electron lane for 2 h 44 min until a
-watchdog stopped it: its waiter had been orphaned by GNU timeout, waited 124 min, and the lease's escape hatch then ran
-it beside three holders that were each "running 0 min", four Electron runs at once with 38 MB free; it had reached its
-last capture. The same code alone takes 26 s, and no loop or promise in the new code can spin. Not run here: the full
-`npm test`. Left open: the canvas's own 9 to 11 px callout and label type predates this work and still reads under 12
-px; dimmed labels and cards (search, Running only, the legend's dim) fall under 4.5:1 on a light page by design; the
-lease's running-anyway escape should not admit a waiter beside holders that have only just started.
-
-## 2026-10-07 Pets: petting and the chase, little things, three Shop pets, a live pet card; relay pets generations
-
-Branch `feat/pets-more` (C:\wt\s-pets, from origin/main c513838; 414c7f6, cdda867, 3d93d0f, d78b331, 17c954d).
-Asked: pet Ember (rest the pointer on it: it stops, looks, purrs, hearts, its name; quick circles: a chase), rare
-little things (stretch and yawn on waking, tail flick, spark sneeze, a firefly), a cloud dragon for the Shop, then
-"add more pets" (a phoenix and a will-o'-wisp), Shop catalog entries left to the Shop's rotation work, relay kinds with
-compatibility, and Settings' pet card with a live preview and a name. Not deployed: the relay changes are code only.
-
-Measured (perf lab, the page's own paint path, 4 interleaved rounds of 20 s at 60 fps with a loop, fireflies and
-petting, main's Ember beside the new code; Chromium's timer is 0.1 ms): dpr 1.25 main's Ember mean 0.13/0.11 ms
-(theme/gold), now 0.12/0.12; cloud 0.15/0.12, phoenix 0.16/0.16, wisp 0.11/0.10; dpr 2 every kind 0.10 to 0.14;
-every p95 0.3 ms or less. A rest with a purr, stretch, flick or firefly paints at 60 fps (15 before), one with a
-drifting trail at 30; sleep keeps 6; motion Off one still pose; a live preview draws nothing until it is on screen.
-
-Tests, each through `npm run test:one` (Node suites) or the Electron lane with a 600 s limit: pets 25/25 (11 before),
-relay_pets 14/14 and hub_client_pets 5/5, hub_client 18/18, friends_shop_ui 29/29 (Ember's switch now sets kind
-dragon; a Shop pet's card; previews on seconds, they were given milliseconds), setup_helper 33/33, rooms_ui, shop_host,
-hub_client_shop, relay_shop and pets_host green (80/80 together); Electron: setup_helper_render 1/1 (34 s),
-settings_render 1/1 (57 s), one run each. check ok; lint 47 warnings (as main); audit 0 findings; Python contracts
-248 OK (1 skipped). Contact sheets (dark Chrome and light Daylight; poses, skins, 96x64 to 360x240) and frame strips
-of petting, waking, sneezing, the flick, fireflies and the chase were rendered offscreen and kept locally in
-C:\wt\s-pets-lab\out. Not run: the full `npm test`.
-
-## 2026-10-07 The Shop as a page of its own, monthly drops with a Featured shelf, the signed-out showroom and sale pop-ups
-
-Branch `feat/shop-showroom` (C:\wt\s-shop, from origin/main c513838; 906cfbe..448f311, not pushed), on the owner's
-laptop with Node 24.15 and 250 to 900 MB free. Asked: a showroom while signed out, a pop-up when a member gets one of
-your packs, then (the owner) "make the shop its own whole page, make it clean, nice, like discords shop almost, lets
-have the shop rotate in and out styles". Built: relay/src/shop-drops.mjs (DROPS, the windows, the Featured shelf;
-feature shop.drops, refusal not-available) mirrored by main.cjs (SHOP_DROPS, shopCatalog); the route "shop" (the month's
-drop as a banner made from its data, Featured this week, categories, a detail dialog per item, the showroom with Sign in
-to get it); Friends' sale pop-up; the page's head and card names clear of styles.css's header and button rules.
-Relay not deployed (the owner decides). Every Electron run went through the lane with a 600 s limit.
-
-Results: relay_shop_drops 8/8, relay_shop 18/18, shop_host 6/6 (main's rules equal the relay's at 130 times),
-hub_client_shop 8/8, friends_shop_ui 33/33, friends_front_ui 15/15, friends_navigation 13/13; the 20 suites around the
-change 258/258; friends_render (Electron) passed at 34c96d7 (101 s) and on 448f311 (160 s), now walking the Shop's own page
-at 1920x1080 and 1440x900 in Studio and Social, 1100x720 and 600x560@1.5, the showroom and a light palette, with even card
-columns and the column filling the page beside the list. By hand in a real window: no text under 4.5:1 in Daylight,
-Paper or the dark default; Tab reaches a card with a 2 px ring round it, Enter opens its detail, Esc closes only the
-detail. check ok; lint 47 warnings (as main); audit 0 findings; Python contracts 248 OK, 1 skipped. Not run here: the
-full `npm test`.
 
 ## Read Before Any Tests
 

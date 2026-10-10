@@ -239,7 +239,27 @@ async function writeBuildFile(out, content) {
   }
 }
 
+const pendingBuilds = new Map();
+
 export async function build({ root = ROOT, inputs = BOOKLET_INPUTS } = {}) {
+  const resolved = path.resolve(root);
+  const key = process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  // Keep a complete HTML/source-map snapshot together. In-process readers
+  // otherwise hold the Windows destination open while sibling builds rename
+  // it. Separate processes still use the unique atomic files and bounded
+  // rename retries; neither output is ever truncated as a fallback.
+  const pending = (pendingBuilds.get(key) ?? Promise.resolve())
+    .catch(() => {})
+    .then(() => buildSnapshot({ root: resolved, inputs }));
+  pendingBuilds.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (pendingBuilds.get(key) === pending) pendingBuilds.delete(key);
+  }
+}
+
+async function buildSnapshot({ root, inputs }) {
   validateBookletInputs(inputs);
   const RENDERER = path.join(root, "renderer");
   const rawTemplate = await readText(path.join(RENDERER, "booklet.template.html"), "utf8");

@@ -101,6 +101,9 @@ app.whenReady().then(async () => {
     const state = await run("return { hidden: document.hidden, fetches: window.__fetches ? window.__fetches.length : null, pollLive: window.MefiBoot ? window.MefiBoot.pollActive('eyes.log') : null };");
     state.at = Date.now();
     state.windowMinimized = !window.isDestroyed() && window.isMinimized();
+    state.windowVisible = !window.isDestroyed() && window.isVisible();
+    state.windowFocused = !window.isDestroyed() && window.isFocused();
+    state.windowAlwaysOnTop = !window.isDestroyed() && window.isAlwaysOnTop();
     report.timeline.push({ at: state.at, label, ...state });
     return state;
   };
@@ -131,8 +134,12 @@ app.whenReady().then(async () => {
 
   await window.loadURL("data:text/html,<title>log-tail-toggle</title><body></body>");
   window.show();
+  // Set and verify the native state after show: the constructor option alone
+  // did not hold on this Windows build, allowing unrelated occlusion changes
+  // to invalidate a fixture that is meant to exercise one hide/show toggle.
+  window.setAlwaysOnTop(true);
   window.focus();
-  await waitFor((state) => state.hidden === false, 10000, "visible");
+  await waitFor((state) => state.hidden === false && state.windowVisible && state.windowAlwaysOnTop, 10000, "visible");
 
   // Inject the shipped boot.js verbatim: it defines window.MefiBoot on a blank page.
   const bootSource = fs.readFileSync(path.join(studio, "renderer", "boot.js"), "utf8");
@@ -217,7 +224,9 @@ app.whenReady().then(async () => {
   // snap. A genuine duplicate (a double-registered listener) stamps a second
   // fetch within milliseconds of the snap and still fails here.
   window.show();
-  await waitFor((state) => state.hidden === false, 5000, "visible-after-show");
+  window.setAlwaysOnTop(true);
+  window.focus();
+  await waitFor((state) => state.hidden === false && state.windowVisible && state.windowAlwaysOnTop, 5000, "visible-after-show");
   await waitFor((state) => (state.fetches ?? 0) > afterHide, 5000, "resume-snap-landed");
   const shownState = await pageState("resume-snap");
   assert.equal(shownState.pollLive, true, "the guard must hold exactly one live interval again after show");

@@ -30,7 +30,10 @@ test("one hide/show visibility toggle: the eyes log tail pauses hidden, snaps on
   try {
     const env = { ...process.env, MEFI_LOG_TOGGLE_FIXTURE: fixture };
     delete env.ELECTRON_RUN_AS_NODE;
-    const child = spawn(executable, [path.join(studio, "tests", "fixtures", "log-tail-toggle-electron.cjs")], { cwd: studio, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    // This is an intentionally visible GUI probe. windowsHide also supplies
+    // SW_HIDE to Windows' first ShowWindow call, so it can defeat the probe's
+    // explicit show even though document.hidden briefly starts out false.
+    const child = spawn(executable, [path.join(studio, "tests", "fixtures", "log-tail-toggle-electron.cjs")], { cwd: studio, env, windowsHide: false, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     child.stdout.on("data", (chunk) => { output = (output + chunk).slice(-10000); });
     child.stderr.on("data", (chunk) => { output = (output + chunk).slice(-10000); });

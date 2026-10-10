@@ -207,6 +207,25 @@ test("overlapping booklet builds keep complete output and clean up their own tem
   }
 });
 
+test("a failed booklet build does not block the next snapshot for the same root", async () => {
+  const root = await makeFixtureRoot();
+  try {
+    const results = await Promise.allSettled([
+      build({ root, inputs: { scripts: ["missing.js"], styles: BOOKLET_INPUTS.styles } }),
+      build({ root }),
+    ]);
+    assert.equal(results[0].status, "rejected");
+    assert.equal(results[0].reason.code, "ENOENT");
+    assert.equal(results[1].status, "fulfilled");
+    const html = await readFile(path.join(root, "renderer", "booklet.html"), "utf8");
+    assert.deepEqual(JSON.parse(bakedSection(html, /<script id="booklet-data" type="application\/json">([\s\S]*?)<\/script>/, "catalog block")), FIXTURE_CATALOG);
+    assert.ok(JSON.parse(await readFile(path.join(root, "renderer", "booklet.sources.json"), "utf8")));
+    assert.deepEqual((await readdir(path.join(root, "renderer"))).filter((name) => name.endsWith(".tmp")), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("booklet build on fixtures: a missing renderer input fails the build, writing nothing", async () => {
   const root = await makeFixtureRoot();
   try {
