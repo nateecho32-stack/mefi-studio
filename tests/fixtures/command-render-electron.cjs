@@ -258,7 +258,7 @@ app.whenReady().then(async () => {
       // one-shot must survive into the test output with its full text (and the
       // "Renderer errors before" prefix stays intact for the retry signature).
       assert.deepEqual(report.errors, [], `Renderer errors before ${label}: ${JSON.stringify(report.errors)}`);
-      if (await run(`return Boolean(${expression});`)) return;
+      if (typeof expression === "function" ? await expression() : await run(`return Boolean(${expression});`)) return;
       await sleep(30);
     }
     throw new Error(`Timed out: ${label}`);
@@ -337,8 +337,18 @@ app.whenReady().then(async () => {
     let taskPixels=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i+3]>0&&Math.max(pixels[i],pixels[i+1],pixels[i+2])>70)taskPixels++;
     return {frames:window.__commandPaintFrames,finiteNodes:nodes.filter(node=>Number.isFinite(node.x)&&Number.isFinite(node.y)).length,taskPixels,taskId:task.id};
   `);
-  await until("window.__commandPaintFrames>=4 && window.MefiIdle.debugNodes().some(node=>node.id==='task:command_render_task'&&Number.isFinite(node.x))", "initial painted task frames");
-  report.first = await snapshot();
+  // A cleared frame is counted before the initial camera/layout settles.
+  // Wait for the actual task pixels within the same five-second budget,
+  // preserving the minimum frames, finite position and painted-pixel checks.
+  let firstPainted;
+  await until(async () => {
+    if (!await run("return window.__commandPaintFrames>=4 && window.MefiIdle.debugNodes().some(node=>node.id==='task:command_render_task'&&Number.isFinite(node.x));")) return false;
+    const sample = await snapshot();
+    if (sample.taskPixels <= 8) return false;
+    firstPainted = sample;
+    return true;
+  }, "initial painted task frames");
+  report.first = firstPainted;
   const commandRailFrames = await run("return window.__railPaintFrames;");
   await sleep(200);
   report.commandRailPaints = await run(`return window.__railPaintFrames-${commandRailFrames};`);

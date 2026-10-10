@@ -45,6 +45,8 @@ test("two Studios meet through the relay: The Lobby, a room and its code, chat b
     }
     assert.equal(code, 0, `${report?.failure || "No renderer report"}\n${output}`);
     assert.deepEqual(report.errors, []); assert.deepEqual(report.networkAttempts, []); assert.deepEqual(report.processAttempts, []);
+    assert.equal(report.linkConsent.prompts.length, 2, "the shared website is explicitly refused, then approved");
+    assert.equal(report.linkConsent.declinedOpened, false); assert.equal(report.linkConsent.declinedEarned, false);
     assert.deepEqual(report.steps.map((step) => step.replace(/ \(.*\)$/, "")), ["both PCs meet in The Lobby", "a room and its invite code", "joined with the code", "chat both ways, who is here", "left, missed two messages, came back and caught up", "listen together", "shared a card, played it, both earned"]);
     assert.ok(report.complete, "the fixture ran to its end");
   } finally {

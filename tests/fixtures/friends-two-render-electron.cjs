@@ -259,8 +259,24 @@ app.whenReady().then(async () => {
   await two.until("document.getElementById('project-hub')?.dataset.state === 'ready' && document.getElementById('project-hub-tab-new')", "PC two's Project hub");
   await two.run("document.getElementById('project-hub-tab-new').click();");
   await two.until("[...document.querySelectorAll('#project-hub [data-project]')].some((row) => row.textContent.includes('Two PC Test'))", "PC two sees the card");
-  await two.run("const row = [...document.querySelectorAll('#project-hub [data-project]')].find((item) => item.textContent.includes('Two PC Test')); [...row.querySelectorAll('button')].find((button) => button.textContent === 'Play').click();");
+  // A shared website now requires explicit origin consent. Answer the same
+  // prompt a person sees, and prove that declining neither opens nor earns.
+  await two.run("window.__linkPrompts = []; window.confirm = (text) => { window.__linkPrompts.push(String(text)); return false; }; const row = [...document.querySelectorAll('#project-hub [data-project]')].find((item) => item.textContent.includes('Two PC Test')); [...row.querySelectorAll('button')].find((button) => button.textContent === 'Play').click();");
+  await sleep(100);
+  const declinedOpened = two.host.opened.length > 0;
+  const declinedEarned = two.host.timers.some((timer) => timer.ms >= 120_000);
+  assert.equal(declinedOpened, false, "declining website consent opens no destination");
+  assert.equal(declinedEarned, false, "declining does not begin an earning play");
+  const refusedPrompt = await two.run("return window.__linkPrompts;");
+  assert.equal(refusedPrompt.length, 1);
+  assert.match(refusedPrompt[0], /Open mefi\.itch\.io\?/);
+  assert.match(refusedPrompt[0], /website will receive your IP address/);
+  assert.ok(refusedPrompt[0].includes("https://mefi.itch.io/two-pc-test"));
+  await two.run("window.confirm = (text) => { window.__linkPrompts.push(String(text)); return true; }; const row = [...document.querySelectorAll('#project-hub [data-project]')].find((item) => item.textContent.includes('Two PC Test')); [...row.querySelectorAll('button')].find((button) => button.textContent === 'Play').click();");
   await sleep(500);
+  report.linkConsent = { prompts: await two.run("return window.__linkPrompts;"), declinedOpened, declinedEarned };
+  assert.equal(report.linkConsent.prompts.length, 2);
+  assert.equal(report.linkConsent.prompts[1], refusedPrompt[0], "approval reviews the same exact website");
   assert.deepEqual(two.host.opened, ["https://mefi.itch.io/two-pc-test"], "Play opens the link in the browser");
   const finishPlay = two.host.timers.find((timer) => timer.ms >= 120_000);
   assert.ok(finishPlay, "the play is counted two minutes later");

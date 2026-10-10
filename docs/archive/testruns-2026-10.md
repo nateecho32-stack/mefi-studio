@@ -6,6 +6,67 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-07 Shop node styles Lanterns and Neon; eight style packs for October's drop and the classic shelf
+
+Branch `feat/styles-more` (C:\wt\s-styles, from main c513838): dc3c06a (the painters), 3c55da2 (Settings gating and
+thumbnails), 068527c (the packs fixture and Shop tests), 59a7146 (cheaper lantern ribs), 2802afd (docs), 007e4c7 (test tweaks). Asked: new node
+styles and themes for the Shop's monthly drops ("Haunted Hollow", drop "2026-10") and its classic shelf, at Dragon scales'
+quality and within its paint cost. The catalog files (relay/src/shop.mjs CATALOG, main.cjs SHOP_STUDIO_ITEMS) were left
+alone (another helper restructures them); the eight packs live in tests/fixtures/shop-themes-2026-10.json as catalog
+entries and the two node style entries (studio:style-lantern, drop "2026-10"; studio:style-neon, classic) join at merge.
+
+Measured. Lab paint (offscreen Electron page, 20 nodes and 19 wires, software raster forced every frame, median of 5
+interleaved rounds, ms a frame), quiet machine: orbs 0.79, Star chart 0.66, Prism 0.90, Neon 0.97, Lanterns 1.07, Dragon
+scales 1.50; on the final code under load: orbs 1.28, Star chart 1.13, Prism 1.44, Neon 1.52, Lanterns 1.61, Dragon
+scales 2.20. The whole Command view, 150 tasks in 3D (tools/profile_studio.mjs, three runs with the style order rotated,
+medians, frame JS mean / p95, ms): orbs 7.49 / 10.30, Dragon scales 7.34 / 11.70, Lanterns 7.70 / 10.30 (+0.21 over orbs,
+inside the 1.5 ms gate), Neon 7.15 / 9.30; the machine was loaded (orbs had read 4.53 in the 10-06 row), so the node
+span is the steadier read: orbs 1.65, Dragon scales 2.04, Lanterns 2.31, Neon 1.57 ms, before the lantern ribs became
+quadratic curves (59a7146; JS-only lab node time after it: Lanterns 1.74, Dragon scales 2.37). tools/capture_node_styles.mjs
+(aurora, void, light, with strips): both animated, still pose identical, reach 1.47 / 1.27, Extra glow 2.14, arrival 1.87 /
+1.96, no gradient on a steady frame, no blur or filter, no state leaks. Each pack was painted in the real app look (an
+offscreen booklet with a seeded board: Social's Home and the Map at 1440x900) and tuned there: Haunted and Forest Glade
+first had green accents, which made a working node read like a done one; Haunted now leads with violet, Forest Glade's
+fern leans to a sunlit yellow. Every pack's text and accent hold 4.5:1 on its page and its panels (lowest: Candlelight's
+accent 4.81:1 on its page) and Studio's own contrast pass keeps each text colour as chosen. The same harness with a fake
+hub:shop selling all four node styles and the eight packs showed Friends › Shop: a live board in each new style, and
+each pack's card painted in its own colours, face and node style. Settings' new thumbnails were checked in dark, Aurora
+and light tokens, moving and with reduced motion.
+
+Tests, one suite at a time through `npm run test:one` (the Electron ones alone in the lane): node_styles_shop 21/21,
+node_styles 30/30, music 137/137, shop_pack 5/5, friends_shop_ui 29/29, command_visuals, node_styles_free,
+node_styles_overlays and node_styles_wires pass; node_paint_cache 1/1, node_views_render 1/1 (92 s) and settings_render
+1/1 (53 s) pass. check ok, lint 47 warnings (as main), audit 0 findings, Python contracts 248 OK (1 skipped). A
+settings_render run sat in the lane behind another helper's hung window test until it was killed; the rerun passed. Not
+run here: the full `npm test`, friends_render (the Shop's window fixture: its catalog has no new items until the merge).
+
+## 2026-10-07 Credits harder to farm: Forget me keeps what was given, reward switches, once-a-week Top, Shop and jam gates, the jam's review day and batch rule, moderators' alerts
+
+Branch `fix/credits-guard` (C:\wt\credits-guard, off main c513838). The owner asked whether the credits can be cheated
+("i dont want a system where hackers can ruin the fun for everyone"), then said "do it" to the five fixes proposed. A
+read-only review found no way to change a balance directly. Aged second Discord accounts can still farm within the
+caps, and a throwaway probe against the relay harness confirmed three gaps: five alts paid a main 40 credits with no
+flag, and after they used Forget me the `gone:` rows went in 8 days, so review showed 0 and revoke took 0 while the main
+kept all 40; a revoke stops at a 0 balance and items bought with the credits stay; and an account 3 days old, an hour in
+the server, published a free pack that unaged accounts' free Gets put first on the Shop's Top list. Changed: Forget me
+keeps what a member gave under a random `gone:` id and no project for the usual 180 days, counted in
+`credits.mjs farmingFlags` and taken back by revoke's `from`. Switches (`/v1/admin/credits/switches`, audited, not a
+write route): plays, stars, together, cowork, sales and featuring pay nothing while off, and their rows stay at 0 so the
+time off never pays later; jam holds prizes; review and batches turn the jam's new rules off. Top and the Lobby's week
+count each player once a week per project. A pack's sales count only from buyers in good standing, and publishing (free
+too), listing again and entering the jam need good standing. A closed jam waits a day in `review`, with
+`/v1/admin/jam` (every vote, why not counted, account age, join date and batch letter), votes void plus bar, entry
+removal and release. One batch (made within 3 days, joined within 12 h) counts once and never for its own entry.
+`relay/src/alerts.mjs` posts a nameless line to the optional `MOD_ALERT_WEBHOOK`. Studio: hub-client mod methods,
+HUB_ROOM_METHODS, Friends › Moderation's Build Jam and Rewards, Events' "results come", Project hub's paused words. The
+fake Discord now spreads members' join dates by id (3 days apart) so test members are no batch. Here: relay_credits,
+relay_shop and relay_events 47 pass, 0 fail (9 new, one of them Studio's real hub client against the relay);
+relay_core, relay_e2e, relay_connect, relay_pcs, relay_pets, hub_client, hub_client_shop, friends_mod_ui,
+friends_events_ui, friends_front_ui, rooms_ui and project_hub_ui 127 pass, 0 fail (5 new); check ok; audit 0
+findings; eslint on the changed files clean (npm run lint 47 warnings, as main, none in them). Not run here: the
+full `npm test` (this PC is shared; ci.yml on the pushed branch is the gate). The relay is not deployed: one deploy
+from main once feat/shop-season has landed too.
+
 ## 2026-10-07 Social uses a wide window: Friends over the docked conversation at the right; menus without odd gaps
 
 Branch `ui/social-wide` in C:\wt\social-wide, off main c513838. The owner asked for Social Home's empty sides to be used
