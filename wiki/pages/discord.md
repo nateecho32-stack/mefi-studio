@@ -2,7 +2,7 @@
 
 The Void Engine is the Discord server for people who build with Studio. Share what you're making, ask for help and feedback, swap model setups, and keep each other company while you work. Unfinished ideas are welcome, and you don't need Studio to join.
 
-**[Join the Void Engine Discord](https://discord.gg/xgfKc5pVxG)**
+**[Join the Void Engine Discord](https://discord.gg/nTU3pxhgq)**
 
 Discord is the easiest way to reach the community, but you never need it. Every theme and node style in Studio is free without it. Only features that connect you with other people, such as rooms, use your Discord account, so Studio knows who you are. They arrive with 0.5. You can also report bugs and ask for features [on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new/choose).
 
@@ -38,11 +38,11 @@ Signing in is optional. It tells Studio who you are in the Void Engine, which Th
 - **Where:** until you sign in, **Friends** shows a **Sign in with Discord** card. **Settings › General › Community** has it too, and searching for “Void Engine Discord” with **Ctrl + K** opens it.
 - **How:** Discord asks once, in your browser, and Studio connects by itself from then on. If your account isn't in the Void Engine server yet, Studio offers **Join the Discord** and checks again.
 - **What it reads:** your Discord id and name, and your roles and join date in the Void Engine server. It never reads your messages, your email or your other servers, and nothing about your projects is sent.
-- **Where it's kept:** in Studio's settings on this PC, with the sign-in encrypted in `community-auth.json`. The Mefi Studio relay keeps your id, name, roles and join date for sign-in and room rules; its [README](https://github.com/nateecho32-stack/mefi-studio/blob/main/relay/README.md) says for how long.
+- **Where it's kept:** in Studio's settings on this PC, with the sign-in encrypted in `community-auth.json`. The Vibe Studio relay keeps your id, name, roles and join date for sign-in and room rules; its [README](https://github.com/nateecho32-stack/mefi-studio/blob/main/relay/README.md) says for how long.
 
-Studio 0.4.4 doesn't include the Mefi Studio Link app ID, so **Link my Discord** stays hidden there and the card offers **Join the Discord** only. In 0.5 the app ID and the relay's address are built in; **Connection details**, in the same card, only points a PC somewhere else for testing.
+Studio 0.4.4 doesn't include the Vibe Studio Link app ID, so **Link my Discord** stays hidden there and the card offers **Join the Discord** only. In 0.5 the app ID and the relay's address are built in; **Connection details**, in the same card, only points a PC somewhere else for testing.
 
-You can also remove “Mefi Studio Link” in Discord under **User Settings › Authorized Apps**.
+You can also remove “Vibe Studio Link” in Discord under **User Settings › Authorized Apps**.
 
 ## The invitation card
 

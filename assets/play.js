@@ -1,4 +1,4 @@
-/* Mefi Studio website — "Try the app": a playable, made-up copy of Studio's
+/* Vibe Studio website — "Try the app": a playable, made-up copy of Studio's
    Social mode, opened from Home's gate or its buttons (window.MefiPlay.open).
    It is guided from start to end. The visitor picks one of six ready-made
    projects (the box types it for them; nothing is typed freely), presses
@@ -587,7 +587,7 @@
       var c = el("div", "pl-end");
       c.innerHTML =
         '<div class="pl-end-card" role="document">' +
-          '<p class="pl-k">You just used Mefi Studio</p>' +
+          '<p class="pl-k">You just used Vibe Studio</p>' +
           '<h2>That’s the whole loop.</h2>' +
           '<ol class="pl-recap">' +
             '<li><b>You said what you wanted.</b> Builders like Claude Code, Codex and OpenCode did the work in your project.</li>' +
@@ -969,7 +969,7 @@
     root.id = "play";
     root.setAttribute("role", "dialog");
     root.setAttribute("aria-modal", "true");
-    root.setAttribute("aria-label", "Mefi Studio, a playable demo");
+    root.setAttribute("aria-label", "Vibe Studio, a playable demo");
     var session = null, built = [];
     function begin(again) {
       if (session) session.stop();

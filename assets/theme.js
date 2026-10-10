@@ -1,9 +1,9 @@
-/* Mefi Studio website — colour themes.
+/* Vibe Studio website — colour themes.
    The palettes are the app's own (THEMES in the app repository's
    renderer/music.js), so the site can be dressed in the same eleven looks as
    Studio. It is loaded from <head>: a saved choice is applied before the first
-   paint. Chrome (matte black and brushed metal) is the site's own look: it
-   lives in site.css and chrome.css and is applied by clearing overrides.
+   paint. Vibe (lime and mint on deep green) is the public default. The
+   historical chrome key stays compatible; vibe.css supplies the final tokens.
    Picker UI lives in fx.js (every page) and demo.js (Home). */
 (function () {
   "use strict";
@@ -18,7 +18,7 @@
   // glows, the sky). The Void collection carries its own second hue; the rest
   // get analogues of the accent.
   var THEMES = {
-    chrome:   { name: "Chrome",     accent: "#c3c8d0", bright: "#eef1f5", bg: "#0a0a0c", panel: "#141418", muted: "#a4a9b2", text: "#f2f4f7", a2: "#a8c5ff", a3: "#c6b4ff" },
+    chrome:   { name: "Vibe",     accent: "#c5ff73", bright: "#deffb1", bg: "#080c0b", panel: "#141e19", muted: "#b0bdb4", text: "#e0e7e2", a2: "#86efdd", a3: "#b9a1ff" },
     aurora:   { name: "Aurora",     accent: "#71cbb7", bright: "#a7f3da", bg: "#050d13", panel: "#101f29", muted: "#a9c1c6", text: "#e9f6f0", a2: "#36d1ff", a3: "#8c7bff" },
     midnight: { name: "Midnight",   accent: "#82a8e6", bright: "#bbd5ff", bg: "#050913", panel: "#0d1524", muted: "#a2b2ca" },
     forest:   { name: "Forest",     accent: "#85bca3", bright: "#b4e1c9", bg: "#050d0b", panel: "#0d1915", muted: "#a2b8ae" },
@@ -77,7 +77,7 @@
     }
     if (id === DEFAULT) root.removeAttribute("data-theme"); else root.setAttribute("data-theme", id);
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", id === DEFAULT ? "#0a0a0c" : THEMES[id].bg);
+    if (meta) meta.setAttribute("content", id === DEFAULT ? "#080c0b" : THEMES[id].bg);
     current = id;
     if (!silent) {
       listeners.forEach(function (fn) { try { fn(id, THEMES[id]); } catch (e) { /* a listener must not break the switch */ } });

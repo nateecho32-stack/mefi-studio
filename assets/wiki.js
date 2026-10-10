@@ -1,4 +1,4 @@
-/* Mefi Studio guide: markdown pages rendered in the browser.
+/* Vibe Studio guide: markdown pages rendered in the browser.
    Pages live in wiki/pages/*.md and are listed in wiki/pages.json, which also
    holds the release the guide describes ("release"), the next one ("next"),
    an optional per-page "status" and old slug "aliases".
@@ -42,7 +42,7 @@
   const metaDescription = document.querySelector('meta[name="description"]');
   const baseDescription = metaDescription ? metaDescription.getAttribute("content") : "";
 
-  let manifest = { title: "Mefi Studio guide", sections: [], aliases: {}, release: "0.4.4", next: "0.5" };
+  let manifest = { title: "Vibe Studio guide", sections: [], aliases: {}, release: "0.4.4", next: "0.5" };
   let flat = [];
   let current = null;   // the page being shown or loaded
   let rendered = null;  // the slug whose content is in the article
@@ -130,7 +130,7 @@
     });
     manifest = {
       sections,
-      title: data.title || "Mefi Studio guide",
+      title: data.title || "Vibe Studio guide",
       aliases: data.aliases && typeof data.aliases === "object" ? data.aliases : {},
       release: data.release || "0.4.4",
       next: data.next || "0.5",

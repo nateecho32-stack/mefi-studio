@@ -1,6 +1,6 @@
 # Privacy
 
-Mefi Studio keeps your work on your PC. It has no usage telemetry and no required Studio account. The services you connect still receive what they need to do the work you ask for.
+Vibe Studio keeps your work on your PC. It has no usage telemetry and no required Studio account. The services you connect still receive what they need to do the work you ask for.
 
 ## What stays local
 
@@ -18,7 +18,7 @@ Keys are encrypted with the Windows keystore and saved apart from your preferenc
 | Release updates | Studio asks GitHub for new releases every 20 minutes, and downloads one only when you choose to update. |
 | Usage › Provider accounts | Studio asks each provider's account service for your usage, with your saved key. Refreshing sends no prompts. |
 
-In 0.4.4 the Discord link stays hidden and Listen together has no room service to reach, so neither sends anything. Joining the [Discord community](https://discord.gg/xgfKc5pVxG) is separate from signing in from Studio, and you never have to do either.
+In 0.4.4 the Discord link stays hidden and Listen together has no room service to reach, so neither sends anything. Joining the [Discord community](https://discord.gg/nTU3pxhgq) is separate from signing in from Studio, and you never have to do either.
 
 **Audio link** uses desktop audio or the microphone only when you turn it on, and only to move the visuals: nothing is transcribed. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>, not a feature.
 
@@ -31,7 +31,7 @@ In 0.4.4 the Discord link stays hidden and Listen together has no room service t
 | **Keep this PC up to date** and the Your PCs look | Studio asks GitHub once a minute whether another PC pushed. The Friends badge looks 45 seconds after launch, then every 15 minutes. |
 | **Set up this PC** | You sign in to GitHub in your browser. Studio never sees your password or token. |
 | **Sign in with Discord** | Optional. It reads your Discord id and name, and your roles and join date in the Void Engine server, never your messages, your email, other servers or anything about your projects. The sign-in is encrypted in `community-auth.json`. |
-| **The Mefi Studio relay** | Friends' rooms, room chat, Listen together, playdates and cowork claims go through this free service, which is built into Studio and used only once you sign in. It keeps your Discord id, name, roles and join date until you go two years without signing in, and writes no chat, files, IP addresses or request logs. Its [README](https://github.com/nateecho32-stack/mefi-studio/blob/main/relay/README.md) lists everything it keeps, and for how long. |
+| **The Vibe Studio relay** | Friends' rooms, room chat, Listen together, playdates and cowork claims go through this free service, which is built into Studio and used only once you sign in. It keeps your Discord id, name, roles and join date until you go two years without signing in, and writes no chat, files, IP addresses or request logs. Its [README](https://github.com/nateecho32-stack/mefi-studio/blob/main/relay/README.md) lists everything it keeps, and for how long. |
 | **Friends › Rooms** | Room chat passes through the relay without being stored there: each Studio keeps its own encrypted copy for a week. Links in chat are never made clickable, and moderators see a message only when someone reports it. |
 | **Listen together and Share what I'm playing** | A room's shared player carries the link and your Discord name, and is kept only while it plays. **Share what I'm playing** is off until you turn it on, shows local music only as "Local music", with no file name or path, and is forgotten when Studio closes. |
 | **Cowork rooms** | The paths of the files a builder will edit go to the room you linked to the project. The relay keeps them for seven days after they're released. |

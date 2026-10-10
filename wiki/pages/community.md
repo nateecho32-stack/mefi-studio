@@ -4,7 +4,7 @@ Studio is made together with the people who use it. Share what you're making, ge
 
 ## The Void Engine Discord
 
-The [Void Engine Discord](https://discord.gg/xgfKc5pVxG) is where people share what they build with Studio, swap model setups, ask for help and keep each other company while they work. Unfinished work and first-timers are welcome, and you don't need Studio to join.
+The [Void Engine Discord](https://discord.gg/nTU3pxhgq) is where people share what they build with Studio, swap model setups, ask for help and keep each other company while they work. Unfinished work and first-timers are welcome, and you don't need Studio to join.
 
 The server has the **Void Engine bot**. Use it to post your project to the showcase, start a cowork session with a voice channel, or ask questions that it answers from this guide. It runs on the owner's PC, so now and then it's offline. [The Void Engine Discord](discord.md) covers the bot, the roles and the house rules.
 
@@ -20,7 +20,7 @@ Now and then Studio shows a small card inviting you to join. **Not now** snoozes
 
 In 0.4.4, your companion's **Friends** bubble holds **Your PCs**, and **Listen together**, which has no room service to connect to yet. [Friends, rooms and playdates](friends-and-rooms.md) has the full guide.
 
-> <span class="status next">Coming in 0.5</span> Friends becomes a place of its own, with nothing to set up: rooms, room chat, Listen together, playdates and cowork claims run through the Mefi Studio relay, a free service built into Studio. Sign in with Discord once.
+> <span class="status next">Coming in 0.5</span> Friends becomes a place of its own, with nothing to set up: rooms, room chat, Listen together, playdates and cowork claims run through the Vibe Studio relay, a free service built into Studio. Sign in with Discord once.
 >
 > - **The Lobby**: who is online, the week's top project, the rooms open now and what was shared this week. Everyone signed in is in the Lobby room.
 > - **Friends › Rooms**: join with a friend's invite code, or ask to join a listed room. An open room reads like a chat app. Room chat is plain text with @names, links are never made clickable, every message can be reported, and moderators see a message only when someone reports it.
@@ -45,14 +45,14 @@ The owner's plan for the community has started: sharing projects, credits and ra
 - Cosmetics and creator styles you can get with credits.
 - Shared mixes, with the most-played lists for people who choose to share their music taste.
 
-Credits are earned only, never bought, and never for inviting people. Every theme and node style stays free. The [roadmap](../roadmap.html) shows these plans and what's being built now. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>.
+Participation earns credits, with optional monthly credit packs and support ranks in the launch plan. See [launch rewards and support](../../index.html#support). Every theme and node style stays free. The [roadmap](../roadmap.html) shows these plans and what's being built now. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>.
 
 ## Ask for something
 
 Tell us what would help you, or suggest a different direction:
 
 - [Request a feature on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md). Check the [roadmap](../roadmap.html) first: it may already be planned.
-- Ask or suggest it in the [Discord](https://discord.gg/xgfKc5pVxG).
+- Ask or suggest it in the [Discord](https://discord.gg/nTU3pxhgq).
 - [Report a bug](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md).
 
 Want to help build Studio or improve this guide? See [Contributing and feature requests](contributing.md).

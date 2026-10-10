@@ -147,12 +147,12 @@ From 0.5 this is Studio's only layout. The classic layout and the switch back to
 
 ## Friends and rooms
 
-> <span class="status next">Coming in 0.5</span> Friends runs on the Mefi Studio relay, a free service built into Studio, so there's nothing to set up and no PC has to stay on. Sign in with Discord once; your account needs to be in the Void Engine server.
+> <span class="status next">Coming in 0.5</span> Friends runs on the Vibe Studio relay, a free service built into Studio, so there's nothing to set up and no PC has to stay on. Sign in with Discord once; your account needs to be in the Void Engine server.
 
 - **Friends, a place of its own.** The rail's **Friends** opens one page: **The Lobby**, **Rooms**, **Your PCs**, **Playground**, the **Project hub** and **Events**. Search and the companion's Friends bubble open it at the right place.
 - **The Lobby.** Who is online and in which room, the week's top project, the rooms open now, what was shared this week and who moved up a rank. Everyone signed in is in the Lobby room, so there's always someone to say hi to.
 - **Rooms like a chat app.** Browse rooms, ask to join, accept invites, or type a friend's invite code to come straight in. An open room fills the page, and **Enter** sends. See [Friends, rooms and playdates](#/friends-and-rooms).
-- **The Project hub.** Share a project as a card and play what friends make. Playing someone else's project for two minutes earns you both credits, and 100 credits put a project at the top of the hub for a day. Ranks run from Spark to Void. Credits are never bought, and never earned by inviting people.
+- **The Project hub.** Share a project as a card and play what friends make. Playing someone else's project for two minutes earns you both credits, and 100 credits put a project at the top of the hub for a day. Ranks run from Spark to Void. The launch plan adds optional paid ranks and monthly credit packs. Free members can post, and ratings help new projects get seen. See [support and discovery](../../index.html#support).
 - **Friends › Events.** A Build Jam every week with a theme, co-work hours three times a day, and credits for building together with a friend.
 - **Playdates with friends.** Companions in the same room meet and play short playdates. Nothing about you or your work is shared until you allow it. When a friend's companion shares more, yours asks **Share back?** and never decides for you.
 - **Agents on several PCs.** Link a cowork room to a project, and builders on different PCs claim the files they'll edit, so two PCs never edit the same file at once.

@@ -1,4 +1,4 @@
-/* Mefi Studio website — the shared motion layer (pairs with fx.css).
+/* Vibe Studio website — the shared motion layer (pairs with fx.css).
    Light behind the page, the header and scroll bar, headlines that rise word
    by word, reveals, count-ups, parallax and scroll scenes, the magnetic and
    tilting bits, the cursor's light on cards and the theme picker, whose

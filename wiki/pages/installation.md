@@ -1,6 +1,6 @@
 # Install Studio
 
-Mefi Studio runs on Windows 10 or 11. The portable download is the quickest way to start. It needs no installer, Node.js or npm.
+Vibe Studio runs on Windows 10 or 11. The portable download is the quickest way to start. It needs no installer, Node.js or npm.
 
 ## What you need
 
@@ -19,7 +19,7 @@ Mefi Studio runs on Windows 10 or 11. The portable download is the quickest way 
 3. Open `Mefi Studio AI+.exe` inside the extracted folder. Keep its supporting files beside it. Opening it from inside the zip won't work.
 4. Choose a project folder, then select **Open studio** or **Open and start agents**.
 
-The executable keeps its older name. That's expected: the public name is Mefi Studio.
+The executable keeps its older name. That's expected: the public name is Vibe Studio.
 
 The build is unsigned, so Windows SmartScreen may ask before it opens. Check the download first (below), then choose **More info › Run anyway**.
 

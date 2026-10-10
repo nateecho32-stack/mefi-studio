@@ -4,7 +4,7 @@
   "use strict";
 
   const SITE = {
-    appName: "Mefi Studio",
+    appName: "Vibe Studio",
     // The application repository (releases, issues, source).
     repo: "nateecho32-stack/mefi-studio",
     // The repository that hosts THIS website. When set, every wiki page gets
@@ -136,8 +136,8 @@
 
   // The community's own places. Discord is the easiest way in, never a requirement.
   SITE.discord = {
-    invite: "https://discord.gg/xgfKc5pVxG",
-    code: "xgfKc5pVxG",
+    invite: "https://discord.gg/nTU3pxhgq",
+    code: "nTU3pxhgq",
   };
   SITE.urls.discord = SITE.discord.invite;
   SITE.urls.enhancements = `https://github.com/${SITE.repo}/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement+sort%3Areactions-%2B1-desc`;

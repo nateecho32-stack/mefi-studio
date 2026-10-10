@@ -7,7 +7,7 @@
     "item: { id (anchor, optional), title, text, status, label, area, details: [string | { text, items: [string] }], link (optional): { href, text } }. status picks the badge colour from site.css: released, next, progress, rolling, planned or idea. label is the badge's words. area must be one of 'areas'. Give every item at least one detail: they fill its Details disclosure.",
     "release: { version, date: 'YYYY-MM-DD', title, href (its GitHub release), note (optional line under the title), highlights: [{ text, area }], items (optional: full items, drawn as cards on the timeline instead of a highlights list) }. upcoming: { version, when, note, link } is drawn at the top of the timeline.",
     "Labels: shipped = the release timeline. The newest release's items use status \"next\" and the label \"New in x.y.z\"; when the next release comes out, give them status \"released\" and the label \"In x.y.z\" (or swap them for a short highlights list). Built but waiting on a part outside Studio, such as the Studio bot = \"Rolling out\" (rolling); being built = \"In progress\" or \"In progress for x.y.z\" (progress); decided, not built = \"Planned\" (planned); not decided = \"Idea\" (idea).",
-    "Honesty: no invented numbers or dates. Credits are earned only: never bought, never for inviting people, never tied to Discord activity. Discord is the easiest way in, never required.",
+    "Honesty: no invented numbers or dates. Free members can post. Participation earns credits; optional launch subscriptions add credit packs and higher daily earnings. Discord is the place for launch announcements and rank claims.",
     "After editing, refresh the <noscript> copy in roadmap.html with the command at the top of assets/roadmap.js."
   ],
   "updated": "2026-10-06",
@@ -852,7 +852,7 @@
         {
           "id": "friends-in-0-5",
           "title": "Friends in 0.5",
-          "note": "Built on main and shipping with 0.5. Friends now runs on the Mefi Studio relay, a free service on Cloudflare that is built into Studio: there is no hub to set up, and no PC has to stay on.",
+          "note": "Built on main and shipping with 0.5. Friends now runs on the Vibe Studio relay, a free service on Cloudflare that is built into Studio: there is no hub to set up, and no PC has to stay on.",
           "items": [
             {
               "id": "friends-relay",
@@ -860,7 +860,7 @@
               "status": "next",
               "label": "Coming in 0.5",
               "area": "Friends",
-              "text": "Rooms, room chat, Listen together, companions in the Playground and cowork file claims all run through the Mefi Studio relay. You no longer enter a hub address.",
+              "text": "Rooms, room chat, Listen together, companions in the Playground and cowork file claims all run through the Vibe Studio relay. You no longer enter a hub address.",
               "details": [
                 "The relay keeps no chat. Your Studio keeps its own encrypted copy of each room’s messages for a week, and fills in what you missed from other members’ copies.",
                 "The relay signs every message, so a copy can’t be altered.",
@@ -1001,7 +1001,7 @@
               "label": "Coming in 0.5",
               "area": "Community",
               "details": [
-                "Credits are earned only: never bought, never for inviting people, never for being active in the Discord.",
+                "Participation earns credits. Optional launch support adds monthly credit packs, higher daily earnings and a 3-day project booster.",
                 "Ranks run Spark, Ember, Flame, Comet, Star, Nova and Void. Your balance is yours alone; others see your rank.",
                 "The relay works credits out, never your Studio, and they hold up against second accounts and trading: credits start once a Discord account is 30 days old and a week in the Void Engine server, a play pays once a day per player, and one person can make another earn at most 15 credits a week."
               ]
@@ -1032,7 +1032,7 @@
               "area": "Community",
               "details": [
                 "Featuring is once a week.",
-                "Nobody can buy a better spot: credits are earned only."
+                "Launch discovery prioritizes Builder, then Donor, then current rank; ratings also help new members get seen."
               ]
             },
             {
@@ -1356,7 +1356,7 @@
         {
           "id": "community-plan",
           "title": "The community plan",
-          "note": "The owner’s plan for sharing in Studio. Sharing projects, credits and featuring come in 0.5 (see Friends in 0.5); these parts are still open. Credits will only ever be earned: never bought, never given for inviting people, and never tied to Discord activity.",
+          "note": "The owner’s plan for sharing in Studio. Sharing projects, credits and featuring come in 0.5 (see Friends in 0.5); these parts are still open. The launch plan includes optional paid ranks and monthly credit packs, alongside credits earned by participating.",
           "items": [
             {
               "id": "cosmetics",

@@ -1,6 +1,6 @@
 # Start here
 
-Welcome to the Mefi Studio guide. Studio is a free Windows app for building your ideas with coding agents. You talk an idea through, the agents build it, and you check what they made. The [Void Engine Discord](discord.md) is where people share what they're making, get help and hang out.
+Welcome to the Vibe Studio guide. Studio is a free Windows app for building your ideas with coding agents. You talk an idea through, the agents build it, and you check what they made. The [Void Engine Discord](discord.md) is where people share what they're making, get help and hang out.
 
 This guide describes **Studio 0.4.4**, the current download.
 
@@ -57,10 +57,10 @@ Inside Studio, [friends and rooms](friends-and-rooms.md) are <span class="status
 
 ## Ask for something
 
-Missing a feature? [Request it on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md) or ask in the [Discord](https://discord.gg/xgfKc5pVxG). The [roadmap](../roadmap.html) shows what's done, what's being built and what's planned.
+Missing a feature? [Request it on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md) or ask in the [Discord](https://discord.gg/nTU3pxhgq). The [roadmap](../roadmap.html) shows what's done, what's being built and what's planned.
 
 ## About this guide
 
-Mefi Studio is free and open source. AI services you connect may have their own costs. Your project records stay on your PC, and providers receive the context you send them. See [Privacy](privacy.md).
+Vibe Studio is free and open source. AI services you connect may have their own costs. Your project records stay on your PC, and providers receive the context you send them. See [Privacy](privacy.md).
 
 Pages use the app's own control names. If a step doesn't match what you see, [report it](https://github.com/nateecho32-stack/mefi-studio/issues) or use **Edit this page on GitHub** at the bottom of the page. [About this guide](about-this-wiki.md) explains how pages are written. Technical detail lives in the repository's [architecture guide](https://github.com/nateecho32-stack/mefi-studio/blob/main/docs/architecture.md).

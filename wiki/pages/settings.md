@@ -35,7 +35,7 @@ Your link to the Void Engine Discord. **Help › Community** opens this card too
 
 When linking is available, you'll see **Link my Discord**, **Check now** and **Unlink**. Linking reads your Discord id and name, and your roles and join date in the Void Engine server. Nothing about your projects is sent.
 
-> <span class="status next">Coming in 0.5</span> Friends needs no setup: the Mefi Studio Link app and the address of the Mefi Studio relay are built into Studio. **Sign in with Discord** also sits in Friends, and The Lobby, rooms and the Project hub use it. **Connection details** only points a PC somewhere else, for testing. See [Friends, rooms and playdates](#/friends-and-rooms) and [The Void Engine Discord](#/discord).
+> <span class="status next">Coming in 0.5</span> Friends needs no setup: the Mefi Studio Link app and the address of the Vibe Studio relay are built into Studio. **Sign in with Discord** also sits in Friends, and The Lobby, rooms and the Project hub use it. **Connection details** only points a PC somewhere else, for testing. See [Friends, rooms and playdates](#/friends-and-rooms) and [The Void Engine Discord](#/discord).
 
 ## Appearance
 

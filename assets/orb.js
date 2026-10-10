@@ -1,4 +1,4 @@
-/* Mefi Studio website — the companion orb (Home's hero and its last call).
+/* Vibe Studio website — the companion orb (Home's hero and its last call).
    A liquid chrome sphere, like Studio's own companion, with four smaller orbs
    for friends that drift in, melt into it and part again. It is ray-marched
    in one small WebGL fragment shader and lit by a studio of soft boxes in the

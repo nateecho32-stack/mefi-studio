@@ -1,4 +1,4 @@
-# Mefi Studio website
+# Vibe Studio website
 
 Public site: https://nateecho32-stack.github.io/mefi-studio/
 
@@ -28,15 +28,15 @@ Every page uses the same header and footer markup.
 
 ## Home: the gate, the demo and the orb
 
-- **The gate** (`index.html` `#gate`, styled in `home.css`, run by `home.js`) is the first screen of a visit: **Try the demo** or **Skip to the site**. A small script in `<head>` decides before the first paint: it shows once per tab (`sessionStorage` `mefiSite.gate.v1`), never for a link to a section, and `?intro=1` shows it anyway, `?intro=0` skips it. Without script, or if `home.js` never starts, the gate steps aside by itself after eight seconds. Skip opens the page through a circle from the button and the orb flies into the hero.
+- **The gate** (`index.html` `#gate`, styled in `home.css`, run by `home.js`) is optional: **Try the demo** or **Skip to the site**. A small script in `<head>` decides before the first paint: only `?intro=1` shows it. The normal entry opens the launch page, with the demo available from its buttons. Without script, or if `home.js` never starts, the gate steps aside by itself after eight seconds. Skip opens the page through a circle from the button and the orb flies into the hero.
 - **Try the demo** (`assets/play.js`, `assets/play.css`, `window.MefiPlay.open`) is a playable, made-up copy of Social mode that fills the screen and opens out of the orb. It is guided from start to end. A **Guided demo** banner under its top bar says what it is (made-up friends and projects, press the glowing button or wait), and a press anywhere else explains it again in a line at the bottom. The visitor picks one of six ready-made projects (`IDEAS`: a game-night page, a tiny arcade game, a band's site, a pixel art tool, a study timer and a plant tracker; the box types the pick and can't be typed in, so every build makes sense) and presses Send (Social's one box, as in the app), Mefi answers in a line under it; three builders work while friends chat; one asks a question, and the answer changes what gets built; the checks pass; Accept (or Revert, then bring them back); the finished site opens in a preview window over the board and works (an RSVP with confetti, Star Catch to play with the mouse, a finger or the arrow keys, a song list, a pixel canvas that saves a real PNG, a focus timer that runs a minute a second, plants to water); put it on the Project hub and the friends in the room react. Only what the current step asks for can be pressed (a capture-phase click guard; anything else bounces the hint), and every step plays itself after a quiet while (`waitClick`). The explaining waits for the end card, whose "Try another project" starts again in the same window with the finished ones marked Built. Skip and Escape always leave, and nothing is sent anywhere. The hero's and the room section's "Try the demo" buttons and the walkthrough's "Play it yourself" open it again, without the gate. When the visitor built something, the last call names it ("Ready to build your game-night page for real?", `sessionStorage` `mefiSite.idea.v1`).
 - **The orb** (`assets/orb.js`, `window.MefiOrb.mount`) is Studio's companion as a liquid chrome sphere with four friends' orbs that melt into it and part again: one small ray-marched WebGL shader, lit by soft boxes in the theme's colours (it follows the picker), drawn only while on screen and the tab is visible, with fewer pixels on a slow GPU, one still frame under reduced motion and a CSS pearl without WebGL. `hold()` pauses it while the demo covers it. The hero's name chips follow the friends' orbs (`friend(i)` gives their place on the page).
-- `assets/og-site.html` is the source of the link preview `assets/shots/og-social.jpg` (1200x630): open it at that size, wait for the orb and capture it. Sharing services cache previews, so a new picture needs a new file name.
+- `assets/og-site.html` is the source of the link preview `assets/shots/vibe-launch.jpg` (1200x630): open it at that size, wait for the orb and capture it. Sharing services cache previews, so a new picture needs a new file name.
 
 ## Motion and themes
 
 Decoration only: every page reads the same without it, and `prefers-reduced-motion` stops it (the gate and the demo still work, without the movement).
-- `assets/theme.js` (loaded from `<head>` so a saved choice paints first) holds Studio's twelve palettes, copied from `THEMES` in the app's `renderer/music.js`. It rewrites the colour tokens on `<html>` and sets `<html class="motion">` when motion is allowed. Chrome, the site's own look (matte black and silver, like Studio's Chrome theme), is applied by clearing the tokens, so its values are the defaults in `site.css`. The pick is kept in `localStorage` (`mefiSite.theme.v1`), and `?theme=abyss` on any URL selects one.
+- `assets/theme.js` (loaded from `<head>` so a saved choice paints first) holds Studio's twelve palettes, copied from `THEMES` in the app's `renderer/music.js`. It rewrites the colour tokens on `<html>` and sets `<html class="motion">` when motion is allowed. Vibe, the public lime-and-mint look, is applied by clearing the tokens; `assets/vibe.css` loads last on every page. The internal `chrome` palette key is retained for existing saved preferences. The pick is kept in `localStorage` (`mefiSite.theme.v1`), and `?theme=abyss` on any URL selects one.
 - Every translucent colour in the CSS is written `rgb(var(--accent-rgb) / .2)` (also `--bg-rgb`, `--bg-2-rgb`, `--panel-rgb`, `--panel-2-rgb`, `--accent-2-rgb`, `--accent-3-rgb`) so it follows the theme. Don't hard-code a palette colour. The violet, gold and status colours stay fixed on purpose: badges use them as meaning.
 - `assets/site.css` is the look of every page: glass surfaces with a lit edge, the floating header, the type scale, a wide layout (`--max` 1640px, fluid `--gutter`) and a fine grain (plain blending, so canvases and pictures show no box).
 - `assets/chrome.css`, on every page after `fx.css`: the Chrome finish. Every rule starts with `:root:not([data-theme])`: brushed metal (`--metal`) on the main buttons, an iridescent gradient (`--grad`, silver-white, ice blue, lilac and pale aqua, Studio's `--chrome-holo` values) on the highlighted words, and a turning iridescent rim on cards under the cursor (`@property --holo-angle`). Headlines stay solid text so the words that rise one by one keep their colour.
@@ -71,11 +71,17 @@ Add a markdown file under `wiki/pages/` and list it in `wiki/pages.json` (title,
 
 ## Names and assets
 
-- The public name is **Mefi Studio**. Keep `SITE.portableName` and the executable, launcher and release asset filenames unchanged: they identify the existing desktop build and its settings.
-- Open Graph and Twitter metadata use `assets/studio-community-card.jpg` (1200×630) on most pages and `assets/shots/og-social.jpg` on Home (`og-site.jpg` is the earlier one, kept for previews already cached). Their editable HTML/CSS sources are `assets/studio-community-card.html` and `assets/og-site.html`. Sharing services cache previews, so a new filename refreshes the image.
+- The public name is **Vibe Studio**. Keep `SITE.portableName` and the executable, launcher and release asset filenames unchanged: they identify the existing desktop build and its settings.
+- Open Graph and Twitter metadata use `assets/shots/vibe-launch.jpg` (1200×630). Its editable source is `assets/og-site.html`. Older share cards are retained for cached previews. Sharing services cache previews, so a new filename refreshes the image.
 - Screenshots in `assets/shots/` use the real renderer with synthetic "Notes app" sample data (`tools/promo/prepare.cjs` on `main`). They contain no live user data.
 - The earlier showreel and Discord post copy stay in `media/`.
 
 ## Checking a change
 
 Preview with a loopback-only static server. Before pushing, check pages at 1440 and 390 px wide with no console errors, no missing files and no sideways scrolling.
+
+## Vibe Studio launch refresh
+
+`assets/vibe-mark.svg` is the public V/spark mark; `assets/vibe.css` supplies the new identity and responsive reward/support cards. Existing page URLs, demo controls, app executable names and storage keys stay compatible.
+
+The homepage separates announced launch rewards from the current downloadable app. First-week and first-month windows begin at launch, with no invented date or user counts. First-week members retain the monthly Donor rank free for life; first-month members receive free Supporter status. Optional support is $5 for first-time donors (lifetime rank, half off the first subscription month) and $10/month for Builder support. The lifetime rank does not promise an unspecified lifetime credit allocation. There is no payment form; Discord carries claim and checkout details. These offers replace the previous participation-only credit policy.

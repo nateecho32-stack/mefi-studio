@@ -1,6 +1,6 @@
 # About this guide
 
-This guide helps you get started with Mefi Studio and find the next step when something is unclear. Its pages describe **Studio 0.4.4**, the current download. For conversation, ideas and works in progress, join the [Discord community](https://discord.gg/xgfKc5pVxG).
+This guide helps you get started with Vibe Studio and find the next step when something is unclear. Its pages describe **Studio 0.4.4**, the current download. For conversation, ideas and works in progress, join the [Discord community](https://discord.gg/nTU3pxhgq).
 
 ## How pages mark what's new
 

@@ -16,7 +16,7 @@ Studio checks GitHub for a new release every 20 minutes. When one is out, a noti
 
 Studio updates only when no build is running; if one is, it asks you to try again once it finishes. It downloads the release zip and checks its published SHA-256 when there is one. Then a helper replaces the app files after Studio closes, keeps your `resources\app\data` folder, and opens Studio again. In 0.4.4 that helper never runs, which is why you update by hand this once.
 
-The zip and the executable keep the older **Mefi Studio AI+** names. That's expected: the public name is Mefi Studio.
+The zip and the executable keep the older **Mefi Studio AI+** names. That's expected: the public name is Vibe Studio.
 
 ## Update from 0.4.4 by hand
 

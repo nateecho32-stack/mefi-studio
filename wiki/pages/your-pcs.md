@@ -34,7 +34,7 @@ Every PC you sign in to Friends on shows in **Your PCs**, live: its CPU, free me
 - **Keep this PC on** keeps a plugged-in PC awake with nothing running, so your other PCs can send it work.
 - Each project has its own switch, and a friend can lend you their PC: your tasks there wait for their OK unless they choose otherwise.
 
-Work sent between PCs is sealed, so the Mefi Studio relay that carries it can't read it.
+Work sent between PCs is sealed, so the Vibe Studio relay that carries it can't read it.
 
 ## Set up this PC <span class="status next">Coming in 0.5</span>
 

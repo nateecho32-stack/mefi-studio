@@ -78,7 +78,7 @@ With **Tree motion** on and the 3D overview spinning, the music's energy quicken
 
 ## Listen with friends <span class="status next">Coming in 0.5</span>
 
-**Listen together** lets a room hear the same link at the same moment. From 0.5 it runs through the Mefi Studio relay, which is built into Studio, once you sign in with Discord. <span class="status rolling">Rolling out</span> **Share what I'm playing** will let Void Engine members see what you're playing with `/nowplaying`, once the Studio bot is linked to the relay. See [Listen together](#/friends-and-rooms/listen-together).
+**Listen together** lets a room hear the same link at the same moment. From 0.5 it runs through the Vibe Studio relay, which is built into Studio, once you sign in with Discord. <span class="status rolling">Rolling out</span> **Share what I'm playing** will let Void Engine members see what you're playing with `/nowplaying`, once the Studio bot is linked to the relay. See [Listen together](#/friends-and-rooms/listen-together).
 
 ## What's next
 

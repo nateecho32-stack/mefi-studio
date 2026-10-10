@@ -2,15 +2,17 @@
 
 ## Is Studio free?
 
-Yes. Mefi Studio is free and open source under the MIT license. Every theme and node style has been free since 0.4.4, including the Void collection. AI services may charge for the account or API you connect.
+Yes. Vibe Studio is free and open source under the MIT license. Every theme and node style has been free since 0.4.4, including the Void collection. AI services may charge for the account or API you connect.
 
 ## Will there be paid extras?
 
-Nothing in Studio costs money, and community credits are earned only, never bought. <span class="status next">Coming in 0.5</span> You earn credits by playing other people's projects on the Project hub, and can spend them to feature your own project for a day. Spending them on cosmetics and creator styles is <span class="status planned">Planned</span>, and the details are still open. Follow it on the [roadmap](../roadmap.html).
+The core app stays free and free members can post. The announced launch plan offers a **$5 first donation** for a lifetime Donor rank and **50% off the first subscription month**, plus an optional **$10/month** Builder subscription with higher daily credit earnings, monthly credits, a 3-day project booster and higher room visibility.
+
+First-week launch members get the monthly Donor rank free for life; first-month launch members get a free Supporter rank and higher-rank permissions. Early members can get custom ranks, flair, cosmetic requests, welcome bonuses and a user number. Existing Discord members can claim the announced ranks too. The launch date and claim steps will be announced in Discord. See [launch rewards](../../index.html#launch) and [support plans](../../index.html#support).
 
 ## Can I join the community without using the app?
 
-Yes. Join the [Void Engine Discord](https://discord.gg/xgfKc5pVxG) to share an idea, show a work in progress, ask a question or hang out. You can also try the Void Engine bot there and help shape what it becomes. See [The Void Engine Discord](discord.md).
+Yes. Join the [Void Engine Discord](https://discord.gg/nTU3pxhgq) to share an idea, show a work in progress, ask a question or hang out. You can also try the Void Engine bot there and help shape what it becomes. See [The Void Engine Discord](discord.md).
 
 The Discord is optional: nothing in Studio needs it.
 
@@ -42,7 +44,7 @@ It may, when a connected AI provider or coding agent needs project context. Stud
 
 ## Can we watch videos together?
 
-Studio 0.4.4 has a personal media player. <span class="status next">Coming in 0.5</span> **Listen together** plays one link for everyone in a room at the same point, and a playlist can be shared into a room. Rooms and Listen together run on the Mefi Studio relay, which is built into Studio, and use a Discord sign-in. See [Friends, rooms and playdates](friends-and-rooms.md), or the [Community page](../../community.html) for what's available and what's planned.
+Studio 0.4.4 has a personal media player. <span class="status next">Coming in 0.5</span> **Listen together** plays one link for everyone in a room at the same point, and a playlist can be shared into a room. Rooms and Listen together run on the Vibe Studio relay, which is built into Studio, and use a Discord sign-in. See [Friends, rooms and playdates](friends-and-rooms.md), or the [Community page](../../community.html) for what's available and what's planned.
 
 ## Can I say "Hey Studio" to open it?
 
@@ -90,4 +92,4 @@ Open **Settings › System › Updates** and choose **Check GitHub**, or use the
 
 ## Where do I ask for a feature or get help?
 
-[Request a feature on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md), or ask in the [Discord](https://discord.gg/xgfKc5pVxG). Check the [roadmap](../roadmap.html) first: it may already be planned. For a problem, start with [Troubleshooting](troubleshooting.md). To help build Studio, see [Contributing](contributing.md).
+[Request a feature on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md), or ask in the [Discord](https://discord.gg/nTU3pxhgq). Check the [roadmap](../roadmap.html) first: it may already be planned. For a problem, start with [Troubleshooting](troubleshooting.md). To help build Studio, see [Contributing](contributing.md).

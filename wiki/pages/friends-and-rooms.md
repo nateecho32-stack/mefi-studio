@@ -2,7 +2,7 @@
 
 Friends is the social side of Studio. You can join rooms with people from the [Void Engine Discord](#/discord), chat, listen to the same song at the same moment, share what you make, and let your companion play with your friends' companions. Your own PCs live here too. See [Your PCs](#/your-pcs).
 
-> <span class="status next">Coming in 0.5</span> The Lobby, rooms, the Project hub, Events and playdates with friends arrive with 0.5. They run on the **Mefi Studio relay**, a free service built into Studio, so there's nothing to set up and no PC has to stay on. In 0.4.4, Friends holds Your PCs and Listen together, which has no room service to connect to yet.
+> <span class="status next">Coming in 0.5</span> The Lobby, rooms, the Project hub, Events and playdates with friends arrive with 0.5. They run on the **Vibe Studio relay**, a free service built into Studio, so there's nothing to set up and no PC has to stay on. In 0.4.4, Friends holds Your PCs and Listen together, which has no room service to connect to yet.
 
 ## Open Friends
 
@@ -22,7 +22,7 @@ In 0.4.4, Friends holds three things:
 - <span class="status next">Coming in 0.5</span> **Sign in with Discord**, once, in Friends. Discord asks in your browser, and from then on Studio connects by itself a few seconds after it opens. Until you sign in, The Lobby, Rooms and the Project hub show one **Sign in with Discord** card; Your PCs and the Playground work without it.
 - Nothing else. The relay's address is built into Studio, so there's no hub address to enter and no Discord role to get.
 
-Studio 0.4.4 doesn't ship the Mefi Studio Link app ID, so its **Link my Discord** button stays hidden.
+Studio 0.4.4 doesn't ship the Vibe Studio Link app ID, so its **Link my Discord** button stays hidden.
 
 Signing in reads only who you are: your Discord id and name, and your roles and join date in the Void Engine server. It never reads your messages, and nothing about your projects is sent. [Link your Discord in Studio](#/discord/link-your-discord-in-studio) has the details.
 
@@ -72,7 +72,7 @@ Anyone a week or more in the Void Engine server can make a room, and you can own
 - **Feature** spends 100 credits to put your project at the top of the hub for a day, once a week.
 - **Report** someone else's project if it's spam or a broken link, not safe to open, or someone else's work.
 
-Credits are never bought, never earned by inviting people, and never tied to activity in the Discord. They start once your Discord account is 30 days old and you've been in the server a week, and one person can make another earn at most 15 credits a week, so a second account gains nothing. Ranks go Spark, Ember, Flame, Comet, Star, Nova and Void by the credits you've earned. Your balance is yours alone; others see your rank.
+Participation earns credits. The announced launch subscription also adds monthly credit packs, higher daily earnings and a 3-day project booster. Discovery prioritizes Builder, then Donor, then current rank, with ratings helping new projects get seen. These launch offers replace the older participation-only credit policy; see [support and early-member rewards](../../index.html#support). Ranks go Spark, Ember, Flame, Comet, Star, Nova and Void by the credits you've earned. Your balance is yours alone; others see your rank.
 
 ## Events <span class="status next">Coming in 0.5</span>
 

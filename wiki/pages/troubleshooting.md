@@ -115,7 +115,7 @@ A synced folder can lock files while it uploads them. Try keeping the Studio fol
 
 In 0.4.4, Listen together has no room service to connect to: the message reads "this build isn't connected to one yet", and reinstalling won't change that. The music player itself works without it.
 
-> <span class="status next">Coming in 0.5</span> Rooms and Listen together run on the Mefi Studio relay, which is built into Studio, so there's no address to enter. Sign in with Discord in Friends; your account needs to be in the Void Engine server. When Friends can't connect, it says why in one sentence and offers only what helps: sign in again, update Studio, join the Discord or connect. See [Friends, rooms and playdates](friends-and-rooms.md).
+> <span class="status next">Coming in 0.5</span> Rooms and Listen together run on the Vibe Studio relay, which is built into Studio, so there's no address to enter. Sign in with Discord in Friends; your account needs to be in the Void Engine server. When Friends can't connect, it says why in one sentence and offers only what helps: sign in again, update Studio, join the Discord or connect. See [Friends, rooms and playdates](friends-and-rooms.md).
 
 ## `npm start` says Electron is running as Node
 

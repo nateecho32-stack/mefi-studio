@@ -57,7 +57,7 @@ The **Connection log** (provider, tool and probe activity) is in **Agents › Se
 4. Before you share anything, read it and remove private details: API keys, tokens, email addresses, and file paths that show your name or your projects.
 5. Open a [bug report on GitHub](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md) and paste it in.
 
-You can also ask for help in the [Void Engine Discord](https://discord.gg/xgfKc5pVxG). It's optional; GitHub works without it.
+You can also ask for help in the [Void Engine Discord](https://discord.gg/nTU3pxhgq). It's optional; GitHub works without it.
 
 ## The log is kept
 

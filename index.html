@@ -3,35 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mefi Studio — The social app for vibe coders</title>
-<meta name="description" content="Mefi Studio is the social app for vibe coders: rooms to hang out in, friends who see what you're making, a weekly Build Jam, and the AI you already use (Claude Code, Codex, OpenCode) building your ideas on your PC. Free and open source for Windows.">
-<meta property="og:title" content="Mefi Studio — The social app for vibe coders">
-<meta property="og:description" content="Rooms to hang out in, friends who see what you're making and a weekly Build Jam, with the AI you already use building your ideas. Free for Windows.">
-<meta property="og:site_name" content="Mefi Studio">
+<title>Vibe Studio — Coming soon. Build together.</title>
+<meta name="description" content="Vibe Studio is coming soon: build with AI, share projects and find collaborators. Join early for custom flair, welcome bonuses and launch ranks. First-week members get a monthly Donor rank free for life.">
+<meta property="og:title" content="Vibe Studio — The social app for vibe coders">
+<meta property="og:description" content="Coming soon for vibe coders and makers. Join early for launch rewards: a monthly Donor rank free for life in week one, or free Supporter status in month one.">
+<meta property="og:site_name" content="Vibe Studio">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://nateecho32-stack.github.io/mefi-studio/">
-<meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/og-social.jpg">
-<meta property="og:image:width" content="1200">
+<meta property="og:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/vibe-launch.jpg">
+<meta property="og:image:width" content="1199">
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/jpeg">
-<meta property="og:image:alt" content="Mefi Studio: the social app for vibe coders. A chrome orb with friends around it.">
+<meta property="og:image:alt" content="Vibe Studio: the social app for vibe coders. Coming soon. Build something. Find your people.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Mefi Studio — The social app for vibe coders">
-<meta name="twitter:description" content="Rooms, friends and a weekly Build Jam, with the AI you already use building your ideas. Free for Windows.">
-<meta name="twitter:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/og-social.jpg">
-<meta name="twitter:image:alt" content="Mefi Studio: the social app for vibe coders.">
+<meta name="twitter:title" content="Vibe Studio — The social app for vibe coders">
+<meta name="twitter:description" content="Coming soon. Build with AI, find collaborators and claim early-member ranks. Join the Vibe Studio Discord before launch.">
+<meta name="twitter:image" content="https://nateecho32-stack.github.io/mefi-studio/assets/shots/vibe-launch.jpg">
+<meta name="twitter:image:alt" content="Vibe Studio: the social app for vibe coders.">
 <link rel="canonical" href="https://nateecho32-stack.github.io/mefi-studio/">
-<meta name="theme-color" content="#070709">
-<link rel="icon" href="assets/favicon.ico">
+<meta name="theme-color" content="#080c0b">
+<link rel="icon" type="image/svg+xml" href="assets/vibe-mark.svg">
 <script>
-  /* The gate (Try the app or Skip to the site) opens a visit once: not for a
-     link to a section or a reload in the same tab. ?intro=1 shows it anyway,
-     ?intro=0 skips it. */
+  /* Launch content opens first. ?intro=1 opens the optional demo welcome. */
   (function () {
     try {
       var want = new URLSearchParams(location.search).get("intro");
-      var seen = sessionStorage.getItem("mefiSite.gate.v1");
-      if (want === "1" || (want !== "0" && !seen && !location.hash)) document.documentElement.classList.add("gate-on");
+      if (want === "1") document.documentElement.classList.add("gate-on");
     } catch (e) { /* storage blocked: no gate */ }
   })();
 </script>
@@ -41,13 +38,15 @@
 <script src="assets/theme.js"></script>
 <link rel="stylesheet" href="assets/home.css">
 <link rel="stylesheet" href="assets/play.css">
+<link rel="stylesheet" href="assets/vibe.css">
 </head>
 <body class="home">
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="site-head">
   <div class="container head-inner">
-    <a class="brand" href="index.html"><img src="assets/icon-256.png" width="32" height="32" alt="">Mefi Studio</a>
+    <a class="brand" href="index.html"><img src="assets/vibe-mark.svg" width="32" height="32" alt="">Vibe Studio</a>
     <nav class="tabs" aria-label="Site">
+      <a href="index.html#launch">Launch rewards</a>
       <a href="index.html" data-tab="home" aria-current="page">Home</a>
       <a href="features.html" data-tab="features">Features</a>
       <a href="roadmap.html" data-tab="roadmap">Roadmap</a>
@@ -55,20 +54,21 @@
       <a href="wiki/" data-tab="wiki">Wiki</a>
     </nav>
     <div class="head-actions">
-      <a class="icon-link" href="https://discord.gg/xgfKc5pVxG" rel="noopener" aria-label="Mefi Studio on Discord" title="Discord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg></a>
-      <a class="icon-link" href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener" aria-label="Mefi Studio on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 8.4 22.9c.6.1.8-.2.8-.6v-2.1c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 12 .5Z"/></svg></a>
-      <a class="btn btn-primary btn-sm" href="download.html">Download</a>
+      <a class="icon-link" href="https://discord.gg/nTU3pxhgq" rel="noopener" aria-label="Vibe Studio on Discord" title="Discord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg></a>
+      <a class="icon-link" href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener" aria-label="Vibe Studio on GitHub" title="GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 8.4 22.9c.6.1.8-.2.8-.6v-2.1c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .4.2.7.8.6A11.5 11.5 0 0 0 12 .5Z"/></svg></a>
+      <a class="btn btn-primary btn-sm" href="https://discord.gg/nTU3pxhgq" rel="noopener">Join early ↗</a>
     </div>
     <details class="menu">
       <summary aria-label="Open the menu"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
       <nav class="menu-panel" aria-label="Site">
+      <a href="index.html#launch">Launch rewards</a>
         <a href="index.html" aria-current="page">Home</a>
         <a href="features.html">Features</a>
         <a href="roadmap.html">Roadmap</a>
         <a href="community.html">Community</a>
         <a href="wiki/">Wiki</a>
         <hr>
-        <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord <span aria-hidden="true">↗</span></a>
+        <a href="https://discord.gg/nTU3pxhgq" rel="noopener">Discord <span aria-hidden="true">↗</span></a>
         <a href="https://github.com/nateecho32-stack/mefi-studio" rel="noopener">GitHub <span aria-hidden="true">↗</span></a>
         <a class="btn btn-primary" href="download.html">Download for Windows</a>
       </nav>
@@ -84,7 +84,7 @@
   <div class="gate-sky" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <div class="gate-inner">
     <span class="gate-orb-slot" id="gate-orb-slot" aria-hidden="true"><span class="gate-pearl"></span></span>
-    <p class="gate-brand"><img src="assets/icon-256.png" width="26" height="26" alt="">Mefi Studio</p>
+    <p class="gate-brand"><img src="assets/vibe-mark.svg" width="26" height="26" alt="">Vibe Studio</p>
     <h1 class="gate-title" id="gate-title"><span class="gl">The social app</span> <span class="gl"><span class="grad">for vibe coders.</span></span></h1>
     <div class="gate-actions">
       <button type="button" class="gate-play" id="gate-play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg>Try the demo</button>
@@ -98,26 +98,28 @@
 <section class="hero" id="hero" aria-labelledby="hero-title">
   <div class="container hero-grid">
     <div class="hero-copy">
-      <a class="hero-pill h-enter" style="--d:0" href="#room"><b data-until="0.5">Coming in 0.5</b><b data-from="0.5" hidden>New</b><span>Rooms, the Lobby and a weekly Build Jam</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-      <h1 id="hero-title" class="hero-title" data-split data-split-manual tabindex="-1"><span class="ln">The social app</span> <span class="ln"><span class="grad shimmer">for vibe coders.</span></span></h1>
-      <p class="hero-lede h-enter" style="--d:3">Hang out in rooms, see what your friends are making, and build right next to them. Studio runs the AI you already use, like Claude Code, Codex and OpenCode, so nobody has to vibe code alone.</p>
+      <a class="hero-pill h-enter" style="--d:0" href="#launch"><b>Coming soon</b><span>Get in early. Make it yours.</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+      <h1 id="hero-title" class="hero-title" data-split data-split-manual tabindex="-1"><span class="ln">Build something.</span> <span class="ln"><span class="grad shimmer">Find your people.</span></span></h1>
+      <p class="hero-lede h-enter" style="--d:3">A home for vibe coders, makers and the people who build together. Share your work, find collaborators and turn ideas into projects with the AI you already use—Claude Code, Codex or OpenCode.</p>
       <div class="cta-row h-enter" style="--d:4">
-        <a class="btn btn-primary btn-lg" href="download.html" data-magnetic><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>Download for Windows</a>
+        <a class="btn btn-primary btn-lg" href="https://discord.gg/nTU3pxhgq" rel="noopener" data-magnetic>Join before launch <span aria-hidden="true">↗</span></a>
         <button type="button" class="btn btn-lg btn-try" data-play-demo hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5Z"/></svg>Try the demo</button>
       </div>
+      <p class="vibe-offer-line h-enter" style="--d:5">Join in launch week one for a <strong>monthly Donor rank, free for life.</strong> <a href="#launch">See the early-member rewards →</a></p>
       <ul class="hero-meta h-enter" style="--d:5">
-        <li>Free and open source</li>
+        <li>Free members can post</li>
         <li>Windows 10 and 11</li>
-        <li>Works with your AI</li>
+        <li>Bring your AI</li>
       </ul>
       <div class="hero-live h-enter" style="--d:6">
         <p class="pulse" data-discord-pulse hidden><span class="dot" aria-hidden="true"></span><span data-pulse-text></span></p>
-        <a class="hero-discord" href="https://discord.gg/xgfKc5pVxG" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg>Join the Discord <span aria-hidden="true">↗</span></a>
+        <a class="hero-discord" href="https://discord.gg/nTU3pxhgq" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.2 18.2 0 0 0-5.6 0L8.6 3a19.6 19.6 0 0 0-4.9 1.5C.6 9.1-.3 13.7.1 18.2a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14.1 14.1 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.8ZM8 15.5c-1.2 0-2.2-1.1-2.2-2.4S6.8 10.7 8 10.7s2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Zm8 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4Z"/></svg>Join the Discord <span aria-hidden="true">↗</span></a>
         <p class="hero-release" data-latest-hint>Latest release on <a href="https://github.com/nateecho32-stack/mefi-studio/releases/latest" rel="noopener">GitHub</a></p>
       </div>
-      <p class="soon-line hero-soon h-enter" style="--d:7" data-until="0.5">Everything on this page is Studio 0.5, out soon. Until then the download is 0.4.4.</p>
+      <p class="soon-line hero-soon h-enter" style="--d:7" data-until="0.5">Vibe Studio’s social launch is coming soon. <a href="download.html">Try the current 0.4.4 Windows app</a> while you wait; rooms and the new social layout arrive in 0.5.</p>
     </div>
     <div class="hero-stage" aria-hidden="true">
+      <span class="vibe-hero-stamp">YOUR NEXT BUILD STARTS HERE ↗</span>
       <div class="orb" id="hero-orb"><span class="orb-pearl"></span></div>
       <ul class="orb-friends h-enter" style="--d:6" id="orb-friends">
         <li class="orb-friend" data-i="0"><i style="--h:146">M</i><b>Maxwell</b><span>building Pixel Forge</span></li>
@@ -126,6 +128,36 @@
         <li class="orb-friend" data-i="3"><i style="--h:196">S</i><b>Sol</b><span>just joined</span></li>
       </ul>
     </div>
+  </div>
+</section>
+
+<!-- Launch rewards: announced offers, separate from the current app release. -->
+<section class="launch-section" id="launch" aria-labelledby="launch-title">
+  <div class="container">
+    <div class="section-head">
+      <p class="vibe-label">Coming soon · early-member rewards</p>
+      <h2 id="launch-title">Be here at the beginning.<br><span class="grad">Keep the perks.</span></h2>
+      <p>Join the Discord now, meet the community and be ready for launch. The first week and first month come with their own rewards.</p>
+    </div>
+    <div class="launch-grid">
+      <article class="launch-card featured">
+        <p class="card-label">01 / First week</p><h3>Monthly Donor rank.<br>Free for life.</h3>
+        <p>Join during the first week of launch and keep the monthly Donor rank for free.</p>
+        <ul><li>A lasting early-member rank</li><li>Custom rank and flair</li><li>Welcome bonuses and rewards</li></ul>
+      </article>
+      <article class="launch-card">
+        <p class="card-label">02 / First month</p><h3>Supporter status.<br>From day one.</h3>
+        <p>Join during the first month of launch for a free Supporter rank and immediate access to higher-rank permissions.</p>
+        <ul><li>Free Supporter rank</li><li>Early-member custom ranks</li><li>Welcome bonuses</li></ul>
+      </article>
+      <article class="launch-card">
+        <p class="card-label">03 / Make it yours</p><h3>Your number.<br>Your own look.</h3>
+        <p>Early members get a user number and a chance to request custom cosmetics. Help shape the place from the start.</p>
+        <ul><li>Early user number</li><li>Custom cosmetic requests</li><li>Flair, bonuses and rewards</li></ul>
+      </article>
+    </div>
+    <p class="launch-note">The first-week and first-month windows begin at launch; a launch date hasn’t been announced yet. The lifetime offer is for the rank. Everyone already in the Discord can claim the announced launch ranks—watch there for claim details.</p>
+    <div class="launch-join"><p>No payment needed to join the community.</p><a class="btn btn-primary btn-lg" href="https://discord.gg/nTU3pxhgq" rel="noopener">Get in early on Discord ↗</a></div>
   </div>
 </section>
 
@@ -139,7 +171,7 @@
     </div>
     <div class="rm-stage" data-play aria-hidden="true">
       <div class="win rm-win" data-tilt="1.2">
-        <div class="win-bar"><i></i><i></i><i></i><span>Mefi Studio <em>Friends · Friday jam</em></span></div>
+        <div class="win-bar"><i></i><i></i><i></i><span>Vibe Studio <em>Friends · Friday jam</em></span></div>
         <div class="rm-body">
           <div class="rm-rooms">
             <p class="rm-k">Rooms</p>
@@ -162,7 +194,7 @@
             <div class="rm-head"><b>Friday jam</b><span>Hangout · 5 here</span><span class="rm-now" id="rm-now"><span class="rm-eq"><i></i><i></i><i></i><i></i></span>Night Bus · listening together</span></div>
             <div class="rm-chat" id="rm-chat"></div>
             <div class="rm-compose">Message Friday jam<b>Send</b></div>
-            <div class="rm-pop" id="rm-pop"><img src="assets/icon-256.png" width="22" height="22" alt=""><span><b></b><small></small></span></div>
+            <div class="rm-pop" id="rm-pop"><img src="assets/vibe-mark.svg" width="22" height="22" alt=""><span><b></b><small></small></span></div>
           </div>
           <div class="rm-side">
             <div class="rm-tile rm-build idle" id="rm-build">
@@ -382,7 +414,7 @@
         <ol class="ranks">
           <li style="--r:0">Spark</li><li style="--r:1">Ember</li><li style="--r:2" class="key">Flame</li><li style="--r:3">Comet</li><li style="--r:4">Star</li><li style="--r:5">Nova</li><li style="--r:6">Void</li>
         </ol>
-        <p class="jam-fine">Credits come from making and playing things with friends, never from money or invites. Spend them in the Shop on dragon scales, menu effects and node styles, and try anything free for two minutes first. At Flame you can list a room for everyone.</p>
+        <p class="jam-fine">Earn credits by taking part, with optional monthly credit packs and higher daily earnings for supporters at launch. Discover new projects, find your style and help other builders get seen. <a href="#support">See ranks, support and visibility →</a></p>
       </article>
     </div>
     <div class="jam-cta" data-reveal>
@@ -391,7 +423,7 @@
         <p class="pulse" data-discord-pulse hidden><span class="dot" aria-hidden="true"></span><span data-pulse-text></span></p>
       </div>
       <div class="cta-row">
-        <a class="btn btn-primary" href="https://discord.gg/xgfKc5pVxG" rel="noopener">Join the Discord <span class="go" aria-hidden="true">↗</span></a>
+        <a class="btn btn-primary" href="https://discord.gg/nTU3pxhgq" rel="noopener">Join the Discord <span class="go" aria-hidden="true">↗</span></a>
         <a class="btn" href="community.html">See the community <span class="go" aria-hidden="true">→</span></a>
       </div>
     </div>
@@ -408,9 +440,9 @@
     <div class="show-stage" data-scene>
       <div class="show-tilt">
         <div class="win" data-tilt="2.5">
-          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><span>Mefi Studio <em data-win-title>The Lobby</em></span></div>
+          <div class="win-bar" aria-hidden="true"><i></i><i></i><i></i><span>Vibe Studio <em data-win-title>The Lobby</em></span></div>
           <div class="win-screens">
-            <img class="win-shot is-on" data-screen="0" src="assets/shots/site/lobby.webp" srcset="assets/shots/site/lobby-960.webp 960w, assets/shots/site/lobby.webp 1920w" sizes="(max-width: 1260px) 94vw, 1180px" width="1920" height="1080" alt="The Lobby in Mefi Studio: three friends online, Building now, the top project of the week, the rooms open now and your week's credits.">
+            <img class="win-shot is-on" data-screen="0" src="assets/shots/site/lobby.webp" srcset="assets/shots/site/lobby-960.webp 960w, assets/shots/site/lobby.webp 1920w" sizes="(max-width: 1260px) 94vw, 1180px" width="1920" height="1080" alt="The Lobby in Vibe Studio: three friends online, Building now, the top project of the week, the rooms open now and your week's credits.">
             <img class="win-shot" data-screen="1" src="assets/shots/site/room.webp" srcset="assets/shots/site/room-960.webp 960w, assets/shots/site/room.webp 1920w" sizes="(max-width: 1260px) 94vw, 1180px" width="1920" height="1080" loading="lazy" alt="A room called Friday jam: friends chatting about a jam tonight, with a Listen together button.">
             <img class="win-shot" data-screen="2" src="assets/shots/site/social.webp" srcset="assets/shots/site/social-960.webp 960w, assets/shots/site/social.webp 1920w" sizes="(max-width: 1260px) 94vw, 1180px" width="1920" height="1080" loading="lazy" alt="Social mode's Home: one box to ask Mefi anything or describe something to make, Mefi's latest line, and your work grouped as needs you, running and in review.">
             <img class="win-shot" data-screen="3" src="assets/shots/site/studio.webp" srcset="assets/shots/site/studio-960.webp 960w, assets/shots/site/studio.webp 1920w" sizes="(max-width: 1260px) 94vw, 1180px" width="1920" height="1080" loading="lazy" alt="Studio mode: the session list on the left, Today in the middle with what needs you and what is running, and the team and live activity on the right.">
@@ -424,7 +456,7 @@
         <span class="float-chip f4" data-parallax="0.06"><i class="ok"></i>Checks passed</span>
       </div>
     </div>
-    <div class="win-tabs" role="tablist" aria-label="Screens from Mefi Studio">
+    <div class="win-tabs" role="tablist" aria-label="Screens from Vibe Studio">
       <button type="button" role="tab" aria-selected="true" data-screen="0"><b>The Lobby</b><small>What friends are making</small><i class="bar"><i></i></i></button>
       <button type="button" role="tab" aria-selected="false" data-screen="1"><b>Rooms</b><small>Chat and listen together</small><i class="bar"><i></i></i></button>
       <button type="button" role="tab" aria-selected="false" data-screen="2"><b>Social</b><small>One box, your work, your people</small><i class="bar"><i></i></i></button>
@@ -545,11 +577,24 @@
         </div>
         <div class="b-copy">
           <h3>Twelve looks, all free</h3>
-          <p>Pick one above and this whole page wears it. <span class="look-now">Showing <b id="theme-name">Chrome</b>.</span></p>
+          <p>Pick one above and this whole page wears it. <span class="look-now">Showing <b id="theme-name">Vibe</b>.</span></p>
         </div>
       </article>
 
     </div>
+  </div>
+</section>
+
+<section class="launch-section support-section" id="support" aria-labelledby="support-title">
+  <div class="container">
+    <div class="section-head"><p class="vibe-label">The launch support plan</p><h2 id="support-title">Build for free.<br><span class="grad">Support what comes next.</span></h2><p>Optional ranks and credit packs help fund hosting, development and giveaways at community events.</p></div>
+    <div class="support-grid">
+      <article class="launch-card"><p class="card-label">Free member</p><p class="price">$0</p><h3>Start making.</h3><p>You can still post your work and take part without a paid rank.</p><ul><li>Share your projects</li><li>Community participation</li><li>Ratings help good projects get seen</li></ul><a class="btn" href="https://discord.gg/nTU3pxhgq" rel="noopener">Join the community ↗</a></article>
+      <article class="launch-card"><p class="card-label">First-time donor</p><p class="price">$5 <small>first donation</small></p><h3>A thank-you that stays.</h3><p>Any donation keeps your Donor rank for life. First-time donors get half off their first subscription month.</p><ul><li>Lifetime Donor rank</li><li>Full posting permissions and social features</li><li>Higher visibility for your posts</li><li>50% off the first $10 subscription month</li></ul><a class="btn" href="https://discord.gg/nTU3pxhgq" rel="noopener">Ask about supporting ↗</a></article>
+      <article class="launch-card featured"><p class="card-label">Monthly support · Builder</p><p class="price">$10 <small>/ month</small></p><h3>Give your work a boost.</h3><p>A monthly subscription for social ranks and credit packs, with more ways to put your projects in front of people.</p><ul><li>Higher daily credit earnings</li><li>Monthly credits</li><li>A 3-day project booster</li><li>Higher visibility for rooms you create</li></ul><a class="btn btn-primary" href="https://discord.gg/nTU3pxhgq" rel="noopener">Follow the launch ↗</a></article>
+    </div>
+    <div class="visibility-row"><div><h3>How discovery works</h3><p>Active supporters appear first, past donors next, then members by their current rank.</p></div><div><ol class="visibility-order"><li>Builder</li><li>Donor</li><li>Current rank</li></ol><p>Ratings also influence discovery, so a new member’s project can still get seen when people like it. Boosts improve visibility; views and plays aren’t guaranteed.</p></div></div>
+    <p class="launch-note">These are the announced launch offers. Joining Discord is free; this site doesn’t take payments. Credit amounts, claim steps and subscription checkout details will be shared there.</p>
   </div>
 </section>
 
@@ -558,12 +603,12 @@
   <div class="container final-grid">
     <div class="final-orb" aria-hidden="true"><div class="orb" id="final-orb"><span class="orb-pearl"></span></div></div>
     <div class="final-copy">
-      <p class="eyebrow" data-reveal>Get Mefi Studio</p>
+      <p class="eyebrow" data-reveal>Get Vibe Studio</p>
       <h2 id="final-title" class="rot-head" data-reveal aria-label="Ready to build your next project?"><span class="ln" aria-hidden="true">Ready to build</span> <span class="ln grad" aria-hidden="true"><span class="nw"><span class="rot" id="final-rot" data-rot="your game-night page|your arcade game|your band's site|your pixel art tool|your study timer|your plant tracker"><span class="rot-w">your game-night page</span></span>?</span></span></h2>
-      <p class="lede" data-reveal id="final-lede">Download Studio, open a folder and say what you want. Your friends are already in the Lobby.</p>
+      <p class="lede" data-reveal id="final-lede">Join the Discord for the launch, or try the current Windows app: open a folder, connect your AI and start building.</p>
       <div class="cta-row" data-reveal>
         <a class="btn btn-primary btn-lg" href="download.html" id="final-download" data-magnetic><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg><span id="final-download-label">Download for Windows</span></a>
-        <a class="btn btn-lg" href="download.html">Install steps</a>
+        <a class="btn btn-lg" href="https://discord.gg/nTU3pxhgq" rel="noopener">Join before launch ↗</a>
       </div>
       <p class="fine" data-reveal><span data-latest-hint>Free · Windows 10 and 11 · 64-bit portable zip</span></p>
       <p class="soon-line" data-reveal data-until="0.5">Today's download is 0.4.4. Friends, the Lobby and the new layout come with 0.5, out soon.</p>
@@ -591,7 +636,7 @@
     </div>
     <div class="faq" data-stagger="70">
       <details data-reveal>
-        <summary>Who is Mefi Studio for?</summary>
+        <summary>Who is Vibe Studio for?</summary>
         <p>People who build things with AI and would rather not do it alone: friends making games and tools together, small teams, students, and communities that already hang out online. If you vibe code by yourself today, Studio gives you a room to do it in.</p>
       </details>
       <details data-reveal>
@@ -603,8 +648,12 @@
         <p>Not in 0.5. Rooms are text chat with @mentions and a shared player for music, and a room can be invite-only for just the two of you.</p>
       </details>
       <details data-reveal>
-        <summary>Is Mefi Studio free?</summary>
-        <p>Yes. Studio is free and open source under the MIT licence. The AI tools you connect use their own plans or keys, and local models and OpenCode's free models cost nothing.</p>
+        <summary>Is Vibe Studio free?</summary>
+        <p>The core app is free and open source under the MIT licence, and free community members can post. Optional launch support includes a $5 first donation and a $10 monthly subscription. <a href="#support">See the benefits</a>. The AI tools you connect use their own plans or keys.</p>
+      </details>
+      <details data-reveal>
+        <summary>When do early-member rewards begin?</summary>
+        <p>The first-week and first-month windows begin at the Vibe Studio launch. No launch date has been announced yet. Join the Discord now for the announcement and claim instructions; existing Discord members can claim these ranks too.</p>
       </details>
       <details data-reveal>
         <summary>Do I need Discord?</summary>
@@ -619,7 +668,7 @@
         <p>The build isn't code-signed yet, so SmartScreen may warn you the first time. Choose <strong>More info</strong>, then <strong>Run anyway</strong>. Every release comes with a SHA-256 file so you can <a href="download.html#verify">check the zip</a>, and the source is on GitHub.</p>
       </details>
     </div>
-    <p class="center fine faq-more" data-reveal>More in the <a href="wiki/#/faq">wiki's FAQ</a>, or ask in the <a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a>.</p>
+    <p class="center fine faq-more" data-reveal>More in the <a href="wiki/#/faq">wiki's FAQ</a>, or ask in the <a href="https://discord.gg/nTU3pxhgq" rel="noopener">Discord</a>.</p>
   </div>
 </section>
 
@@ -629,7 +678,7 @@
   <div class="container">
     <div class="foot-grid">
       <div class="foot-brand">
-        <a class="brand" href="index.html"><img src="assets/icon-256.png" width="32" height="32" alt="">Mefi Studio</a>
+        <a class="brand" href="index.html"><img src="assets/vibe-mark.svg" width="32" height="32" alt="">Vibe Studio</a>
         <p>The social app for vibe coders. Hang out with friends, work alongside each other, and build when you want. Free and open source, for Windows.</p>
       </div>
       <div class="foot-col">
@@ -644,7 +693,7 @@
       <div class="foot-col">
         <h2>Community</h2>
         <ul>
-          <li><a href="https://discord.gg/xgfKc5pVxG" rel="noopener">Discord</a></li>
+          <li><a href="https://discord.gg/nTU3pxhgq" rel="noopener">Discord</a></li>
           <li><a href="community.html">Share your work</a></li>
           <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md" rel="noopener">Request a feature</a></li>
           <li><a href="https://github.com/nateecho32-stack/mefi-studio/issues/new?template=bug_report.md" rel="noopener">Report a bug</a></li>

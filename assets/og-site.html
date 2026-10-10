@@ -1,51 +1,20 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=1200">
-<title>Mefi Studio share card</title>
-<!-- The source of assets/shots/og-social.jpg (1200x630), the picture link
-     previews show for the site. Open it at 1200x630, wait for the orb, and
-     capture the page; sharing services cache previews, so a changed picture
-     needs a new file name. -->
-<link rel="stylesheet" href="site.css">
-<script src="theme.js"></script>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=1200"><title>Vibe Studio launch share card</title>
+<link rel="stylesheet" href="site.css"><link rel="stylesheet" href="vibe.css">
 <style>
-  html, body { width: 1200px; height: 630px; overflow: hidden; }
-  body { display: block; min-height: 0; background:
-    radial-gradient(700px 500px at 78% 50%, rgb(168 197 255 / 0.12), transparent 70%),
-    radial-gradient(600px 400px at 10% 0%, rgb(198 180 255 / 0.1), transparent 70%), #070709; }
-  body::after { opacity: 0.25; }
-  .card { position: relative; width: 1200px; height: 630px; padding: 70px 72px; }
-  .brand { display: inline-flex; align-items: center; gap: 14px; font-family: var(--font-display); font-weight: 700; font-size: 30px; color: var(--ivory); }
-  .brand img { width: 52px; height: 52px; border-radius: 14px; box-shadow: 0 0 0 1px rgb(255 255 255 / 0.25), 0 0 26px -4px rgb(168 197 255 / 0.6); }
-  h1 { margin: 46px 0 0; font-size: 72px; line-height: 0.98; letter-spacing: -0.05em; max-width: 780px; text-shadow: 0 2px 30px rgb(7 7 9 / 0.7); }
-  h1 span { display: block; }
-  .grad { background: linear-gradient(100deg, #f6f8fc 0%, #c3d6ff 24%, #d9cdff 50%, #bff2e8 74%, #f6f8fc 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 0 24px rgb(168 197 255 / 0.25)); }
-  .meta { position: absolute; left: 72px; bottom: 64px; display: flex; gap: 12px; }
-  .meta span { padding: 9px 18px; border-radius: 999px; font-size: 22px; font-weight: 600; color: #d6d9de; background: rgb(255 255 255 / 0.06); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12); }
-  .meta span:first-child { color: #0b0b0d; background: linear-gradient(180deg, #fbfcfd 0%, #dfe3e8 20%, #b3b9c2 48%, #8e959e 52%, #cfd4da 60%, #f1f3f6 100%); }
-  .stage { position: absolute; right: -60px; top: 20px; width: 600px; height: 600px; }
-  .stage .orb { position: absolute; inset: 0; }
-  .stage canvas { width: 100%; height: 100%; display: block; }
-  .chip { position: absolute; display: inline-flex; align-items: center; gap: 10px; padding: 8px 16px 8px 8px; border-radius: 999px; font-size: 20px; color: #a1a6af; background: rgb(12 12 15 / 0.75); box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12), 0 14px 30px -12px #000; white-space: nowrap; }
-  .chip b { color: #f3f5f8; }
-  .chip i { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; font-style: normal; font-weight: 800; font-size: 15px; color: #0b0b0e; background: radial-gradient(circle at 32% 28%, hsl(var(--h) 90% 88%), hsl(var(--h) 70% 62%) 60%, hsl(var(--h) 60% 42%)); }
-  .c1 { right: 380px; top: 150px; } .c2 { right: 40px; top: 120px; } .c3 { right: 330px; bottom: 120px; } .c4 { right: 60px; bottom: 150px; }
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="brand"><img src="icon-256.png" alt="">Mefi Studio</div>
-  <h1><span>The social app</span><span class="grad">for vibe coders.</span></h1>
-  <div class="meta"><span>Free for Windows</span><span>Open source</span><span>Works with your AI</span></div>
-  <div class="stage"><div class="orb" id="orb"></div></div>
-  <span class="chip c1"><i style="--h:146">M</i><b>Maxwell</b> building</span>
-  <span class="chip c2"><i style="--h:268">J</i><b>Juno</b> in a room</span>
-  <span class="chip c3"><i style="--h:32">R</i><b>Rook</b> listening</span>
-  <span class="chip c4"><i style="--h:196">S</i><b>Sol</b> just joined</span>
-</div>
-<script src="orb.js"></script>
-<script>window.addEventListener("load", function () { if (window.MefiOrb) window.MefiOrb.mount(document.getElementById("orb"), { friends: 1, seed: 11.5, maxDpr: 2 }); });</script>
-</body>
-</html>
+html, body { width:1200px; height:630px; overflow:hidden; } body { min-height:0; background:#080c0b; } body::after { display:none; }
+.card { width:1200px; height:630px; position:relative; padding:60px 66px; background:radial-gradient(600px 600px at 95% 60%, #20392a, transparent 80%); }
+.brand { font-size:32px; gap:15px; } .brand img { width:48px; height:48px; }
+.label { margin-top:44px; font-size:17px; color:#c5ff73; font-weight:700; letter-spacing:.16em; text-transform:uppercase; }
+h1 { position:relative; z-index:2; font-size:84px; line-height:.97; letter-spacing:-.065em; margin:18px 0 24px; } h1 span { display:block; color:#c5ff73; }
+.note { font-size:22px; color:#b0bdb4; max-width:640px; line-height:1.4; } .foot { position:absolute; bottom:48px; left:66px; font-size:17px; letter-spacing:.04em; color:#e0e7e2; }
+.art { position:absolute; right:60px; top:150px; width:300px; height:330px; transform:rotate(-10deg); }
+.tile { position:absolute; width:250px; height:250px; border:1px solid #3e5a48; border-radius:40px; background:#142219; }
+.tile:first-child { transform:rotate(18deg); top:20px; left:24px; } .tile:last-child { display:grid; place-items:center; background:#c5ff73; border-color:#c5ff73; } .tile img { width:200px; height:200px; }
+.badge { position:absolute; z-index:3; right:55px; bottom:100px; padding:16px 22px; border:1px solid #3e5a48; border-radius:14px; background:#101714; color:#deffb1; font-size:19px; font-weight:650; transform:rotate(3deg); }
+</style></head><body><div class="card"><div class="brand"><img src="vibe-mark.svg" alt="">Vibe Studio</div>
+<p class="label">Coming soon · get in early</p><h1>Build something.<span>Find your people.</span></h1>
+<p class="note">Vibe coders. Makers. Your next collaborators.<br>Early-member ranks, flair and welcome rewards.</p>
+<div class="art" aria-hidden="true"><div class="tile"></div><div class="tile"><img src="vibe-mark.svg" alt=""></div></div>
+<div class="badge">First week: monthly Donor rank free for life.</div><p class="foot">JOIN THE DISCORD BEFORE LAUNCH ↗</p>
+</div></body></html>

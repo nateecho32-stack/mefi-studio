@@ -1,6 +1,6 @@
 # Contributing and feature requests
 
-You can help Mefi Studio with ideas, bug reports, documentation or code. Start small: a change you can explain and check.
+You can help Vibe Studio with ideas, bug reports, documentation or code. Start small: a change you can explain and check.
 
 ## Suggest a feature
 
@@ -8,7 +8,7 @@ You can help Mefi Studio with ideas, bug reports, documentation or code. Start s
 2. If someone already asked for it, add a 👍 to their request, or a comment with your own reason.
 3. Otherwise, [open a feature request](https://github.com/nateecho32-stack/mefi-studio/issues/new?template=feature_request.md). Say what you're trying to do, what gets in the way today, and what you'd expect instead.
 
-You can also suggest it in the [Discord](https://discord.gg/xgfKc5pVxG). Feature requests get the **enhancement** label.
+You can also suggest it in the [Discord](https://discord.gg/nTU3pxhgq). Feature requests get the **enhancement** label.
 
 ## Report a problem
 
@@ -51,4 +51,4 @@ For a site-only change, check the links and look at the pages on a desktop and o
 - Keep other people's uncommitted changes and active sessions intact.
 - Don't commit local settings, keys, databases, screenshots of private work or migration backups. Only `data/curated.json` and `data/models.json` belong in Git.
 - Keep Ruins Runner in its own repository.
-- Keep the application's package identifiers and executable names, so saved settings and updates keep working. The public name is Mefi Studio.
+- Keep the application's package identifiers and executable names, so saved settings and updates keep working. The public name is Vibe Studio.

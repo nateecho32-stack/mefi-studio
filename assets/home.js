@@ -1,4 +1,4 @@
-/* Mefi Studio website — Home. The gate (Try the app, or Skip to the site), the
+/* Vibe Studio website — Home. The gate (Try the app, or Skip to the site), the
    hero's orb and the friends around it, the window of real screens, the pinned
    walkthrough, the two modes, the permission dial, the theme gallery, this
    week's Build Jam and the co-work hours (worked out the way the relay does,
@@ -197,7 +197,7 @@
     var title = $("#final-title");
     if (title) title.setAttribute("aria-label", "Ready to build " + saved.lead + " for real?");
     var lede = $("#final-lede");
-    if (lede) lede.textContent = "Download Studio, open a folder and say what you want. This time real builders do the work, and your friends are right there with you.";
+    if (lede) lede.textContent = "Make your demo idea real in the current Windows app, and join the Discord to find collaborators before the Vibe Studio social launch.";
   }
 
   // =========================================================================
