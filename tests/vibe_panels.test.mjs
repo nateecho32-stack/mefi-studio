@@ -353,7 +353,7 @@ test("New app retries opening a folder when a running build prevented the first 
   const { window, get, fire } = await load({ quiet: true, sized: 2 });
   let creates = 0; const selections = [];
   window.mefiStudio.projectsCreate = async () => { creates++; return { ok: false, created: true, addedId: "p9", error: "A build is running" }; };
-  window.mefiStudio.projectsSelect = async (args) => { selections.push(args.id); return { activeId: "p9" }; };
+  window.mefiStudio.projectsSelect = async (id) => { selections.push(id); return { activeId: "p9" }; };
   window.MefiVibe.openPanel("newapp");
   const form = get("vibe-panel-body").querySelector("form");
   for (const [index, value] of [[0, "Notes"], [1, "A notes app"]]) { const input = form.children[index].children[1]; input.value = value; fire(input, "input"); }
@@ -362,6 +362,25 @@ test("New app retries opening a folder when a running build prevented the first 
   assert.equal(retry.children[3].textContent, "Open app and start building");
   fire(retry, "submit"); await settle();
   assert.equal(creates, 1); assert.deepEqual(selections, ["p9"]);
+  assert.equal(get("vibe-panel").hidden, true);
+});
+
+test("New app: work still running offers to stop the agents, and the second click opens the folder with progress saved", async () => {
+  const { window, get, fire } = await load({ quiet: true, sized: 2 });
+  let creates = 0; const selections = [];
+  const busy = "The assistant is finishing work in this project. Pause it, let the current work finish, then switch.";
+  window.mefiStudio.projectsCreate = async () => { creates++; return { ok: false, busy: true, created: true, addedId: "p9", error: busy }; };
+  window.mefiStudio.projectsSelect = async (id, options) => { selections.push([id, options?.saveProgress === true]); return options?.saveProgress ? { activeId: "p9" } : { ok: false, busy: true, error: busy }; };
+  window.MefiVibe.openPanel("newapp");
+  const form = get("vibe-panel-body").querySelector("form");
+  for (const [index, value] of [[0, "Notes"], [1, "A notes app"]]) { const input = form.children[index].children[1]; input.value = value; fire(input, "input"); }
+  fire(form, "submit"); await settle();
+  let retry = get("vibe-panel-body").querySelector("form");
+  assert.equal(retry.children[3].textContent, "Stop agents, open app and start building", "the button says it will stop the agents");
+  assert.deepEqual(selections, [], "nothing was stopped by the first click");
+  fire(retry, "submit"); await settle();
+  assert.deepEqual(selections, [["p9", true]], "the second click is the word to stop and open");
+  assert.equal(creates, 1);
   assert.equal(get("vibe-panel").hidden, true);
 });
 

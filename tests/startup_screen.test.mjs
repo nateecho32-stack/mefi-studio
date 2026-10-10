@@ -587,6 +587,66 @@ test("the filter appears from the sixth project and narrows the list without los
   assert.equal(six.wrappers().every((wrap) => !wrap.hidden), true);
 });
 
+// Work still running in the open project refuses a switch ("busy"). The card
+// says so and offers the owner's way out instead of a dead end: stop the
+// agents (each run keeps its checkpoint), then open what was asked for.
+test("a refused Open offers to stop the agents and switch, and Open then asks the host to save progress", async () => {
+  const busy = { ok: false, busy: true, error: "The assistant is finishing work in this project. Pause it, let the current work finish, then switch.", projects: [projectA, projectB], activeId: projectB.id };
+  const calls = [];
+  const env = environment(bridge({
+    startupChoose: async (id, options) => { calls.push(["choose", id, options?.saveProgress === true]); return options?.saveProgress ? { ok: true, chosen: true, projects: [projectA, projectB], activeId: id } : busy; },
+  }).api);
+  const choice = env.startup.choose();
+  await flush();
+  await env.rows()[0].click();
+  await env.get("boot-open").click();
+  await flush();
+  assert.equal(env.note().classList.contains("error"), true);
+  assert.match(env.note().textContent, /finishing work in this project/);
+  assert.equal(env.get("boot-force").hidden, false, "the way out is offered");
+  assert.deepEqual(calls, [["choose", "project_a", false]], "the first Open does not stop anything");
+  await env.get("boot-force").click();
+  await flush();
+  assert.deepEqual(calls.at(-1), ["choose", "project_a", true], "the owner's word stops the agents and saves progress");
+  assert.equal(env.get("boot-force").hidden, true);
+  assert.equal((await choice).projectId, "project_a");
+});
+
+test("a switch already in progress, or a missing folder, is not offered a stop", async () => {
+  const env = environment(bridge({ startupChoose: async () => ({ ok: false, busy: true, error: "A project switch is already in progress.", projects: [projectA, projectB], activeId: projectB.id }) }).api);
+  env.startup.choose();
+  await flush();
+  await env.get("boot-open").click();
+  await flush();
+  assert.match(env.note().textContent, /already in progress/);
+  assert.equal(env.get("boot-force").hidden, true);
+});
+
+test("a new app whose folder was made but could not open offers the stop, then opens that folder without making another", async () => {
+  const made = { id: "project_new", name: "Field Notes", path: "C:/Users/x/Mefi Apps/field-notes" };
+  const calls = [];
+  const all = [projectA, projectB, made];
+  const env = environment(bridge({
+    projectsCreate: async (payload) => { calls.push(["create", payload.name]); return { ok: false, busy: true, created: true, addedId: made.id, folder: made.path, error: "The assistant is finishing work in this project. Pause it, let the current work finish, then switch.", projects: all, activeId: projectB.id }; },
+    projectsSelect: async (id, options) => { calls.push(["select", id, options?.saveProgress === true]); return { ok: true, projects: all, activeId: id }; },
+    startupChoose: async (id) => { calls.push(["choose", id]); return { ok: true, chosen: true, projects: all, activeId: id }; },
+  }).api);
+  const choice = env.startup.choose();
+  await flush();
+  await env.get("boot-new-app").click();
+  const name = env.panel().querySelector("#boot-new-name");
+  name.value = "Field Notes";
+  await name.fire("input");
+  await env.panel().querySelector("#boot-new-form").fire("submit");
+  await flush();
+  assert.equal(env.get("boot-force").hidden, false);
+  await env.get("boot-force").click();
+  await flush();
+  assert.deepEqual(calls.filter(([call]) => call === "create"), [["create", "Field Notes"]], "the folder is made once");
+  assert.deepEqual(calls.find(([call]) => call === "select"), ["select", "project_new", true]);
+  assert.equal((await choice).projectId, "project_new");
+});
+
 test("Start a new app takes a name and a note, makes the folder, opens it, and never reaches GitHub from here", async () => {
   const made = { id: "project_new", name: "Field Notes", path: "C:/Users/x/Mefi Apps/field-notes" };
   const seen = [];

@@ -996,7 +996,7 @@
     paintWhere();
     // With a GitHub choice the button says what is about to happen; without
     // one it says what it always did.
-    const makeLabel = () => (state.busy ? "Making it…" : state.draftApp.made?.ok === false ? "Open app and start building" : state.draftApp.made ? "Retry first build"
+    const makeLabel = () => (state.busy ? "Making it…" : state.draftApp.made?.ok === false ? (state.draftApp.stop ? "Stop agents, open app and start building" : "Open app and start building") : state.draftApp.made ? "Retry first build"
       : !github ? "Make it and start building" : { create: "Start and publish", link: "Start and link", local: "Start project" }[choiceNow()]);
     const github = githubOn() ? githubSection(name, () => { make.textContent = makeLabel(); }) : null;
     name.addEventListener("input", () => { state.draftApp = { ...state.draftApp, name: name.value }; paintWhere(); github?.paint(); });
@@ -1033,15 +1033,23 @@
     state.making = true;
     try {
       let made = state.draftApp.made;
+      // Work still running in the open project refuses the switch. The owner's
+      // second click is the word to stop it (progress is kept) and open the app.
+      const busyAnswer = (answer) => answer?.busy === true && !/already in progress/i.test(String(answer.error ?? ""));
+      const needStop = (answer) => {
+        if (!busyAnswer(answer)) return answer?.error;
+        state.draftApp = { ...state.draftApp, stop: true };
+        return `${answer.error} Choose "Stop agents, open app and start building" to stop them (their progress is kept) and continue.`;
+      };
       if (made?.ok === false && made.addedId) {
-        const opened = await api().projectsSelect({ id: made.addedId });
-        if (opened?.ok === false) throw new Error(opened.error || "The project could not be opened.");
+        const opened = await api().projectsSelect(made.addedId, state.draftApp.stop ? { saveProgress: true } : undefined);
+        if (opened?.ok === false) throw new Error(needStop(opened) || "The project could not be opened.");
         if (!opened) throw new Error("The project could not be opened.");
         made = { ...made, ...opened, ok: true, selectedId: made.addedId };
       }
       if (!made) made = await api().projectsCreate({ name, about });
       if (made?.created && made.addedId) state.draftApp.made = made;
-      if (!made || made.ok === false) throw new Error(made?.error || "The app could not be made.");
+      if (!made || made.ok === false) throw new Error(needStop(made) || "The app could not be made.");
       state.draftApp.made = made;
       // The GitHub choice is a separate step: nothing it does can fail the folder.
       const github = await githubStep(name, made);

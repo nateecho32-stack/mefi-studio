@@ -79,7 +79,7 @@ const api = {
   onProjectPreview: (callback) => ipcRenderer.on("project-preview:changed", (_event, data) => callback(data)),
   // Launch screen: the project to open, and whether the agents may start.
   startupState: () => ipcRenderer.invoke("startup:state"),
-  startupChoose: (id) => ipcRenderer.invoke("startup:choose", { id: typeof id === "string" ? id : null }),
+  startupChoose: (id, options) => ipcRenderer.invoke("startup:choose", { id: typeof id === "string" ? id : null, saveProgress: options?.saveProgress === true }),
   startupBegin: () => ipcRenderer.invoke("startup:begin"),
   // The page's startup marks, once, after the launch gate releases (renderer/startup-marks.js).
   startupMarks: (payload) => ipcRenderer.invoke("startup:marks", payload ?? {}),

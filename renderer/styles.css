@@ -2468,6 +2468,7 @@ html:not([data-starting]) #boot-layer { display: none; }
 .boot-panel:not([hidden]) ~ .boot-foot { padding-top: 0; padding-bottom: 12px; }
 .boot-form { display: grid; gap: 12px; }
 .boot-panel-sub { margin: 0; font: 12.5px/1.5 var(--font-ui); color: var(--muted); }
+.boot-force { align-self: flex-start; margin-top: 8px; }
 .boot-panel-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 .boot-field { display: grid; gap: 6px; font: 500 12px/1.4 var(--font-ui); color: var(--muted); }
 .boot-field input, .boot-field textarea { width: 100%; }
@@ -2511,7 +2512,7 @@ body.no-motion :is(.boot-spinner, .boot-chip-skeleton), body.no-motion #boot-ope
 }
 /* A finger: the switch, Open, the row actions and the add verbs grow to 44px (the rows already are). */
 @media (pointer: coarse) {
-  #boot-open, .boot-switch, .boot-verb, .boot-row-actions button, .boot-panel-actions button { min-height: 44px; }
+  #boot-open, .boot-switch, .boot-verb, .boot-row-actions button, .boot-panel-actions button, .boot-force { min-height: 44px; }
 }
 @media print { #boot-layer { display: none !important; } }
 

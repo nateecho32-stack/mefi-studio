@@ -2478,6 +2478,7 @@ html:not([data-starting]) #boot-layer { display: none; }
 .boot-panel:not([hidden]) ~ .boot-foot { padding-top: 0; padding-bottom: 12px; }
 .boot-form { display: grid; gap: 12px; }
 .boot-panel-sub { margin: 0; font: 12.5px/1.5 var(--font-ui); color: var(--muted); }
+.boot-force { align-self: flex-start; margin-top: 8px; }
 .boot-panel-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 .boot-field { display: grid; gap: 6px; font: 500 12px/1.4 var(--font-ui); color: var(--muted); }
 .boot-field input, .boot-field textarea { width: 100%; }
@@ -2521,7 +2522,7 @@ body.no-motion :is(.boot-spinner, .boot-chip-skeleton), body.no-motion #boot-ope
 }
 /* A finger: the switch, Open, the row actions and the add verbs grow to 44px (the rows already are). */
 @media (pointer: coarse) {
-  #boot-open, .boot-switch, .boot-verb, .boot-row-actions button, .boot-panel-actions button { min-height: 44px; }
+  #boot-open, .boot-switch, .boot-verb, .boot-row-actions button, .boot-panel-actions button, .boot-force { min-height: 44px; }
 }
 @media print { #boot-layer { display: none !important; } }
 
@@ -15259,6 +15260,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <button id="boot-open" class="primary" type="button">Open</button>
         </div>
         <p id="boot-choose-note" class="boot-choose-note" role="status" aria-live="polite">Agents stay off until you start them.</p>
+        <button id="boot-force" class="ghost boot-force" type="button" hidden>Stop the agents and switch</button>
         <p id="boot-live" class="sr-only" role="status" aria-live="polite"></p>
       </div>
       <div id="boot-verbs" class="boot-verbs">
@@ -71229,10 +71231,24 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function note(text, error = false) {
     const target = $("choose-note");
     if (!target) return;
+    // Any new message retires the last offer; offerStop() raises it again after.
+    if ($("force")) { $("force").hidden = true; $("force").onclick = null; }
     const gone = !state.panel && missing(selected());
     target.textContent = text || (state.panel ? "" : gone ? MISSING : why());
     target.classList.toggle("error", Boolean(error));
     target.dataset.kind = error ? "error" : !text && gone ? "missing" : "";
+  }
+  // The host refused a switch because work is still running in the open
+  // project (busy, and not "a switch is already in progress"). Say so, and
+  // offer the owner's way out: stop the agents, keep each run's checkpoint,
+  // then do what was asked. `retry` makes the same call with saveProgress.
+  function offerStop(result, retry) {
+    note(result?.error || "Work is still running in the open project.", true);
+    const button = $("force");
+    if (!button || result?.busy !== true || /already in progress/i.test(String(result.error ?? ""))) return false;
+    button.hidden = false;
+    button.onclick = () => { if (!state.busy) void retry(); };
+    return true;
   }
   // The host's answer names the selection: a folder it just opened, a folder
   // it just added, the current pick if it still exists, else the active one.
@@ -71534,7 +71550,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   // The folder exists first and opens like any chosen project; nothing here
   // reaches GitHub. Publishing is a step of its own once the project is open.
-  async function createApp(nameInput, aboutInput, go) {
+  // `stopId` is the folder a refused open already made: the owner chose to stop
+  // the running agents, so it is opened with saveProgress instead of made again
+  // (the folder exists now and a second create would refuse it).
+  async function createApp(nameInput, aboutInput, go, stopId = null) {
     const name = String(nameInput.value ?? "").trim();
     if (!name) { note("Give the new app a name.", true); nameInput.focus?.(); return; }
     if (!api()?.projectsCreate) { note("New apps can be made in the desktop app.", true); return; }
@@ -71542,13 +71561,23 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     setBusy(true);
     go.textContent = "Making it…";
     announce(`Making ${name}…`);
+    note(stopId ? "Saving the agents' progress, then opening your new app…" : "");
     let made = false;
     try {
-      const result = await api().projectsCreate(about ? { name, about } : { name });
+      let result;
+      if (stopId) {
+        const opened = await api().projectsSelect(stopId, { saveProgress: true });
+        result = opened?.ok === false ? opened : { ...opened, ok: true, addedId: stopId, selectedId: stopId };
+      } else result = await api().projectsCreate(about ? { name, about } : { name });
       if (!state.isCurrent()) return;
       adopt(result);
-      if (result?.ok === false) note(result.error || "The app folder could not be made.", true);
-      else {
+      if (result?.ok === false) {
+        const folderId = stopId ?? (result.created ? result.addedId : null);
+        const said = result.error || "The app folder could not be made.";
+        // The folder was made but could not open because work is running: offer to stop it.
+        if (folderId) offerStop({ ...result, error: said }, () => createApp(nameInput, aboutInput, go, folderId));
+        else note(said, true);
+      } else {
         made = true;
         // What they want to build is this app's first task, waiting in the first run's last step (renderer/setup-helper.js).
         if (about) { try { localStorage.setItem("mefiStudio.firstTask", JSON.stringify({ projectId: result?.addedId ?? result?.selectedId ?? null, text: about.slice(0, 4000) })); } catch { /* a convenience */ } }
@@ -71782,7 +71811,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     note("");
     void requestGlance();
     return new Promise((resolve) => {
-      const finish = async () => {
+      const finish = async ({ saveProgress = false } = {}) => {
         if (state.busy || !isCurrent()) return;
         const chosen = selected();
         if (missing(chosen)) { note(""); return; }
@@ -71792,11 +71821,11 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         let opened = false;
         setBusy(true, state.selectedId ? "Opening…" : "Continuing…");
         announce(chosen ? `Opening ${chosen.name || "the project"}…` : "Continuing without a project…");
-        note("");
+        note(saveProgress ? "Saving the agents' progress, then opening…" : "");
         try {
-          const result = await api().startupChoose(state.selectedId);
+          const result = await (saveProgress ? api().startupChoose(state.selectedId, { saveProgress: true }) : api().startupChoose(state.selectedId));
           if (!isCurrent()) return;
-          if (result?.ok === false) { note(result.error || "The project could not be opened.", true); return; }
+          if (result?.ok === false) { offerStop({ ...result, error: result.error || "The project could not be opened." }, () => finish({ saveProgress: true })); return; }
           adopt(result);
           const changed = (result?.activeId ?? null) !== (info.activeId ?? null);
           opened = true;
@@ -100890,7 +100919,7 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     paintWhere();
     // With a GitHub choice the button says what is about to happen; without
     // one it says what it always did.
-    const makeLabel = () => (state.busy ? "Making it…" : state.draftApp.made?.ok === false ? "Open app and start building" : state.draftApp.made ? "Retry first build"
+    const makeLabel = () => (state.busy ? "Making it…" : state.draftApp.made?.ok === false ? (state.draftApp.stop ? "Stop agents, open app and start building" : "Open app and start building") : state.draftApp.made ? "Retry first build"
       : !github ? "Make it and start building" : { create: "Start and publish", link: "Start and link", local: "Start project" }[choiceNow()]);
     const github = githubOn() ? githubSection(name, () => { make.textContent = makeLabel(); }) : null;
     name.addEventListener("input", () => { state.draftApp = { ...state.draftApp, name: name.value }; paintWhere(); github?.paint(); });
@@ -100927,15 +100956,23 @@ html[data-motion="off"] .demo-bar { transform: none; opacity: .5; }
     state.making = true;
     try {
       let made = state.draftApp.made;
+      // Work still running in the open project refuses the switch. The owner's
+      // second click is the word to stop it (progress is kept) and open the app.
+      const busyAnswer = (answer) => answer?.busy === true && !/already in progress/i.test(String(answer.error ?? ""));
+      const needStop = (answer) => {
+        if (!busyAnswer(answer)) return answer?.error;
+        state.draftApp = { ...state.draftApp, stop: true };
+        return `${answer.error} Choose "Stop agents, open app and start building" to stop them (their progress is kept) and continue.`;
+      };
       if (made?.ok === false && made.addedId) {
-        const opened = await api().projectsSelect({ id: made.addedId });
-        if (opened?.ok === false) throw new Error(opened.error || "The project could not be opened.");
+        const opened = await api().projectsSelect(made.addedId, state.draftApp.stop ? { saveProgress: true } : undefined);
+        if (opened?.ok === false) throw new Error(needStop(opened) || "The project could not be opened.");
         if (!opened) throw new Error("The project could not be opened.");
         made = { ...made, ...opened, ok: true, selectedId: made.addedId };
       }
       if (!made) made = await api().projectsCreate({ name, about });
       if (made?.created && made.addedId) state.draftApp.made = made;
-      if (!made || made.ok === false) throw new Error(made?.error || "The app could not be made.");
+      if (!made || made.ok === false) throw new Error(needStop(made) || "The app could not be made.");
       state.draftApp.made = made;
       // The GitHub choice is a separate step: nothing it does can fail the folder.
       const github = await githubStep(name, made);

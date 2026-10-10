@@ -185,10 +185,24 @@
   function note(text, error = false) {
     const target = $("choose-note");
     if (!target) return;
+    // Any new message retires the last offer; offerStop() raises it again after.
+    if ($("force")) { $("force").hidden = true; $("force").onclick = null; }
     const gone = !state.panel && missing(selected());
     target.textContent = text || (state.panel ? "" : gone ? MISSING : why());
     target.classList.toggle("error", Boolean(error));
     target.dataset.kind = error ? "error" : !text && gone ? "missing" : "";
+  }
+  // The host refused a switch because work is still running in the open
+  // project (busy, and not "a switch is already in progress"). Say so, and
+  // offer the owner's way out: stop the agents, keep each run's checkpoint,
+  // then do what was asked. `retry` makes the same call with saveProgress.
+  function offerStop(result, retry) {
+    note(result?.error || "Work is still running in the open project.", true);
+    const button = $("force");
+    if (!button || result?.busy !== true || /already in progress/i.test(String(result.error ?? ""))) return false;
+    button.hidden = false;
+    button.onclick = () => { if (!state.busy) void retry(); };
+    return true;
   }
   // The host's answer names the selection: a folder it just opened, a folder
   // it just added, the current pick if it still exists, else the active one.
@@ -490,7 +504,10 @@
   }
   // The folder exists first and opens like any chosen project; nothing here
   // reaches GitHub. Publishing is a step of its own once the project is open.
-  async function createApp(nameInput, aboutInput, go) {
+  // `stopId` is the folder a refused open already made: the owner chose to stop
+  // the running agents, so it is opened with saveProgress instead of made again
+  // (the folder exists now and a second create would refuse it).
+  async function createApp(nameInput, aboutInput, go, stopId = null) {
     const name = String(nameInput.value ?? "").trim();
     if (!name) { note("Give the new app a name.", true); nameInput.focus?.(); return; }
     if (!api()?.projectsCreate) { note("New apps can be made in the desktop app.", true); return; }
@@ -498,13 +515,23 @@
     setBusy(true);
     go.textContent = "Making it…";
     announce(`Making ${name}…`);
+    note(stopId ? "Saving the agents' progress, then opening your new app…" : "");
     let made = false;
     try {
-      const result = await api().projectsCreate(about ? { name, about } : { name });
+      let result;
+      if (stopId) {
+        const opened = await api().projectsSelect(stopId, { saveProgress: true });
+        result = opened?.ok === false ? opened : { ...opened, ok: true, addedId: stopId, selectedId: stopId };
+      } else result = await api().projectsCreate(about ? { name, about } : { name });
       if (!state.isCurrent()) return;
       adopt(result);
-      if (result?.ok === false) note(result.error || "The app folder could not be made.", true);
-      else {
+      if (result?.ok === false) {
+        const folderId = stopId ?? (result.created ? result.addedId : null);
+        const said = result.error || "The app folder could not be made.";
+        // The folder was made but could not open because work is running: offer to stop it.
+        if (folderId) offerStop({ ...result, error: said }, () => createApp(nameInput, aboutInput, go, folderId));
+        else note(said, true);
+      } else {
         made = true;
         // What they want to build is this app's first task, waiting in the first run's last step (renderer/setup-helper.js).
         if (about) { try { localStorage.setItem("mefiStudio.firstTask", JSON.stringify({ projectId: result?.addedId ?? result?.selectedId ?? null, text: about.slice(0, 4000) })); } catch { /* a convenience */ } }
@@ -738,7 +765,7 @@
     note("");
     void requestGlance();
     return new Promise((resolve) => {
-      const finish = async () => {
+      const finish = async ({ saveProgress = false } = {}) => {
         if (state.busy || !isCurrent()) return;
         const chosen = selected();
         if (missing(chosen)) { note(""); return; }
@@ -748,11 +775,11 @@
         let opened = false;
         setBusy(true, state.selectedId ? "Opening…" : "Continuing…");
         announce(chosen ? `Opening ${chosen.name || "the project"}…` : "Continuing without a project…");
-        note("");
+        note(saveProgress ? "Saving the agents' progress, then opening…" : "");
         try {
-          const result = await api().startupChoose(state.selectedId);
+          const result = await (saveProgress ? api().startupChoose(state.selectedId, { saveProgress: true }) : api().startupChoose(state.selectedId));
           if (!isCurrent()) return;
-          if (result?.ok === false) { note(result.error || "The project could not be opened.", true); return; }
+          if (result?.ok === false) { offerStop({ ...result, error: result.error || "The project could not be opened." }, () => finish({ saveProgress: true })); return; }
           adopt(result);
           const changed = (result?.activeId ?? null) !== (info.activeId ?? null);
           opened = true;

@@ -39,6 +39,24 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-08 The launch screen and Vibe New app offer to stop the agents when a switch is refused for running work
+
+Detached worktree C:\wt\stopswitch, off main b640d29. The owner's screenshot: opening or starting a project on the launch
+screen showed "The assistant is finishing work in this project. Pause it, let the current work finish, then switch." with
+the Start agents switch off and no way forward. selectProject already has a saveProgress mode (stop every agent, keep each
+run's checkpoint, then switch) that only the Workspace sidebar used. Changed: startup:choose and preload startupChoose pass
+saveProgress through; the launch card gets a hidden "Stop the agents and switch" button (boot-force) that startup.js raises
+only for a busy refusal that is not "already in progress", for Open and for a new app whose folder was made but could not
+open (retried with projectsSelect(addedId, { saveProgress }) so the folder is not made twice); the Vibe New app panel's retry
+button reads "Stop agents, open app and start building" after a busy refusal and passes saveProgress on the second click.
+Checked: `npm run check` ok (314 targets); `npm run audit` ok (0 findings); `npm run lint` 0 errors, 47 warnings, the same
+count as without the change. New tests: 3 in startup_screen (32/32), 1 in vibe_panels (52/52), plus startup_resume 14/14,
+daily_paper 10/10, booklet_build 5/5. The full `npm test` here, run while other sessions held the PC, failed only in git-heavy
+suites that passed alone: advisory_checks 26/26, attempt_review_host 28/28, executor_worktree 12/12, rust_parity_repo 3/3,
+rust_parity_snapshots 3/3, rust_parity_git 4/4 (141 s; it failed twice under load on a `filesystem: NTFS` probe and passes
+4/4 on clean main b640d29 as well). Not measured: hot paths (a button and one IPC argument, no new startup work). Not run
+in the real app: both buttons are pinned by stubbed tests only.
+
 ## 2026-10-08 The 0.5.0 release commit brought up to main b640d29 and gated: CI green, every window suite passes
 
 Branch `wip/release-0.5.0` (C:\wt\rel05, local `release/0.5.0-prep`), 7aa3894 on top of the held release commit
@@ -495,39 +513,6 @@ the store (model_performance, learning_host, model_routing, model_routing_eviden
 planning_routing, usage_tracker_host, task_cap_host, kind_routes_host, jev_model_routing_host,
 explicit_route_fallback, builder_thinking_host, build_home_host, ai_route_gate): 201/201. Not run: the full
 `npm test` (hosted CI runs the Node stage on the branch).
-
-## 2026-10-06 My PCs: the owner's PCs live, splitting the queue, and a laptop that hands off on low battery
-
-Branch `feat/my-pcs` (C:\wt\pcs, merged with main twice in C:\wt\pcs2: the CHANGELOG kept from both sides, the
-relay import line, its README row and hub_client's hello assertion kept from both, `renderer/booklet.html` rebuilt,
-not merged). New: scripts/pc-trust.cjs, pc-fleet.cjs, pc-power.cjs, pc-handoff.cjs, relay/src/pcs.mjs,
-renderer/pc-fleet.js, docs/my-pcs.md; main.cjs "My PCs" block plus small guarded hooks (spawnNextJob's "battery"
-stop, applyKeepAwake, hubInstance's onEvent, hubPresenceWanted, startPcs at boot, pcs:* IPC); backlog.workState's
-moved card and battery/friend/came-back holds. The push guard in attempt_snapshots_host now lets a branch be named in
-full (`refs/heads/`, the handoff branches) and still refuses every other ref. Kill switch `MEFI_STUDIO_NO_PCS=1`.
-
-Measured: the four modules take 18.6 ms to require, so they load on first use; one battery read is one PowerShell
-call (3.3 s wall on this laptop at 392 MB free; it read 61%, on battery), every 3 min above 40%, 1 min under, 30 s
-under 25%, 5 min on mains, 30 min without a battery.
-
-`npm run check` ok, `npm run audit` 0 findings, eslint on the changed files 0 new problems (main.cjs keeps its 5
-older warnings). New suites: pc_trust 7, pc_power 7, pc_fleet 12, pc_handoff 4 (real git: park leaves the tree,
-index and HEAD alone; pick-up claims once; a clash stays on GitHub), pcs_host 7 (several PCs in vms on a fake relay:
-pairing by the six numbers, a stranger refused, a low battery moving two cards that come back done, a full PC
-declining, work started elsewhere and refused for a closed project, an unpaired sender refused, the stop line and
-Continue, a friend's lent PC holding the task), pc_fleet_ui 7, relay_pcs 9, hub_client_pcs 7. On the merged tree
-through `npm run test:one`: 247/248 across hub_host, hub_client(_pcs, _remote), relay_core/e2e/connect/pcs/events/
-credits, pcs_host, pc_fleet_ui, pc_sync_ui, pc_remote_ui, paired_worker_ui, module_purity, booklet_build,
-remote_host, cowork_host, link_compat, paired_reconnect, hub_rooms; the one failure was pcs_host removing a PC's
-temp folder while a write was pending (fixed: cleanup waits; then 7/7 four runs in a row, after its waits became
-"until the delivery lands"). Electron, one at a time: companion_hub_render, friends_render (no text under 12 px at
-four sizes), paired_worker_render, friends_two_render 4/4. A first full `npm test` on the pre-merge tree was stopped
-in the Node stage after 91 min at 392 MB free: its one real failure was the push guard (fixed); rust_parity_*/sync
-suites ran 25-70 min each and failed on time limits under that load (the known pattern), not rerun here. Hosted CI
-(ci.yml, Windows) green on 69cf256 (8 min 12 s); then main moved (Resources, Other apps): merged with both
-sides' blocks kept, and 327/330 (3 skipped, 0 failed) here across app_wide_ipc, preload_fanout, module_purity,
-booklet_build, the pc_* and pcs_host suites, hub_host, remote_host/admission/gate, studio_api_*, resource_*,
-resources_ui, settings_nav, backlog_engine and attempt_snapshots_host. Not run here: a real two-PC or laptop-battery test (owner).
 
 ## Read Before Any Tests
 

@@ -25614,7 +25614,7 @@ function registerIpc() {
     const id = typeof payload?.id === "string" && payload.id ? payload.id : null;
     let result = projects.list();
     if (id && id !== projects.active().id) {
-      result = await selectProject(id);
+      result = await selectProject(id, { saveProgress: payload?.saveProgress === true });
       if (result.ok === false) return result;
     }
     startupChosen = true;
