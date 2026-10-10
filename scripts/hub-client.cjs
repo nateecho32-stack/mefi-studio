@@ -81,6 +81,7 @@
 const cowork = require("./cowork.cjs");
 // The protocol window this Studio speaks with the relay (scripts/link-compat.cjs).
 const { LINKS } = require("./link-compat.cjs");
+const { ACTOR_PROTOCOL, actorId, isDiscordSubject } = require("./actor-contract.cjs");
 
 const PROTOCOL_VERSION = LINKS.friends.protocol;
 const OLDEST_PROTOCOL = LINKS.friends.oldest;
@@ -97,7 +98,7 @@ const PRESENCE_EVERY_MS = 30_000;
 const KEEPALIVE_EVERY_MS = 30_000;
 const KEEPALIVE_FRAME = Object.freeze({ type: "ping" });
 // What this Studio tells the hub it can do (hello.features); "pets.2": it draws the Shop's pets too.
-const CLIENT_FEATURES = Object.freeze(["history.peer", "keepalive", "friend.online", "pcs", "pets", "pets.2", "collectibles.1"]);
+const CLIENT_FEATURES = Object.freeze([ACTOR_PROTOCOL, "history.peer", "keepalive", "friend.online", "pcs", "pets", "pets.2", "collectibles.1", "collectibles.crates.1", "billing.1", "commerce.orders.2", "commerce.catalog.1", "commerce.seller.1", "commerce.onboarding.1", "commerce.orders.retire.1", "commerce.seller-setup.1"]);
 // A historyReply must fit the hub's 16 KB frame limit.
 const HISTORY_REPLY_BYTES = 15 * 1024;
 const HISTORY_REPLY_MESSAGES = 100;
@@ -203,8 +204,11 @@ function listenUrl(value) {
   } catch { return null; }
 }
 
+// Actor projections have a per-client negotiation context, never global mutable identity state.
+function createActorShapes(canonical = () => false) {
+const principal = (value) => canonical() === true ? actorId(value) : isDiscordSubject(value) ? value : null;
 function user(value) {
-  if (!object(value) || !SNOWFLAKE.test(String(value.id))) return null;
+  if (!object(value) || !principal(value.id)) return null;
   return { id: String(value.id), name: typeof value.name === "string" ? value.name.slice(0, 100) : "" };
 }
 
@@ -224,12 +228,12 @@ function listenSession(value) {
 }
 
 function roomSummary(value) {
-  if (!object(value) || !opaqueId(value.id) || !line(value.name, 80)) return null;
+  if (!object(value) || !opaqueId(value.id) || !line(value.name, 80) || (value.ownerId != null && !principal(value.ownerId))) return null;
   return {
     id: value.id, name: value.name, kind: value.kind === "cowork" ? "cowork" : "hangout",
     status: ["active", "locked", "closed"].includes(value.status) ? value.status : "active",
     you: typeof value.you === "string" ? value.you : "none",
-    ownerId: SNOWFLAKE.test(String(value.ownerId)) ? String(value.ownerId) : null,
+    ownerId: value.ownerId == null ? null : principal(value.ownerId),
     memberCount: count(value.memberCount, 1000) ?? 0,
     policy: value.policy === "invite" ? "invite" : "request",
     listed: value.listed === true,
@@ -243,7 +247,11 @@ const text = (value, max) => (typeof value === "string" ? value.replace(/[\x00-\
 
 // A room message as Studio shows it. Studio renders `text` as text only.
 function roomMessage(value) {
-  if (!object(value) || !SNOWFLAKE.test(String(value.id)) || !object(value.author) || !SNOWFLAKE.test(String(value.author.id))) return null;
+  if (!object(value) || !isDiscordSubject(value.id) || !object(value.author)) return null;
+  const signedStudio = canonical() && value.author.viaStudio === true && opaqueId(value.sig);
+  const messageActor = signedStudio ? principal : (id) => isDiscordSubject(id) ? id : null;
+  if (!messageActor(value.author.id)) return null;
+  if (Array.isArray(value.mentions?.users) && value.mentions.users.some((item) => !object(item) || !messageActor(item.id))) return null;
   if (typeof value.text !== "string" || !Number.isFinite(value.createdAt)) return null;
   const image = value.v === 2 ? require("./social-client.cjs").imageRef(value.image) : null;
   if (value.v === 2 && !image) return null;
@@ -252,11 +260,11 @@ function roomMessage(value) {
     author: { id: String(value.author.id), name: text(value.author.name, 100), viaStudio: value.author.viaStudio === true },
     text: text(value.text, 2000), truncated: value.truncated === true,
     createdAt: value.createdAt, editedAt: Number.isFinite(value.editedAt) ? value.editedAt : null,
-    mentions: Array.isArray(value.mentions?.users) ? value.mentions.users.map((item) => (object(item) && SNOWFLAKE.test(String(item.id)) ? { id: String(item.id), name: text(item.name, 100) } : null)).filter(Boolean).slice(0, 50) : [],
+    mentions: Array.isArray(value.mentions?.users) ? value.mentions.users.map((item) => (object(item) && messageActor(item.id) ? { id: String(item.id), name: text(item.name, 100) } : null)).filter(Boolean).slice(0, 50) : [],
     attachments: Array.isArray(value.attachments) ? value.attachments.filter(object).slice(0, 10).map((item) => ({ name: text(item.name, 200) || "file", size: count(item.size, 1e12) ?? 0 })) : [],
     replyTo: SNOWFLAKE.test(String(value.replyTo)) ? String(value.replyTo) : null,
     ...(image ? { v: 2, image } : {}),
-    ...(value.sticker && require("./collectibles-contract.cjs").sticker(value.sticker) ? { sticker: require("./collectibles-contract.cjs").sticker(value.sticker) } : {}),
+    ...(value.sticker && require("./collectibles-contract.cjs").sticker(value.sticker, canonical()) ? { sticker: require("./collectibles-contract.cjs").sticker(value.sticker, canonical()) } : {}),
     // The relay's signature (feature "messages.signed"), kept so this copy can
     // later fill another member's gap or back a report.
     ...(opaqueId(value.sig) ? { sig: value.sig } : {}),
@@ -390,7 +398,7 @@ function pcViews(value) {
 
 // A project card from the relay's hub, or null.
 function projectCard(value) {
-  if (!object(value) || !opaqueId(value.id) || !object(value.owner) || !SNOWFLAKE.test(String(value.owner.id))) return null;
+  if (!object(value) || !opaqueId(value.id) || !object(value.owner) || !principal(value.owner.id)) return null;
   const url = listenUrl(value.url);
   const title = line(value.title, 100);
   if (!url || !title) return null;
@@ -452,7 +460,7 @@ const JAM_PHASES = Object.freeze(["entries", "voting", "results"]);
 const timeOf = (value) => (Number.isFinite(value) ? value : null);
 // An id must be a string of the pattern: String(undefined) is "undefined", which the pattern alone lets through.
 const opaque = (value) => (typeof value === "string" && OPAQUE_ID.test(value) ? value : null);
-const snowflake = (value) => (typeof value === "string" && SNOWFLAKE.test(value) ? value : null);
+const snowflake = principal; // These uses are Studio principals; message/provider fields stay Snowflakes.
 function eventProject(value) {
   if (!object(value) || !opaque(value.id)) return null;
   return { id: value.id, title: line(value.title, 100) ?? "project", url: listenUrl(value.url), host: line(value.host, 253) ?? "", kind: PROJECT_KINDS.includes(value.kind) ? value.kind : "other" };
@@ -493,12 +501,12 @@ function coworkOf(value) {
 // Credits on hold for a newcomer wave (relay credits.mjs heldList): by the member they are for, with each newcomer who
 // would have paid them, how much, how old their Discord account is and when they joined the server.
 function heldOf(value) {
-  if (!object(value) || !object(value.member) || !SNOWFLAKE.test(String(value.member.id ?? ""))) return null;
+  if (!object(value) || !object(value.member) || !principal(value.member.id)) return null;
   const when = (time) => (Number.isFinite(time) ? time : null);
   return {
     member: { id: String(value.member.id), name: text(value.member.name, 100) || "member" },
     total: count(value.total, 1e12) ?? 0, since: when(value.since), dropsAt: when(value.dropsAt),
-    givers: Array.isArray(value.givers) ? value.givers.map((item) => (object(item) && SNOWFLAKE.test(String(item.id ?? "")) ? {
+    givers: Array.isArray(value.givers) ? value.givers.map((item) => (object(item) && principal(item.id) ? {
       id: String(item.id), name: text(item.name, 100) || "member", amount: count(item.amount, 1e12) ?? 0, events: count(item.events, 1e9) ?? 0,
       accountCreatedAt: when(item.accountCreatedAt), joinedAt: when(item.joinedAt),
     } : null)).filter(Boolean).slice(0, 100) : [],
@@ -591,7 +599,7 @@ function itemCard(value) {
   if (!object(value) || !shopItemId(value.id) || !SHOP_ITEM_KINDS.includes(value.kind)) return null;
   const name = line(value.name, 40);
   const data = value.kind === "pack" ? packData(value.data) : null;
-  if (!name || (value.kind === "pack" && !data)) return null;
+  if (!name || (value.kind === "pack" && !data) || (value.maker != null && !user(value.maker))) return null;
   return {
     id: value.id, kind: value.kind, name, blurb: line(value.blurb, 160) ?? "",
     price: count(value.price, 1e6) ?? 0, requires: shopItemId(value.requires) ? value.requires : null,
@@ -703,6 +711,10 @@ function roomPetsOf(value) {
   return out;
 }
 
+return { principal, user, listenSession, roomSummary, text, roomMessage, wireMessage, joinRequest, roomInvite, postText, nowPlayingTrack, remoteText, remoteButtons, remoteCommand, remotePcs, pcId, pcKeys, jsonBytes, pcHello, pcView, pcViews, projectCard, rankOf, specialOf, frontPage, JAM_PHASES, timeOf, opaque, snowflake, eventProject, jamPayout, jamOf, coworkOf, heldOf, holdsOf, switchesOff, modJamOf, eventsPage, eventsFront, shopItemId, isPackId, packData, shopTime, itemCard, dropCard, shopDrops, packFields, petLook, petsGenerationOf, petForRelay, roomPetsOf };
+}
+const { listenSession, roomSummary, roomMessage, wireMessage, joinRequest, roomInvite, postText, nowPlayingTrack, remoteText, remoteButtons, remoteCommand, remotePcs, pcKeys, pcHello, pcView, pcViews, projectCard, eventsPage, eventsFront, packData, itemCard, dropCard, shopDrops, packFields, petLook, petsGenerationOf, petForRelay, roomPetsOf } = createActorShapes();
+
 // A room's join code ("7K3Q-M2XR") and its link, or a failure.
 function codeOf(data) {
   const code = typeof data?.code === "string" && /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(data.code) ? data.code : null;
@@ -714,6 +726,7 @@ function createHubClient(options = {}) {
   const {
     url = configuredUrl(),
     getAccessToken = async () => ({ ok: false, error: "auth" }),
+    getAccountSession = null, // Native-selected authority session; failure never falls back to Discord.
     fetch: fetchImpl = globalThis.fetch,
     WebSocket: SocketImpl = globalThis.WebSocket,
     now = () => Date.now(),
@@ -729,7 +742,9 @@ function createHubClient(options = {}) {
   let state = "off";
   let error = null;
   let wanted = false;
-  let session = null; // { token, expiresAt, user, readOnly }
+  let session = null; // { token, expiresAt, user, readOnly, actorProtocol }
+  const canonical = () => session?.actorProtocol === ACTOR_PROTOCOL;
+  const { principal, user, listenSession, roomSummary, text, roomMessage, wireMessage, joinRequest, roomInvite, postText, nowPlayingTrack, remoteText, remoteButtons, remoteCommand, remotePcs, pcId, pcKeys, jsonBytes, pcHello, pcViews, projectCard, rankOf, specialOf, frontPage, timeOf, opaque, snowflake, jamOf, coworkOf, holdsOf, switchesOff, modJamOf, eventsPage, shopItemId, isPackId, packData, shopTime, itemCard, shopDrops, packFields, petLook, petsGenerationOf, petForRelay, roomPetsOf } = createActorShapes(canonical);
   let socket = null;
   let generation = 0;
   let backoff = 0;
@@ -768,7 +783,7 @@ function createHubClient(options = {}) {
   function status() {
     return {
       configured: Boolean(address), state, error,
-      user: session?.user ?? null, readOnly: Boolean(session?.readOnly), paused,
+      user: session?.user ?? null, actorProtocol: session?.actorProtocol ?? null, readOnly: Boolean(session?.readOnly), paused,
       rooms: [...rooms.keys()],
       companions: features.includes("companion"), companionDirect: features.includes("companion") && features.includes("companion.direct"),
       remote: features.includes("remote"), remoteOn: Boolean(remote?.on) && features.includes("remote"), remotePcs: remoteList,
@@ -778,6 +793,15 @@ function createHubClient(options = {}) {
       lobby: features.includes("lobby"), joinCodes: features.includes("join.codes"), online: features.includes("online"), front: features.includes("front"), building: features.includes("building"),
       pcs: features.includes("pcs"), pcOn: Boolean(pc) && features.includes("pcs"),
       shop: features.includes("shop"), pets: features.includes("pets"), images: features.includes("messages.images"), trades: features.includes("shop.trades"), collectibles: features.includes("collectibles.1"),
+      dynamicCrates: features.includes("collectibles.1") && features.includes("collectibles.crates.1"),
+      billing: features.includes("billing.1"),
+      commerceOrders: features.includes("commerce.orders.2"),
+      commerceCatalog: features.includes("commerce.catalog.1"),
+      commerceSeller: features.includes("commerce.seller.1"),
+      commerceOnboarding: features.includes("commerce.onboarding.1"),
+      commerceRetireOrders: features.includes("commerce.orders.retire.1"),
+      commerceSellerSetup: features.includes("commerce.seller-setup.1"),
+      referralInvitations: canonical() && features.includes("referrals.1"),
     };
   }
   function setState(next, nextError = null) {
@@ -795,8 +819,9 @@ function createHubClient(options = {}) {
     try {
       const headers = { Accept: "application/json" };
       if (body !== undefined) headers["Content-Type"] = "application/json";
+      if (body !== undefined && address.http.startsWith("https:")) headers.Origin = new URL(address.http).origin;
       if (token) headers.Authorization = `Bearer ${token}`;
-      const res = await fetchImpl(`${address.http}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: controller?.signal });
+      const res = await fetchImpl(`${address.http}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal: controller?.signal, redirect: "error", cache: "no-store" });
       let data = null;
       try { data = await res.json(); } catch {}
       if (res.ok && object(data) && data.ok !== false) return { ok: true, status: res.status, data };
@@ -811,20 +836,44 @@ function createHubClient(options = {}) {
     }
   }
 
-  // Trades the Discord access token for a hub session. The Discord token is
-  // sent once per session and dropped; the hub never keeps it either.
+  // Only the native-selected credential reaches bootstrap; canonical failure
+  // cannot fall back to a different Discord wallet.
   async function openSession() {
+    const accountMode = typeof getAccountSession === "function";
+    if (accountMode && !address?.http.startsWith("https:")) return { ok: false, error: "unsupported" };
     let grant;
-    try { grant = await getAccessToken(); } catch { grant = null; }
-    if (!grant?.ok || typeof grant.token !== "string" || !grant.token) return { ok: false, error: grant?.error === "not-configured" ? "not-linked" : grant?.error || "not-linked" };
-    const answer = await request("POST", "/v1/session", { accessToken: grant.token });
-    if (!answer.ok) return { ok: false, error: answer.status === 401 ? "auth" : answer.error === "not-member" || answer.status === 403 ? "not-member" : answer.error === "rate-limited" ? "rate-limited" : "network", retryAfter: answer.retryAfter };
+    try { grant = await (accountMode ? getAccountSession() : getAccessToken()); } catch { grant = null; }
+    const credential = accountMode ? grant?.accountSession : grant?.token;
+    if (!grant?.ok || typeof credential !== "string" || !credential || credential.length > 8192)
+      return { ok: false, error: grant?.error === "not-configured" ? "not-linked" : grant?.error || "not-linked" };
+    const answer = await request("POST", "/v1/session", accountMode ? { accountSession: credential } : { accessToken: credential });
+    if (!answer.ok) return { ok: false, error: accountMode && ["unsupported", "not-found"].includes(answer.error) || accountMode && answer.status === 404 ? "unsupported" : answer.status === 401 ? "auth" : answer.error === "not-member" || answer.status === 403 ? "not-member" : answer.error === "rate-limited" ? "rate-limited" : "network", retryAfter: answer.retryAfter };
     const data = answer.data;
-    const who = user(data.user);
-    if (typeof data.session !== "string" || !data.session || !Number.isFinite(data.expiresAt) || !who) return { ok: false, error: "network" };
-    return { ok: true, session: { token: data.session, expiresAt: data.expiresAt, user: who, readOnly: data.readOnly === true } };
+    const marked = data.actorProtocol === ACTOR_PROTOCOL;
+    if ((data.actorProtocol != null && !marked) || (accountMode && !marked)) return { ok: false, error: "unsupported" };
+    const who = createActorShapes(() => marked).user(data.user);
+    if (typeof data.session !== "string" || !data.session || data.session.length > 8192 || !Number.isSafeInteger(data.expiresAt) || data.expiresAt <= now() || !who) return { ok: false, error: "auth" };
+    return { ok: true, session: { token: data.session, expiresAt: data.expiresAt, user: who, readOnly: data.readOnly === true, actorProtocol: marked ? ACTOR_PROTOCOL : null } };
   }
-
+  function sameSessionIdentity(previous, next) {
+    return !previous || previous.user.id === next?.user?.id && previous.actorProtocol === next?.actorProtocol;
+  }
+  function identityFailure(reason = "stale_account") {
+    session = null; features = []; drop(); setState("error", reason);
+    return { ok: false, error: reason };
+  }
+  // A legacy client must reject an opaque actor surface, never hide its people
+  // or silently replace ownership with null. This only detects the exact actor
+  // primitive; item/resource IDs keep their own contracts.
+  function needsCanonical(value) {
+    const pending = [value]; let seen = 0;
+    while (pending.length && ++seen <= 100000) {
+      const item = pending.pop();
+      if (typeof item === "string" && item.startsWith("studio:") && actorId(item)) return true;
+      if (item && typeof item === "object") pending.push(...Object.values(item));
+    }
+    return pending.length > 0;
+  }
   function scheduleRenew() {
     renewTimer = clearTimer(renewTimer);
     if (!session) return;
@@ -836,10 +885,11 @@ function createHubClient(options = {}) {
     const fresh = await openSession();
     if (mine !== generation || !wanted) return;
     if (!fresh.ok) {
-      if (fresh.error === "auth" || fresh.error === "not-member" || fresh.error === "not-linked") { drop(); setState("error", fresh.error); return; }
+      if (["auth", "not-member", "not-linked", "unsupported", "expired", "waitlisted"].includes(fresh.error)) { identityFailure(fresh.error); return; }
       renewTimer = later(() => { renewTimer = null; void renew(); }, 30_000);
       return;
     }
+    if (!sameSessionIdentity(session, fresh.session)) { identityFailure(); return; }
     session = fresh.session;
     send({ type: "renew", session: session.token });
     scheduleRenew();
@@ -891,7 +941,8 @@ function createHubClient(options = {}) {
           else setState("error", fresh.error);
           return;
         }
-        session = fresh.session;
+        if (!sameSessionIdentity(session, fresh.session)) { identityFailure(); return; }
+    session = fresh.session;
       }
       let ws;
       try { ws = new SocketImpl(address.ws); } catch { setState("offline", "network"); retry(); return; }
@@ -933,11 +984,17 @@ function createHubClient(options = {}) {
     let frame;
     try { frame = JSON.parse(typeof data === "string" ? data : String(data)); } catch { return; }
     if (!object(frame) || typeof frame.type !== "string") return;
+    if (frame.type !== "ready" && state !== "ready") return;
+    if (!canonical() && needsCanonical(frame)) { identityFailure("upgrade-required"); return; }
     switch (frame.type) {
       case "ready": {
         backoff = 0;
         const who = user(frame.user);
-        if (who && session) session.user = who;
+        const readyFeatures = Array.isArray(frame.features) ? frame.features : [];
+        if (!who || !session || who.id !== session.user.id || (canonical() && !readyFeatures.includes(ACTOR_PROTOCOL))) {
+          identityFailure(canonical() && !readyFeatures.includes(ACTOR_PROTOCOL) ? "unsupported" : "stale_account"); return;
+        }
+        session.user = who;
         if (session) session.readOnly = frame.readOnly === true;
         paused = frame.paused === true;
         features = Array.isArray(frame.features) ? frame.features.filter((name) => typeof name === "string" && name.length <= 40).slice(0, 32) : [];
@@ -973,7 +1030,7 @@ function createHubClient(options = {}) {
         return;
       }
       case "presence":
-        if (opaqueId(frame.roomId) && Array.isArray(frame.inStudio)) emit({ type: "presence", roomId: frame.roomId, inStudio: frame.inStudio.filter((id) => SNOWFLAKE.test(String(id))).slice(0, 100) });
+        if (opaqueId(frame.roomId) && Array.isArray(frame.inStudio)) emit({ type: "presence", roomId: frame.roomId, inStudio: frame.inStudio.filter((id) => principal(id)).slice(0, 100) });
         return;
       case "room": {
         const room = roomSummary(frame.room);
@@ -981,13 +1038,13 @@ function createHubClient(options = {}) {
         return;
       }
       case "membership":
-        if (opaqueId(frame.roomId) && ["joined", "left", "removed", "closed"].includes(frame.state)) emit({ type: "membership", roomId: frame.roomId, userId: String(frame.userId ?? ""), state: frame.state });
+        if (opaqueId(frame.roomId) && principal(frame.userId) && ["joined", "left", "removed", "closed"].includes(frame.state)) emit({ type: "membership", roomId: frame.roomId, userId: String(frame.userId ?? ""), state: frame.state });
         return;
       // A friend's companion card (null when it went home). The card is passed
       // on as received; main reads it through companion-friends.readCard.
       // `direct` marks a card sent to this member alone (the hub keeps `to`).
       case "companion":
-        if (opaqueId(frame.roomId) && SNOWFLAKE.test(String(frame.from))) emit({ type: "companion", roomId: frame.roomId, from: String(frame.from), card: object(frame.card) ? frame.card : null, direct: frame.to != null, receivedAt: now() });
+        if (opaqueId(frame.roomId) && principal(frame.from) && (frame.to == null || principal(frame.to))) emit({ type: "companion", roomId: frame.roomId, from: String(frame.from), card: object(frame.card) ? frame.card : null, direct: frame.to != null, receivedAt: now() });
         return;
       case "message":
       case "messageUpdate": {
@@ -1149,14 +1206,21 @@ function createHubClient(options = {}) {
   // An HTTP call with the hub session, renewed once when the hub says it
   // lapsed. Refusals keep the hub's own error, reason and retryAfter.
   async function authed(method, path, body) {
-    if (!session) return { ok: false, error: state === "error" ? error : "offline" };
+    if (!session || state !== "ready") return { ok: false, error: state === "error" ? error : "offline" };
+    const mine = generation, original = session;
+    const current = () => mine === generation && session && sameSessionIdentity(original, session);
     let answer = await request(method, path, body, session.token);
+    if (!current()) return { ok: false, error: "stale_account" };
     if (!answer.ok && answer.status === 401) {
       const fresh = await openSession();
-      if (!fresh.ok) return { ok: false, error: fresh.error };
+      if (!current()) return { ok: false, error: "stale_account" };
+      if (!fresh.ok) return identityFailure(fresh.error);
+      if (!sameSessionIdentity(original, fresh.session)) return identityFailure();
       session = fresh.session;
       answer = await request(method, path, body, session.token);
+      if (!current()) return { ok: false, error: "stale_account" };
     }
+    if (answer.ok && !canonical() && needsCanonical(answer.data)) return { ok: false, error: "upgrade-required" };
     return answer;
   }
   const refused = (answer) => ({ ok: false, error: answer.error, ...(answer.reason ? { reason: answer.reason } : {}), ...(answer.retryAfter != null ? { retryAfter: answer.retryAfter } : {}) });
@@ -1178,7 +1242,7 @@ function createHubClient(options = {}) {
   };
   const bad = () => Promise.resolve({ ok: false, error: "bad-request" });
   // Loaded when the social client starts, never during app boot.
-  const trades = require("./social-client.cjs").createSocialClient({ request: authed, supported: (feature) => features.includes(feature) });
+  const trades = require("./social-client.cjs").createSocialClient({ request: authed, supported: (feature) => features.includes(feature), canonical });
   const id = (value) => opaqueId(value);
   async function simple(method, path, body) {
     const answer = await authed(method, path, body);
@@ -1268,14 +1332,14 @@ function createHubClient(options = {}) {
     },
     cancelRequest(requestId) { return id(requestId) ? simple("POST", `/v1/requests/${requestId}/cancel`) : bad(); },
     invite(roomId, userId) {
-      if (!id(roomId) || !SNOWFLAKE.test(String(userId ?? ""))) return bad();
+      if (!id(roomId) || !principal(userId)) return bad();
       return one("POST", `/v1/rooms/${roomId}/invites`, { userId: String(userId) }, "invite", roomInvite);
     },
     invites() { return many("/v1/invites", "invites", roomInvite); },
     acceptInvite(inviteId) { return id(inviteId) ? one("POST", `/v1/invites/${inviteId}/accept`, undefined, "room", roomSummary) : bad(); },
     declineInvite(inviteId) { return id(inviteId) ? simple("POST", `/v1/invites/${inviteId}/decline`) : bad(); },
     leave(roomId) { return id(roomId) ? simple("POST", `/v1/rooms/${roomId}/leave`) : bad(); },
-    removeMember(roomId, userId) { return id(roomId) && SNOWFLAKE.test(String(userId ?? "")) ? simple("POST", `/v1/rooms/${roomId}/members/${userId}/remove`) : bad(); },
+    removeMember(roomId, userId) { return id(roomId) && principal(userId) ? simple("POST", `/v1/rooms/${roomId}/members/${userId}/remove`) : bad(); },
     lock(roomId) { return id(roomId) ? one("POST", `/v1/rooms/${roomId}/lock`, undefined, "room", roomSummary) : bad(); },
     unlock(roomId) { return id(roomId) ? one("POST", `/v1/rooms/${roomId}/unlock`, undefined, "room", roomSummary) : bad(); },
     close(roomId) { return id(roomId) ? simple("POST", `/v1/rooms/${roomId}/close`) : bad(); },
@@ -1403,7 +1467,7 @@ function createHubClient(options = {}) {
       return { ok: true, days: count(answer.data.days, 365) ?? 30, flags };
     },
     async modReview(userId) {
-      if (!SNOWFLAKE.test(String(userId ?? ""))) return { ok: false, error: "bad-request" };
+      if (!principal(userId)) return { ok: false, error: "bad-request" };
       const answer = await authed("GET", `/v1/admin/credits/${userId}`);
       if (!answer.ok) return refused(answer);
       const data = answer.data;
@@ -1419,7 +1483,7 @@ function createHubClient(options = {}) {
         total: count(data.total, 1e12) ?? 0,
         givers: Array.isArray(data.givers) ? data.givers.map((item) => ({
           // A member's id, or the random one a member who used Forget me has here (modRevoke's `from` takes either).
-          id: SNOWFLAKE.test(String(item?.id ?? "")) || GONE_ID.test(String(item?.id ?? "")) ? String(item.id) : null,
+          id: principal(item?.id) || GONE_ID.test(String(item?.id ?? "")) ? String(item.id) : null,
           forgotten: GONE_ID.test(String(item?.id ?? "")),
           name: text(item?.name, 100) || "member",
           amount: count(item?.amount, 1e12) ?? 0, events: count(item?.events, 1e9) ?? 0, share: count(item?.share, 100) ?? 0,
@@ -1430,7 +1494,7 @@ function createHubClient(options = {}) {
     async modRevoke(userId, options = {}) {
       const from = options?.from == null ? null : String(options.from);
       const days = options?.days == null ? null : Number(options.days);
-      if (!SNOWFLAKE.test(String(userId ?? "")) || (from !== null && !SNOWFLAKE.test(from) && !GONE_ID.test(from)) || (days !== null && (!Number.isSafeInteger(days) || days < 1 || days > 180))) return { ok: false, error: "bad-request" };
+      if (!principal(userId) || (from !== null && !principal(from) && !GONE_ID.test(from)) || (days !== null && (!Number.isSafeInteger(days) || days < 1 || days > 180))) return { ok: false, error: "bad-request" };
       const answer = await authed("POST", `/v1/admin/credits/${userId}/revoke`, { ...(from ? { from } : {}), ...(days ? { days } : {}) });
       if (!answer.ok) return refused(answer);
       return { ok: true, revoked: count(answer.data.revoked, 1e12) ?? 0, credits: { balance: count(answer.data.credits?.balance, 1e12) ?? 0, lifetime: count(answer.data.credits?.lifetime, 1e12) ?? 0, rank: RANK_KEY.test(String(answer.data.credits?.rank ?? "")) ? answer.data.credits.rank : "spark" } };
@@ -1455,7 +1519,7 @@ function createHubClient(options = {}) {
     },
     modResolve(reportId) { return id(reportId) ? simple("POST", `/v1/admin/reports/${reportId}/resolve`) : bad(); },
     modSuspend(userId, minutes) {
-      if (!SNOWFLAKE.test(String(userId ?? "")) || !Number.isSafeInteger(minutes) || minutes < 0 || minutes > 60 * 24 * 365) return bad();
+      if (!principal(userId) || !Number.isSafeInteger(minutes) || minutes < 0 || minutes > 60 * 24 * 365) return bad();
       return simple("POST", `/v1/admin/members/${userId}/suspend`, { minutes });
     },
     // Credits on hold (relay credits.mjs): what newcomer waves would have paid members, waiting for a moderator.
@@ -1465,7 +1529,7 @@ function createHubClient(options = {}) {
     },
     // Pay ("release") or drop what is held for a member: all of it, or only what one newcomer would have paid.
     async modHeldDecide(userId, action, from = null) {
-      if (!SNOWFLAKE.test(String(userId ?? "")) || !["release", "drop"].includes(action) || (from != null && !SNOWFLAKE.test(String(from)))) return bad();
+      if (!principal(userId) || !["release", "drop"].includes(action) || (from != null && !principal(from))) return bad();
       const answer = await authed("POST", `/v1/admin/credits/held/${userId}`, { action, ...(from != null ? { from: String(from) } : {}) });
       return answer.ok ? { ok: true, total: count(answer.data.total, 1e12) ?? 0, holds: holdsOf(answer.data.holds) } : refused(answer);
     },
@@ -1488,7 +1552,7 @@ function createHubClient(options = {}) {
     },
     // A voter's votes in that jam no longer count, and they cannot vote in it again.
     modJamVoid(eventId, userId) {
-      if (!id(eventId) || !SNOWFLAKE.test(String(userId ?? ""))) return bad();
+      if (!id(eventId) || !principal(userId)) return bad();
       return simple("DELETE", `/v1/admin/jam/${eventId}/votes/${userId}`);
     },
     // Pay a jam in review now instead of waiting its day out.
@@ -1517,7 +1581,7 @@ function createHubClient(options = {}) {
     },
     // A vote for an entrant (by member id), or taking it back; only for an entry you played during the jam.
     async voteEvent(eventId, userId, on = true) {
-      if (!features.includes("events") || !id(eventId) || !SNOWFLAKE.test(String(userId ?? ""))) return { ok: false, error: "bad-request" };
+      if (!features.includes("events") || !id(eventId) || !principal(userId)) return { ok: false, error: "bad-request" };
       const answer = on === false ? await authed("DELETE", `/v1/events/${eventId}/votes/${userId}`) : await authed("POST", `/v1/events/${eventId}/votes`, { userId: String(userId) });
       if (answer.ok) return { ok: true, jam: jamOf(answer.data.jam) };
       // Why this member's votes do not count yet (credits.mjs standing()), so Studio can say when they will.
@@ -1525,7 +1589,7 @@ function createHubClient(options = {}) {
     },
     // A moderator takes an entry out of a jam that is still running.
     removeEntry(eventId, userId) {
-      if (!features.includes("events") || !id(eventId) || !SNOWFLAKE.test(String(userId ?? ""))) return bad();
+      if (!features.includes("events") || !id(eventId) || !principal(userId)) return bad();
       return simple("DELETE", `/v1/events/${eventId}/entries/${userId}`);
     },
     // A co-work hour's room, joined straight away. The caller keeps it open (subscribe) while attending.
@@ -1555,7 +1619,7 @@ function createHubClient(options = {}) {
     },
     async memberCard(userId) {
       if (!features.includes("credits")) return { ok: false, error: "unsupported" };
-      if (!SNOWFLAKE.test(String(userId ?? ""))) return { ok: false, error: "bad-request" };
+      if (!principal(userId)) return { ok: false, error: "bad-request" };
       const answer = await authed("GET", `/v1/members/${userId}/card`);
       if (!answer.ok) return refused(answer);
       const card = answer.data.member;
@@ -1617,11 +1681,107 @@ function createHubClient(options = {}) {
     // with needs, price, balance and hold kept (shopRefused).
     // A list: "studio", "new", "top", "owned" or "mine" (anything else is
     // "studio"); `cursor` is the `next` of the page before.
+    async referrals(action, payload = {}) {
+      const contract = require("./referrals-contract.cjs");
+      if (!canonical() || !features.includes(contract.CAPABILITY)) return { ok:false, error:"unsupported" };
+      if (state !== "ready" || !session) return { ok:false, error:"offline" };
+      if (session.expiresAt <= now()) return { ok:false, error:"unauthorized" };
+      const call = contract.request(action, payload);
+      if (!call) return { ok:false, error:"bad_request" };
+      const input = call.body || {};
+      let origin;
+      try { const parsed = new URL(address?.http); if (parsed.protocol === "https:" && !parsed.username && !parsed.password) origin = parsed.origin; } catch {}
+      if (!origin || typeof fetchImpl !== "function") return { ok:false, error:"referral_origin_required" };
+      const mine = generation, original = session, token = session.token;
+      const current = () => mine === generation && state === "ready" && session === original && session.expiresAt > now() && canonical() && features.includes(contract.CAPABILITY);
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = later(() => controller?.abort(), requestTimeoutMs);
+      try {
+        const headers = { Accept:"application/json", Authorization:"Bearer " + token };
+        if (call.body) { headers["Content-Type"] = "application/json"; headers.Origin = origin; }
+        const reply = await fetchImpl(address.http + call.path, { method:call.method, headers,
+          body:call.body ? JSON.stringify(call.body) : undefined, signal:controller?.signal, redirect:"error", cache:"no-store" });
+        const data = await contract.readJson(reply);
+        if (!current()) return { ok:false, error:"stale_account" };
+        // Never renew and replay a mutation under a potentially changed account.
+        if (reply.status === 401) return { ok:false, error:"unauthorized" };
+        return reply.status === 200 ? contract.response(action, data) || { ok:false, error:"bad_response" }
+          : contract.error(action, data, input, reply.status, reply.headers?.get?.("retry-after"));
+      } catch { return { ok:false, error:current() ? "network" : "stale_account" }; }
+      finally { cancel(timer); }
+    },
+    async commerce(action, payload = {}) {
+      const contract = require("./commerce-contract.cjs");
+      if (!features.includes(contract.capability(action))) return { ok: false, error: "unsupported" };
+      if (state !== "ready" || !session) return { ok: false, error: "offline" };
+      const call = contract.request(action, payload);
+      if (!call) return { ok: false, error: "bad_request" };
+      // Snapshot GET cursor/limit and mutation identities before any await.
+      const responsePayload = { ...payload };
+      let origin;
+      try { const parsed = new URL(address?.http); if (parsed.protocol === "https:" && !parsed.username && !parsed.password) origin = parsed.origin; } catch {}
+      if (!origin || typeof fetchImpl !== "function") return { ok: false, error: "cash_origin_required" };
+      const mine = generation, actor = session.user.id, token = session.token;
+      const current = () => mine === generation && state === "ready" && session?.user?.id === actor && features.includes(contract.capability(action));
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = later(() => controller?.abort(), requestTimeoutMs);
+      try {
+        const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
+        if (call.body) { headers["Content-Type"] = "application/json"; headers.Origin = origin; }
+        const reply = await fetchImpl(`${address.http}${call.path}`, { method: call.method, headers,
+          body: call.body ? JSON.stringify(call.body) : undefined, signal: controller?.signal, redirect: "error", cache: "no-store" });
+        const data = await contract.readJson(reply);
+        if (!current()) return { ok: false, error: "stale_account" };
+        if (reply.status === 401) return { ok: false, error: "unauthorized" };
+        return reply.ok ? contract.response(action, data, responsePayload, actor, canonical()) || { ok: false, error: "bad_response" }
+          : contract.error(data, reply.headers?.get?.("retry-after"));
+      } catch { return { ok: false, error: current() ? "network" : "stale_account" }; }
+      finally { cancel(timer); }
+    },
+    async billing(action = "status", payload = {}) {
+      if (!features.includes("billing.1")) return { ok: false, error: "unsupported" };
+      if (state !== "ready" || !session) return { ok: false, error: "offline" };
+      const contract = require("./billing-contract.cjs"), call = contract.request(action, payload);
+      if (!call) return { ok: false, error: "bad_request" };
+      // The native client supplies Origin from its trusted Hub configuration;
+      // a renderer cannot name one. Billing never uses loopback HTTP fallback.
+      let origin;
+      try { const parsed = new URL(address?.http); if (parsed.protocol === "https:" && !parsed.username && !parsed.password) origin = parsed.origin; } catch {}
+      if (!origin || typeof fetchImpl !== "function") return { ok: false, error: "billing_origin_required" };
+      const mine = generation, actor = session.user.id, token = session.token;
+      const current = () => mine === generation && state === "ready" && session?.user?.id === actor && features.includes("billing.1");
+      const controller = typeof AbortController === "function" ? new AbortController() : null;
+      const timer = later(() => controller?.abort(), requestTimeoutMs);
+      try {
+        const headers = { Accept: "application/json", Authorization: `Bearer ${token}` };
+        if (call.body) { headers["Content-Type"] = "application/json"; headers.Origin = origin; }
+        const reply = await fetchImpl(`${address.http}${call.path}`, { method: call.method, headers,
+          body: call.body ? JSON.stringify(call.body) : undefined, signal: controller?.signal, redirect: "error", cache: "no-store" });
+        const data = await contract.readJson(reply);
+        if (!current()) return { ok: false, error: "stale_account" };
+        // No automatic 401 renewal/replay: a renewed Discord grant might be
+        // another account. Recovery starts with a fresh current-account status.
+        if (reply.status === 401) return { ok: false, error: "unauthorized" };
+        return reply.ok ? contract.response(action, data) || { ok: false, error: "bad_response" }
+          : contract.error(data, reply.headers?.get?.("retry-after"));
+      } catch { return { ok: false, error: current() ? "network" : "stale_account" }; }
+      finally { cancel(timer); }
+    },
     async collectibles(action = "list", payload = {}) {
-      if (!features.includes("collectibles.1")) return { ok: false, error: "unsupported" };
-      const call = require("./collectibles-contract.cjs").request(action, payload);
+      const contract = require("./collectibles-contract.cjs");
+      const dynamic = contract.isDynamicAction(action);
+      if (action === "transfer" && !principal(payload?.userId)) return { ok: false, error: "bad-request" };
+      if (!features.includes("collectibles.1") || (dynamic && !features.includes("collectibles.crates.1"))) return { ok: false, error: "unsupported" };
+      const call = contract.request(action, payload);
       if (!call) return { ok: false, error: "bad-request" };
+      // GET pagination has no request body. Retain its validated cursor and
+      // limit before awaiting HTTP, so response checks use the actual request
+      // rather than defaulting to the first page or a different page size.
+      const responsePayload = dynamic ? call.body ?? { ...payload } : null;
       const answer = await authed(call.method, call.path, call.body);
+      if (dynamic) return answer.ok
+        ? contract.dynamicResponse(action, answer.data, { payload: responsePayload, shopItem: itemCard, canonical: canonical() }) || { ok: false, error: "bad-response" }
+        : contract.dynamicError(answer);
       if (!answer.ok) return { ...refused(answer), ...Object.fromEntries(["price", "balance", "until", "poolVersion"].filter((key) => ["number", "string"].includes(typeof answer.data?.[key])).map((key) => [key, answer.data[key]])) };
       // JSON from the authenticated relay; surfaces render only text and
       // allowlisted visuals. Cap before crossing IPC into the renderer.
@@ -1790,7 +1950,7 @@ function createHubClient(options = {}) {
     sendCompanion(roomId, card, to = null) {
       if (state !== "ready" || !features.includes("companion") || !rooms.has(roomId)) return false;
       if (card !== null && !object(card)) return false;
-      if (to != null && (!SNOWFLAKE.test(String(to)) || !features.includes("companion.direct"))) return false;
+      if (to != null && (!principal(to) || !features.includes("companion.direct"))) return false;
       return send({ type: "companion", roomId, card, ...(to != null ? { to: String(to) } : {}) });
     },
     // ---- The Discord remote (docs/remote.md) ---------------------------------
@@ -1899,7 +2059,7 @@ function createHubClient(options = {}) {
 
 module.exports = {
   PROTOCOL_VERSION, OLDEST_PROTOCOL, RELAY_BEHIND_RETRY_MS, HUB_URL, LISTEN_PROVIDERS, NOW_PLAYING_PROVIDERS, LISTEN_ACTIONS, HOLDERS, BACKOFF_MS, PRESENCE_EVERY_MS, SESSION_MARGIN_MS,
-  hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
+  createActorShapes, hubAddress, configuredUrl, listenSession, nowPlayingTrack, roomSummary, roomMessage, joinRequest, roomInvite, postText, createHubClient,
   remoteText, remoteButtons, remoteCommand, remotePcs,
   PC_KINDS, pcKeys, pcHello, pcView, pcViews,
   KEEPALIVE_FRAME, KEEPALIVE_EVERY_MS, CLIENT_FEATURES, wireMessage, projectCard, PROJECT_KINDS,

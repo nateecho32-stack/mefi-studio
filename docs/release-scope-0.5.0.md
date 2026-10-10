@@ -14,9 +14,12 @@ The public pet/sticker client adds a collection home, care and rarity
 appearances, reviewed crate quotes, market orders and creator forms, with nine
 bundled sticker designs. Item ownership and membership rights remain
 capability-gated by the separately staged private service.
-The hosted account, subscription and economy proposals remain private drafts;
-they are not activated by this candidate. Google social sign-in still needs
-registered OAuth configuration and a deployed identity adapter.
+Google account sign-in and account-scoped chat history use the native credential
+boundary. Shop also has subscription and cash marketplace controls for compatible
+services, with reviewed prices, tax state and recovery for interrupted requests.
+The hosted account, subscription and economy services remain staged privately
+and disabled. Google still needs registered OAuth configuration and a deployed
+broker; cash sales need separately configured and validated provider services.
 
 Candidate scope updated 10 October 2026. The published Windows download is
 still 0.4.4. This records the scope of the next release; it does not announce a

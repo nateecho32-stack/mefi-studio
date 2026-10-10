@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import nativeFixture from "./fixtures/native-account-host.cjs";
 import { CATALOG } from "../relay/src/shop.mjs";
 import { DROPS, dropsAt, featuredAt, isoWeek, saleOf, windowsOf } from "../relay/src/shop-drops.mjs";
 
@@ -27,12 +28,13 @@ function host(env = {}) {
   const client = { status: () => ({ configured: true, state: "ready", error: null, user: null, readOnly: false, paused: false, rooms: [] }) };
   for (const name of METHODS) client[name] = async (...args) => { calls.push([name, ...args]); return { ok: true }; };
   const context = vm.createContext({
+    ...nativeFixture.nativeHostPorts(),
     process: { env }, Date, Boolean, Number, Object,
     community: {}, discordOAuth: {}, COMMUNITY_ACCESS_MARGIN_MS: 60_000, communityTokens: null,
     communityClientId: () => "1234567890",
     communityRead: async () => ({ state: { link: { userId: "42" } } }),
     checkCommunity: async () => ({ ok: true }), publishCommunity: async () => ({}),
-    send: () => {}, logLine: () => {}, require: () => null,
+    send: () => {}, logLine: () => {},
     optionalHelper: () => ({ configuredUrl: () => "https://hub.example.test", createHubClient: () => client }),
   });
   vm.runInContext(`${block}\nthis.api = { hubShop, HUB_SHOP_METHODS, SHOP_STUDIO_ITEMS, SHOP_DROPS, shopWindows, shopSaleOf, shopDropsAt, shopIsoWeek, shopFeaturedAt, hubShopCatalog };`, context);

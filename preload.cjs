@@ -346,6 +346,8 @@ const api = {
   onAlertsOpen: (callback) => ipcRenderer.on("alerts:open", (_event, payload) => callback(payload)),
   // Void Engine Discord link (main.cjs "Discord community link"): every call
   // answers { ok, status } with the public status only; tokens never cross.
+  studioAccount: (action = "status") => ipcRenderer.invoke("community:account", { action: ["status", "google", "linkGoogle", "cancel", "signOut", "useDiscord"].includes(action) ? action : null }),
+  onStudioAccount: (callback) => ipcRenderer.on("community:account-event", (_event, status) => callback(status)),
   communityStatus: () => ipcRenderer.invoke("community:status"),
   communityLink: () => ipcRenderer.invoke("community:link"),
   communityLinkCancel: () => ipcRenderer.invoke("community:link-cancel"),
@@ -410,6 +412,40 @@ const api = {
     try { const json = JSON.stringify(payload); if (json.length > 8192) throw new Error("large"); copy = JSON.parse(json); }
     catch { return Promise.resolve({ ok: false, error: "bad-request" }); }
     return ipcRenderer.invoke("hub:collectibles", { action: typeof action === "string" ? action.slice(0, 32) : "", payload: copy });
+  },
+  hubReferrals: (action, payload = {}, actorId) => {
+    if (!["readReferralStatus", "issueReferralInvitation", "redeemReferralInvitation"].includes(action)
+      || typeof actorId !== "string" || actorId.length > 64) return Promise.resolve({ ok:false, error:"bad_request" });
+    let copy;
+    try { const json = JSON.stringify(payload); if (json.length > 512) throw new Error("large"); copy = JSON.parse(json); }
+    catch { return Promise.resolve({ ok:false, error:"bad_request" }); }
+    return ipcRenderer.invoke("hub:referrals", { action, payload:copy, actorId });
+  },
+  hubCommerce: (action, payload = {}) => {
+    if (!["createOrder", "retireOrderRequest", "checkout", "getOrder", "listOrders", "catalog", "listing", "seller", "sellerAssets", "sellerListings", "publishListing", "updateListing", "unlistListing", "onboarding", "readSellerSetup", "prepareSellerSetup"].includes(action)) return Promise.resolve({ ok: false, error: "bad_request" });
+    let copy;
+    try { const json = JSON.stringify(payload); if (json.length > 1024) throw new Error("large"); copy = JSON.parse(json); }
+    catch { return Promise.resolve({ ok: false, error: "bad_request" }); }
+    return ipcRenderer.invoke("hub:commerce", { action, payload: copy });
+  },
+  hubCommerceOpen: (orderId, url, actorId) => {
+    if (typeof orderId !== "string" || !(orderId === "onboarding" || /^cash_[a-f0-9]{32}$/.test(orderId)) || typeof url !== "string" || url.length > 4096
+      || typeof actorId !== "string" || actorId.length > 100) return Promise.resolve({ ok: false, error: "bad_request" });
+    return ipcRenderer.invoke("hub:commerce-open", { orderId, url, actorId });
+  },
+  hubBilling: (action, payload = {}) => {
+    // Do not silently drop a price/account assertion: main rejects all extra
+    // request fields. Sandboxed Electron and the Rust shim share this bridge.
+    if (!["status", "checkout", "portal"].includes(action)) return Promise.resolve({ ok: false, error: "bad_request" });
+    let copy;
+    try { const json = JSON.stringify(payload); if (json.length > 256) throw new Error("large"); copy = JSON.parse(json); }
+    catch { return Promise.resolve({ ok: false, error: "bad_request" }); }
+    return ipcRenderer.invoke("hub:billing", { action, payload: copy });
+  },
+  hubBillingOpen: (action, url, actorId) => {
+    if (!["checkout", "portal"].includes(action) || typeof url !== "string" || url.length > 2048
+      || typeof actorId !== "string" || actorId.length > 80) return Promise.resolve({ ok: false, error: "bad_request" });
+    return ipcRenderer.invoke("hub:billing-open", { action, url, actorId });
   },
   // Companion friends (main.cjs "Companion friends"): what friends' companions
   // may see, the friends out now and playdates. Only named fields cross.

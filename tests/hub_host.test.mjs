@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import nativeFixture from "./fixtures/native-account-host.cjs";
 
 // main.cjs's "Rooms hub" block in a vm: how it hands the hub client a Discord
 // access token (never refreshing on its own, so it cannot race the community
@@ -21,6 +22,7 @@ function host({ link = { userId: "42" }, tokens = null, clientId = "1234567890",
   const sent = [], checks = [];
   let created = null;
   const context = vm.createContext({
+    ...nativeFixture.nativeHostPorts(),
     Date: { now: () => T0 }, process: { env: {} }, Boolean, Number, Object,
     community: {}, discordOAuth: {}, COMMUNITY_ACCESS_MARGIN_MS: MARGIN, communityTokens: tokens,
     communityClientId: () => clientId,
@@ -29,13 +31,12 @@ function host({ link = { userId: "42" }, tokens = null, clientId = "1234567890",
     publishCommunity: async () => ({}),
     send: (channel, payload) => sent.push([channel, payload]),
     logLine: () => {},
-    require: () => null,
     optionalHelper: () => ({
       configuredUrl: () => "https://hub.example.test",
       createHubClient: (options) => { created = options; return { status: () => ({ configured: true, state: "off", error: null, user: null, readOnly: false, paused: false, rooms: [] }), ...client }; },
     }),
   });
-  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance, hubSubscribe, hubConnect, hubDisconnect, hubPresenceLook, startHubPresence, hubBuildingLook, hubBuildingShare, hubRoom, hubPresenceWake, hubVersionBehind };`, context);
+  vm.runInContext(`${block}\nthis.api = { hubAccessToken, hubStatus, hubInstance, studioAccountReady, hubSubscribe, hubConnect, hubDisconnect, hubPresenceLook, startHubPresence, hubBuildingLook, hubBuildingShare, hubRoom, hubPresenceWake, hubVersionBehind };`, context);
   return { api: context.api, context, sent, checks, created: () => created };
 }
 
@@ -100,7 +101,7 @@ test("Share what I'm building: off until turned on, then the open project's name
   h.context.readSettings = async () => settings;
   h.context.updateSettings = async (mutate) => { const next = JSON.parse(JSON.stringify(settings)); mutate(next); settings = next; };
   h.context.agentsSnapshot = async () => ({ project: "Pixel Forge", working: [{ title: "a secret plan" }, { title: "b" }], done: [{ title: "c" }] });
-  h.api.hubInstance();
+  await h.api.studioAccountReady(); h.api.hubInstance();
   assert.equal(await h.api.hubBuildingLook(), false, "off by default");
   assert.deepEqual(shared, [null]);
   const turned = await h.api.hubRoom("shareBuilding", [true]);
@@ -122,7 +123,7 @@ test("Reconnect by itself: on unless turned off, remembered, connects at once wh
   } });
   h.context.readSettings = async () => settings;
   h.context.updateSettings = async (mutate) => { const next = JSON.parse(JSON.stringify(settings)); mutate(next); settings = next; };
-  h.api.hubInstance();
+  await h.api.studioAccountReady(); h.api.hubInstance();
   assert.equal((await h.api.hubStatus()).autoConnect, true, "on by default");
   const off = await h.api.hubRoom("autoConnect", [false]);
   assert.equal(off.ok, true); assert.equal(off.autoConnect, false);
@@ -200,20 +201,21 @@ function setupHost({ saved, env = {}, reachable = true, status = 200, answer = {
   const fetches = [], published = [], logs = [];
   let disconnected = 0;
   const context = vm.createContext({
+    ...nativeFixture.nativeHostPorts(),
     process: { env }, AbortController, setTimeout, clearTimeout,
     community: communityRules, discordOAuth: {}, COMMUNITY_ACCESS_MARGIN_MS: MARGIN, communityTokens: null,
     communityClientId: () => String(env.MEFI_STUDIO_DISCORD_CLIENT_ID || context.communitySetup().clientId || ""),
     communityRead: async () => ({ state: { link: null } }),
     checkCommunity: async () => ({ ok: true }),
     publishCommunity: async (options) => { published.push(options); return { configured: true }; },
-    send: () => {}, logLine: (line) => logs.push(line), require: () => null,
+    send: () => {}, logLine: (line) => logs.push(line),
     SETTINGS_PATH: "settings.json",
     readFileSync: () => JSON.stringify(settings),
     updateSettings: async (mutate) => { const next = JSON.parse(JSON.stringify(settings)); await mutate(next); settings = next; return next; },
     fetch: async (url) => { fetches.push(url); if (!reachable) throw new Error("connect ECONNREFUSED"); return { ok: status === 200, status, json: async () => answer }; },
     optionalHelper: () => ({ ...hubClientModule, createHubClient: (options) => ({ url: options.url, status: () => ({ configured: Boolean(options.url), state: "off", error: null, user: null, readOnly: false, paused: false, rooms: [] }), disconnect: async () => { disconnected += 1; } }) }),
   });
-  vm.runInContext(`${block}\nthis.api = { communitySetupView, communitySetupSave, hubInstance, communitySetup };`, context);
+  vm.runInContext(`${block}\nthis.api = { communitySetupView, communitySetupSave, hubInstance, studioAccountReady, communitySetup };`, context);
   return { api: context.api, settings: () => settings, fetches, published, logs, disconnected: () => disconnected };
 }
 const plainCopy = (value) => JSON.parse(JSON.stringify(value));
@@ -233,10 +235,12 @@ test("connection details save, answer at once and say whether the hub is there",
 
 test("a new hub address drops the old client; the next one uses it", async () => {
   const h = setupHost({ saved: { clientId: APP, hubUrl: "https://old.example.com" } });
+  await h.api.studioAccountReady();
   assert.equal(h.api.hubInstance().url, "https://old.example.com");
   await h.api.communitySetupSave({ clientId: APP, hubUrl: "https://new.example.com" });
   await Promise.resolve(); await Promise.resolve();
   assert.equal(h.disconnected(), 1);
+  await h.api.studioAccountReady();
   assert.equal(h.api.hubInstance().url, "https://new.example.com");
   await h.api.communitySetupSave({ clientId: "", hubUrl: "https://new.example.com" });
   assert.equal(h.disconnected(), 1, "the same address keeps its client");
@@ -260,6 +264,7 @@ test("the environment still wins, and an unreachable hub is saved with the reaso
   const h = setupHost({ env, reachable: false });
   const saved = plainCopy(await h.api.communitySetupSave({ clientId: "", hubUrl: "https://hub.example.com" }));
   assert.deepEqual(saved.environment, { clientId: true, hubUrl: true });
+  await h.api.studioAccountReady();
   assert.equal(h.api.hubInstance().url, "http://127.0.0.1:8787", "a maintainer's test hub wins");
   assert.equal(saved.health.ok, false);
   assert.match(saved.health.error, /could not reach the rooms service/);
@@ -294,6 +299,7 @@ test("room history: this PC keeps what it saw, answers the relay's asks from it,
     report: async (...args) => ({ ok: true, args }),
   };
   const context = vm.createContext({
+    ...nativeFixture.nativeHostPorts(),
     Date: { now: () => T0 }, process: { env: {} }, Boolean, Number, Object, String, Buffer, JSON, Array,
     setTimeout: () => 1, clearTimeout: () => {},
     path: { join: (...parts) => parts.join("/") }, app: { getPath: () => "/user-data" },
@@ -301,14 +307,14 @@ test("room history: this PC keeps what it saw, answers the relay's asks from it,
     safeStorage: { isEncryptionAvailable: () => false }, authStore: { atomicWriteJson: async () => {} },
     community: {}, discordOAuth: {}, COMMUNITY_ACCESS_MARGIN_MS: MARGIN, communityTokens: null,
     communityClientId: () => "1234567890", communityRead: async () => ({ state: { link: { userId: "42" } } }), checkCommunity: async () => ({ ok: true }), publishCommunity: async () => ({}),
-    send: (channel, payload) => sent.push([channel, payload]), logLine: () => {}, require: () => null,
+    send: (channel, payload) => sent.push([channel, payload]), logLine: () => {},
     optionalHelper: (file) => (file.includes("room-history") ? roomHistory : {
       configuredUrl: () => "https://hub.example.test",
       createHubClient: (options) => { created = options; return client; },
     }),
   });
-  vm.runInContext(`${block}\nthis.api = { hubInstance, hubRoom };`, context);
-  context.api.hubInstance();
+  vm.runInContext(`${block}\nthis.api = { hubInstance, studioAccountReady, hubRoom };`, context);
+  await context.api.studioAccountReady(); context.api.hubInstance();
   for (let n = 0; n < 3; n += 1) created.onEvent({ type: "message", roomId: "room_a", message: message(n) });
   assert.equal(sent.filter(([, event]) => event.type === "message").length, 3, "messages still reach Rooms");
 

@@ -47,3 +47,19 @@ test("the content kill switch disables cards while keeping secret-link redaction
   assert.equal(all(root).filter(el => el.tagName === "button").length, 0);
   assert.equal(root.textContent.includes("token=secret"), false); assert.equal(root.textContent.includes("https://docs.github.com"), true);
 });
+
+test("encoded fragment credentials are blocked even beside malformed escapes, while normal anchors remain usable", () => {
+  const urls = ["https://docs.github.com/#%74%6f%6b%65%6e=private-token", "https://docs.github.com/#/callback?%63ode%3dprivate-code", "https://docs.github.com/#bad%ZZ?%61uth=private-auth", "https://docs.github.com/#sessionid=private-session"];
+  for (const off of [false, true]) {
+    const { api, all, calls } = setup(off);
+    for (const url of urls) {
+      assert.equal(api.inspect(url).ok, false, url);
+      assert.equal(api.checkPost(`Shared ${url}`).ok, false, url);
+      const displayed = api.content(`Shared ${url}`);
+      assert.equal(displayed.textContent.includes("private-"), false, url);
+      assert.equal(all(displayed).some(el => ["button", "iframe", "img"].includes(el.tagName)), false);
+    }
+    assert.equal(calls.length, 0);
+    assert.equal(api.inspect("https://docs.github.com/en#%61ccessibility").ok, true);
+  }
+});

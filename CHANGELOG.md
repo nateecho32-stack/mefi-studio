@@ -7,6 +7,24 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Referral rewards have one home in Account.** Friends opens the same card.
+  Compatible services show verified progress, create a referral code, and record
+  a friend's code after confirmation. Saved requests remain recoverable after
+  connection loss or an account switch; room invitations remain separate.
+
+- **Studio accounts can use Google through a configured service.** Native sign-in
+  keeps credentials encrypted, shows admission or waitlist status, and requires
+  explicit linking to keep an existing account. Chat history follows the selected
+  account; work started under another account cannot resume as the new one.
+  Existing history and credentials stay preserved when migration is required.
+
+- **Cash marketplace has a review and recovery interface.** Compatible private
+  services can supply creator goods and exact collectible listings, seller setup,
+  configured cash pricing and pending/history orders. Buyers review server prices,
+  fees and tax state before secure checkout. Unknown payment results retain their
+  original request, and delivery refreshes canonical ownership. Availability and
+  provider policy remain service-controlled; this client does not activate sales.
+
 - **Pets and stickers have a collection home.** The desktop client adds a
   nursery with growth and rarity appearances, clear crate odds and skippable
   reveals, a sticker book with nine bundled Studio designs, room sharing,

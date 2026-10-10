@@ -6,6 +6,105 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-08 The launch screen and Vibe New app offer to stop the agents when a switch is refused for running work
+
+Detached worktree C:\wt\stopswitch, off main b640d29. The owner's screenshot: opening or starting a project on the launch
+screen showed "The assistant is finishing work in this project. Pause it, let the current work finish, then switch." with
+the Start agents switch off and no way forward. selectProject already has a saveProgress mode (stop every agent, keep each
+run's checkpoint, then switch) that only the Workspace sidebar used. Changed: startup:choose and preload startupChoose pass
+saveProgress through; the launch card gets a hidden "Stop the agents and switch" button (boot-force) that startup.js raises
+only for a busy refusal that is not "already in progress", for Open and for a new app whose folder was made but could not
+open (retried with projectsSelect(addedId, { saveProgress }) so the folder is not made twice); the Vibe New app panel's retry
+button reads "Stop agents, open app and start building" after a busy refusal and passes saveProgress on the second click.
+Checked: `npm run check` ok (314 targets); `npm run audit` ok (0 findings); `npm run lint` 0 errors, 47 warnings, the same
+count as without the change. New tests: 3 in startup_screen (32/32), 1 in vibe_panels (52/52), plus startup_resume 14/14,
+daily_paper 10/10, booklet_build 5/5. The full `npm test` here, run while other sessions held the PC, failed only in git-heavy
+suites that passed alone: advisory_checks 26/26, attempt_review_host 28/28, executor_worktree 12/12, rust_parity_repo 3/3,
+rust_parity_snapshots 3/3, rust_parity_git 4/4 (141 s; it failed twice under load on a `filesystem: NTFS` probe and passes
+4/4 on clean main b640d29 as well). Not measured: hot paths (a button and one IPC argument, no new startup work). Not run
+in the real app: both buttons are pinned by stubbed tests only.
+
+## 2026-10-07 A newcomer wave cannot farm credits for someone: credits on hold, a moderator's Pay or Drop, the Studio bot's message
+
+Branch `fix/credits-wave` (C:\wt\credits-wave, off main cde77af). The owner, through the Studio UI/UX session: if more
+than about three new accounts all play one member's app, that member must not be able to game credits from it;
+existing members playing is fine; new members must not be softlocked; "put a hold on it" and "notify me in the Discord
+through the studio bot"; IP checks maybe, not super worried. Gap after c679461: aged Discord accounts that joined the
+server together pay once past their first week. Changed: credits.mjs adds newcomers (first 30 days in the server) and
+WAVE_KINDS (played, starred, sale). In any 7 days the first 3 newcomers to pay a member are paid, and from the 4th on
+pay() keeps the credit_events row at 0 and puts the amount in credit_held (schema v7, claimed with the style-shop
+session, whose tables take v8 and up). Holds count toward kindToday, the pair limit and the day's cap. Moderators read
+`GET /v1/admin/credits/held` and `POST /v1/admin/credits/held/:id` releases or drops (audited, `from` for one giver).
+Holds go with a revoke or Forget me and drop after 30 days. /v1/me and the review carry `credits.held`. alerts.mjs
+adds holds() (each member told once until decided) and an optional MOD_ALERT_BOT_TOKEN: the Studio bot messages each
+OWNER_IDS account. Studio: hub-client modHeld/modHeldDecide and me().credits.held, HUB_ROOM_METHODS, Friends ›
+Moderation's Credits on hold, and the Project hub's "N credits waiting for a quick check". No IP signal (the relay
+keeps none). Here: relay_credits, relay_shop, relay_events, friends_mod_ui and project_hub_ui 70 pass, 0 fail (5 new:
+the wave with Studio's real hub client and both alert channels, caps and expiry, the v7 migration, the two UI parts;
+the v6 migration test no longer pins 6 as the last). relay_core, relay_e2e, relay_connect, relay_pcs, relay_pets,
+hub_client, hub_client_shop, friends_events_ui, friends_front_ui and rooms_ui 115 pass. check ok; audit 0 findings;
+eslint clean on the changed files. Not run here: the full `npm test` (ci.yml on the pushed branch is the gate). Not
+deployed: one deploy from main after the style-shop session's v8+ work lands on top.
+
+## 2026-10-07 Projects shows whole names again: the Friends card's one-line rows stay the card's own
+
+Branch `ui/projects-names` in C:\wt\sw-capture, off main f02381e. Capturing Social for the owner showed Projects cutting
+its names to "Notes..." beside their folders: 565c068 turned the shared `.social-row-text` into a one-line row for the
+Friends card, and Projects' rows use the same class. The base rule is the name over what it is again; the Friends card
+keeps one line (`.social-people .social-row-text`), and a project card is 320 px wide at least. Checked in offscreen
+captures at 1920x1080 and 1440x900 (Projects, Home with its Friends card). Node through `npm run test:one`: social,
+layout_contract_css, shell_frame_css, today_page and friends_front_ui 65/65; Windows: friends_render passes. check ok,
+lint 47 warnings (as main), audit 0 findings. The change is CSS only (renderer/social.css and the rebuilt booklet); the
+full test:fast ran on its parent's content earlier today (7741 of 7756, 14 skipped, its one sync failure passes alone).
+
+## 2026-10-07 The Shop's season, put together: five helper branches, 29 catalog items with October's drop, the Shop page seen in the real app
+
+Branch `feat/shop-season` (C:\wt\style, off main c513838, main merged in twice: de5490d and c679461). The owner, after
+the first Shop: "add more, polish more, improve more", then "add more pets, styles, effects, themes, make the viewing
+easier to see for the shop, make the shop its own whole page, make it clean, nice, like discords shop almost, lets have
+the shop rotate in and out styles" and "every month we will make new styles". Five helpers worked in their own
+worktrees (feat/shop-showroom, feat/pets-more, feat/effects-more, feat/styles-more, feat/map-glance; each has its own
+row below); every merge was resolved file by file with both sides kept, renderer/booklet.html rebuilt, TESTRUNS rows
+united and rotated. Caught while merging: the Shop page passed MefiPets.paintPreview milliseconds where pets count
+seconds (a card's pet spun about a thousand times too fast); two tests written for the old card layout were rewritten
+for the page's detail view. The catalog: 17 new items in relay/src/shop.mjs CATALOG and main.cjs's mirror (29 in all),
+October's drop "2026-10" (Haunted Hollow) holding the Will-o'-wisp, Spirits, Lanterns, Pumpkin Spice, Haunted and
+Candlelight. relay_shop's catalog test listed the day's twelve items and its client test counted them; with the drop
+in the catalog both failed, and the failed client test left the relay harness open, so the run held the suites lane
+for 11 minutes until stopped: both now pin the catalog in code and check each day's list against shop-drops.mjs
+saleOf, so they mean the same in October and after it. Polish from the real app: a pet's name sits on a nameplate in
+the page's own tone (it was white words in a heavy outline on Daylight), and the signed-out Shop's Friends sign-in
+card waits out of sight until a Sign in calls it (it sat under every view).
+
+The real app on a fresh profile, signed out (the showroom: main's catalog, nothing owned), 1920x1080: Home with the
+drop's banner ("October drop · Leaves in 24 days", its wisp, lanterns and Pumpkin Spice live), its six pieces "On sale
+until October 31", Featured this week and every category, 40 cards; Pets 8 (Ember, four scales, three pets), Menu
+effects 7, Node styles 4, Themes 11; the Phoenix's detail (large live preview, 150 credits, Try for 2 minutes, Sign in
+to get it); its Try (the phoenix flies the window, "Trying Phoenix · 1:57 left"); Studio mode and Daylight; no page
+errors. Window suites on the merged tree, one at a time: friends_render (83 s), settings_render, setup_helper_render,
+map_render, node_paint_cache, node_views_render, command_render, shell_render, tabs_render pass; today_render failed
+once while main was being merged under it and passes alone. Node: the Shop, relay, pets, effects, music and node
+style suites 338/338, then the credits merge's overlap 139/139; check ok; lint 47 warnings (as main); audit 0
+findings; Python contracts 248 OK (1 skipped). Not deployed: the relay (drops, Shop pets' generations and the credits
+hardening go out together in one deploy from main, the owner asked first).
+
+## 2026-10-07 Menu effects: Blown away, Shatter, Glitch and Spirits; right-click menus, Search and popovers leave in style
+
+Branch `feat/effects-more` (6e84e14, 02c6146, 03cc92e on c513838), worktree C:\wt\s-fx on the owner's laptop (Node
+24.15, Electron 44.4.1; 700 MB free and paging for most of the run). Asked: two new menu effects, then four (Spirits
+for October's drop, Glitch), effects for right-click and tab menus, Search and popovers, under 2 ms of particle work a
+frame on a 400x500 menu, motion Off and "It fades out" closing at once, a menu reopened mid-effect back at once. The
+Shop's catalog entries are left to the Shop helper (rotation rework). Per-frame JS (mask step plus particles), 400x500
+menu, Electron offscreen, 3 runs each through the windows lane: wind mean 0.42 ms p95 0.8, shatter 0.83/1.2, spirits
+0.57/1.0, glitch 0.54/0.5 (dissolve 0.28/0.5, embers 0.52/1.8, stardust 0.33/0.6), frames 16.7 ms apart (p50); single
+32-38 ms frames (shatter, glitch) did not come back in per-frame reruns (max 3.8 and 1.2 ms), taken as the PC's paging.
+Plans fill in idle slices: 27-43 ms in one task before, 2-9 ms per slice. Suites on the last commit: effects 15/15,
+tabs_strip 68/68, friends_shop_ui, booklet_build, studio_ui, type_into_menu, shop_host, relay_shop, sessions_list,
+shell_frame_state: 210/210; earlier on the branch 20 suites around the change 446/446. Electron, one at a time:
+tabs_render, sessions_render, shell_render, autonomy_render, friends_render, today_render pass. check ok; lint 47
+warnings (baseline); audit 0 findings; Python contracts 248 OK, 1 skipped. Frame strips (dark and light) in
+C:\wt\s-fx-lab\out\*-final.png. Not run: the full `npm test`.
+
 ## 2026-10-07 The Map at a glance: state ripples, a legend that points at its nodes, a hover card, the four states apart in every theme
 
 Branch `feat/map-glance` (4d923fa and ec3784a, from origin/main c513838), worktree C:\wt\s-map on the owner's laptop

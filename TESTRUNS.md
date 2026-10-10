@@ -39,6 +39,50 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-10 17:13 — Integrated referrals, crate resale and 1,000-member rehearsal
+
+Private release composition attempt14: 843/843 pass, zero failures/skips/cancellations, 148.516 seconds, through the PC test lease with 128 MiB heap and concurrency1. All191 private and1293 public input hashes remain unchanged. The original1,000-member capacity suite passes in98.673 seconds within its unchanged110-second arrival and180-second hard limits; final RSS236.21 MiB, heap16 MiB, hibernation35.305 ms, reconnect80.116 ms and revocation197.236 ms. This is local synthetic-provider rehearsal, not hosted or physical-PC acceptance. Its `wireBytes` metric counts string code units, not measured network bytes.
+
+The same graph exercises actual mounted signed referral routes and admission/attribution transactions, five-friend permanent benefits, explicit positive/negative replay, account/session revocation and the native handler with the public parser. Actual earned credits open an unforced multi-rarity crate; the existing pet is cared for and sold through public HubClient, with its traits/provenance preserved, one ownership transfer and separately verified seller-paid processing. External provider HTTP/configuration remains synthetic; no live payments or configuration are enabled.
+
+Public v17: 263/263 pass across18 affected suites, 6.905 seconds, zero failures/skips/cancellations/drift;26 new referral cases. Check and audit exit0. Lint exits0 with48 existing warnings and zero errors. Earlier v16 keeps262/263: a test compared a JSON tuple to a renderer-VM prototype; v17 clones only the expected test tuple without changing production behavior. Account/host fixture checkpoints55/55,53/53 and6/6 remain preserved. Same-graph native v3 passes3/3 in0.710 seconds using the real localhost callback, saved AccountClient and canonical signed service, synthetic RSA provider and ephemeral AES fixture. It does not prove Windows DPAPI, live consent or Rust-host acceptance.
+
+Private backup contains1505 entries; root reopened every entry and verified length/hash. Application source and private authority remain separate. Failed predecessor receipts remain reachable, including the prototype comparison, OAuth429 fixture pacing, old canonical nested-transaction fixture, lint under an accidentally inherited128 MiB cap, and malformed single-suite wrapper. Current fixtures keep the original deadlines and policy bounds.
+
+Source Chromium capture v2 exits1 after26 screenshots and154 passing interaction/layout checks: four denied reads of an unbound local speed-measurement file fail the final network check. Root visually inspected all26 images and found several offscreen/stale captures; these are not accepted visual proofs. A separate fixture correction is pending. The original complete application gate remains RED. Final application full gate, accepted visuals, package/ZIP, user-data backup, installation and main landing remain pending; component passes do not replace them.
+
+## 2026-10-10 16:38 — Native account readiness and shared-link privacy component validation
+
+The immutable public v9 focus passes199/199,0skip/cancel,5.208 seconds. Its earlier v8 run retains198total/197pass/1fail: a community IPC fixture still expected eight actions after the ninth named action was added. The narrow v9 fixture correction preserves unknown-action refusals. Native retirement/cancellation, waitlist/account mode, PC generation fences, history isolation, commerce quote/cooldown and host/preload checks remain exercised.
+
+Public v10 adds asynchronous single-flight encrypted-state readiness and lazy account code loading. All three adopted source hashes match the source artifact; fourteen focused suites pass207/207,0skip/cancel,5.646 seconds. Manifest70B5055F8A824DB3B39B8CFDC9186EC8BD03A8FB9A4EAC6731FB177BA6633716 pins1284 inputs; source hashes remain unchanged before/after. Actual real-PC test lease,128MiB and concurrency1 were used.
+
+The same immutable native-hook measurement passes before and after,21 samples each. Before uses one synchronous credential read; after uses zero synchronous and one asynchronous read. Median hook0.8888→0.5431ms and first synchronous call1.3673→0.7511ms; first-ready1.3936→1.7996ms. This measures an isolated VM hook and synthetic encryption, not full app startup, Rust or Windows DPAPI. Both receipts are retained; there is no blanket startup-speed claim.
+
+Separate closed private/shared-link before/after snapshots reproduce four privacy failures among22cases, then pass22/22 after the correction. Encoded fragment secrets are refused in sends/edits/captions and the renderer, and authentic older unsafe peer/image history is withheld without erasing retained evidence. Both actual real-PC lease receipts preserve125 inputs plus433 public runner inputs and unchanged limits. The six-file release adoption is source-reviewed; its own final combined graph remains pending. Booklet regeneration exits0,45models/hashbfe811c509c8.
+
+Private capacity passes the unchanged1000-client fixture under128MiB,110-second connection deadline and original memory bounds. The earlier865-of1000 failed attempt is retained. Private cash263/263 and actual mounted-host8/8 are separate component evidence. Latest combined host55-suite run is799total/798pass/1failure: the co-work renewal test used a10ms sleep before an alarm; a bounded actual-ready acknowledgement correction is prepared, unrun. No live provider, physical two-PC, full final app gate, fresh package, installed update or main landing is claimed by these component runs. Private source, credentials, data and receipts remain outside Git.
+
+## 2026-10-10 afternoon — Exact quote consent, collapsed odds and creator access component checks
+
+Combined public v1's focused run reported211 tests,208pass/3fail,0skip/cancel. One real GET pagination defect lost the validated request's cursor/limit while checking the reply; the fix captures those primitives before awaiting HTTP and tests valid second-page and backtracked-page responses. Two existing Shop expectations needed the new Membership tab/script position. The corrected combined public v2 passes211/211,0skip/cancel,1.843 seconds, and check/audit; lint has0errors and48existing warnings. Original failed log remains retained.
+
+The v3 quote keeps reward count, exact debit, leftover budget and expiry visible while complete unchanged odds sit in default-collapsed native details. Open is actually disabled before consent and responds to checkbox changes; creator copy accurately treats paid, lifetime and unexpired intro access alike. Its three focused suites pass76/76,0skip/cancel,0.762 seconds. Booklet regeneration/check/audit exit0; lint still has0errors and48existing warnings.
+
+Chromium capture uses mock bridge data, isolated profiles, a frozen nine-input helper manifest and the shared Windows lease with owned Job Object cleanup. Attempt1 stopped after two screenshots because the old helper refused to click the newly disabled Open button; the failed report/log are preserved. New attempt2 changes only that helper interaction and dispatches the checkbox change. Shipping source is unchanged: eight screenshots,34checks,0page errors/network attempts, actual exit0. Desktop/narrow collapsed quote, expanded exact odds, mixed pet/license reveal and revised creator access were checked; screenshot review found no overflow or overlapping controls. This proves component behavior, not a live provider/private-service roundtrip or a completed full desktop gate. The original full0d failures remain separately recorded; no fresh package/install is claimed.
+
+## 2026-10-10 midday — Eyes taskbar level corrected after native trace; Git and profiler triage retained
+
+Original worktree-actions passes 17/17 (183.772 seconds). External copies of its conflict case against clean main and candidate pass 2/2 (19.208 seconds), preserving every assertion and the 30-second Git command bound. Config commands complete in 137–178 ms; the only nonzero observed result is the expected absent MERGE_HEAD. The historical full-run Git failure remains unexplained. Original candidate desktop profiler passes (24.886 seconds); clean-main export-observation copy passes (28.489 seconds), with a real 14,651-byte JSON download and completed event 2.657 seconds after the renderer trigger. Its original deadline is unchanged, and the historical timeout cause remains unproven.
+
+Eyes original diagnostic failed native readiness while minimized. A second trace then failed after show despite successful resumed polling: default `setAlwaysOnTop(true)` emitted true while native topmost readback stayed false. Electron 44.4.1 places the default floating level behind the taskbar on setter and focus; a native read-only observation found the taskbar without WS_EX_TOPMOST. Both fixture pins now use the documented `pop-up-menu` level. No constructor, polling source, throttling, readiness assertion or deadline was relaxed. The external trace passes (4.447 seconds); the original suite passes (4.079 seconds): baseline two/303 ms, hidden zero/1,200 ms, one snap, resumed three/590 ms, gaps 294–1,270 ms. These results support a fixture correction, not a green full gate. All failed variants and terminal full0d evidence remain retained.
+
+## 2026-10-10 midday — Frozen 0d910af full gate completes with three failures
+
+Exact clean source `0d910af3dab0b3215bbae9b40de8e0d5f6f8e604` completed `npm test` at widths one/one with actual exit 1. CPU: 7,945 total, 7,906 pass, 38 skip, one failure, zero cancellations (2,009.131 seconds). The conflict-merge fixture failed before exercising merge behavior, on unchanged `git config core.autocrlf false` (33.859 seconds); native error details were not retained, so its cause is unknown. Main Windows: 70 total, 68 pass, one failure, one skip, zero cancellations (2,040.490 seconds). The unchanged desktop profiler JSON download timed out after 5,240 ms at observed 1.05x pace. Serial Command passed (84.076 seconds); Eyes failed initial native topmost readiness before loading polling code (11.141 seconds).
+
+Occlusion: one pass, one capability skip (31.330 seconds), with the cover unable to produce real occlusion; no actual occlusion proof is claimed. Python: 248 tests, one skip, pass (89.328 seconds); normalized-path locking passed. Node summary: 4,187 seconds, exit 1. Ctrl+W native-close behavior remains unverified where the synthetic input did not close the window. The complete log `full-test-final-0d910af.log` and resource/native observations are retained outside Git. Subsequent solo diagnostics do not change this failed result. No final green receipt, fresh package, verified user-data backups, installed update or main landing was produced.
+
 ## 2026-10-10 late morning — Concurrent booklet snapshots and native Eyes readiness corrected
 
 Same-root booklet builds now take turns for the complete HTML/source-map snapshot, releasing the queue after success or failure. Unique exclusive temporary files, atomic replacement and existing bounded cross-process rename retries remain intact. The actual eight-way regression and failed-build-followed-by-valid-build recovery pass; all six booklet cases pass in 15.822 seconds. No renderer source or generated application behavior changes.
@@ -181,105 +225,6 @@ tabs_model, tabs_observer, tabs_persist, workspace_ui 199/199 after two fixture 
 electron: the bar spans the window and the list and its splitter start under it; both had pinned the bar starting where the
 list ended). Offscreen Electron tour at 1920x1080 and 1366x768 (Social Home, Friends, Studio Home, a session, Tasks, Team,
 Settings, both project menus, the list drawer, the collapsed rail): the bar is 0,0,W,56 on every page, rail and list at y 56.
-
-## 2026-10-08 The launch screen and Vibe New app offer to stop the agents when a switch is refused for running work
-
-Detached worktree C:\wt\stopswitch, off main b640d29. The owner's screenshot: opening or starting a project on the launch
-screen showed "The assistant is finishing work in this project. Pause it, let the current work finish, then switch." with
-the Start agents switch off and no way forward. selectProject already has a saveProgress mode (stop every agent, keep each
-run's checkpoint, then switch) that only the Workspace sidebar used. Changed: startup:choose and preload startupChoose pass
-saveProgress through; the launch card gets a hidden "Stop the agents and switch" button (boot-force) that startup.js raises
-only for a busy refusal that is not "already in progress", for Open and for a new app whose folder was made but could not
-open (retried with projectsSelect(addedId, { saveProgress }) so the folder is not made twice); the Vibe New app panel's retry
-button reads "Stop agents, open app and start building" after a busy refusal and passes saveProgress on the second click.
-Checked: `npm run check` ok (314 targets); `npm run audit` ok (0 findings); `npm run lint` 0 errors, 47 warnings, the same
-count as without the change. New tests: 3 in startup_screen (32/32), 1 in vibe_panels (52/52), plus startup_resume 14/14,
-daily_paper 10/10, booklet_build 5/5. The full `npm test` here, run while other sessions held the PC, failed only in git-heavy
-suites that passed alone: advisory_checks 26/26, attempt_review_host 28/28, executor_worktree 12/12, rust_parity_repo 3/3,
-rust_parity_snapshots 3/3, rust_parity_git 4/4 (141 s; it failed twice under load on a `filesystem: NTFS` probe and passes
-4/4 on clean main b640d29 as well). Not measured: hot paths (a button and one IPC argument, no new startup work). Not run
-in the real app: both buttons are pinned by stubbed tests only.
-
-## 2026-10-07 A newcomer wave cannot farm credits for someone: credits on hold, a moderator's Pay or Drop, the Studio bot's message
-
-Branch `fix/credits-wave` (C:\wt\credits-wave, off main cde77af). The owner, through the Studio UI/UX session: if more
-than about three new accounts all play one member's app, that member must not be able to game credits from it;
-existing members playing is fine; new members must not be softlocked; "put a hold on it" and "notify me in the Discord
-through the studio bot"; IP checks maybe, not super worried. Gap after c679461: aged Discord accounts that joined the
-server together pay once past their first week. Changed: credits.mjs adds newcomers (first 30 days in the server) and
-WAVE_KINDS (played, starred, sale). In any 7 days the first 3 newcomers to pay a member are paid, and from the 4th on
-pay() keeps the credit_events row at 0 and puts the amount in credit_held (schema v7, claimed with the style-shop
-session, whose tables take v8 and up). Holds count toward kindToday, the pair limit and the day's cap. Moderators read
-`GET /v1/admin/credits/held` and `POST /v1/admin/credits/held/:id` releases or drops (audited, `from` for one giver).
-Holds go with a revoke or Forget me and drop after 30 days. /v1/me and the review carry `credits.held`. alerts.mjs
-adds holds() (each member told once until decided) and an optional MOD_ALERT_BOT_TOKEN: the Studio bot messages each
-OWNER_IDS account. Studio: hub-client modHeld/modHeldDecide and me().credits.held, HUB_ROOM_METHODS, Friends ›
-Moderation's Credits on hold, and the Project hub's "N credits waiting for a quick check". No IP signal (the relay
-keeps none). Here: relay_credits, relay_shop, relay_events, friends_mod_ui and project_hub_ui 70 pass, 0 fail (5 new:
-the wave with Studio's real hub client and both alert channels, caps and expiry, the v7 migration, the two UI parts;
-the v6 migration test no longer pins 6 as the last). relay_core, relay_e2e, relay_connect, relay_pcs, relay_pets,
-hub_client, hub_client_shop, friends_events_ui, friends_front_ui and rooms_ui 115 pass. check ok; audit 0 findings;
-eslint clean on the changed files. Not run here: the full `npm test` (ci.yml on the pushed branch is the gate). Not
-deployed: one deploy from main after the style-shop session's v8+ work lands on top.
-
-## 2026-10-07 Projects shows whole names again: the Friends card's one-line rows stay the card's own
-
-Branch `ui/projects-names` in C:\wt\sw-capture, off main f02381e. Capturing Social for the owner showed Projects cutting
-its names to "Notes..." beside their folders: 565c068 turned the shared `.social-row-text` into a one-line row for the
-Friends card, and Projects' rows use the same class. The base rule is the name over what it is again; the Friends card
-keeps one line (`.social-people .social-row-text`), and a project card is 320 px wide at least. Checked in offscreen
-captures at 1920x1080 and 1440x900 (Projects, Home with its Friends card). Node through `npm run test:one`: social,
-layout_contract_css, shell_frame_css, today_page and friends_front_ui 65/65; Windows: friends_render passes. check ok,
-lint 47 warnings (as main), audit 0 findings. The change is CSS only (renderer/social.css and the rebuilt booklet); the
-full test:fast ran on its parent's content earlier today (7741 of 7756, 14 skipped, its one sync failure passes alone).
-
-## 2026-10-07 The Shop's season, put together: five helper branches, 29 catalog items with October's drop, the Shop page seen in the real app
-
-Branch `feat/shop-season` (C:\wt\style, off main c513838, main merged in twice: de5490d and c679461). The owner, after
-the first Shop: "add more, polish more, improve more", then "add more pets, styles, effects, themes, make the viewing
-easier to see for the shop, make the shop its own whole page, make it clean, nice, like discords shop almost, lets have
-the shop rotate in and out styles" and "every month we will make new styles". Five helpers worked in their own
-worktrees (feat/shop-showroom, feat/pets-more, feat/effects-more, feat/styles-more, feat/map-glance; each has its own
-row below); every merge was resolved file by file with both sides kept, renderer/booklet.html rebuilt, TESTRUNS rows
-united and rotated. Caught while merging: the Shop page passed MefiPets.paintPreview milliseconds where pets count
-seconds (a card's pet spun about a thousand times too fast); two tests written for the old card layout were rewritten
-for the page's detail view. The catalog: 17 new items in relay/src/shop.mjs CATALOG and main.cjs's mirror (29 in all),
-October's drop "2026-10" (Haunted Hollow) holding the Will-o'-wisp, Spirits, Lanterns, Pumpkin Spice, Haunted and
-Candlelight. relay_shop's catalog test listed the day's twelve items and its client test counted them; with the drop
-in the catalog both failed, and the failed client test left the relay harness open, so the run held the suites lane
-for 11 minutes until stopped: both now pin the catalog in code and check each day's list against shop-drops.mjs
-saleOf, so they mean the same in October and after it. Polish from the real app: a pet's name sits on a nameplate in
-the page's own tone (it was white words in a heavy outline on Daylight), and the signed-out Shop's Friends sign-in
-card waits out of sight until a Sign in calls it (it sat under every view).
-
-The real app on a fresh profile, signed out (the showroom: main's catalog, nothing owned), 1920x1080: Home with the
-drop's banner ("October drop · Leaves in 24 days", its wisp, lanterns and Pumpkin Spice live), its six pieces "On sale
-until October 31", Featured this week and every category, 40 cards; Pets 8 (Ember, four scales, three pets), Menu
-effects 7, Node styles 4, Themes 11; the Phoenix's detail (large live preview, 150 credits, Try for 2 minutes, Sign in
-to get it); its Try (the phoenix flies the window, "Trying Phoenix · 1:57 left"); Studio mode and Daylight; no page
-errors. Window suites on the merged tree, one at a time: friends_render (83 s), settings_render, setup_helper_render,
-map_render, node_paint_cache, node_views_render, command_render, shell_render, tabs_render pass; today_render failed
-once while main was being merged under it and passes alone. Node: the Shop, relay, pets, effects, music and node
-style suites 338/338, then the credits merge's overlap 139/139; check ok; lint 47 warnings (as main); audit 0
-findings; Python contracts 248 OK (1 skipped). Not deployed: the relay (drops, Shop pets' generations and the credits
-hardening go out together in one deploy from main, the owner asked first).
-
-## 2026-10-07 Menu effects: Blown away, Shatter, Glitch and Spirits; right-click menus, Search and popovers leave in style
-
-Branch `feat/effects-more` (6e84e14, 02c6146, 03cc92e on c513838), worktree C:\wt\s-fx on the owner's laptop (Node
-24.15, Electron 44.4.1; 700 MB free and paging for most of the run). Asked: two new menu effects, then four (Spirits
-for October's drop, Glitch), effects for right-click and tab menus, Search and popovers, under 2 ms of particle work a
-frame on a 400x500 menu, motion Off and "It fades out" closing at once, a menu reopened mid-effect back at once. The
-Shop's catalog entries are left to the Shop helper (rotation rework). Per-frame JS (mask step plus particles), 400x500
-menu, Electron offscreen, 3 runs each through the windows lane: wind mean 0.42 ms p95 0.8, shatter 0.83/1.2, spirits
-0.57/1.0, glitch 0.54/0.5 (dissolve 0.28/0.5, embers 0.52/1.8, stardust 0.33/0.6), frames 16.7 ms apart (p50); single
-32-38 ms frames (shatter, glitch) did not come back in per-frame reruns (max 3.8 and 1.2 ms), taken as the PC's paging.
-Plans fill in idle slices: 27-43 ms in one task before, 2-9 ms per slice. Suites on the last commit: effects 15/15,
-tabs_strip 68/68, friends_shop_ui, booklet_build, studio_ui, type_into_menu, shop_host, relay_shop, sessions_list,
-shell_frame_state: 210/210; earlier on the branch 20 suites around the change 446/446. Electron, one at a time:
-tabs_render, sessions_render, shell_render, autonomy_render, friends_render, today_render pass. check ok; lint 47
-warnings (baseline); audit 0 findings; Python contracts 248 OK, 1 skipped. Frame strips (dark and light) in
-C:\wt\s-fx-lab\out\*-final.png. Not run: the full `npm test`.
 
 ## Read Before Any Tests
 

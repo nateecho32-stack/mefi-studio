@@ -46,6 +46,7 @@ function host({ repo = "Owner/App", rooms = { "owner/app": "room_1" }, state = "
     vaultProjectRepo: async () => repo,
     hubClient: client,
     hubInstance: () => client,
+    studioAccountLinked: async () => linked,
     communityRead: async () => ({ state: { link: linked ? { userId: ME } : null } }),
     logLine: (line) => logs.push(line),
     existsSync: (file) => Boolean(files[path.basename(file)]),

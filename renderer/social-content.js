@@ -7,6 +7,12 @@
   const button = (label, run) => { const el = node("button", "ghost rooms-button", label); el.type = "button"; el.addEventListener("click", run); return el; };
   const privateEnd = /(?:^|\.)(?:localhost|local|lan|internal|home|arpa|intranet|test|invalid|example)$/i;
   const secretKey = /^(?:access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|key|token|secret|password|passwd|authorization|auth|code|session|sessionid|jwt|signature|sig|x-amz-signature)$/i;
+  function secretFragment(hash) {
+    // Inspect one percent-encoding layer even when another escape is malformed.
+    const decoded = hash.replace(/%([0-9a-f]{2})/gi, (_, octet) => String.fromCharCode(parseInt(octet, 16)));
+    return /(?:token|password|secret|access_token|api_key)=/i.test(decoded)
+      || decoded.split(/[?#&;/]/).some(part => { const equals = part.indexOf("="); return equals >= 0 && secretKey.test(part.slice(0, equals)); });
+  }
   function inspect(value) {
     if (typeof value !== "string" || value.length > 2048 || /[\s\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069\\]/.test(value)) return { ok: false, reason: "This link contains hidden characters or is too long." };
     let url;
@@ -14,7 +20,7 @@
     const host = url.hostname.toLowerCase().replace(/\.$/, "");
     if (url.protocol !== "https:" || url.username || url.password || url.port) return { ok: false, reason: "Only HTTPS links without a login or custom port can open here." };
     if (!host.includes(".") || host.startsWith("[") || /^\d+(?:\.\d+)*$/.test(host) || privateEnd.test(host)) return { ok: false, reason: "Private-network addresses cannot open from chat." };
-    if ([...url.searchParams.keys()].some((key) => secretKey.test(key)) || /(?:token|password|secret|access_token|api_key)=/i.test(url.hash)) return { ok: false, reason: "This link may contain a login or secret. Ask for a public share link." };
+    if ([...url.searchParams.keys()].some((key) => secretKey.test(key)) || secretFragment(url.hash)) return { ok: false, reason: "This link may contain a login or secret. Ask for a public share link." };
     const label = host; // ASCII/punycode from URL, never a member-supplied label.
     let embed = null;
     if (["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].includes(host)) {

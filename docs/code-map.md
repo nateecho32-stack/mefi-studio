@@ -1,10 +1,31 @@
 # Code map
 
+Referral rewards: `scripts/referrals-contract.cjs` validates the three bounded
+actions; `renderer/referrals.js` owns the full Account card and saved request
+recovery. `renderer/account.js` and `friends-front.js` link to that same home.
+Main, preload and `hub-client.cjs` preserve the original account and session
+through each request. Attribution and benefits belong to the private service.
+See [referrals.md](referrals.md).
+
+Cash marketplace: `scripts/commerce-contract.cjs` validates orders and bounded
+transport, `commerce-listings-contract.cjs` validates seller/catalog and exact
+collectible previews, and `renderer/commerce.js` / `.css` provide Browse, Sell
+and My orders. Main/preload own the native provider-link boundary. Service and
+provider authority remain private. See [cash-marketplace.md](cash-marketplace.md).
+
 Pets and stickers: `scripts/collectibles-contract.cjs` bounds desktop API
 requests; `renderer/collectibles.js` and `.css` own the Shop collection panels;
 `renderer/pets.js` paints pet snapshots and `renderer/rooms.js` offers sticker
 chat. `assets/stickers/` contains the nine Studio illustrations. The collectible
 service implementation is private and separate. See [collectibles.md](collectibles.md).
+
+`renderer/collectible-crates.js` owns server-configured dynamic crate quotes,
+typed reveals, request recovery and paginated creator consent.
+`renderer/membership.js` and `.css` own Shop's Membership view;
+`scripts/billing-contract.cjs` validates its bounded status and fixed actions.
+`scripts/hub-client.cjs`, main and preload carry those actions and validate
+issued browser links. See [membership.md](membership.md). Payment authority,
+provider configuration and collectible transactions remain in the private service.
 
 Where things live, folder by folder. [architecture.md](architecture.md) is the
 feature walkthrough and glossary, and [agent-loop.md](agent-loop.md) follows a
@@ -652,3 +673,10 @@ commit rewrites the JSON view as well.
   `renderer/community.js`. [community.md](community.md) walks the flow.
 - **something only the running app shows:** the recipes in
   [performance.md](performance.md) and `tools/profile_studio.mjs`.
+
+Prepared canonical account client: scripts/actor-contract.cjs holds the exact
+public grammar; scripts/account-client.cjs owns native Google broker sign-in
+and encrypted account selection; scripts/room-history-scopes.cjs isolates
+local chat by validated actor; renderer/account.js exposes public sign-in
+status and named actions. See [studio-accounts.md](studio-accounts.md) for protocol negotiation,
+migration boundaries and validation still required.

@@ -134,10 +134,11 @@ app.whenReady().then(async () => {
 
   await window.loadURL("data:text/html,<title>log-tail-toggle</title><body></body>");
   window.show();
-  // Set and verify the native state after show: the constructor option alone
-  // did not hold on this Windows build, allowing unrelated occlusion changes
-  // to invalidate a fixture that is meant to exercise one hide/show toggle.
-  window.setAlwaysOnTop(true);
+  // Electron's default "floating" level places Windows fixtures behind the
+  // taskbar. A non-topmost taskbar then clears their native topmost state,
+  // including on focus. Use the documented level above the taskbar so the
+  // single hide/show toggle remains the only visibility transition.
+  window.setAlwaysOnTop(true, "pop-up-menu");
   window.focus();
   await waitFor((state) => state.hidden === false && state.windowVisible && state.windowAlwaysOnTop, 10000, "visible");
 
@@ -224,7 +225,7 @@ app.whenReady().then(async () => {
   // snap. A genuine duplicate (a double-registered listener) stamps a second
   // fetch within milliseconds of the snap and still fails here.
   window.show();
-  window.setAlwaysOnTop(true);
+  window.setAlwaysOnTop(true, "pop-up-menu");
   window.focus();
   await waitFor((state) => state.hidden === false && state.windowVisible && state.windowAlwaysOnTop, 5000, "visible-after-show");
   await waitFor((state) => (state.fetches ?? 0) > afterHide, 5000, "resume-snap-landed");

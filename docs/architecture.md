@@ -1,5 +1,18 @@
 # How Studio is put together
 
+Account's **Referral rewards** is the single home for invitation codes, verified
+progress and explicit redemption recovery; Friends links to that card. The
+private service counts qualifying admitted accounts and awards the permanent
+five-friend benefit. Room invitations remain separate. Saved requests retain
+their original account, code and request ID across reloads; uncertain results
+require explicit recovery. See [referrals.md](referrals.md).
+
+Shop's **Cash marketplace** adds independently gated catalog, seller and order
+panels. Exact item/listing versions, current seller fees, explicit tax state and
+account-bound order recovery come from the private service. The native host opens
+only issued, short-lived provider URLs; browser returns never grant ownership.
+See [cash-marketplace.md](cash-marketplace.md) for the contracts and recovery flow.
+
 Shop's **Pets & collectibles** provides the desktop nursery, crate reveals,
 sticker book, market and creator forms. The private service supplies ownership,
 membership entitlements, odds and purchase results; it is deployed separately.
@@ -7,6 +20,24 @@ membership entitlements, odds and purchase results; it is deployed separately.
 service-provided looks, and `scripts/collectibles-contract.cjs` bounds desktop
 requests. Nine free-pack sticker designs are bundled as artwork. See
 [collectibles.md](collectibles.md) for client behavior and the public API contract.
+
+Dynamic crates add server-configured topic and budget choices. Studio shows
+the exact quote, reward pool and odds before an explicit opening, retains the
+original request IDs for recovery, and refreshes authoritative ownership after
+a typed collectible or community-pack-license grant. Historical creator
+contributions remain accessible through pagination; dynamic participation has
+separate reversible consent. The service must advertise both `collectibles.1`
+and `collectibles.crates.1` before any dynamic request.
+
+Shop's **Membership** reads current paid, lifetime or intro benefits separately
+from permanent Donor history. It displays the service's offer and opens only
+validated, issued Checkout or billing-management links. A browser return asks
+for refreshed status; it does not grant benefits. The `billing.1` capability
+and account-specific action permissions control availability. Installing the
+desktop client enables no payments or service policy. See
+[membership.md](membership.md). Cash marketplace and seller onboarding need
+their separate client, private composition and provider acceptance before a
+cash-sales launch can be claimed.
 
 Friends > Your PCs has an optional paired repository-check coordinator. The
 desktop adapter loads only when requested. Local IPC owns queueing, invitations,
@@ -3134,3 +3165,10 @@ among several cards or revive a question from an unrelated earlier turn.
 Chat Undo selects the named saved decision or the latest active decision.
 An **inbox identity** hashes the saved request's scope; promotion refuses an
 outdated identity and preserves the request's agent/owner origin.
+
+Prepared canonical accounts use a negotiated accounts.canonical.1 marker for
+principal fields while retaining Discord-only provider/message identifiers.
+Native account authority stays in the existing host encryption boundary. Local
+chat history is selected from trusted hub identity and actor-hashed file names;
+legacy history is preserved without assigning an owner. See
+[studio-accounts.md](studio-accounts.md) for the disabled rollout and integration gates.

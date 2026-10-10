@@ -102,7 +102,7 @@
   const ABOUT = "New looks for Studio, for the credits you earn with friends. Credits are never bought, and everything Studio comes with stays free.";
   const KINDS = ["pet", "skin", "effect", "nodestyle", "pack"];
   // The views, in the row's order. "studio" (Home) and "packs" (Community) keep their old names for every way in.
-  const VIEWS = [["studio", "Home"], ["pets", "Pets"], ["collectibles", "Pets & collectibles"], ["effects", "Menu effects"], ["nodestyles", "Node styles"], ["themes", "Themes"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"]];
+  const VIEWS = [["studio", "Home"], ["pets", "Pets"], ["collectibles", "Pets & collectibles"], ["effects", "Menu effects"], ["nodestyles", "Node styles"], ["themes", "Themes"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"], ["membership", "Membership"], ["commerce", "Cash marketplace"]];
   const STUDIO_VIEWS = ["studio", "pets", "effects", "nodestyles", "themes"];
   const viewOf = (wanted) => (VIEWS.some(([id]) => id === wanted) ? wanted : { home: "studio", community: "packs", mine: "make" }[wanted] ?? null);
   // Studio's categories: a heading and a line each. Pets and their scales share one.
@@ -692,6 +692,8 @@
     balance.hidden = true;
     const earn = button("How to earn credits", () => window.MefiNav?.go?.("friends-page", { place: "events" }), "friends-shop-earn", "friends-shop-link");
     headTools.append(balance, earn);
+    headTools.append(button("Cash marketplace", () => show("commerce"), "friends-shop-commerce", "friends-shop-link"));
+    headTools.append(button("Membership", () => show("membership"), "friends-shop-membership", "friends-shop-link"));
     if (window.MefiTrades) headTools.append(button("Trade items", () => { void window.MefiTrades.open(); }, "friends-shop-trades", "friends-shop-link"));
     head.append(headWords, headTools);
     // Friends' places as a row, for when the list column is not showing them (Social, a small window).
@@ -724,7 +726,7 @@
     asked = null;
     lastView = view;
     let ready = false, me = null, balanceNow = null, canEarn = true, hold = null;
-    let collectiblesCard = null;
+    let collectiblesCard = null, membershipCard = null, commerceCard = null;
     // Studio's list: the relay's (signed in) or this PC's copy (the showroom), with the drops and the Featured shelf.
     let catalog = null; // { items, drops, featured, featuredUntil, local, at }
     let items = [], next = null, mine = [], busy = false, gone = false, seq = 0, autoConnected = false, loading = false;
@@ -781,7 +783,7 @@
       const known = Number.isFinite(balanceNow);
       balance.hidden = !known;
       if (known) balance.replaceChildren(gem(), node("span", "", credits(balanceNow)));
-      const shown = ready || showroom();
+      const shown = ready || showroom() || view === "membership" || view === "commerce";
       tabs.hidden = !shown;
       root.dataset.view = view;
       for (const tab of tabs.children) {
@@ -1557,6 +1559,14 @@
       if (signIn && !signIn.disabled) signIn.click?.();
     }
     function viewParts() {
+      if (view === "commerce" && window.MefiCommerce?.card) {
+        commerceCard ??= window.MefiCommerce.card();
+        return [commerceCard];
+      }
+      if (view === "membership" && window.MefiMembership?.card) {
+        membershipCard ??= window.MefiMembership.card();
+        return [membershipCard];
+      }
       if (view === "collectibles" && window.MefiCollectibles?.card) {
         collectiblesCard ??= window.MefiCollectibles.card();
         return [collectiblesCard];
@@ -1858,11 +1868,16 @@
       const wanted = viewOf(id);
       if (!wanted) return;
       const moved = view !== wanted;
+      const leavingCommerce = moved && view === "commerce";
+      if (leavingCommerce) { commerceCard?.dispose?.(); commerceCard = null; }
+      const leavingMembership = moved && view === "membership";
+      if (leavingMembership) { membershipCard?.dispose?.(); membershipCard = null; }
       view = wanted;
       lastView = wanted;
       confirm = confirm?.where === "banner" ? confirm : null;
       reporting = null;
       closeDetail({ focus: false });
+      if (leavingMembership || leavingCommerce) { paint(); void load(); return; }
       if (!ready) { paint(); return; }
       // Studio's categories share one read of the Studio list.
       if (moved && !(STUDIO_VIEWS.includes(wanted) && catalog && !catalog.local)) { items = []; next = null; loading = true; }
@@ -1885,7 +1900,7 @@
     }
     async function loadView({ more = false, fresh = false } = {}) {
       if (!ready) return;
-      if (view === "collectibles") { loading = false; paint(); return; }
+      if (view === "collectibles" || view === "membership" || view === "commerce") { loading = false; paint(); return; }
       const mineSeq = ++seq;
       const wanted = view;
       const studio = STUDIO_VIEWS.includes(wanted);
@@ -2002,6 +2017,7 @@
       try { hub = (await api.hubStatus())?.status; } catch { hub = null; }
       if (gone) return;
       me = hub?.user?.id ?? me;
+      if (view === "membership" || view === "commerce") { ready = hub?.state === "ready" && hub?.shop !== false; cataloguing = false; setStatus(""); paint(); return; }
       if (!explain(hub)) { await loadShowroom(); return; }
       if (status.textContent === "Checking the room service…" || status.textContent === "Connecting…") setStatus("");
       void refresh();
@@ -2029,6 +2045,8 @@
       gone = true;
       seq += 1;
       collectiblesCard?.dispose?.();
+      membershipCard?.dispose?.();
+      commerceCard?.dispose?.();
       endTry();
       closeDetail({ focus: false });
       releaseLive();

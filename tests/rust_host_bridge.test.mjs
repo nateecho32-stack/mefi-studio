@@ -53,6 +53,24 @@ ipcMain.handle("echo", (event, ...args) => ({
   count: args.length, firstUndefined: args[0] === undefined, second: args[1],
   sender: event.sender === win.webContents, frame: event.senderFrame === win.webContents.mainFrame,
 }));
+const accountModule = require(${JSON.stringify(path.join(root, "scripts", "account-client.cjs"))});
+const account = accountModule.createAccountClient({
+  origin: "https://hub.example.test", enabled: true,
+  canEncrypt: () => safeStorage.isEncryptionAvailable(),
+  readStored: () => ({ selected: true, origin: "https://hub.example.test",
+    encrypted: safeStorage.encryptString(JSON.stringify({
+      accountSession: "a".repeat(64), expiresAt: Date.now() + 600000,
+      actorProtocol: "accounts.canonical.1", user: { id: "studio:12345678-1234-4abc-8abc-123456789abc", name: "Fixture member" },
+      state: "waitlisted", socialAccess: false, waitlistPosition: 1001,
+    })).toString("base64") }),
+  unprotect: value => safeStorage.decryptString(Buffer.from(value, "base64")),
+  protect: value => safeStorage.encryptString(value).toString("base64"),
+  writeStored: async () => {}, openExternal: async () => { throw Error("No provider browser in bridge fixture"); },
+});
+ipcMain.handle("community:account", async (_event, payload) => {
+  if (payload?.action === "status") return { ok: true, status: account.status() };
+  return { ok: false, error: "bad-request" };
+});
 ipcMain.handle("bytes", () => Buffer.from("hi"));
 ipcMain.handle("boom", () => { throw new TypeError("bad thing"); });
 const original = ipcMain.handle.bind(ipcMain);
@@ -188,6 +206,13 @@ test("the engine's Electron shim talks to the host over the pipe", { timeout: 60
     host.send({ t: "invoke", id: 5, ch: "wrapped", body: [] });
     assert.equal((await host.next((f) => f.t === "result" && f.id === 5, "the wrapped handler")).body, "through the wrapper");
 
+    host.send({ t: "invoke", id: 6, ch: "community:account", body: [{ action: "status" }] });
+    const account = await host.next((f) => f.t === "result" && f.id === 6, "native account status");
+    assert.equal(account.body.ok, true);
+    assert.equal(account.body.status.linked, true);
+    assert.equal(account.body.status.socialAccess, false);
+    assert.equal(account.body.status.waitlistPosition, 1001);
+    assert.doesNotMatch(JSON.stringify(account), /accountSession|aaaaaaaaaaaaaaaa|codeVerifier|handoff/);
     host.send({ t: "send", ch: "eyes:assistant-sync", body: [] });
     assert.deepEqual((await host.next((f) => f.t === "push" && f.ch === "note", "the sync note")).body, ["synced"]);
 
@@ -575,4 +600,18 @@ test("Zen's desktop audio is the host's loopback sound, with no picker and no vi
   context.__TAURI__.core.invoke = async (command) => { if (command === "audio_loopback_start") throw new Error("no output device"); return null; };
   await assert.rejects(context.navigator.mediaDevices.getDisplayMedia({ audio: true }), (error) => error.name === "NotReadableError" && /no output device/.test(error.message));
   assert.equal(closed, 2);
+});
+
+test("the real preload exposes bounded native account actions and public account events on the host bridge", async () => {
+  const { context, calls, channels, answers } = pageBridge();
+  const status = { selected: true, linked: true, state: "waitlisted", socialAccess: false, waitlistPosition: 1001, user: { name: "Waiting" } };
+  answers.set("community:account", { t: "result", ok: true, body: { ok: true, status } });
+  assert.equal((await context.mefiStudio.studioAccount("status")).status.waitlistPosition, 1001);
+  await context.mefiStudio.studioAccount("google"); await context.mefiStudio.studioAccount("https://evil.test");
+  const accountCalls = calls.filter(call => call.headers["mefi-ch"] === "community:account");
+  assert.deepEqual(accountCalls.map(call => call.args), [[{ action: "status" }], [{ action: "google" }], [{ action: null }]]);
+  const events = []; context.mefiStudio.onStudioAccount(value => events.push(value));
+  channels[0].onmessage({ t: "push", ch: "community:account-event", body: [status] });
+  assert.equal(events[0].waitlistPosition, 1001);
+  assert.doesNotMatch(JSON.stringify(events), /accountSession|codeVerifier|handoff/);
 });

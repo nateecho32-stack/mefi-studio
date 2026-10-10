@@ -23,7 +23,7 @@
     return `${rounded !== chance ? "≈ " : ""}${rounded.toLocaleString(undefined, { maximumSignificantDigits: 6, useGrouping: false })}%`;
   };
   const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
-  let state = null, readFlight = null, epoch = 0, identityEpoch = 0, requestedView = "collection", dirty = false, accountId = null, connectionReady = true;
+  let state = null, readFlight = null, epoch = 0, identityEpoch = 0, statusEpoch = 0, requestedView = "collection", dirty = false, accountId = null, connectionReady = true, dynamicCratesAvailable = false;
   const listeners = new Set();
   const cards = new Set();
   // An uncertain acquisition keeps its id across tab changes and inventory
@@ -36,8 +36,8 @@
   }
   const interested = () => Boolean(window.MefiPets?.state?.()?.chosen?.instanceId) || [...cards].some((root) => root.isConnected !== false && !root.closest?.("[hidden]") && document.visibilityState !== "hidden");
   const ERRORS = {
-    "monthly-required": "An active monthly membership is needed to make new pets or stickers. Your existing creations stay yours.",
-    "supporter-required": "Selling requires supporter history. Adding rarity requires an active monthly membership.",
+    "monthly-required": "Active paid, lifetime or intro membership is needed to make new pets or stickers. Your existing creations stay yours.",
+    "supporter-required": "Selling requires supporter history. Adding rarity requires active paid, lifetime or intro membership.",
     "trade-hold": "This item is still on trade hold. Check the time shown on its card.",
     "short": "You do not have enough earned credits for this.",
     "pool-changed": "The community pool changed. Review the updated odds and opt in again.",
@@ -59,6 +59,21 @@
     "not-configured": "This copy of Studio has no room service configured.",
     "unsupported": "Pets & collectibles needs the updated community service.",
     "incomplete-inventory": "Your complete collection could not be read. Your equipped pet has been kept; try again to refresh.",
+    "dynamic-crates-unavailable": "Topic crates are not available on this community service yet.",
+    "recipe-unavailable": "That topic and budget are no longer available. Refresh the configured choices.",
+    "empty-pool": "There are not enough eligible rewards for this exact count and budget.",
+    "pool-too-large": "This pool is too large to quote safely. Choose another configured topic or budget.",
+    "quote-expired": "This quote expired. Get a new quote and review it before opening.",
+    "quote-unavailable": "This quote is no longer available. Review a fresh quote before opening.",
+    "quote-consumed": "This quote has already been opened. Refresh your collection to see its rewards.",
+    "quote-mismatch": "These opening terms do not match the saved quote. Review a new quote.",
+    "request-conflict": "This request no longer matches its saved terms. Review a new quote.",
+    "terms-changed": "The creation's terms changed. Read the current terms and confirm again.",
+    "opt-in-required": "This recipe needs your explicit permission to include community creations before it can be quoted.",
+    "rate-limited": "Too many quotes were requested recently. Please wait before asking for another.",
+    "read-only": "This account currently has read-only community access.",
+    "paused": "The community service is paused. Your existing collection remains yours.",
+    "bad-response": "The service returned an incomplete quote or receipt. Nothing new will be opened; retry the same request to recover its result.",
   };
   const errorWords = (answer) => ERRORS[answer?.error] || (typeof answer?.why === "string" ? answer.why : "The community service could not complete that. Try again.");
   const call = async (action, payload = {}) => {
@@ -100,25 +115,63 @@
     return readFlight;
   }
   const rarityOf = (id) => state?.rarities?.find((entry) => entry.id === id) || { id, name: id === "none" ? "Original" : word(id), color: "#a7afbd" };
-  const stickerGlyph = (item) => GLYPHS[item?.visual?.glyph] || "✦";
+  const stickerGlyph = (item) => Object.hasOwn(GLYPHS, item?.visual?.glyph) ? GLYPHS[item.visual.glyph] : "✦";
   const stickerSource = (item) => STICKER_ASSETS.includes(item?.visual?.asset) ? `../assets/stickers/studio-${item.visual.asset}.png` : null;
+  const stickerMotif = (item) => ["stars", "sparkles", "stripes"].includes(item?.visual?.motif) ? item.visual.motif : "plain";
+  const stickerPreviews = new Map();
+  // One bounded painter serves the book, creator preview, room chat and PNG.
+  // Only fixed shapes, allowlisted glyphs and validated hex colors are drawn.
+  function paintSticker(canvas, item, edge) {
+    const ctx = canvas.getContext?.("2d"); if (!ctx) return false;
+    canvas.width = edge; canvas.height = edge; ctx.scale(edge / 512, edge / 512);
+    const primary = cleanColor(item?.visual?.primary), secondary = cleanColor(item?.visual?.secondary, "#172039");
+    const motif = stickerMotif(item);
+    ctx.beginPath(); ctx.roundRect(0, 0, 512, 512, 116); ctx.fillStyle = secondary; ctx.fill();
+    ctx.save(); ctx.clip(); ctx.globalAlpha = 0.28; ctx.fillStyle = primary; ctx.strokeStyle = primary;
+    if (motif === "stripes") {
+      ctx.lineWidth = 24; ctx.beginPath();
+      for (let offset = -512; offset <= 512; offset += 128) { ctx.moveTo(offset, 0); ctx.lineTo(offset + 512, 512); }
+      ctx.stroke();
+    } else if (motif !== "plain") {
+      const points = motif === "stars" ? 5 : 4, inner = motif === "stars" ? 10 : 5;
+      for (let row = 0; row < 4; row += 1) for (let col = 0; col < 4; col += 1) {
+        ctx.beginPath();
+        for (let point = 0; point < points * 2; point += 1) {
+          const angle = -Math.PI / 2 + point * Math.PI / points, radius = point % 2 ? inner : 26;
+          const x = 64 + col * 128 + Math.cos(angle) * radius, y = 64 + row * 128 + Math.sin(angle) * radius;
+          if (!point) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.restore(); ctx.fillStyle = primary; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "bold 330px sans-serif"; ctx.fillText(stickerGlyph(item), 256, 256);
+    return true;
+  }
+  function stickerPreview(item) {
+    // A full room book may repeat many instances of the same artwork. Retain
+    // only 64 small encoded previews, never a canvas per visible instance.
+    const key = JSON.stringify([stickerGlyph(item), cleanColor(item?.visual?.primary), cleanColor(item?.visual?.secondary, "#172039"), stickerMotif(item)]);
+    if (stickerPreviews.has(key)) { const source = stickerPreviews.get(key); stickerPreviews.delete(key); stickerPreviews.set(key, source); return source; }
+    const canvas = node("canvas"); if (!paintSticker(canvas, item, 96)) return null;
+    const source = canvas.toDataURL("image/png"); stickerPreviews.set(key, source);
+    if (stickerPreviews.size > 64) stickerPreviews.delete(stickerPreviews.keys().next().value);
+    return source;
+  }
   function renderSticker(item) {
     const art = node("span", "collectibles-sticker", stickerGlyph(item));
     art.style.color = cleanColor(item?.visual?.primary);
     art.style.backgroundColor = cleanColor(item?.visual?.secondary, "#172039");
     art.dataset.rarity = RARITIES.includes(item?.rarity) ? item.rarity : "none";
     art.setAttribute("role", "img"); art.setAttribute("aria-label", item?.name || "Sticker");
-    const source = stickerSource(item);
+    const source = stickerSource(item) || stickerPreview(item);
     if (source) { const image = node("img"); image.src = source; image.alt = item?.name || "Sticker"; image.loading = "lazy"; art.replaceChildren(image); }
     return art;
   }
   function downloadSticker(item) {
     let source = stickerSource(item);
     if (!source) {
-      const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 512;
-      const ctx = canvas.getContext?.("2d"); if (!ctx) return;
-      ctx.fillStyle = cleanColor(item?.visual?.secondary, "#172039"); ctx.fillRect(0, 0, 512, 512);
-      ctx.fillStyle = cleanColor(item?.visual?.primary); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "bold 330px sans-serif"; ctx.fillText(stickerGlyph(item), 256, 256);
+      const canvas = document.createElement("canvas"); if (!paintSticker(canvas, item, 512)) return;
       source = canvas.toDataURL("image/png");
     }
     const link = node("a"); link.href = source; link.download = `${String(item?.name || "sticker").replace(/[^a-z0-9_-]/gi, "-").slice(0, 50)}.png`; document.body.append(link); link.click(); link.remove();
@@ -182,6 +235,27 @@
     const reveal = node("dialog", "collectibles-reveal"); reveal.setAttribute("aria-label", "Your crate rewards");
     root.append(hero, tabs, status, confirmation, body, reveal);
     const say = (message) => { status.textContent = message; };
+    const dynamic = window.MefiDynamicCrates?.create?.({
+      ui: { node, btn, field, input, select, title, empty, credits, chanceText }, call,
+      context: () => ({ enabled: connectionReady && dynamicCratesAvailable, account: accountId, identity: identityEpoch }),
+      changed: () => paint(), message: say, errorWords,
+      refreshOwned: async () => {
+        const refreshIdentity = identityEpoch;
+        epoch += 1; if (readFlight) await readFlight;
+        if (refreshIdentity !== identityEpoch) return false;
+        const freshShop = async () => {
+          if (typeof window.MefiShop?.refresh !== "function") return { ok: false };
+          // Shop.refresh can return a read that began before the grant, while
+          // queuing another internally. Drain it, then await a post-grant read.
+          try { await window.MefiShop.refresh(); } catch { /* the fresh read below decides success */ }
+          if (refreshIdentity !== identityEpoch) return { ok: false };
+          return window.MefiShop.refresh();
+        };
+        const results = await Promise.allSettled([refresh(), freshShop()]);
+        return results.every((entry) => entry.status === "fulfilled" && entry.value?.ok);
+      },
+      reveal: (rewards) => { if (!gone && view === "crates") showRewards(rewards, true); },
+    });
     const focusRestore = (active) => { if (active?.dataset?.focus) body.querySelector(`[data-focus="${active.dataset.focus}"]`)?.focus?.(); };
     function ask(message, label, run) {
       confirmation.hidden = false; confirmation.replaceChildren(node("p", "", message), btn(label, async () => { if (busy) return; confirmation.hidden = true; await run(); }, true), btn("Cancel", () => { confirmation.hidden = true; }));
@@ -257,12 +331,21 @@
       if (items.length > inventoryShown[itemKind]) section.append(btn(`Show more ${stickers ? "stickers" : "pets"} (${items.length - inventoryShown[itemKind]} more)`, () => { inventoryShown[itemKind] += 60; paint(); }));
       return section;
     }
-    function showRewards(items) {
+    function showRewards(items, typed = false) {
       clearTimeout(revealTimer); reveal.replaceChildren(); reveal.dataset.phase = motionOff() ? "revealed" : "opening";
       const heading = node("h3", "", "A new chapter for your collection");
       const opening = node("div", "collectibles-opening", "✦"); opening.setAttribute("aria-hidden", "true");
       const rewards = node("div", "collectibles-grid");
-      for (const item of items || []) { const { card: itemEl, words } = itemCard(item); words.append(node("p", "collectibles-note", item.kind === "pet" ? "Born today. Ready to grow with you." : "A new page in your sticker book.")); rewards.append(itemEl); }
+      for (const reward of items || []) {
+        const item = typed ? reward.item : reward;
+        if (!typed || reward.type === "collectible") {
+          const { card: itemEl, words } = itemCard(item); words.append(node("p", "collectibles-note", item.kind === "pet" ? "Born today. Ready to grow with you." : "A new page in your sticker book.")); rewards.append(itemEl);
+        } else if (["catalog-license", "community-pack-license"].includes(reward.type)) {
+          const itemEl = node("article", "collectibles-item"), words = node("div", "collectibles-item-words");
+          words.append(node("span", "collectibles-rarity", "Shop license"), node("h4", "", item.name), node("p", "collectibles-note", reward.type === "community-pack-license" ? "A community pack for your Studio. This license stays with your account." : "A new look for your Studio. Open Owned in the Shop to apply it."), btn("Open Shop ownership", () => { reveal.close?.(); window.MefiShop?.open?.("owned"); }));
+          itemEl.append(words); rewards.append(itemEl);
+        }
+      }
       const revealNow = () => { clearTimeout(revealTimer); reveal.dataset.phase = "revealed"; skip.hidden = true; done.focus?.(); };
       const skip = btn("Skip animation", revealNow); skip.hidden = motionOff();
       const done = btn("Add to my day", () => { reveal.close?.(); view = "collection"; paint(); }, true);
@@ -297,7 +380,8 @@
         if (crate.available === false || crate.claimed === true) { openButton.disabled = true; openButton.textContent = crate.claimed ? "Already claimed" : "No eligible items yet"; }
         cardEl.append(openButton); grid.append(cardEl);
       }
-      section.append(available.length ? grid : empty("No matching crate right now", "Try another reward type or collection. Community pools need eligible creators to opt their work in.")); return section;
+      section.append(available.length ? grid : empty("No matching crate right now", "Try another reward type or collection. Community pools need eligible creators to opt their work in."));
+      if (dynamic) section.append(dynamic.crates()); return section;
     }
     function market() {
       const section = node("section"); section.append(title("The community market", "Find a look you love, or leave one order for a match. Original items have a 15-minute trade hold after transfer; every rarity tier has a one-hour hold. Growth and traits stay with the pet."));
@@ -368,9 +452,10 @@
       return section;
     }
     function creator() {
-      const section = node("section"); section.append(title("Give your imagination a home", "Monthly members can create pets and stickers and choose their rarity chances. Price, visuals and rarity chances are permanently locked when created. Past members keep their existing rarity items and trading rights, and can list or take down their designs."));
+      const section = node("section"); section.append(title("Give your imagination a home", "Active membership lets you create pets and stickers and choose their rarity chances. Price, visuals and rarity chances are permanently locked when created. Past members keep their existing rarity items and trading rights, and can list or take down their designs."));
+      section.append(btn("View membership", () => window.MefiShop?.open?.("membership")));
       const allowed = state?.entitlements?.canCreate === true;
-      if (!allowed) section.append(empty("A monthly member's studio", "Active monthly membership unlocks creation and rarity editing. Your existing collection and free community participation stay available."));
+      if (!allowed) section.append(empty("Creation needs active membership", "Paid, lifetime and unexpired intro membership provide the same creator benefits. Your existing collection and free community participation stay available."));
       else {
         const editor = node("div", "collectibles-editor");
         const kind = select(["pet", "sticker"], "pet"), name = input("text", "My little companion"), blurb = input("text"), bodyChoice = select(["dragon", "cloud", "phoenix", "wisp"], "dragon"), glyph = select(Object.entries(GLYPHS).map(([id, value]) => [id, `${value} ${word(id)}`]), "star"), primary = input("color", "#8b7cf6"), secondary = input("color", "#73d6cf"), motif = select(["plain", "stars", "sparkles", "stripes"], "stars"), price = input("number", 0, 0, 250);
@@ -387,7 +472,7 @@
         const listed = input("checkbox"); listed.checked = true;
         const listedLabel = node("label", "collectibles-optin"); listedLabel.append(listed, node("span", "", "List in the community shop.")); editor.append(listedLabel);
         const inCrates = input("checkbox"); inCrates.checked = false;
-        const cratesLabel = node("label", "collectibles-optin"); cratesLabel.append(inCrates, node("span", "", "Permanently allow this design in opt-in community crates while listed. The crate's credits are split across rewards and creators receive their share, subject to community earning limits.")); editor.append(cratesLabel);
+        const cratesLabel = node("label", "collectibles-optin"); cratesLabel.append(inCrates, node("span", "", "Permanently allow this design in opt-in community crates while listed. The crate's credits are split across rewards and creators receive their share.")); editor.append(cratesLabel);
         editor.append(btn("Review creation", () => {
           if ([...weights.values()].some((chance) => { const value = Number(chance.value); return !Number.isFinite(value) || value < 0 || value > 100 || Math.abs(value * 100 - Math.round(value * 100)) > 0.000001; })) { say("Each rarity chance must be from 0 to 100%, with at most two decimal places."); return; }
           const rarityWeights = Object.fromEntries([...weights].map(([rarity, chance]) => [rarity, Math.round(Number(chance.value) * 100)]).filter(([, weight]) => weight > 0));
@@ -402,6 +487,7 @@
       }
       section.append(title("Your published designs", "Taking a design down stops new copies. Everyone who already owns one keeps it."));
       for (const definition of state?.creations || []) { const row = node("div", "collectibles-market-row"); row.append(node("span", "", `${definition.name} · ${credits(definition.price)} · ${definition.listed ? "Listed" : "Unlisted"}`), btn(definition.listed ? "Take down" : "List again", () => act("updateCreation", { definitionId: definition.id, listed: !definition.listed }, definition.listed ? "Design unlisted. Existing copies remain owned." : "Design listed again."))); section.append(row); }
+      if (dynamic) section.append(dynamic.contributions());
       return section;
     }
     function paint(nextView = null) {
@@ -414,16 +500,31 @@
       const content = view === "collection" ? collection() : view === "stickers" ? collection(true) : view === "crates" ? crates() : view === "market" ? market() : creator();
       body.replaceChildren(content); focusRestore(active);
     }
-    async function load() { const answer = await refresh(); if (gone || answer?.error === "stale") return; loaded = true; say(answer?.ok ? "" : errorWords(answer)); paint(); }
+    async function load() {
+      const before = identityEpoch, beforeStatus = statusEpoch;
+      if (typeof window.mefiStudio?.hubStatus === "function") {
+        try {
+          const hub = (await window.mefiStudio.hubStatus())?.status;
+          if (gone || before !== identityEpoch) return;
+          if (beforeStatus === statusEpoch) {
+            dynamicCratesAvailable = hub?.state === "ready" && hub?.collectibles === true && hub?.dynamicCrates === true;
+            if (hub?.state === "ready" && hub.user?.id) accountId = hub.user.id;
+          }
+        } catch { if (beforeStatus === statusEpoch) dynamicCratesAvailable = false; }
+      }
+      const answer = await refresh(); if (gone || answer?.error === "stale") return; loaded = true; say(answer?.ok ? "" : errorWords(answer)); paint();
+    }
     listeners.add(paint); cards.add(root);
-    root.dispose = () => { gone = true; listeners.delete(paint); cards.delete(root); clearTimeout(revealTimer); reveal.close?.(); };
+    root.dispose = () => { gone = true; dynamic?.dispose(); listeners.delete(paint); cards.delete(root); clearTimeout(revealTimer); reveal.close?.(); };
     paint(); void load(); return root;
   }
   window.MefiCollectibles = { card, open, refresh, snapshot: () => clone(state), stickerGlyph, renderSticker, stickers: (roomId) => call("stickers", { roomId }), share: (instanceId, roomId, shared) => call("share", { instanceId, roomId, shared }), errorWords };
   function invalidate() { epoch += 1; dirty = true; if (connectionReady && interested()) void refresh(); }
   window.mefiStudio?.onHubEvent?.((event) => {
     if (event?.type === "status") {
+      statusEpoch += 1;
       connectionReady = event.status?.state === "ready";
+      dynamicCratesAvailable = connectionReady && event.status?.collectibles === true && event.status?.dynamicCrates === true;
       const nextAccount = event.status?.user?.id || null;
       if (!connectionReady || (accountId && nextAccount !== accountId)) {
         epoch += 1; identityEpoch += 1; state = null; dirty = false;

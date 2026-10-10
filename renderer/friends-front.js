@@ -64,7 +64,10 @@
   // connection can actually be made). The Lobby, the Project hub and Your PCs use it.
   function hubState(hub) {
     if (!hub?.configured) return { action: null, text: "This copy of Studio can't reach the room service." };
-    if (!hub.linked) return { action: "signin", text: "Sign in with Discord to use Friends." };
+    if (!hub.linked) return { action: "signin", text: "Sign in to your Studio account to use Friends." };
+    if (hub.account?.selected && hub.account.state === "waitlisted") return { action: "signin", text: "Studio waitlist position " + hub.account.waitlistPosition + ". Social access is pending admission." };
+    if (hub.account?.selected && ["auth", "expired", "stale_account"].includes(hub.error)) return { action: "signin", text: "Sign in to your Studio account again." };
+    if (hub.account?.selected && hub.error === "not-member") return { action: "signin", text: "This Studio account does not currently have social access." };
     if (hub.error === "not-member") return { action: "join", text: "Your Discord account isn't in the Void Engine server yet. Join it, then check again." };
     if (hub.error === "auth") return { action: "signin", text: "Your Discord sign-in has run out. Sign in with Discord again." };
     if (hub.error === "version") return { action: "update", text: "The room service needs a newer Studio. Update Studio; Friends reconnects by itself after the update." };
@@ -100,6 +103,7 @@
     const signIn = button("Sign in with Discord", () => { void start(); }, "friends-gate-signin", "friends-gate-signin");
     actions.append(signIn);
     root.append(title, lead, actions, status, fine, points);
+    if (window.MefiAccount?.card) { const accountCard = window.MefiAccount.card({ onSignedIn, compact: true }); root.append(accountCard); root.dispose = () => accountCard.dispose?.(); }
 
     async function connected() {
       status.textContent = "Signed in. Connecting…";
@@ -130,6 +134,8 @@
       busy = true;
       signIn.disabled = true;
       status.textContent = "Discord is asking in your browser. Press Authorize there, then come back.";
+      const selected = await bridge()?.studioAccount?.("useDiscord");
+      if (selected && !selected.ok) { busy = false; signIn.disabled = false; status.textContent = "Studio could not switch sign-in methods."; return; }
       const linked = await community.link();
       busy = false;
       signIn.disabled = false;
@@ -504,6 +510,7 @@
       } else if (page.ownRoom) invite.append(node("span", "", "Getting your invite code…"));
       else invite.append(button("Make a room to invite friends", () => goPlace("rooms"), "ghost", "friends-front-make"));
       bar.append(invite);
+      if (window.MefiReferrals) bar.append(button("Referral rewards", () => window.MefiReferrals.open(), "ghost", "friends-front-referrals"));
       return bar;
     }
 

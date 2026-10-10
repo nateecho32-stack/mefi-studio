@@ -124,6 +124,7 @@ function host({ keystore = true, env = { MEFI_STUDIO_DISCORD_CLIENT_ID: CLIENT }
   vm.runInContext(`${block}\n${handlers}\n${section("function updateSettings(", "function send(channel, payload)")}`, context);
   return {
     context, disk, sent, opened, logs, calls, timers, member,
+    channels: () => [...registered.keys()],
     get settings() { return plain(stored); },
     get now() { return now; },
     advance: (ms) => { now += ms; },
@@ -148,13 +149,42 @@ const linkedHost = (options = {}) => host({
   ...options,
 });
 
-test("the host registers exactly the eight community channels", () => {
+test("the host registers exactly the nine named community channels", () => {
   const h = host();
-  for (const name of ["community:status", "community:link", "community:link-cancel", "community:check", "community:unlink", "community:prompt", "community:open", "community:setup"]) {
-    assert.ok(handlers.includes(`ipcMain.handle("${name}"`), name);
-  }
-  assert.equal(handlers.split("\n").length, 8);
+  const expected = ["community:status", "community:link", "community:link-cancel", "community:check", "community:unlink", "community:prompt", "community:open", "community:setup", "community:account"];
+  assert.deepEqual(h.channels().sort(), [...expected].sort(), "no missing or extra community channels");
+  for (const name of expected) assert.ok(handlers.includes('ipcMain.handle("' + name + '"'), name);
+  assert.equal(handlers.split("\n").length, 9, "each named channel is registered exactly once");
   assert.equal(h.run("COMMUNITY_AUTH_PATH"), AUTH_FILE, "the refresh token has its own file beside settings.json, not auth.json");
+});
+
+test("community account IPC accepts only named native actions and does not forward renderer credentials or URLs", async () => {
+  const h = host(), actions = [], connected = [];
+  const status = { selected: false, linked: false, socialAccess: false, error: null };
+  h.context.studioAccountActionGeneration = 0;
+  h.context.studioAccount = () => ({
+    status: () => status,
+    signIn: async options => { actions.push(["signIn", plain(options)]); return { ok: true }; },
+    cancel: async () => { actions.push(["cancel"]); return { ok: true }; },
+    signOut: async () => { actions.push(["signOut"]); return { ok: true }; },
+    useDiscord: async () => { actions.push(["useDiscord"]); return { ok: true }; },
+  });
+  h.context.studioAccountLinked = async () => false;
+  h.context.hubConnect = async () => { connected.push("explicit-discord"); };
+  vm.runInContext(section("async function studioAccountAction(", "\n}\n") + "\n}", h.context);
+  assert.deepEqual(await h.invoke("community:account", { action: "status" }), { ok: true, status });
+  for (const payload of [null, {}, { action: null }, { action: "constructor" }, { action: "toString" }, { action: "https://evil.test" }, { action: "redeem", accountSession: "renderer-token" }]) {
+    assert.deepEqual(await h.invoke("community:account", payload), { ok: false, error: "bad-request" });
+  }
+  assert.deepEqual(actions, []); assert.deepEqual(connected, []);
+  for (const action of ["google", "linkGoogle", "cancel", "signOut", "useDiscord"]) {
+    const result = await h.invoke("community:account", { action, url: "https://evil.test", accountSession: "renderer-token", actor: "renderer-actor" });
+    assert.equal(result.ok, true);
+  }
+  assert.deepEqual(actions, [["signIn", undefined], ["signIn", { link: true }], ["cancel"], ["signOut"], ["useDiscord"]]);
+  assert.deepEqual(connected, ["explicit-discord"], "only the explicit Discord selection requests reconnection");
+  assert.deepEqual(h.calls, [], "native named dispatch does not invoke the legacy Discord transport");
+  assert.deepEqual(h.opened, [], "no renderer-supplied URL opens");
 });
 
 test("status stamps firstSeenAt once and the card waits out the first three days", async () => {

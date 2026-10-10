@@ -1597,6 +1597,7 @@ async function applyReleaseUpdate() {
     stopEyesWatch();
     stopMachineWatch();
     stopCommunityWatch();
+    if (typeof studioAccountRetirement !== "undefined") await studioAccountRetirement;
     stopAssistant();
     // Launched through `start`: a detached PowerShell has no console and
     // exits at once without running its script, so the update never applied.
@@ -1800,6 +1801,7 @@ async function releaseRollback() {
     stopEyesWatch();
     stopMachineWatch();
     stopCommunityWatch();
+    if (typeof studioAccountRetirement !== "undefined") await studioAccountRetirement;
     stopAssistant();
     const rollbackLine = ["start", '""', "powershell.exe", ...["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", scriptPath].map(quoteWindowsCmdArg)].join(" ");
     const helper = spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", `"${rollbackLine}"`], {
@@ -2293,6 +2295,7 @@ function startCommunityWatch() {
 // starts no check and pushes nothing after this (a check it already started
 // finishes and saves its answer).
 function stopCommunityWatch() {
+  if (typeof retireStudioAccount === "function") retireStudioAccount();
   if (communityWatch) {
     clearTimeout(communityWatch.first);
     clearInterval(communityWatch.timer);
@@ -2314,6 +2317,91 @@ function stopCommunityWatch() {
 const hubModule = optionalHelper("./scripts/hub-client.cjs", () => require("./scripts/hub-client.cjs"), null);
 let hubClient = null;
 
+// Native Studio account sign-in. Electron and the Rust shim supply safeStorage;
+// credentials have no plaintext fallback and never cross renderer IPC.
+let studioAccountModule = null;
+const studioActor = require("./scripts/actor-contract.cjs");
+const STUDIO_ACCOUNT_AUTH_PATH = path.join(app.getPath("userData"), "studio-account-auth.json");
+let studioAccountClient = null, studioAccountActionGeneration = 0, studioAccountClientEpoch = 0, studioAccountRetirement = Promise.resolve(), studioAccountQuitReady = false, studioAccountQuitPending = false;
+function studioAccount() {
+  if (!studioAccountClient) {
+    const epoch = ++studioAccountClientEpoch;
+    studioAccountModule ??= require("./scripts/account-client.cjs");
+    studioAccountClient = studioAccountModule.createAccountClient({
+    origin: communityHubUrl(), enabled: process.env.MEFI_STUDIO_GOOGLE_SIGNIN === "1",
+    canEncrypt: communityKeystore,
+    readStored: async () => { try { return JSON.parse(await readFile(STUDIO_ACCOUNT_AUTH_PATH, "utf8")); } catch (error) { if (error?.code === "ENOENT") return null; throw error; } },
+    writeStored: (value) => authStore.atomicWriteJson(STUDIO_ACCOUNT_AUTH_PATH, value),
+    protect: (value) => safeStorage.encryptString(value).toString("base64"),
+    unprotect: (value) => safeStorage.decryptString(Buffer.from(value, "base64")),
+    openExternal: (url) => shell.openExternal(url),
+    getDiscordAccessToken: hubAccessToken,
+    onChange: (status) => {
+      if (epoch !== studioAccountClientEpoch) return;
+      roomHistoryScopes.select(null); roomHistoryStore = null;
+      const old = hubClient; hubClient = null;
+      old?.disconnect().catch(() => {});
+      billingBrowserLinks.clear(); commerceBrowserLinks.clear();
+      send("community:account-event", status);
+      const off = { type: "status", status: { configured: false, state: "off", user: null, error: status.error, linked: status.linked } };
+      friendsHear(off);
+      if (pcsMemo) {
+        pcsMemo.roster = []; pcsMemo.heard.clear(); pcsMemo.asks.clear(); pcsMemo.keysOf.clear();
+        if (pcsMemo.pushTimer) { clearTimeout(pcsMemo.pushTimer); pcsMemo.pushTimer = null; }
+      }
+      pcsHear(off);
+    },
+    });
+  }
+  return studioAccountClient;
+}
+async function studioAccountReady() {
+  const account = studioAccount();
+  await account.ready?.();
+  return account === studioAccountClient && account.isReady?.() !== false ? account : null;
+}
+function retireStudioAccount() {
+  const account = studioAccountClient;
+  studioAccountActionGeneration++; studioAccountClientEpoch++;
+  if (!account) return studioAccountRetirement;
+  const cleanup = account.close();
+  studioAccountRetirement = Promise.all([studioAccountRetirement, cleanup]).then(() => {});
+  return studioAccountRetirement;
+}
+function studioAccountQuit(event) {
+  if (!studioAccountClient || studioAccountQuitReady) return false;
+  event.preventDefault();
+  if (!studioAccountQuitPending) {
+    studioAccountQuitPending = true;
+    retireStudioAccount().then(() => { studioAccountQuitReady = true; app.quit(); });
+  }
+  return true;
+}
+async function studioAccountAction(action) {
+  const account = studioAccount();
+  if (action === "status") {
+    const mine = studioAccountActionGeneration; await account.ready?.();
+    return { ok: mine === studioAccountActionGeneration, status: account.status() };
+  }
+  const methods = { google: () => account.signIn(), linkGoogle: () => account.signIn({ link: true }),
+    cancel: () => account.cancel(), signOut: () => account.signOut(), useDiscord: () => account.useDiscord() };
+  if (!Object.hasOwn(methods, action)) return { ok: false, error: "bad-request" };
+  const mine = ++studioAccountActionGeneration;
+  await account.ready?.();
+  if (mine !== studioAccountActionGeneration) return { ok: false, error: "superseded", status: account.status() };
+  const before = account.status();
+  const result = await methods[action](), status = account.status();
+  if (mine !== studioAccountActionGeneration) return { ok: false, error: "superseded", status };
+  const restoredLink = !result.ok && action === "linkGoogle" && before.selected === status.selected && before.user?.id === status.user?.id && await studioAccountLinked();
+  if (mine === studioAccountActionGeneration && (restoredLink || result.ok && (status.linked && status.socialAccess === true || action === "useDiscord"))) await hubConnect();
+  return { ...result, ok: result.ok && !status.error, status };
+}
+async function studioAccountLinked() {
+  const account = await studioAccountReady();
+  if (!account) return false;
+  const status = account.status();
+  return status.selected ? status.linked && status.socialAccess === true : Boolean(community && (await communityRead()).state.link);
+}
 // A Discord access token with a few minutes left. A stale one is renewed by
 // the community check itself, which is single-flight and keeps the rotated
 // refresh token, so the hub can never race the weekly watcher's rotation.
@@ -2348,13 +2436,20 @@ function communitySetup() {
   communitySetupCache ??= communitySetupFromDisk();
   return communitySetupCache;
 }
-function communitySetupReload(value = communitySetupFromDisk()) {
+async function communitySetupReload(value = communitySetupFromDisk()) {
   const hubChanged = communitySetupCache?.hubUrl !== value.hubUrl;
   communitySetupCache = value;
   if (hubChanged && hubClient) {
     const old = hubClient;
     hubClient = null;
     Promise.resolve().then(() => old.disconnect()).catch(() => {});
+  }
+  if (hubChanged && studioAccountClient) {
+    const retiring = studioAccountClient, cleanup = retireStudioAccount();
+    const epoch = studioAccountClientEpoch;
+    // Keep the closed instance installed until all of its credential writes end.
+    await cleanup;
+    if (studioAccountClient === retiring && epoch === studioAccountClientEpoch) studioAccountClient = null;
   }
 }
 const communityHubUrl = () => String(process.env.MEFI_STUDIO_HUB_URL || communitySetup().hubUrl || "").trim();
@@ -2395,13 +2490,13 @@ async function communitySetupSave(payload) {
     if (next.clientId || next.hubUrl) settings.communitySetup = { clientId: next.clientId, hubUrl: next.hubUrl };
     else delete settings.communitySetup;
   });
-  communitySetupReload({ clientId: next.clientId, hubUrl: next.hubUrl });
+  await communitySetupReload({ clientId: next.clientId, hubUrl: next.hubUrl });
   const health = next.hubUrl ? await communityHubHealth(next.hubUrl) : null;
   // Only the hub address given, and the hub names its link app: use that.
   if (!next.clientId && health?.appId) {
     next.clientId = health.appId;
     await updateSettings((settings) => { settings.communitySetup = { clientId: next.clientId, hubUrl: next.hubUrl }; });
-    communitySetupReload({ clientId: next.clientId, hubUrl: next.hubUrl });
+    await communitySetupReload({ clientId: next.clientId, hubUrl: next.hubUrl });
   }
   logLine(`[community] connection details saved: link app id ${next.clientId ? "set" : "empty"}, hub ${next.hubUrl ? (health?.ok ? "answering" : "not answering") : "empty"}`);
   return { ...communitySetupView(), health, status: await publishCommunity({ force: true }) };
@@ -2416,27 +2511,33 @@ async function communitySetupSave(payload) {
 // comes from here too; when the room's history comes back from a member, it
 // is merged and Rooms hears historyFill. Leaving a room forgets its copy.
 const roomHistoryModule = optionalHelper("./scripts/room-history.cjs", () => require("./scripts/room-history.cjs"), null);
-const roomHistoryPath = () => path.join(app.getPath("userData"), "room-history.json");
+const roomHistoryPath = (name = "room-history.json") => path.join(app.getPath("userData"), name);
 const ROOM_HISTORY_SAVE_MS = 2000;
 let roomHistoryStore = null;
 let roomHistorySaveTimer = null;
+const roomHistoryScopes = require("./scripts/room-history-scopes.cjs").createHistoryScopes({
+  create: () => roomHistoryModule.createRoomHistory({ now: () => Date.now() }),
+  load: (name) => {
+    const saved = JSON.parse(readFileSync(roomHistoryPath(name), "utf8"));
+    return typeof saved?.encrypted === "string" && communityKeystore() ? JSON.parse(safeStorage.decryptString(Buffer.from(saved.encrypted, "base64"))) : null;
+  },
+  save: async (name, snapshot) => {
+    if (!communityKeystore()) throw new Error("history encryption unavailable");
+    const encrypted = safeStorage.encryptString(JSON.stringify(snapshot)).toString("base64");
+    await authStore.atomicWriteJson(roomHistoryPath(name), { version: 1, encrypted });
+  },
+  onError: () => logLine("[rooms] encrypted history could not be saved"),
+});
 function roomHistory() {
-  if (roomHistoryStore || typeof roomHistoryModule?.createRoomHistory !== "function") return roomHistoryStore;
-  roomHistoryStore = roomHistoryModule.createRoomHistory({ now: () => Date.now() });
-  try {
-    const saved = JSON.parse(readFileSync(roomHistoryPath(), "utf8"));
-    if (typeof saved?.encrypted === "string" && safeStorage.isEncryptionAvailable()) roomHistoryStore.load(JSON.parse(safeStorage.decryptString(Buffer.from(saved.encrypted, "base64"))));
-  } catch { /* no copy yet, or one this PC cannot read: start empty */ }
+  if (typeof roomHistoryModule?.createRoomHistory !== "function") return null;
+  const status = hubClient?.status();
+  roomHistoryScopes.select(status?.user ? { id: status.user.id, actorProtocol: status.actorProtocol } : null);
+  roomHistoryStore = roomHistoryScopes.current();
   return roomHistoryStore;
 }
 function roomHistorySaveSoon() {
   if (roomHistorySaveTimer || !roomHistoryStore) return;
-  roomHistorySaveTimer = setTimeout(() => {
-    roomHistorySaveTimer = null;
-    if (!roomHistoryStore?.takeDirty() || !safeStorage.isEncryptionAvailable()) return;
-    const encrypted = safeStorage.encryptString(JSON.stringify(roomHistoryStore.dump())).toString("base64");
-    authStore.atomicWriteJson(roomHistoryPath(), { version: 1, encrypted }).catch((error) => logLine(`[rooms] history not saved: ${error?.message ?? error}`));
-  }, ROOM_HISTORY_SAVE_MS);
+  roomHistorySaveTimer = setTimeout(() => { roomHistorySaveTimer = null; void roomHistoryScopes.persist(); }, ROOM_HISTORY_SAVE_MS);
 }
 // Each hub event passes through here first; false keeps it from the renderer.
 function roomHistoryHear(event) {
@@ -2472,8 +2573,10 @@ function roomHistoryHear(event) {
 // PC's copy, which answers. Opening a room also asks the room for what this PC
 // missed while it was away.
 async function hubRoomMessages(client, roomId, before) {
-  const remote = await client.messages(roomId, before);
   const store = roomHistory();
+  const historyScope = roomHistoryScopes.token();
+  const remote = await client.messages(roomId, before);
+  if (hubClient !== client || !roomHistoryScopes.isCurrent(historyScope)) return { ok: false, error: "stale_account", messages: [] };
   if (!store) return remote;
   if (remote.ok && store.merge(roomId, remote.messages)) roomHistorySaveSoon();
   if (!remote.ok && remote.error !== "offline" && remote.error !== "network") return remote;
@@ -2484,13 +2587,18 @@ async function hubRoomMessages(client, roomId, before) {
 
 function hubInstance() {
   if (!hubClient && hubModule) {
-    hubClient = hubModule.createHubClient({
+    const account = studioAccount();
+    if (account.isReady?.() === false) return null;
+    const instance = hubModule.createHubClient({
       url: hubModule.configuredUrl({ MEFI_STUDIO_HUB_URL: communityHubUrl() }),
       getAccessToken: hubAccessToken,
+      ...(account.status().selected ? { getAccountSession: () => account.accountSession() } : {}),
       // Companion cards go through the "Companion friends" block, which reads
       // them before the renderer sees one; everything else passes straight on.
       // A cowork room's claims also reach the dispatcher (the "Cowork claims" block).
       onEvent: (event) => {
+        if (hubClient !== instance) return;
+        if (event?.type === "status") { billingBrowserLinks.clear(); commerceBrowserLinks.clear(); }
         if (!roomHistoryHear(event)) return undefined;
         if (event?.type === "claims" && typeof coworkHear === "function") coworkHear(event);
         // A Discord remote command (the "Discord remote" block) is answered
@@ -2509,15 +2617,17 @@ function hubInstance() {
       },
       log: (line) => logLine(line),
     });
+    hubClient = instance;
   }
   return hubClient;
 }
 
 async function hubStatus() {
-  const client = hubInstance();
+  const account = await studioAccountReady();
+  const client = account ? hubInstance() : null;
   const base = client ? client.status() : { configured: false, state: "off", error: "unavailable", user: null, readOnly: false, paused: false, rooms: [] };
   let linked = false;
-  try { linked = Boolean(community && (await communityRead()).state.link); } catch { linked = false; }
+  try { linked = Boolean(account) && await studioAccountLinked(); } catch { linked = false; }
   let shareBuilding = false;
   let autoConnect = true;
   try {
@@ -2525,11 +2635,12 @@ async function hubStatus() {
     shareBuilding = friends?.shareBuilding === true;
     autoConnect = friends?.connectAtLaunch !== false;
   } catch { shareBuilding = false; }
-  return { ...base, linked, communityConfigured: Boolean(communityClientId()), shareBuilding, autoConnect };
+  return { ...base, linked, account: studioAccount().status(), communityConfigured: Boolean(communityClientId()), shareBuilding, autoConnect };
 }
 
 async function hubCall(work) {
-  const client = hubInstance();
+  const account = await studioAccountReady();
+  const client = account ? hubInstance() : null;
   if (!client) return { ok: false, error: "unavailable", status: await hubStatus() };
   const result = await work(client);
   return { ...(result && typeof result === "object" ? result : { ok: Boolean(result) }), status: await hubStatus() };
@@ -2780,6 +2891,91 @@ function hubCollectibles(action, payload) {
   if (!contract.request(action, payload)) return Promise.resolve({ ok: false, error: "bad-request" });
   return hubCall((client) => typeof client.collectibles === "function" ? client.collectibles(action, payload) : { ok: false, error: "unsupported" });
 }
+// Membership browser links are short-lived, memory-only results from the
+// authenticated billing route. Both hosts use this IPC and shell adapter.
+const billingBrowserLinks = new Map();
+async function hubBilling(action, payload) {
+  if (process.env.MEFI_STUDIO_BILLING === "0") return { ok: false, error: "disabled" };
+  const contract = require("./scripts/billing-contract.cjs");
+  if (!contract.request(action, payload)) return { ok: false, error: "bad_request" };
+  const client = hubInstance(), before = client?.status();
+  if (!client?.billing || !before?.billing) return { ok: false, error: "unsupported" };
+  const result = await client.billing(action, payload), after = client.status();
+  if (hubInstance() !== client || before.user?.id !== after.user?.id || after.state !== "ready" || !after.billing) {
+    billingBrowserLinks.clear();
+    return { ok: false, error: "stale_account" };
+  }
+  if (result?.ok && action !== "status") {
+    const url = contract.stripeUrl(action, result.url);
+    if (!url) return { ok: false, error: "bad_response" };
+    billingBrowserLinks.set(action, { url, actor: after.user.id, client, until: Date.now() + 5 * 60_000 });
+  }
+  return { ...result, status: after };
+}
+async function hubBillingOpen(action, url, actorId) {
+  if (process.env.MEFI_STUDIO_BILLING === "0") return { ok: false, error: "disabled" };
+  const clean = require("./scripts/billing-contract.cjs").stripeUrl(action, url);
+  const issued = billingBrowserLinks.get(action), client = hubInstance(), current = client?.status();
+  if (!clean || !issued || issued.url !== clean || issued.client !== client || issued.until <= Date.now()
+    || !current?.billing || current.state !== "ready" || typeof actorId !== "string"
+    || current.user?.id !== actorId || issued.actor !== actorId) return { ok: false, error: "stale_account" };
+  billingBrowserLinks.delete(action);
+  try { await shell.openExternal(clean); return { ok: true }; }
+  catch { return { ok: false, error: "browser_unavailable" }; }
+}
+// Renderer actor is an assertion only; authentication comes from the ready native client.
+async function hubReferrals(action, payload, expectedActor) {
+  const contract = require("./scripts/referrals-contract.cjs"), call = contract.request(action, payload);
+  if (!call || !studioActor.actorId(expectedActor)) return { ok:false, error:"bad_request" };
+  const originalPayload = call.body || {}, generation = studioAccountActionGeneration, account = await studioAccountReady();
+  if (generation !== studioAccountActionGeneration) return { ok:false, error:"stale_account" };
+  const client = account ? hubInstance() : null, before = client?.status();
+  if (!client || before?.actorProtocol !== studioActor.ACTOR_PROTOCOL || before.user?.id !== expectedActor) return { ok:false, error:"stale_account" };
+  if (before.state !== "ready" || !before.referralInvitations || typeof client.referrals !== "function") return { ok:false, error:"unsupported" };
+  const result = await client.referrals(action, originalPayload), after = client.status();
+  if (generation !== studioAccountActionGeneration || account !== studioAccountClient || hubClient !== client || after.state !== "ready" || after.actorProtocol !== studioActor.ACTOR_PROTOCOL || after.user?.id !== expectedActor || !after.referralInvitations) return { ok:false, error:"stale_account" };
+  return result;
+}
+// Commerce links are bound to one authenticated order and one native client.
+// The renderer cannot open a Stripe URL that this host did not just issue.
+const commerceBrowserLinks = new Map();
+async function hubCommerce(action, payload) {
+  if (process.env.MEFI_STUDIO_COMMERCE === "0") return { ok: false, error: "disabled" };
+  const contract = require("./scripts/commerce-contract.cjs");
+  if (!contract.request(action, payload)) return { ok: false, error: "bad_request" };
+  const client = hubInstance(), before = client?.status();
+  if (!client?.commerce || !before?.[contract.statusKey(action)]) return { ok: false, error: "unsupported" };
+  const result = await client.commerce(action, payload), after = client.status();
+  if (hubInstance() !== client || before.user?.id !== after.user?.id || after.state !== "ready" || !after[contract.statusKey(action)]) {
+    commerceBrowserLinks.clear(); return { ok: false, error: "stale_account" };
+  }
+  if (result?.ok && action === "onboarding") {
+    const url = contract.onboardingUrl(result.url);
+    if (!url || !Number.isSafeInteger(result.expiresAt) || result.expiresAt <= Date.now()) return { ok: false, error: "onboarding_link_expired" };
+    commerceBrowserLinks.set("onboarding", { url, actor: after.user.id, client, until: Math.min(result.expiresAt, Date.now() + 5 * 60_000) });
+  }
+  if (result?.ok && action === "checkout" && result.url) {
+    const url = contract.stripeUrl(result.url);
+    if (!url || result.orderId !== payload.orderId) return { ok: false, error: "bad_response" };
+    const at = Date.now();
+    for (const [id, link] of commerceBrowserLinks) if (link.until <= at) commerceBrowserLinks.delete(id);
+    if (commerceBrowserLinks.size >= 32) commerceBrowserLinks.clear();
+    commerceBrowserLinks.set(result.orderId, { url, actor: after.user.id, client, until: at + 5 * 60_000 });
+  }
+  return { ...result, status: after };
+}
+async function hubCommerceOpen(orderId, url, actorId) {
+  if (process.env.MEFI_STUDIO_COMMERCE === "0") return { ok: false, error: "disabled" };
+  const contract = require("./scripts/commerce-contract.cjs"), onboarding = orderId === "onboarding";
+  const clean = onboarding ? contract.onboardingUrl(url) : contract.stripeUrl(url);
+  const issued = commerceBrowserLinks.get(orderId), client = hubInstance(), current = client?.status();
+  if (typeof orderId !== "string" || !onboarding && !contract.ORDER_ID.test(orderId) || !clean || !issued || issued.url !== clean || issued.client !== client || issued.until <= Date.now()
+    || !(onboarding ? current?.commerceOnboarding : current?.commerceOrders) || current.state !== "ready" || typeof actorId !== "string"
+    || current.user?.id !== actorId || issued.actor !== actorId) return { ok: false, error: "stale_account" };
+  commerceBrowserLinks.delete(orderId);
+  try { await shell.openExternal(clean); return { ok: true }; }
+  catch { return { ok: false, error: "browser_unavailable" }; }
+}
 async function hubShopAll() {
   const items = SHOP_STUDIO_ITEMS.map((item) => ({ id: item.id, kind: item.kind, name: item.name, data: item.data ? JSON.parse(JSON.stringify(item.data)) : null, updatedAt: null }));
   return { ok: true, items, all: true, status: await hubStatus() };
@@ -2801,7 +2997,7 @@ async function hubPresenceWanted() {
   // My PCs is a reason of its own (a paired or lent PC), whatever Friends' switch says.
   const pcs = typeof pcsWantsRelay === "function" && await pcsWantsRelay().catch(() => false);
   if (!pcs && (await readSettings())?.friends?.connectAtLaunch === false) return false;
-  return Boolean((await communityRead()).state.link);
+  return studioAccountLinked();
 }
 async function hubPresenceLook() {
   if (!(await hubPresenceWanted())) return false;
@@ -3913,12 +4109,14 @@ function coworkPushed() {
 async function coworkTick() {
   try {
     coworkActive = await coworkRoomForProject().catch(() => null);
-    const client = coworkActive || coworkMine.size ? hubInstance() : null;
+    const needed = Boolean(coworkActive || coworkMine.size);
+    const accountReady = !needed || typeof studioAccountReady !== "function" || await studioAccountReady();
+    const client = needed && accountReady ? hubInstance() : null;
     // Another project (or no room) now: let go of the old room's hold.
     if (coworkHeld && coworkHeld !== coworkActive?.roomId) { hubClient?.unsubscribe(coworkHeld, "cowork"); coworkHeld = null; }
     if (coworkActive && client) {
       await coworkMachineId();
-      if (client.status().state === "off" && (await communityRead()).state.link) await client.connect().catch(() => {});
+      if (client.status().state === "off" && await studioAccountLinked()) await client.connect().catch(() => {});
       if (client.status().state === "ready") { client.subscribe(coworkActive.roomId, "cowork"); coworkHeld = coworkActive.roomId; }
     }
     for (const [runId, mine] of coworkMine) {
@@ -4262,6 +4460,7 @@ function remoteApply() {
   const next = remoteApplying.then(async () => {
     const settings = await remoteSettings();
     if (!settings || SMOKE || CAPTURE || CLI_MODE) return;
+    if (typeof studioAccountReady === "function" && !await studioAccountReady()) return;
     const client = hubInstance();
     if (!settings.on) {
       stopRemoteLook();
@@ -4555,13 +4754,17 @@ async function pcsReadJson(name, fallback) {
   try { return JSON.parse(await readFile(path.join(pcsHome(), name), "utf8")); } catch { return fallback; }
 }
 // One write at a time, each through a temporary file.
-function pcsWriteJson(name, value) {
-  const mem = pcsMem();
+function pcsWriteJson(name, value, guard = () => true) {
+  const mem = pcsMem(), snapshot = JSON.stringify(value);
   mem.files = mem.files.catch(() => {}).then(async () => {
+    if (!guard()) return false;
     await mkdir(pcsHome(), { recursive: true });
     const file = path.join(pcsHome(), name), temp = `${file}.${process.pid}.tmp`;
-    await writeFile(temp, JSON.stringify(value));
+    if (!guard()) return false;
+    await writeFile(temp, snapshot);
+    if (!guard()) return false;
     await rename(temp, file);
+    return true;
   });
   return mem.files;
 }
@@ -4598,7 +4801,7 @@ async function pcsSettings() {
     always: saved.stayOn === "always",
     lines: pcPower ? pcPower.normalizeLines(saved.battery) : { low: 20, stop: 10 },
     projects: saved.projects && typeof saved.projects === "object" && !Array.isArray(saved.projects) ? saved.projects : {},
-    lend: (Array.isArray(saved.lend) ? saved.lend : []).filter((row) => /^\d{17,20}$/.test(String(row?.id ?? ""))).slice(0, 8)
+    lend: (Array.isArray(saved.lend) ? saved.lend : []).filter((row) => Boolean(studioActor.actorId(row?.id))).slice(0, 8)
       .map((row) => ({ id: String(row.id), name: String(row.name ?? "").replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, 40) || "friend", auto: row.auto === true })),
     power: saved.power && typeof saved.power === "object" ? saved.power : null,
   };
@@ -4613,20 +4816,23 @@ async function pcsPeers() {
   mem.peers ??= pcFleet ? pcFleet.cleanPeers(await pcsReadJson("peers.json", [])) : [];
   return mem.peers;
 }
-async function pcsPeersSave(next) {
-  const mem = pcsMem();
-  mem.peers = pcFleet.cleanPeers(next);
-  await pcsWriteJson("peers.json", mem.peers);
-  return mem.peers;
+async function pcsPeersSave(next, guard = () => true) {
+  const mem = pcsMem(), snapshot = pcFleet.cleanPeers(next);
+  if (!guard()) return Promise.resolve(mem.peers);
+  return pcsWriteJson("peers.json", snapshot, guard).then((written) => {
+    if (written && guard()) mem.peers = snapshot;
+    return mem.peers;
+  });
 }
 async function pcsSent() {
   const mem = pcsMem();
   mem.sent ??= (await pcsReadJson("sent.json", [])).filter((row) => row && typeof row === "object").slice(0, PCS_SENT_MAX);
   return mem.sent;
 }
-async function pcsSentSave(next) {
-  pcsMem().sent = next.slice(0, PCS_SENT_MAX);
-  await pcsWriteJson("sent.json", pcsMem().sent);
+async function pcsSentSave(next, guard = () => true) {
+  if (!guard()) return Promise.resolve();
+  const snapshot = next.slice(0, PCS_SENT_MAX).map((row) => ({ ...row }));
+  return pcsWriteJson("sent.json", snapshot, guard).then((written) => { if (written && guard()) pcsMem().sent = snapshot; });
 }
 
 // This PC's keys: made on first use, the private halves kept with safeStorage.
@@ -4699,21 +4905,24 @@ async function pcsStateNow() {
 // and whenever the name, the kind, the keys or the lending change.
 async function pcsHello() {
   pcsLibs();
-  const client = hubClient;
+  const client = hubClient, guard = pcsSessionFence(client);
   if (!client || typeof client.setPc !== "function" || !pcFleet) return false;
   const identity = await pcsIdentity();
   if (!identity) return false;
   const settings = await pcsSettings();
-  return client.setPc({ pc: { id: await coworkMachineId(), name: settings.name, kind: pcsMem().power.reading ? "laptop" : "desktop" }, keys: identity.public, lendTo: settings.lend.map((row) => row.id) });
+  const id = await coworkMachineId();
+  if (!guard()) return false;
+  return client.setPc({ pc: { id, name: settings.name, kind: pcsMem().power.reading ? "laptop" : "desktop" }, keys: identity.public, lendTo: settings.lend.map((row) => row.id) });
 }
 
 // This PC's line to the others: on a change at most every ten seconds, and
 // once a minute regardless (CPU and memory alone never count as a change).
 async function pcsSendState({ force = false } = {}) {
   pcsLibs();
-  const client = hubClient;
+  const client = hubClient, guard = pcsSessionFence(client);
   if (!client || client.status?.().state !== "ready" || typeof client.pcState !== "function" || !pcFleet) return false;
   const state = await pcsStateNow();
+  if (!guard()) return false;
   const mem = pcsMem();
   const { at: _at, cpu: _cpu, freeMB: _freeMB, ...steady } = state;
   const key = JSON.stringify(steady);
@@ -4745,7 +4954,7 @@ function pcsHearNow(event) {
   if (!pcsLibs() || !event || typeof event !== "object") return false;
   const mem = pcsMem();
   if (event.type === "status") {
-    if (event.status?.state === "ready") pcsHello().then(() => pcsSendState({ force: true })).catch(() => {});
+    if (event.status?.state === "ready") { const guard = pcsSessionFence(); pcsHello().then(() => guard() && pcsSendState({ force: true })).catch(() => {}); }
     pcsPushSoon();
     return false;
   }
@@ -4776,18 +4985,21 @@ function pcsHearNow(event) {
 
 // A paired PC seen on the relay: remember when, so an offline row can say so.
 async function pcsSeen() {
+  const guard = pcsSessionFence();
   const peers = await pcsPeers();
+  if (!guard()) return;
   const online = new Set(pcsMem().roster.map((row) => row.id));
   if (!peers.some((peer) => online.has(peer.id))) return;
-  await pcsPeersSave(peers.map((peer) => (online.has(peer.id) ? { ...peer, lastSeen: pcsNow() } : peer)));
+  await pcsPeersSave(peers.map((peer) => (online.has(peer.id) ? { ...peer, lastSeen: pcsNow() } : peer)), guard);
 }
 
 // A sealed body for one paired PC. -> { ok } or { ok: false, reason }.
-async function pcsSendTo(peerId, body) {
+async function pcsSendTo(peerId, body, guard = () => true) {
+  if (!guard()) return { ok: false, reason: "stale-account" };
   const client = hubClient;
   const identity = await pcsIdentity();
   const peer = (await pcsPeers()).find((row) => row.id === peerId);
-  if (!client || typeof client.pcSend !== "function" || !identity || !peer) return { ok: false, reason: "not-paired" };
+  if (!guard() || !client || hubClient !== client || typeof client.pcSend !== "function" || !identity || !peer) return { ok: false, reason: "not-paired" };
   const listed = pcsMem().roster.find((row) => row.id === peerId)?.keys ?? (peer.relation === "borrower" ? pcsMem().keysOf.get(peerId) ?? peer.keys : null);
   if (!listed) return { ok: false, reason: "not-online" };
   if (listed.sign !== peer.keys.sign || listed.box !== peer.keys.box) return { ok: false, reason: "keys-changed" };
@@ -4797,39 +5009,59 @@ async function pcsSendTo(peerId, body) {
   } catch (error) {
     return { ok: false, reason: String(error?.message ?? error).slice(0, 120) };
   }
+  if (!guard() || hubClient !== client) return { ok: false, reason: "stale-account" };
   return (await client.pcSend(peerId, env)) ?? { ok: false, reason: "failed" };
 }
 
 // A note that must arrive (done, taken): now when the PC is online, else kept for 14 days.
-async function pcsDeliver(peerId, body) {
-  const sent = await pcsSendTo(peerId, body);
+async function pcsDeliver(peerId, body, guard = () => true) {
+  const sent = await pcsSendTo(peerId, body, guard);
+  if (!guard()) return false;
   if (sent?.ok) return true;
   const mem = pcsMem();
-  mem.outbox = pcFleet.outboxAdd(mem.outbox ?? (await pcsReadJson("outbox.json", [])), { to: peerId, body }, pcsNow());
-  await pcsWriteJson("outbox.json", mem.outbox);
+  const old = mem.outbox ?? (await pcsReadJson("outbox.json", []));
+  if (!guard()) return false;
+  const next = pcFleet.outboxAdd(old, { to: peerId, body }, pcsNow());
+  const written = await pcsWriteJson("outbox.json", next, guard);
+  if (written && guard()) mem.outbox = next;
   return false;
 }
 async function pcsFlushOutbox() {
-  const mem = pcsMem();
+  const guard = pcsSessionFence(), mem = pcsMem();
+  if (!guard()) return;
   mem.outbox ??= await pcsReadJson("outbox.json", []);
   if (!mem.outbox.length) return;
   // A borrower's PC is never on this list: its notes are simply tried.
   const borrowers = (await pcsPeers()).filter((peer) => peer.relation === "borrower").map((peer) => peer.id);
   const due = pcFleet.outboxDue(mem.outbox, new Set([...mem.roster.map((row) => row.id), ...borrowers]), pcsNow());
   const kept = [...due.keep];
-  for (const row of due.send) if (!(await pcsSendTo(row.to, row.body))?.ok) kept.push(row);
-  mem.outbox = kept;
-  await pcsWriteJson("outbox.json", kept);
+  for (const row of due.send) if (!(await pcsSendTo(row.to, row.body, guard))?.ok) kept.push(row);
+  if (!guard()) return;
+  const written = await pcsWriteJson("outbox.json", kept, guard);
+  if (written && guard()) mem.outbox = kept;
 }
 
+// Captured native identity, never a renderer-supplied actor. A reconnect may
+// keep a local task alive, but an old account cannot dispatch into a new one.
+function pcsSessionFence(client = hubClient) {
+  const before = client?.status?.(), actor = before?.user?.id, protocol = before?.actorProtocol ?? null;
+  return () => {
+    const after = client?.status?.();
+    return Boolean(client && hubClient === client && actor && after?.state === "ready"
+      && after.user?.id === actor && (after.actorProtocol ?? null) === protocol);
+  };
+}
 async function pcsReceive({ from, fromUser, fromName, keys, env }) {
+  const client = hubClient, guard = pcsSessionFence(client);
   pcsLibs();
   if (!pcTrust || !env || typeof env !== "object" || typeof from !== "string") return;
   const me = await coworkMachineId();
-  if (env.k === "pair") return pcsPairHear({ from, fromUser, fromName, keys, env, me });
+  if (!guard()) return;
+  if (env.k === "pair") return pcsPairHear({ from, fromUser, fromName, keys, env, me, client, guard });
   const identity = await pcsIdentity();
   if (!identity) return;
   const peers = await pcsPeers();
+  if (!guard()) return;
   const opened = pcTrust.open(identity, env, { me, peers: new Map(peers.map((peer) => [peer.id, peer.keys])), now: pcsNow(), seen: pcsMem().seen });
   if (!opened.ok || opened.from !== from) {
     logLine(`[pcs] refused a message from ${String(from).slice(0, 64)}: ${opened.reason ?? "sender mismatch"}`);
@@ -4838,17 +5070,18 @@ async function pcsReceive({ from, fromUser, fromName, keys, env }) {
   const peer = peers.find((row) => row.id === from);
   // A friend's PC answers only while it still lends or borrows as recorded.
   if (peer.relation === "borrower" && !(await pcsSettings()).lend.some((row) => row.id === peer.uid)) return;
+  if (!guard()) return;
   const body = opened.body;
   switch (body.type) {
-    case "offer": return pcsOfferHear(peer, body);
-    case "offerReply": return pcsOfferReplyHear(peer, body);
-    case "start": return pcsStartHear(peer, body);
-    case "startReply": return pcsStartReplyHear(peer, body);
-    case "done": return pcsDoneHear(peer, body);
-    case "recall": return pcsRecallHear(peer, body);
-    case "recallReply": return pcsRecallReplyHear(peer, body);
-    case "handoff": return pcsHandoffLook({ force: true });
-    case "taken": return pcsTakenHear(peer, body);
+    case "offer": return pcsOfferHear(peer, body, guard);
+    case "offerReply": return pcsOfferReplyHear(peer, body, guard);
+    case "start": return pcsStartHear(peer, body, guard);
+    case "startReply": return pcsStartReplyHear(peer, body, guard);
+    case "done": return pcsDoneHear(peer, body, guard);
+    case "recall": return pcsRecallHear(peer, body, guard);
+    case "recallReply": return pcsRecallReplyHear(peer, body, guard);
+    case "handoff": return pcsHandoffLook({ force: true, guard });
+    case "taken": return pcsTakenHear(peer, body, guard);
     default: return undefined;
   }
 }
@@ -4858,6 +5091,8 @@ async function pcsReceive({ from, fromUser, fromName, keys, env }) {
 // Pair with a PC on the relay's list: it shows the six numbers and its owner
 // chooses Pair there. Up to five minutes to answer.
 async function pcsPair(pcId) {
+  const client = hubClient, guard = pcsSessionFence(client);
+  if (!guard()) return { ok: false, error: "stale-account" };
   pcsLibs();
   const mem = pcsMem();
   const row = mem.roster.find((pc) => pc.id === pcId);
@@ -4868,18 +5103,21 @@ async function pcsPair(pcId) {
   const settings = await pcsSettings();
   const relation = row.mine ? "mine" : "borrow";
   const env = pcTrust.pairEnvelope(identity, { from: await coworkMachineId(), to: pcId, step: "ask", relation, name: settings.name, now: pcsNow() });
-  const sent = await hubClient?.pcSend?.(pcId, env);
+  if (!guard()) return { ok: false, error: "stale-account" };
+  const sent = await client.pcSend(pcId, env);
+  if (!guard()) return { ok: false, error: "stale-account" };
   if (!sent?.ok) return { ok: false, error: sent?.reason === "not-online" ? "That PC went offline." : "The relay did not pass it on. Try again." };
   const numbers = pcTrust.pairNumbers(identity.public, row.keys);
   mem.asks.set(pcId, { dir: "out", at: pcsNow(), relation, name: row.name, numbers, uid: row.owner?.id ?? null, keys: row.keys });
-  pcsPush();
+  pcsPush(guard);
   return { ok: true, numbers };
 }
 
-async function pcsPairHear({ from, fromUser, fromName, keys, env, me }) {
+async function pcsPairHear({ from, fromUser, fromName, keys, env, me, client = hubClient, guard = pcsSessionFence(client) }) {
   const mem = pcsMem();
   const listed = mem.roster.find((pc) => pc.id === from);
   const peer = (await pcsPeers()).find((row) => row.id === from);
+  if (!guard() || !client || hubClient !== client) return;
   const sent = pcTrust.keysOf(keys);
   const row = listed ?? (sent ? { id: from, name: String(env?.name || fromName || "PC").slice(0, 40), keys: sent, mine: false } : null);
   if (!row?.keys) return;
@@ -4891,32 +5129,37 @@ async function pcsPairHear({ from, fromUser, fromName, keys, env, me }) {
   const identity = await pcsIdentity();
   if (!identity) return;
   const settings = await pcsSettings();
+  if (!guard() || hubClient !== client) return;
   if (opened.step === "ask") {
     // Your own PC (same account) or a friend you lend this PC to.
     const lent = settings.lend.find((lend) => lend.id === String(fromUser));
     if (opened.relation === "mine" ? row.mine !== true : !lent) return;
     mem.asks.set(from, { dir: "in", at: pcsNow(), relation: opened.relation, name: opened.name || row.name, numbers: pcTrust.pairNumbers(identity.public, row.keys), uid: String(fromUser ?? ""), keys: row.keys });
     pcsNote(`${opened.name || row.name} asks to pair with this PC`);
-    pcsPush();
+    pcsPush(guard);
     return;
   }
   if (opened.step === "ok" && ask?.dir === "out" && pcsNow() - ask.at < PCS_ASK_MS) {
     mem.asks.delete(from);
     const added = pcFleet.addPeer(await pcsPeers(), { id: from, name: row.name, relation: ask.relation === "mine" ? "mine" : "lender", uid: String(fromUser ?? ""), keys: ask.keys, pairedAt: pcsNow() });
-    if (added.peers) { await pcsPeersSave(added.peers); pcsNote(`paired with ${row.name}`); }
+    if (!guard()) return;
+    if (added.peers) { await pcsPeersSave(added.peers, guard); if (!guard()) return; pcsNote(`paired with ${row.name}`); }
     else pcsNote(added.error);
   } else if (opened.step === "no" && ask?.dir === "out") {
     mem.asks.delete(from);
     pcsNote(`${row.name} did not pair`);
   } else if (opened.step === "forget") {
     const peers = await pcsPeers();
-    if (peers.some((peer) => peer.id === from)) { await pcsPeersSave(peers.filter((peer) => peer.id !== from)); pcsNote(`${row.name} forgot this PC`); }
+    if (!guard()) return;
+    if (peers.some((peer) => peer.id === from)) { await pcsPeersSave(peers.filter((peer) => peer.id !== from), guard); if (!guard()) return; pcsNote(`${row.name} forgot this PC`); }
   }
-  pcsPush();
+  pcsPush(guard);
 }
 
 // The owner's answer on this PC to another PC's ask.
 async function pcsPairAnswer(pcId, yes) {
+  const client = hubClient, guard = pcsSessionFence(client);
+  if (!guard()) return { ok: false, error: "stale-account" };
   pcsLibs();
   const mem = pcsMem();
   const ask = mem.asks.get(pcId);
@@ -4924,34 +5167,44 @@ async function pcsPairAnswer(pcId, yes) {
   mem.asks.delete(pcId);
   const identity = await pcsIdentity();
   const settings = await pcsSettings();
-  if (pcsNow() - ask.at >= PCS_ASK_MS) { pcsPush(); return { ok: false, error: "That request is too old. Ask again from the other PC." }; }
+  if (pcsNow() - ask.at >= PCS_ASK_MS) { pcsPush(guard); return { ok: false, error: "That request is too old. Ask again from the other PC." }; }
   const env = pcTrust.pairEnvelope(identity, { from: await coworkMachineId(), to: pcId, step: yes ? "ok" : "no", relation: ask.relation, name: settings.name, now: pcsNow() });
   if (yes) {
     const lent = settings.lend.find((lend) => lend.id === ask.uid);
     const added = pcFleet.addPeer(await pcsPeers(), { id: pcId, name: ask.name, relation: ask.relation === "mine" ? "mine" : "borrower", uid: ask.uid || null, keys: ask.keys, pairedAt: pcsNow(), auto: lent?.auto === true });
-    if (added.error) { pcsPush(); return { ok: false, error: added.error }; }
-    await pcsPeersSave(added.peers);
+    if (!guard()) return { ok: false, error: "stale-account" };
+    if (added.error) { pcsPush(guard); return { ok: false, error: added.error }; }
+    await pcsPeersSave(added.peers, guard);
+    if (!guard()) return { ok: false, error: "stale-account" };
     pcsNote(`paired with ${ask.name}`);
   }
-  await hubClient?.pcSend?.(pcId, env);
-  pcsPush();
+  if (!guard()) return { ok: false, error: "stale-account" };
+  await client.pcSend(pcId, env);
+  pcsPush(guard);
   return { ok: true };
 }
 
 // Forget a paired PC here at once, and there too when it is online.
 async function pcsForget(pcId) {
   pcsLibs();
+  const client = hubClient, guard = pcsSessionFence(client);
   const peers = await pcsPeers();
   const peer = peers.find((row) => row.id === pcId);
   if (!peer) return { ok: false, error: "That PC is not paired." };
+  // Forgetting the local pairing is explicit and also works while offline.
   await pcsPeersSave(peers.filter((row) => row.id !== pcId));
+  if (!guard()) return { ok: true };
   const identity = await pcsIdentity();
+  if (!guard()) return { ok: true };
   if (identity && (peer.relation === "borrower" || pcsMem().roster.some((row) => row.id === pcId))) {
-    const env = pcTrust.pairEnvelope(identity, { from: await coworkMachineId(), to: pcId, step: "forget", relation: peer.relation === "mine" ? "mine" : "borrow", now: pcsNow() });
-    await hubClient?.pcSend?.(pcId, env);
+    const from = await coworkMachineId();
+    if (!guard()) return { ok: true };
+    const env = pcTrust.pairEnvelope(identity, { from, to: pcId, step: "forget", relation: peer.relation === "mine" ? "mine" : "borrow", now: pcsNow() });
+    await client.pcSend?.(pcId, env);
+    if (!guard()) return { ok: true };
   }
-  pcsNote(`forgot ${peer.name}`);
-  pcsPush();
+  pcsNote("forgot " + peer.name);
+  pcsPush(guard);
   return { ok: true };
 }
 
@@ -4967,20 +5220,25 @@ async function pcsPeerViews() {
 }
 
 // Offer these cards to one PC. The cards wait here (movedTo, pending) until it answers.
-async function pcsSendOffer({ to, toName, project, why, tasks }, localProject) {
+async function pcsSendOffer({ to, toName, project, why, tasks }, localProject, guard = pcsSessionFence()) {
+  if (!guard()) return { ok: false, reason: "stale-account" };
   const mem = pcsMem();
   const offerId = `offer_${crypto.randomBytes(6).toString("hex")}`;
   const ids = tasks.map((card) => card.id);
   const at = pcsNow();
   const marked = await projects.run(localProject, () => mutateBoard((board) => {
+    if (!guard()) return null;
     const rows = board.tasks.filter((task) => ids.includes(task.id) && !task.movedTo && !task.runId && !task.lease);
     for (const row of rows) row.movedTo = { id: to, name: toName, at, pending: offerId };
     return rows.length ? { tasks: board.tasks, marked: rows.map((row) => row.id) } : { marked: [] };
   }));
-  const cards = tasks.filter((card) => marked.marked?.includes(card.id));
+  if (!guard()) return { ok: false, reason: "stale-account" };
+  const cards = tasks.filter((card) => marked?.marked?.includes(card.id));
   if (!cards.length) return { ok: false, reason: "nothing-to-offer" };
   mem.offers.set(offerId, { at, to, toName, projectId: localProject.id, taskIds: cards.map((card) => card.id) });
-  const sent = await pcsSendTo(to, { type: "offer", offerId, project, why, tasks: cards });
+  if (!guard()) return { ok: false, reason: "stale-account" };
+  const sent = await pcsSendTo(to, { type: "offer", offerId, project, why, tasks: cards }, guard);
+  if (!guard()) return { ok: false, reason: "stale-account" };
   if (!sent?.ok) await pcsOfferLapse(offerId);
   else assistantLog("control", `offered ${cards.length} card${cards.length === 1 ? "" : "s"} to ${toName}${why === "battery" ? " (battery low)" : why === "memory" ? " (short of memory)" : why === "busy" ? " (every slot here is busy)" : ""}`);
   return sent;
@@ -4999,27 +5257,31 @@ async function pcsOfferLapse(offerId) {
   }));
 }
 
-async function pcsOfferHear(peer, body) {
+async function pcsOfferHear(peer, body, guard = () => true) {
+  if (!guard()) return;
   const ids = (Array.isArray(body.tasks) ? body.tasks : []).slice(0, pcFleet.LIMITS.offerTasks);
-  const reply = (taken, declined) => pcsSendTo(peer.id, { type: "offerReply", offerId: String(body.offerId ?? "").slice(0, 40), taken, declined });
+  const reply = (taken, declined) => pcsSendTo(peer.id, { type: "offerReply", offerId: String(body.offerId ?? "").slice(0, 40), taken, declined }, guard);
   if (peer.relation !== "mine") return reply([], ids.map((card) => ({ id: String(card?.id ?? "").slice(0, 80), reason: "not-taking" })));
   const settings = await pcsSettings();
   const open = projects.open();
   const known = Boolean(open) && pcFleet.isProjectKey(body.project?.key) && (await pcsProjectKey(open)) === body.project.key;
   const state = await pcsStateNow();
   const tasks = known ? await (await getEyes()).readJson(TASKS_PATH, []) : [];
+  if (!guard()) return;
   const decision = pcFleet.takeOffer({
     tasks: ids, accepting: state.accepting, free: pcFleet.freeSlots(state), project: { known, open: known, share: known && pcsShared(settings, open.id) },
     known: (card) => tasks.some((task) => task?.fromPc?.id === peer.id && task.fromPc.taskId === card.id && !["done", "archived"].includes(task.status)),
   });
   const taken = [];
   if (decision.take.length) {
-    for (const result of await pcsAdmitCards(decision.take, { peer })) {
+    for (const result of await pcsAdmitCards(decision.take, { peer, guard })) {
       if (result.created) taken.push({ id: result.card.id, as: result.created.id });
       else decision.decline.push({ id: result.card.id, reason: "already-here" });
     }
   }
+  if (!guard()) return;
   await reply(taken, decision.decline);
+  if (!guard()) return;
   if (taken.length) {
     pcsNote(`took ${taken.length} card${taken.length === 1 ? "" : "s"} from ${peer.name}`);
     assistantAskForWork(`work from ${peer.name}`);
@@ -5028,13 +5290,15 @@ async function pcsOfferHear(peer, body) {
 
 // Cards from another PC, admitted in one board write. A friend's wait for
 // this PC's owner (an ownerHold of kind "friend") unless they run without asking.
-async function pcsAdmitCards(cards, { peer, held = false }) {
+async function pcsAdmitCards(cards, { peer, held = false, guard = () => true }) {
+  if (!guard()) return [];
   const now = pcsNow();
   const project = { id: projects.current().id, path: projectRoot() };
   const allocateId = () => "task_" + crypto.randomBytes(8).toString("hex");
   const friend = peer.relation === "borrower";
   pcsMem().received = true;
   const written = await mutateBoard((board) => {
+    if (!guard()) return { results: [] };
     const results = [];
     for (const card of cards) {
       const candidate = {
@@ -5048,16 +5312,17 @@ async function pcsAdmitCards(cards, { peer, held = false }) {
     }
     return results.some((row) => row.created) ? { tasks: board.tasks, results } : { results };
   });
-  return written.results ?? [];
+  return guard() ? written.results ?? [] : [];
 }
 
-async function pcsOfferReplyHear(peer, body) {
+async function pcsOfferReplyHear(peer, body, guard = () => true) {
+  if (!guard()) return;
   const mem = pcsMem();
   const offer = mem.offers.get(body.offerId);
   const taken = (Array.isArray(body.taken) ? body.taken : []).filter((row) => typeof row?.id === "string");
   if (!offer || offer.to !== peer.id) {
     // Too late: the cards came back here already, so ask for them back there.
-    for (const row of taken) await pcsSendTo(peer.id, { type: "recall", taskId: row.id });
+    for (const row of taken) await pcsSendTo(peer.id, { type: "recall", taskId: row.id }, guard);
     return;
   }
   mem.offers.delete(body.offerId);
@@ -5065,6 +5330,7 @@ async function pcsOfferReplyHear(peer, body) {
   if (!project) return;
   const declined = (Array.isArray(body.declined) ? body.declined : []).filter((row) => typeof row?.id === "string");
   await projects.run(project, () => mutateBoard((board) => {
+    if (!guard()) return null;
     let changed = false;
     for (const row of board.tasks) {
       if (row.movedTo?.pending !== body.offerId) continue;
@@ -5081,8 +5347,9 @@ async function pcsOfferReplyHear(peer, body) {
     }
     return changed ? { tasks: board.tasks } : null;
   }));
+  if (!guard()) return;
   if (taken.length) pcsNote(`${peer.name} took ${taken.length} card${taken.length === 1 ? "" : "s"}`);
-  pcsPushSoon();
+  pcsPushSoon(guard);
 }
 
 // Every tick: lapse old offers, send "done" notes home, and when this PC is
@@ -5139,12 +5406,15 @@ async function pcsDoneNotes(tasks) {
 }
 
 // The board, of whichever project holds this card.
-async function pcsOnCard(taskId, change) {
+async function pcsOnCard(taskId, change, guard = () => true) {
   for (const project of projects.list().projects ?? []) {
+    if (!guard()) return false;
     const done = await projects.run(project, async () => {
       const tasks = await (await getEyes()).readJson(TASKS_PATH, []);
+      if (!guard()) return false;
       if (!tasks.some((task) => task?.id === taskId)) return false;
       await mutateBoard((board) => {
+        if (!guard()) return null;
         const row = board.tasks.find((task) => task.id === taskId);
         return row && change(row) !== false ? { tasks: board.tasks } : null;
       });
@@ -5155,17 +5425,20 @@ async function pcsOnCard(taskId, change) {
   return false;
 }
 
-async function pcsDoneHear(peer, body) {
+async function pcsDoneHear(peer, body, guard = () => true) {
+  if (!guard()) return;
   const taskId = String(body.taskId ?? "").slice(0, 80);
   const outcome = pcFleet.OUTCOMES.includes(body.outcome) ? body.outcome : "done";
-  const sent = await pcsSent();
+  const sent = (await pcsSent()).map((row) => ({ ...row }));
+  if (!guard()) return;
   const row = sent.find((item) => item.reqId === taskId && item.to === peer.id);
   if (row) {
     row.status = outcome;
     row.doneAt = pcsNow();
-    await pcsSentSave(sent);
+    await pcsSentSave(sent, guard);
+    if (!guard()) return;
     pcsNote(`${peer.name} ${outcome === "done" ? "finished" : outcome === "dropped" ? "dropped" : "could not finish"} "${row.title}"`);
-    pcsPush();
+    pcsPush(guard);
     return;
   }
   await pcsOnCard(taskId, (task) => {
@@ -5182,8 +5455,8 @@ async function pcsDoneHear(peer, body) {
       executorResume.appendLog(task, `came back from ${peer.name}: it was ${outcome} there`);
     }
     return true;
-  });
-  pcsPushSoon();
+  }, guard);
+  pcsPushSoon(guard);
 }
 
 // Bring back a card another PC has not started. `force` takes it back here
@@ -5202,10 +5475,12 @@ async function pcsRecall(taskId, { force = false } = {}) {
   return { ok: true, asked: true };
 }
 
-async function pcsRecallHear(peer, body) {
+async function pcsRecallHear(peer, body, guard = () => true) {
+  if (!guard()) return;
   const taskId = String(body.taskId ?? "").slice(0, 80);
   let answer = { ok: false, error: "It is not here any more." };
   await mutateBoard((board) => {
+    if (!guard()) return null;
     const row = board.tasks.find((task) => task?.fromPc?.id === peer.id && task.fromPc.taskId === taskId && !["done", "archived"].includes(task.status));
     if (!row) return null;
     if (row.runId || row.lease || row.runProgress?.pending || ["active", "running", "verifying", "awaiting_verification"].includes(row.status)) {
@@ -5219,18 +5494,20 @@ async function pcsRecallHear(peer, body) {
     answer = { ok: true };
     return { tasks: board.tasks };
   });
-  await pcsSendTo(peer.id, { type: "recallReply", taskId, ...answer });
+  await pcsSendTo(peer.id, { type: "recallReply", taskId, ...answer }, guard);
 }
 
-async function pcsRecallReplyHear(peer, body) {
+async function pcsRecallReplyHear(peer, body, guard = () => true) {
+  if (!guard()) return;
   const taskId = String(body.taskId ?? "").slice(0, 80);
-  if (body.ok === true) await pcsOnCard(taskId, (task) => { if (task.movedTo?.id !== peer.id) return false; delete task.movedTo; executorResume.appendLog(task, `back from ${peer.name}`); return true; });
+  if (body.ok === true) await pcsOnCard(taskId, (task) => { if (task.movedTo?.id !== peer.id) return false; delete task.movedTo; executorResume.appendLog(task, `back from ${peer.name}`); return true; }, guard);
   else pcsNote(`${peer.name} kept a card: ${String(body.error ?? "it could not give it back").slice(0, 120)}`);
-  pcsPushSoon();
+  pcsPushSoon(guard);
 }
 
 // Send one of the open project's ready cards to a PC now (the owner's choice).
 async function pcsMove(taskId, pcId) {
+  const guard = pcsSessionFence();
   pcsLibs();
   const project = projects.open();
   if (!project) return { ok: false, error: "Open a project first." };
@@ -5243,13 +5520,15 @@ async function pcsMove(taskId, pcId) {
   if (!task || !pcFleet.movable({ ...task, pin: false }, pcsTaskState(task, tasks, pcsNow()))) return { ok: false, error: "Only a ready card that has not started can move." };
   const why = pcFleet.whyNotTaking(peer.heard, pcsNow(), { key, name: project.name });
   if (why) return { ok: false, error: `${peer.name}: ${why}.` };
-  const sent = await pcsSendOffer({ to: peer.id, toName: peer.name, project: { key, name: project.name }, why: "you", tasks: [pcFleet.cardOf(task)] }, project);
+  if (!guard()) return { ok: false, error: "stale-account" };
+  const sent = await pcsSendOffer({ to: peer.id, toName: peer.name, project: { key, name: project.name }, why: "you", tasks: [pcFleet.cardOf(task)] }, project, guard);
   return sent?.ok ? { ok: true } : { ok: false, error: "It could not be sent. Try again." };
 }
 
 // ---- starting work on another PC --------------------------------------------------
 
 async function pcsStart({ pcId, title, prompt }) {
+  const guard = pcsSessionFence();
   pcsLibs();
   const project = projects.open();
   if (!project) return { ok: false, error: "Open the project the work is for first." };
@@ -5259,42 +5538,52 @@ async function pcsStart({ pcId, title, prompt }) {
   if (!key) return { ok: false, error: "This project has no GitHub repository, so other PCs cannot have it." };
   const card = pcFleet.cleanCard({ id: `sent_${crypto.randomBytes(6).toString("hex")}`, title, prompt });
   if (!card) return { ok: false, error: "Give the work a title." };
-  const sent = await pcsSendTo(pcId, { type: "start", reqId: card.id, project: { key, name: project.name }, title: card.title, prompt: card.prompt });
+  if (!guard()) return { ok: false, error: "stale-account" };
+  const sent = await pcsSendTo(pcId, { type: "start", reqId: card.id, project: { key, name: project.name }, title: card.title, prompt: card.prompt }, guard);
   if (!sent?.ok) return { ok: false, error: sent?.reason === "not-online" ? `${peer.name} is not online.` : "It could not be sent. Try again." };
   const list = await pcsSent();
-  await pcsSentSave([{ reqId: card.id, to: pcId, toName: peer.name, title: card.title, project: project.name, at: pcsNow(), status: "sent" }, ...list]);
-  pcsPush();
+  if (!guard()) return { ok: false, error: "stale-account" };
+  await pcsSentSave([{ reqId: card.id, to: pcId, toName: peer.name, title: card.title, project: project.name, at: pcsNow(), status: "sent" }, ...list], guard);
+  if (!guard()) return { ok: false, error: "stale-account" };
+  pcsPush(guard);
   return { ok: true, reqId: card.id };
 }
 
-async function pcsStartHear(peer, body) {
+async function pcsStartHear(peer, body, guard = () => true) {
+  if (!guard()) return;
   const reqId = String(body.reqId ?? "").slice(0, 80);
-  const reply = (fields) => pcsSendTo(peer.id, { type: "startReply", reqId, ...fields });
+  const reply = (fields) => pcsSendTo(peer.id, { type: "startReply", reqId, ...fields }, guard);
   if (peer.relation !== "mine" && peer.relation !== "borrower") return reply({ ok: false, error: "This PC does not take work from you." });
   const open = projects.open();
   if (!open || !pcFleet.isProjectKey(body.project?.key) || (await pcsProjectKey(open)) !== body.project.key) {
     return reply({ ok: false, error: `${String(body.project?.name ?? "That project").slice(0, 60)} is not open on this PC.` });
   }
+  if (!guard()) return;
   const card = pcFleet.cleanCard({ id: reqId, title: body.title, prompt: body.prompt });
   if (!card) return reply({ ok: false, error: "The work had no title." });
   const lent = peer.relation === "borrower" ? (await pcsSettings()).lend.find((row) => row.id === peer.uid) : null;
+  if (!guard()) return;
   const held = peer.relation === "borrower" && lent?.auto !== true;
-  const [result] = await pcsAdmitCards([card], { peer, held });
+  const [result] = await pcsAdmitCards([card], { peer, held, guard });
+  if (!guard()) return;
   if (!result?.created) return reply({ ok: false, error: "This PC already has that work on its board." });
   pcsNote(`${peer.name} started "${card.title}" here${held ? "; it waits for your OK" : ""}`);
   if (!held) assistantAskForWork(`work from ${peer.name}`);
-  pcsPush();
+  pcsPush(guard);
   return reply({ ok: true, taskId: result.created.id, held });
 }
 
-async function pcsStartReplyHear(peer, body) {
-  const list = await pcsSent();
+async function pcsStartReplyHear(peer, body, guard = () => true) {
+  if (!guard()) return;
+  const list = (await pcsSent()).map((row) => ({ ...row }));
+  if (!guard()) return;
   const row = list.find((item) => item.reqId === body.reqId && item.to === peer.id);
   if (!row) return;
   row.status = body.ok === true ? (body.held ? "held" : "queued") : "refused";
   if (body.ok !== true) row.error = String(body.error ?? "").slice(0, 160);
-  await pcsSentSave(list);
-  pcsPush();
+  await pcsSentSave(list, guard);
+  if (!guard()) return;
+  pcsPush(guard);
 }
 
 // ---- battery ---------------------------------------------------------------------
@@ -5510,8 +5799,10 @@ async function pcsContinue() {
 // The open project's handoffs (every five minutes, or when a paired PC says
 // it parked one). A PC taking work picks up one from a paired PC of the owner
 // by itself when its changes apply cleanly.
-async function pcsHandoffLook({ force = false } = {}) {
+async function pcsHandoffLook({ force = false, guard = () => true } = {}) {
+  if (!guard()) return;
   pcsLibs();
+  const git = (args, options) => guard() ? pcsGit(args, options) : Promise.resolve({ code: 1, stdout: "", stderr: "stale-account" });
   const project = projects.open();
   const mem = pcsMem();
   if (!pcHandoff || !project) return;
@@ -5519,15 +5810,20 @@ async function pcsHandoffLook({ force = false } = {}) {
   // GitHub is asked by itself only on a PC paired with another of the owner's.
   if (!force && !(await pcsPeers()).some((peer) => peer.relation === "mine")) return;
   const settings = await pcsSettings();
-  if (!(await pcsProjectKey(project))) { mem.handoffs = { ...mem.handoffs, at: pcsNow(), projectId: project.id, list: [], error: null }; return; }
-  const listed = await pcHandoff.list({ git: pcsGit, root: project.path });
-  if (!listed.ok) { mem.handoffs = { ...mem.handoffs, at: pcsNow(), projectId: project.id, error: listed.error }; pcsPushSoon(); return; }
+  const projectKey = await pcsProjectKey(project);
+  if (!guard()) return;
+  if (!projectKey) { mem.handoffs = { ...mem.handoffs, at: pcsNow(), projectId: project.id, list: [], error: null }; return; }
+  const listed = await pcHandoff.list({ git, root: project.path });
+  if (!guard()) return;
+  if (!listed.ok) { mem.handoffs = { ...mem.handoffs, at: pcsNow(), projectId: project.id, error: listed.error }; pcsPushSoon(guard); return; }
   const me = await coworkMachineId();
+  if (!guard()) return;
   const list = [];
   for (const row of listed.branches) {
     let meta = mem.handoffs.meta.get(row.sha) ?? null;
     if (!meta) {
-      const read = await pcHandoff.read({ git: pcsGit, root: project.path, branch: row.branch, sha: row.sha });
+      const read = await pcHandoff.read({ git, root: project.path, branch: row.branch, sha: row.sha });
+      if (!guard()) return;
       meta = read.ok ? read.meta : null;
       if (meta) mem.handoffs.meta.set(row.sha, meta);
     }
@@ -5537,34 +5833,41 @@ async function pcsHandoffLook({ force = false } = {}) {
   mem.handoffs = { ...mem.handoffs, at: pcsNow(), projectId: project.id, list, error: null };
   const peers = await pcsPeers();
   const state = await pcsStateNow();
+  if (!guard()) return;
   const auto = list.find((row) => !row.mine && peers.some((peer) => peer.id === row.meta.pc && peer.relation === "mine"));
   if (auto && state.accepting && pcFleet.freeSlots(state) > 0 && pcsShared(settings, project.id)) {
-    const check = await pcHandoff.applies({ git: pcsGit, root: project.path, meta: auto.meta, sha: auto.sha });
-    if (check.ok) await pcsPickUp({ branch: auto.branch, sha: auto.sha, auto: true });
+    const check = await pcHandoff.applies({ git, root: project.path, meta: auto.meta, sha: auto.sha });
+    if (guard() && check.ok) await pcsPickUp({ branch: auto.branch, sha: auto.sha, auto: true, guard });
   }
-  pcsPushSoon();
+  pcsPushSoon(guard);
 }
 
-async function pcsPickUp({ branch, sha, auto = false }) {
+async function pcsPickUp({ branch, sha, auto = false, guard = () => true }) {
+  if (!guard()) return { ok: false, error: "stale-account" };
   pcsLibs();
+  const git = (args, options) => guard() ? pcsGit(args, options) : Promise.resolve({ code: 1, stdout: "", stderr: "stale-account" });
   const project = projects.open();
   if (!project || !pcHandoff) return { ok: false, error: "Open the project first." };
-  const result = await pcHandoff.pickUp({ git: pcsGit, root: project.path, branch, sha });
+  const result = await pcHandoff.pickUp({ git, root: project.path, branch, sha });
+  if (!guard()) return { ok: false, error: "stale-account" };
   if (!result.ok) { if (!auto) pcsNote(`could not pick up ${branch}: ${result.error}`); return { ok: false, error: result.error }; }
   const meta = result.meta;
   const peer = (await pcsPeers()).find((row) => row.id === meta.pc) ?? { id: meta.pc, name: meta.pcName, relation: "mine" };
+  if (!guard()) return { ok: false, error: "stale-account" };
   const files = meta.files.slice(0, 20).join(", ") + (meta.files.length > 20 ? ", …" : "");
   const cards = meta.tasks.map((task) => pcFleet.cleanCard({
     id: task.id, title: task.title,
     prompt: `${task.prompt}\n\nThis continues work ${meta.pcName} started and handed off${meta.why === "battery" ? ` at ${meta.level ?? "?"}% battery` : ""}. Its changes so far are already in the working tree${files ? ` (${files})` : ""}.${task.note ? ` Where it stopped: ${task.note}` : ""} Carry on from there; do not start over.`,
   })).filter(Boolean);
-  const admitted = await pcsAdmitCards(cards, { peer: { ...peer, relation: "mine" } });
+  const admitted = await pcsAdmitCards(cards, { peer: { ...peer, relation: "mine" }, guard });
+  if (!guard()) return { ok: false, error: "stale-account" };
   const ids = admitted.filter((row) => row.created).map((row) => row.card.id);
-  if (meta.pc) await pcsDeliver(meta.pc, { type: "taken", branch, taskIds: ids });
+  if (meta.pc) await pcsDeliver(meta.pc, { type: "taken", branch, taskIds: ids }, guard);
+  if (!guard()) return { ok: false, error: "stale-account" };
   pcsNote(`${auto ? "picked up by itself" : "picked up"}: ${branch} from ${meta.pcName} (${ids.length} card${ids.length === 1 ? "" : "s"})`);
   pcsMem().handoffs.at = 0;
   assistantAskForWork(`handoff from ${meta.pcName}`);
-  pcsPush();
+  pcsPush(guard);
   return { ok: true, tasks: ids.length };
 }
 
@@ -5578,7 +5881,8 @@ async function pcsDropHandoff({ branch, sha }) {
 }
 
 // Another PC picked up this PC's parked cards: they are on that PC now.
-async function pcsTakenHear(peer, body) {
+async function pcsTakenHear(peer, body, guard = () => true) {
+  if (!guard()) return;
   const ids = (Array.isArray(body.taskIds) ? body.taskIds : []).map((id) => String(id).slice(0, 80)).slice(0, 8);
   for (const id of ids) {
     await pcsOnCard(id, (task) => {
@@ -5588,21 +5892,21 @@ async function pcsTakenHear(peer, body) {
       task.movedTo = { id: peer.id, name: peer.name, at: pcsNow() };
       executorResume.appendLog(task, `${peer.name} picked up its handoff`);
       return true;
-    });
+    }, guard);
   }
-  pcsPushSoon();
+  pcsPushSoon(guard);
 }
 
 // ---- the page --------------------------------------------------------------------
 
 async function pcsStatus({ watch = false } = {}) {
+  const client = hubClient;
   pcsLibs();
   if (!pcFleet || !pcTrust || !pcPower) return { ok: false, error: "unavailable" };
   const mem = pcsMem();
   if (watch) mem.watchUntil = pcsNow() + 90000;
   const settings = await pcsSettings();
   const me = await coworkMachineId();
-  const client = hubClient;
   const hub = client?.status?.() ?? null;
   let encryption = false;
   try { encryption = safeStorage.isEncryptionAvailable() === true; } catch {}
@@ -5622,7 +5926,9 @@ async function pcsStatus({ watch = false } = {}) {
     .map((task) => ({ id: task.id, title: task.title, to: task.movedTo.name, toId: task.movedTo.id ?? null, pending: Boolean(task.movedTo.pending), at: task.movedTo.at ?? null }));
   const waiting = tasks.filter((task) => task?.ownerHold?.kind === "friend" && !["done", "archived"].includes(task.status)).slice(0, 10).map((task) => ({ id: task.id, title: task.title, from: task.fromPc?.name ?? "a friend" }));
   let linked = false;
-  try { linked = Boolean(community && (await communityRead()).state.link); } catch {}
+  try { linked = await studioAccountLinked(); } catch {}
+  const sent = (await pcsSent()).slice(0, 10);
+  if (hubClient !== client) return { ok: false, error: "stale-account" };
   return {
     ok: true, me: { id: me, name: settings.name },
     relay: { state: hub?.state ?? "off", error: hub?.error ?? null, carries: Array.isArray(hub?.features) ? hub.features.includes("pcs") : hub?.pcs === true, linked },
@@ -5634,7 +5940,7 @@ async function pcsStatus({ watch = false } = {}) {
     project: project ? { id: project.id, name: project.name, github: Boolean(key), share: Boolean(key) && pcsShared(settings, project.id) } : null,
     offers: [...mem.offers.values()].map((offer) => ({ toName: offer.toName, count: offer.taskIds.length, at: offer.at })),
     movable, moved, waiting, held: tasks.filter((task) => task?.ownerHold?.kind === "battery").length,
-    sent: (await pcsSent()).slice(0, 10),
+    sent,
     handoffs: mem.handoffs.projectId === project?.id ? { at: mem.handoffs.at, error: mem.handoffs.error, list: mem.handoffs.list.map((row) => ({ branch: row.branch, sha: row.sha, mine: row.mine, pcName: row.meta.pcName, why: row.meta.why, level: row.meta.level, at: row.meta.at, titles: row.meta.tasks.map((task) => task.title) })) } : { at: 0, error: null, list: [] },
     lend: settings.lend,
     notes: mem.notes.slice(0, 8),
@@ -5642,14 +5948,17 @@ async function pcsStatus({ watch = false } = {}) {
   };
 }
 // Pushed only while a page watches (pcs:status with watch: true holds it 90 s).
-function pcsPush() {
+function pcsPush(guard = () => true) {
+  const client = hubClient;
+  if (!guard()) return;
   if (pcsMem().watchUntil < pcsNow()) return;
-  pcsStatus().then((status) => send("pcs:event", status)).catch(() => {});
+  pcsStatus().then((status) => { if (guard() && hubClient === client) send("pcs:event", status); }).catch(() => {});
 }
-function pcsPushSoon() {
+function pcsPushSoon(guard = () => true) {
+  if (!guard()) return;
   const mem = pcsMem();
   if (mem.pushTimer || mem.watchUntil < pcsNow()) return;
-  mem.pushTimer = setTimeout(() => { mem.pushTimer = null; pcsPush(); }, 400);
+  mem.pushTimer = setTimeout(() => { mem.pushTimer = null; pcsPush(guard); }, 400);
   mem.pushTimer.unref?.();
 }
 
@@ -5660,7 +5969,7 @@ function pcsPushSoon() {
 async function pcsSet(patch = {}) {
   pcsLibs();
   const lines = patch.battery && pcPower ? pcPower.normalizeLines(patch.battery) : null;
-  const lend = Array.isArray(patch.lend) ? patch.lend.filter((row) => /^\d{17,20}$/.test(String(row?.id ?? ""))).slice(0, 8)
+  const lend = Array.isArray(patch.lend) ? patch.lend.filter((row) => Boolean(studioActor.actorId(row?.id))).slice(0, 8)
     .map((row) => ({ id: String(row.id), name: String(row.name ?? "").replace(/[\x00-\x1f\x7f]+/g, " ").trim().slice(0, 40) || "friend", auto: row.auto === true })) : null;
   await updateSettings((settings) => {
     const pcs = { ...(settings.pcs && typeof settings.pcs === "object" ? settings.pcs : {}) };
@@ -27763,6 +28072,7 @@ function registerIpc() {
   // the release watcher). App-wide, so handleProjectIpc
   // lets community:* through ungated. Every reply carries the public status;
   // tokens stay in this process.
+  ipcMain.handle("community:account", async (_event, payload) => studioAccountAction(payload?.action));
   ipcMain.handle("community:status", async () => ({ ok: true, status: await communitySnapshot() }));
   ipcMain.handle("community:link", async () => linkCommunity());
   ipcMain.handle("community:link-cancel", async () => cancelCommunityLink());
@@ -27793,6 +28103,11 @@ function registerIpc() {
   // Friends › Shop: one channel, HUB_SHOP_METHODS decides what it may call.
   ipcMain.handle("hub:shop", async (_event, payload) => hubShop(String(payload?.method ?? ""), Array.isArray(payload?.args) ? payload.args : []));
   ipcMain.handle("hub:collectibles", async (_event, payload) => hubCollectibles(String(payload?.action ?? ""), payload?.payload ?? {}));
+  ipcMain.handle("hub:referrals", async (_event, payload) => hubReferrals(payload?.action, payload?.payload, payload?.actorId));
+  ipcMain.handle("hub:commerce", async (_event, payload) => hubCommerce(payload?.action, payload?.payload));
+  ipcMain.handle("hub:commerce-open", async (_event, payload) => hubCommerceOpen(payload?.orderId, payload?.url, payload?.actorId));
+  ipcMain.handle("hub:billing", async (_event, payload) => hubBilling(payload?.action, payload?.payload));
+  ipcMain.handle("hub:billing-open", async (_event, payload) => hubBillingOpen(payload?.action, payload?.url, payload?.actorId));
   // Companion friends (the "Companion friends" block): what friends' companions
   // may see, the friends out now, and playdates.
   ipcMain.handle("hub:friends", async (_event, payload) => friendsView(payload ?? {}));
@@ -28869,7 +29184,7 @@ app.whenReady().then(() => {
   }
 });
 
-app.on("window-all-closed", () => {
+app.on("window-all-closed", async () => {
   // Background mode with a tray keeps the assistant alive without a window.
   if (tray && assistantState?.prefs?.background && !app.isQuitting) return;
   stopUpdateWatch();
@@ -28877,6 +29192,7 @@ app.on("window-all-closed", () => {
   stopEyesWatch();
   stopMachineWatch();
   stopCommunityWatch();
+  if (typeof studioAccountRetirement !== "undefined") await studioAccountRetirement;
   if (process.platform !== "darwin") app.quit();
 });
 
@@ -28884,6 +29200,7 @@ let quitCheckpointSaved = false;
 app.on("before-quit", (event) => {
   app.isQuitting = true;
   if (typeof pairedWorkersQuit === "function" && pairedWorkersQuit(event)) return;
+  if (typeof studioAccountQuit === "function" && studioAccountQuit(event)) return;
   // Reaching here is the user's own doing — Alt+F4, the close button, the
   // tray's Quit. Record it before anything winds down, so the next launch
   // asks which folder to open instead of resuming this one. An update

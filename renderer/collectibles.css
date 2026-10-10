@@ -76,3 +76,18 @@
 .rooms-sticker-option { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
 .rooms-sticker-option > .collectibles-sticker { width: 48px; height: 48px; font-size: 28px; border-radius: 12px; }
 .rooms-sticker-option button { min-width: 0; min-height: 32px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+/* Exact, bounded discovery quotes use the existing Shop typography and controls. */
+.collectibles-dynamic, .collectibles-contributions, .collectibles-quote { display: grid; gap: 14px; min-width: 0; }
+.collectibles-dynamic, .collectibles-contributions { padding-top: 20px; border-top: 1px solid var(--line); }
+.collectibles-dynamic:empty, .collectibles-contributions:empty { display: none; }
+.collectibles-quote { padding: 18px; border: 1px solid var(--gold); border-radius: 14px; background: var(--panel-solid); }
+.collectibles-quote-details { margin: 14px 0; padding: 12px; border: 1px solid var(--line-strong); border-radius: 10px; }
+.collectibles-quote-details > summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
+.collectibles-quote-details > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 3px; }
+.collectibles-quote button:disabled { color: var(--muted); background: var(--panel-solid); border-color: var(--line-strong); box-shadow: none; cursor: not-allowed; opacity: .65; }
+.collectibles-pool { min-width: 0; padding: 12px; border: 1px solid var(--line-strong); border-radius: 10px; overflow-wrap: anywhere; }
+.collectibles-pool summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
+.collectibles-pool > :not(summary) { margin-top: 12px; }
+.collectibles-pool-candidates { display: grid; gap: 12px; padding-left: 22px; max-height: 380px; overflow-y: auto; overscroll-behavior: contain; }
+.collectibles-topic-choices { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.collectibles-pool button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; margin-right: 8px; }

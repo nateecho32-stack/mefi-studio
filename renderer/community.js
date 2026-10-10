@@ -383,10 +383,12 @@
     body.after(setupBox);
     void call("communitySetup").then(paint);
   }
+  let studioAccountCard = null;
   function renderSettings() {
     const body = $("community-settings-body");
     if (!body) return;
     setupSection();
+    if (!studioAccountCard && window.MefiAccount?.card) { studioAccountCard = window.MefiAccount.card(); body.after(studioAccountCard); }
     const focused = focusedAction();
     rendered = [];
     const state = view();

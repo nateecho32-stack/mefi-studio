@@ -22,6 +22,7 @@
 
 "use strict";
 
+const { actorId, isDiscordSubject } = require("./actor-contract.cjs");
 const DAY_MS = 86_400_000;
 const LIMITS = Object.freeze({ perRoom: 500, maxAgeMs: 7 * DAY_MS, maxRooms: 50, page: 50 });
 const SNOWFLAKE = /^\d{17,20}$/;
@@ -33,7 +34,7 @@ function compareIds(a, b) {
   return a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
 }
 
-const usable = (message) => Boolean(message) && typeof message === "object" && SNOWFLAKE.test(String(message.id)) && Number.isFinite(message.createdAt) && typeof message.text === "string" && SNOWFLAKE.test(String(message.author?.id ?? ""));
+const usable = (message) => Boolean(message) && typeof message === "object" && SNOWFLAKE.test(String(message.id)) && Number.isFinite(message.createdAt) && typeof message.text === "string" && (isDiscordSubject(message.author?.id) || message.author?.viaStudio === true && typeof message.sig === "string" && OPAQUE_ID.test(message.sig) && Boolean(actorId(message.author.id)));
 
 function createRoomHistory({ now, limits = {} } = {}) {
   if (typeof now !== "function") throw new TypeError("createRoomHistory needs now()");

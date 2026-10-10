@@ -248,7 +248,7 @@ test("Home: the month's drop as a banner made from its own data, its pieces, the
   assert.equal(card.querySelector("#friends-shop-balance").hidden, false);
   await one(card, "How to earn credits").click();
   assert.deepEqual(env.went.at(-1), ["friends-page", { place: "events" }], "how to earn credits is Friends › Events");
-  assert.deepEqual(card.querySelectorAll('[role="tab"]').map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]), [["Home", "true"], ["Pets", "false"], ["Pets & collectibles", "false"], ["Menu effects", "false"], ["Node styles", "false"], ["Themes", "false"], ["Community", "false"], ["Owned", "false"], ["Make a style", "false"]]);
+  assert.deepEqual(card.querySelectorAll('[role="tab"]').map((tab) => [tab.textContent, tab.getAttribute("aria-selected")]), [["Home", "true"], ["Pets", "false"], ["Pets & collectibles", "false"], ["Menu effects", "false"], ["Node styles", "false"], ["Themes", "false"], ["Community", "false"], ["Owned", "false"], ["Make a style", "false"], ["Membership", "false"], ["Cash marketplace", "false"]]);
   // The banner: the drop's colours as custom properties, a text colour that reads on them, its month and time left.
   const hero = card.querySelector("#friends-shop-hero");
   assert.ok(hero, "the drop's banner");
@@ -1177,7 +1177,7 @@ test("the route, the place, Search, Social and Settings know the Shop; text only
   assert.match(shellSource, /current: \(id === "friends-page" \|\| \(id === "shop" && place\.id === "shop"\)\) && Boolean\(place\.current\)/, "the list column marks the Shop's row");
   assert.match(shellSource, /if \(place === "friends" && id === "shop"\) return \["Friends", "Shop"\];/, "the breadcrumb says Friends / Shop");
   assert.match(socialSource, /const PAGES = Object\.freeze\(\[[^\]]*"shop"\]\);/, "the page stays in Social");
-  assert.match(builder, /"friends-events\.js",\n {4}"friends-shop\.js",/);
+  assert.match(builder, /"friends-events\.js",\n {4}"membership\.js",\n {4}"commerce\.js",\n {4}"friends-shop\.js",/);
   assert.match(builder, /"friends-events\.css",\n {4}"friends-shop\.css",/);
   assert.match(template, /<symbol id="g-shop" viewBox="0 0 16 16">/);
   assert.equal((template.match(/<symbol id="g-shop"/g) ?? []).length, 1);

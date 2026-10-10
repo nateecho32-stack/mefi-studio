@@ -55,7 +55,7 @@ const DURATIONS = Object.freeze(["session", "always"]);
 const HOLDS = Object.freeze(["none", "play"]);
 const LIMITS = Object.freeze({ name: 24, project: 40, title: 60, titles: 3, label: 60, rules: 100, running: 99, done: 999 });
 const OPAQUE_ID = /^[A-Za-z0-9_-]{1,64}$/;
-const SNOWFLAKE = /^\d{17,20}$/;
+const { actorId } = require("./actor-contract.cjs");
 
 const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const asArray = (value) => (Array.isArray(value) ? value : []);
@@ -87,9 +87,9 @@ const atLeast = (level, floor) => rank(level) >= rank(floor);
  */
 function normalizeRule(raw, duration = "always", now = 0) {
   if (!isObject(raw) || !SCOPES.includes(raw.scope) || !validLevel(raw.level)) return null;
-  const target = raw.scope === "everyone" ? null : String(raw.target ?? "");
+  const target = raw.scope === "everyone" ? null : raw.scope === "friend" ? raw.target : String(raw.target ?? "");
   if (raw.scope === "room" && !OPAQUE_ID.test(target)) return null;
-  if (raw.scope === "friend" && !SNOWFLAKE.test(target)) return null;
+  if (raw.scope === "friend" && !Boolean(actorId(target))) return null;
   const label = raw.scope === "everyone" ? "Everyone" : clip(raw.label, LIMITS.label) || (raw.scope === "room" ? "A room" : "A friend");
   return { scope: raw.scope, target, level: raw.level, label, duration: DURATIONS.includes(duration) ? duration : "always", at: num(raw.at) || num(now) };
 }
@@ -121,7 +121,7 @@ function normalizeSession(raw) {
     if (at >= 0) rules.splice(at, 1);
     rules.push(rule);
   }
-  return { rules: rules.slice(-LIMITS.rules), hold: HOLDS.includes(value.hold) ? value.hold : null, dismissed: asArray(value.dismissed).map(String).filter((id) => SNOWFLAKE.test(id)).slice(-LIMITS.rules) };
+  return { rules: rules.slice(-LIMITS.rules), hold: HOLDS.includes(value.hold) ? value.hold : null, dismissed: asArray(value.dismissed).filter((id) => Boolean(actorId(id))).slice(-LIMITS.rules) };
 }
 
 /**
@@ -291,7 +291,7 @@ function nameOf(card, fallback = "your friend's companion") {
  */
 function consentAsk({ mine, theirs, friendId, dismissed = [] }) {
   const friend = readCard(theirs);
-  if (!friend || !SNOWFLAKE.test(String(friendId ?? "")) || asArray(dismissed).includes(String(friendId))) return null;
+  if (!friend || !Boolean(actorId(friendId)) || asArray(dismissed).includes(String(friendId))) return null;
   const ours = mine?.level && validLevel(mine.level) ? mine.level : "none";
   if (rank(friend.level) <= rank(ours) || rank(friend.level) < rank("hello")) return null;
   const what = { hello: "its name", status: "how its person's work is going", work: "what its person is working on" }[friend.level];

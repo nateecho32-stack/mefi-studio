@@ -10654,6 +10654,56 @@ html[data-motion="off"] .friends-shop-item:hover { translate: none; }
   .friends-shop-item:hover { translate: none; }
 }
 
+.membership { --membership-edge: color-mix(in srgb, var(--gold, #f4c77a) 24%, transparent); display: grid; gap: 20px; max-width: 920px; width: 100%; margin-inline: auto; color: var(--ivory, #f4f1ea); }
+.membership-head { padding: 24px; border: 1px solid var(--membership-edge); border-radius: 18px; background: linear-gradient(125deg, color-mix(in srgb, var(--gold, #f4c77a) 9%, transparent), transparent 75%); }
+.membership-head h2 { font-size: clamp(23px, 3.5vw, 34px); line-height: 1.15; margin: 8px 0 12px; }
+.membership-eyebrow, .membership-label { color: var(--gold, #f4c77a); font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+.membership-content { display: grid; gap: 16px; min-width: 0; }
+.membership-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.membership-fact, .membership-offer { border: 1px solid var(--membership-edge); border-radius: 14px; padding: 20px; background: var(--panel-solid, #191c25); min-width: 0; }
+.membership h3 { font-size: 18px; margin: 9px 0; }
+.membership-note, .membership-empty, .membership-message, .membership-notice { font-size: 13px; line-height: 1.6; margin: 8px 0 0; overflow-wrap: anywhere; }
+.membership-price { font-size: 25px; line-height: 1.3; font-weight: 650; margin: 12px 0; overflow-wrap: anywhere; }
+.membership-notice { padding: 14px 18px; border-left: 3px solid var(--gold, #f4c77a); background: color-mix(in srgb, var(--gold, #f4c77a) 7%, transparent); }
+.membership-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.membership-button { border: 1px solid var(--membership-edge); background: var(--panel-solid, #191c25); color: inherit; padding: 10px 16px; border-radius: 9px; font: inherit; cursor: pointer; min-height: 42px; }
+.membership-button.is-primary { background: var(--gold, #f4c77a); color: var(--bg, #15161c); font-weight: 650; }
+.membership-button:disabled { opacity: .55; cursor: default; }
+.membership-button:focus-visible { outline: 2px solid var(--gold, #f4c77a); outline-offset: 3px; }
+.membership-message:empty { display: none; }
+@media (max-width: 640px) { .membership-facts { grid-template-columns: 1fr; } .membership-head, .membership-fact, .membership-offer { padding: 18px; } .membership-actions { flex-direction: column; } .membership-button { width: 100%; } }
+
+.commerce { display: grid; gap: 18px; max-width: 1120px; margin: 0 auto; color: var(--text); }
+.commerce-head { padding: 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.commerce-head h2 { margin: 5px 0 10px; font-size: clamp(22px, 3vw, 34px); }
+.commerce-eyebrow { margin: 0; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.commerce-note { color: var(--muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.commerce-content { display: grid; gap: 14px; }
+.commerce-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.commerce-button { border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); padding: 9px 13px; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.commerce-button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.commerce-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.commerce-button:disabled { opacity: .55; cursor: default; }
+.commerce-orders { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 12px; }
+.commerce-order, .commerce-detail { padding: 18px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); min-width: 0; overflow-wrap: anywhere; }
+.commerce-order h3, .commerce-detail h3 { margin: 6px 0; font-size: 17px; }
+.commerce-terms { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr); gap: 8px 18px; font-size: 14px; }
+.commerce-terms dt { color: var(--muted); }
+.commerce-terms dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.commerce-notice, .commerce-empty { padding: 15px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); line-height: 1.5; }
+.commerce-total { font-weight: 700; }
+.commerce-message { min-height: 1.5em; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 650px) { .commerce-head, .commerce-detail { padding: 14px; } .commerce-terms { grid-template-columns: 1fr; gap: 3px; } .commerce-terms dd { text-align: left; margin-bottom: 8px; } }
+.commerce-art { display: grid; place-items: center; min-height: 120px; overflow: hidden; }
+.commerce-art canvas { width: min(240px, 100%); height: auto; }
+.commerce-art img { width: 110px; height: 110px; object-fit: contain; }
+.commerce-price { font-size: 20px; font-weight: 700; }
+.commerce-swatches { display: flex; gap: 7px; padding: 10px 0; }
+.commerce-swatch { width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px; }
+.commerce-form { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(150px, 2fr); gap: 12px; }
+.commerce-form label { display: grid; gap: 6px; }
+.commerce-input { min-width: 0; width: 100%; padding: 9px; box-sizing: border-box; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
+@media (max-width: 650px) { .commerce-form { grid-template-columns: 1fr; } }
 /* Room links share the app's surfaces and type; no remote image or favicon. */
 .rooms-social-content { min-width: 0; display: grid; gap: 8px; }
 .rooms-link-card { display: grid; gap: 7px; max-width: 560px; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-solid); }
@@ -10753,6 +10803,21 @@ html[data-motion="off"] .friends-shop-item:hover { translate: none; }
 .rooms-sticker-option { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
 .rooms-sticker-option > .collectibles-sticker { width: 48px; height: 48px; font-size: 28px; border-radius: 12px; }
 .rooms-sticker-option button { min-width: 0; min-height: 32px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+/* Exact, bounded discovery quotes use the existing Shop typography and controls. */
+.collectibles-dynamic, .collectibles-contributions, .collectibles-quote { display: grid; gap: 14px; min-width: 0; }
+.collectibles-dynamic, .collectibles-contributions { padding-top: 20px; border-top: 1px solid var(--line); }
+.collectibles-dynamic:empty, .collectibles-contributions:empty { display: none; }
+.collectibles-quote { padding: 18px; border: 1px solid var(--gold); border-radius: 14px; background: var(--panel-solid); }
+.collectibles-quote-details { margin: 14px 0; padding: 12px; border: 1px solid var(--line-strong); border-radius: 10px; }
+.collectibles-quote-details > summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
+.collectibles-quote-details > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 4px; border-radius: 3px; }
+.collectibles-quote button:disabled { color: var(--muted); background: var(--panel-solid); border-color: var(--line-strong); box-shadow: none; cursor: not-allowed; opacity: .65; }
+.collectibles-pool { min-width: 0; padding: 12px; border: 1px solid var(--line-strong); border-radius: 10px; overflow-wrap: anywhere; }
+.collectibles-pool summary { cursor: pointer; font-weight: 600; line-height: 1.5; }
+.collectibles-pool > :not(summary) { margin-top: 12px; }
+.collectibles-pool-candidates { display: grid; gap: 12px; padding-left: 22px; max-height: 380px; overflow-y: auto; overscroll-behavior: contain; }
+.collectibles-topic-choices { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.collectibles-pool button { max-width: 100%; white-space: normal; overflow-wrap: anywhere; margin-right: 8px; }
 
 /* Vibe: the calm front door (renderer/vibe.js), the Vibe / Build switch and
    the one-time "what's new" card. Inlined last, so it wins ties. Every colour
@@ -83033,6 +83098,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const button = (label, run) => { const el = node("button", "ghost rooms-button", label); el.type = "button"; el.addEventListener("click", run); return el; };
   const privateEnd = /(?:^|\.)(?:localhost|local|lan|internal|home|arpa|intranet|test|invalid|example)$/i;
   const secretKey = /^(?:access[_-]?token|refresh[_-]?token|id[_-]?token|api[_-]?key|key|token|secret|password|passwd|authorization|auth|code|session|sessionid|jwt|signature|sig|x-amz-signature)$/i;
+  function secretFragment(hash) {
+    // Inspect one percent-encoding layer even when another escape is malformed.
+    const decoded = hash.replace(/%([0-9a-f]{2})/gi, (_, octet) => String.fromCharCode(parseInt(octet, 16)));
+    return /(?:token|password|secret|access_token|api_key)=/i.test(decoded)
+      || decoded.split(/[?#&;/]/).some(part => { const equals = part.indexOf("="); return equals >= 0 && secretKey.test(part.slice(0, equals)); });
+  }
   function inspect(value) {
     if (typeof value !== "string" || value.length > 2048 || /[\s\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069\\]/.test(value)) return { ok: false, reason: "This link contains hidden characters or is too long." };
     let url;
@@ -83040,7 +83111,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const host = url.hostname.toLowerCase().replace(/\.$/, "");
     if (url.protocol !== "https:" || url.username || url.password || url.port) return { ok: false, reason: "Only HTTPS links without a login or custom port can open here." };
     if (!host.includes(".") || host.startsWith("[") || /^\d+(?:\.\d+)*$/.test(host) || privateEnd.test(host)) return { ok: false, reason: "Private-network addresses cannot open from chat." };
-    if ([...url.searchParams.keys()].some((key) => secretKey.test(key)) || /(?:token|password|secret|access_token|api_key)=/i.test(url.hash)) return { ok: false, reason: "This link may contain a login or secret. Ask for a public share link." };
+    if ([...url.searchParams.keys()].some((key) => secretKey.test(key)) || secretFragment(url.hash)) return { ok: false, reason: "This link may contain a login or secret. Ask for a public share link." };
     const label = host; // ASCII/punycode from URL, never a member-supplied label.
     let embed = null;
     if (["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"].includes(host)) {
@@ -85061,6 +85132,262 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   window.MefiProjectHub = { card, spot };
 })();
 
+// One Account home for referral rewards. Saved tuples contain no credentials.
+(() => {
+  "use strict";
+  const AP = "accounts.canonical.1", CODE = /^ref_[a-f0-9]{64}$/, REQUEST = /^[A-Za-z0-9_-]{8,80}$/;
+  const ACTOR = /^(?:\d{17,20}|studio:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/;
+  const homes = new Set(), api = () => window.mefiStudio;
+  let listening = false;
+  const el = (tag, text = "", cls = "") => { const n = document.createElement(tag); n.textContent = text; n.className = cls; return n; };
+  const plain = v => v !== null && typeof v === "object" && !Array.isArray(v);
+  const keys = (v, fields) => plain(v) && Object.keys(v).length === fields.length && fields.every(k => Object.hasOwn(v,k));
+  const tuple = (v, redeem) => v === null || keys(v, redeem ? ["code","requestId"] : ["requestId"]) && typeof v.requestId === "string" && REQUEST.test(v.requestId) && (!redeem || typeof v.code === "string" && CODE.test(v.code));
+  const readyActor = s => s?.state === "ready" && s.actorProtocol === AP && s.referralInvitations === true && typeof s.user?.id === "string" && ACTOR.test(s.user.id) ? s.user.id : null;
+  const ERRORS = {
+    referrals_unavailable:"Referrals are not available on this connection.",
+    referral_authority_unavailable:"Referral progress could not be verified. Refresh when the connection is ready.",
+    referral_policy_unresolved:"Referrals are awaiting service configuration.",
+    read_only:"New referral requests are paused. Saved requests can still be recovered.",
+    referral_capacity_reached:"This account reached its referral request capacity. Contact support; waiting will not reset it.",
+    referral_rate_limited:"Please wait before trying again.",
+    referral_already_recorded:"An invitation is already recorded for this account.",
+    self_referral:"You cannot redeem your own invitation.",
+    referral_invitation_unavailable:"That invitation is expired or unavailable.",
+    referral_request_conflict:"This saved request conflicts with the service record. Keep it for support to review.",
+    unauthorized:"Sign in again to the same account, then recover this saved request.",
+    admission_required:"Referral invitations become available after admission.",
+    verified_identity_required:"The service needs to verify this Studio account first.",
+    stale_account:"The account changed. This request remains saved for its original account.",
+    storage:"Studio could not safely save this request on this PC. No new request was sent.",
+  };
+  function card({ accountStatus = () => window.MefiAccount?.status?.() } = {}) {
+    const root = el("details", "", "community-referrals"), title = el("summary", "Referral rewards"), body = el("div");
+    root.setAttribute("aria-label", "Referral rewards"); root.append(title, body);
+    let disposed = false, epoch = 0, actor = null, view = null, busy = false, reading = false, message = "", draft = "", accountKey = null, hubKey = null;
+    let pending = {issue:null,redeem:null}, storageError = false, refusal = null, retryAt = 0;
+    const entry = { open: () => { root.open = true; void load(); root.scrollIntoView?.({block:"nearest"}); } }; homes.add(entry);
+    const fingerprint = s => [s?.selected,s?.linked,s?.signingIn,s?.user?.id,s?.state,s?.socialAccess,s?.error].join("|");
+    const hubFingerprint = s => [s?.state,s?.actorProtocol,s?.user?.id,s?.referralInvitations].join("|");
+    function invalidate() {
+      epoch++; actor = null; view = null; busy = false; reading = false; message = ""; draft = ""; refusal = null; retryAt = 0;
+      pending = {issue:null,redeem:null}; storageError = false; paint();
+    }
+    root.accountChanged = s => {
+      const next = fingerprint(s);
+      if (next !== accountKey) { accountKey = next; invalidate(); if (root.open) void load(); }
+    };
+    const key = who => "mefi.referrals.pending.v1:" + who;
+    function restore(who) {
+      try {
+        const raw = window.localStorage.getItem(key(who)); if (raw === null) return {issue:null,redeem:null};
+        if (raw.length > 2048) throw Error("large");
+        const v = JSON.parse(raw); if (!keys(v,["issue","redeem"]) || !tuple(v.issue,false) || !tuple(v.redeem,true)) throw Error("invalid");
+        return v;
+      } catch { storageError = true; return {issue:null,redeem:null}; }
+    }
+    function save(next) {
+      try {
+        const value = JSON.stringify(next); window.localStorage.setItem(key(actor),value);
+        if (window.localStorage.getItem(key(actor)) !== value) throw Error("not saved");
+        pending = next; return true;
+      } catch { storageError = true; message = ERRORS.storage; return false; }
+    }
+    const current = (mine,who) => !disposed && mine === epoch && actor === who;
+    function closedReason() {
+      const state = accountStatus();
+      if (state?.state === "waitlisted") return "Referral invitations become available after admission. Your waitlist position is " + state.waitlistPosition + ".";
+      if (state?.signingIn) return "Finish or cancel your sign-in before using referrals.";
+      if (state?.selected && (!state.linked || state.socialAccess !== true)) return "Sign in to an admitted Studio account to use referrals.";
+      return null;
+    }
+    async function load() {
+      if (disposed || !root.open || reading || busy) return;
+      const closed = closedReason(); if (closed) { message = closed; paint(); return; }
+      const mine = epoch; reading = true; paint();
+      try {
+        const answer = await api()?.hubStatus?.(); if (disposed || mine !== epoch) return;
+        const next = readyActor(answer?.status); hubKey = hubFingerprint(answer?.status);
+        if (!next) { actor = null; view = null; message = "Connect to an admitted Studio account with referrals enabled."; return; }
+        if (actor !== next) { actor = next; view = null; draft = ""; refusal = null; retryAt = 0; storageError = false; pending = restore(next); }
+        const result = await api()?.hubReferrals?.("readReferralStatus",{},next);
+        if (!current(mine,next)) return;
+        if (result?.ok) view = result;
+        else { view = null; message = ERRORS[result?.error] || "Referral progress could not be loaded. Refresh to try again."; }
+      } catch { if (mine === epoch) { view = null; message = "Referral progress could not be loaded. Refresh to try again."; } }
+      finally { if (!disposed && mine === epoch) { reading = false; paint(); } }
+    }
+    async function mutate(kind) {
+      if (busy || reading || !actor || storageError || closedReason()) return;
+      if (Date.now() < retryAt) { message = "Please wait until the service retry period ends, then recover the saved request."; paint(); return; }
+      const who = actor, mine = epoch, action = kind === "issue" ? "issueReferralInvitation" : "redeemReferralInvitation";
+      let input = pending[kind];
+      if (!input) {
+        if (!(kind === "issue" ? view?.canIssue : view?.canRedeem)) return;
+        const code = draft.replace(/^[\t\n\v\f\r ]+|[\t\n\v\f\r ]+$/g,"");
+        if (kind === "redeem" && !CODE.test(code)) { message = "Enter the exact referral code, starting with ref_. Room invite codes and links do not work here."; paint(); return; }
+        let requestId; try { requestId = crypto.randomUUID(); } catch {}
+        if (typeof requestId !== "string" || !REQUEST.test(requestId)) { message = ERRORS.storage; paint(); return; }
+        input = kind === "issue" ? {requestId} : {code,requestId};
+        if (!save({...pending,[kind]:input})) { paint(); return; }
+      }
+      input = {...input}; busy = true; refusal = null; message = ""; paint();
+      try {
+        const status = await api()?.hubStatus?.();
+        if (!current(mine,who)) return;
+        if (readyActor(status?.status) !== who || closedReason()) { invalidate(); message = ERRORS.stale_account; paint(); return; }
+        const result = await api()?.hubReferrals?.(action,input,who);
+        if (!current(mine,who)) return;
+        if (result?.ok === true) {
+          if (!save({...pending,[kind]:null})) return;
+          message = kind === "issue" ? result.expiresAt <= Date.now() ? "The saved invitation was recovered, but has expired. Review current availability before creating another." : "Invitation ready. Copy it below and share it with a friend."
+            : "Invitation recorded. Your account will be evaluated by Studio; this does not promise an immediate discount.";
+          draft = ""; view = null;
+        } else {
+          message = ERRORS[result?.error] || "The outcome is unknown. Recover this saved request before starting another.";
+          if (Number.isSafeInteger(result?.retryAfter) && result.retryAfter >= 1000 && result.retryAfter <= 3600000) retryAt = Date.now() + result.retryAfter;
+          if (kind === "redeem" && keys(result,["ok","error","outcome","requestId"]) && result.ok === false
+            && ["self_referral","referral_already_recorded","referral_invitation_unavailable"].includes(result.error)
+            && result.outcome === "not-applied" && result.requestId === input.requestId) refusal = {requestId:input.requestId};
+        }
+      } catch { if (current(mine,who)) message = "The outcome is unknown. Recover this saved request before starting another."; }
+      finally {
+        if (current(mine,who)) { busy = false; paint(); if (!pending[kind]) void load(); }
+      }
+    }
+    const button = (text, fn, disabled = false) => {
+      const b = el("button",text,"ghost"); b.type = "button"; b.disabled = disabled;
+      b.addEventListener("click",() => { if (!b.disabled) void fn(); }); return b;
+    };
+    async function copy() {
+      const code = view?.invitation?.code, mine = epoch, who = actor;
+      if (!code || view.invitation.expiresAt <= Date.now()) { message = "This invitation expired. Refresh before creating another."; paint(); return; }
+      try { await navigator.clipboard.writeText(code); if (current(mine,who)) message = "Referral code copied. Share it with your friend."; }
+      catch { if (current(mine,who)) message = "Copy the referral code shown above."; }
+      if (current(mine,who)) paint();
+    }
+    function paint() {
+      body.replaceChildren();
+      const info = el("p",closedReason() || message || (reading ? "Loading referral progress…" : "Invite friends with your referral code. Five qualifying Studio accounts unlock the inviter commission rate."));
+      info.setAttribute("role","status"); body.append(info);
+      if (closedReason()) return;
+      body.append(button("Refresh referrals",load,busy || reading));
+      if (!actor) return;
+      if (storageError) body.append(el("p",ERRORS.storage));
+      if (view) {
+        body.append(el("p",view.qualifyingInvitees + " of " + view.threshold + " qualifying Studio accounts. " + (view.qualified ? "Your inviter discount is active." : "Your inviter discount is not active.")));
+        body.append(el("p","Studio verifies account admission. Opening a room invitation does not count. Current seller fees are shown in the cash marketplace.","muted"));
+        if (view.invitation) {
+          const code = el("code",view.invitation.code); code.style.overflowWrap = "anywhere"; body.append(code,button("Copy referral code",copy,busy));
+          body.append(el("p","Expires " + new Date(view.invitation.expiresAt).toLocaleString() + ".","muted"));
+        }
+      }
+      if (pending.issue) {
+        body.append(el("p","An invitation request is saved for this account. Recover it using the same request."));
+        body.append(button("Recover saved invitation",() => mutate("issue"),busy || reading || storageError));
+      } else if (!view?.invitation) {
+        body.append(button("Create referral invitation",() => mutate("issue"),busy || reading || storageError || !view?.canIssue));
+        if (view?.issueReason) body.append(el("p",ERRORS[view.issueReason] || ERRORS.referrals_unavailable));
+      }
+      if (pending.redeem) {
+        body.append(el("p","A redemption request is saved for this account. Recover it before entering another code."));
+        const code = el("code",pending.redeem.code); code.style.overflowWrap = "anywhere"; body.append(code);
+        body.append(button("Recover saved redemption",() => mutate("redeem"),busy || reading || storageError));
+        if (refusal?.requestId === pending.redeem.requestId) body.append(button("Review another code",() => {
+          if (save({...pending,redeem:null})) { refusal = null; draft = ""; message = "Studio confirmed the saved request did not apply. Review and confirm a new code below."; void load(); } paint();
+        },busy || reading || storageError));
+      } else if (view?.attributionRecorded) body.append(el("p",ERRORS.referral_already_recorded));
+      else {
+        const label = el("label","A friend's referral code"), input = el("input");
+        input.type = "text"; input.value = draft; input.maxLength = 80; input.setAttribute("aria-label","A friend's referral code");
+        input.disabled = busy || reading || storageError || !view?.canRedeem;
+        input.addEventListener("input",() => { draft = input.value; }); label.append(input); body.append(label);
+        body.append(button("Confirm referral code",() => mutate("redeem"),busy || reading || storageError || !view?.canRedeem));
+        if (view?.redeemReason) body.append(el("p",ERRORS[view.redeemReason] || ERRORS.referrals_unavailable));
+      }
+    }
+    entry.hear = event => {
+      if (disposed || event?.type !== "status") return;
+      const next = hubFingerprint(event.status); if (next === hubKey) return;
+      hubKey = next; invalidate(); if (root.open) void load();
+    };
+    if (!listening) { listening = true; api()?.onHubEvent?.(event => { for (const home of homes) home.hear?.(event); }); }
+    root.addEventListener("toggle",() => { if (root.open) void load(); });
+    root.dispose = () => { disposed = true; epoch++; homes.delete(entry); };
+    root.accountChanged(accountStatus()); paint(); return root;
+  }
+  function open() { window.MefiCommunity?.open?.(); for (const home of homes) home.open(); }
+  window.MefiReferrals = {card,open};
+})();
+
+// Reachable Studio sign-in controls. Only native public status crosses the bridge;
+// no provider URL, callback state, verifier or credential enters this renderer.
+(() => {
+  "use strict";
+  const cards = new Set(), api = () => window.mefiStudio;
+  const node = (tag, text, cls = "") => { const el = document.createElement(tag); el.textContent = text; el.className = cls; return el; };
+  let state = null, busy = false, listening = false, revision = 0, feedback = "";
+  const ERRORS = {
+    unavailable: "Google sign-in is not configured for this connection yet.",
+    unsupported: "This connection does not support Studio accounts yet.",
+    auth: "Studio could not verify this sign-in. Start again when ready.",
+    expired: "Your Studio sign-in expired. Sign in again to continue.",
+    identity_already_linked: "This Google account belongs to a separate Studio account. No accounts or balances were merged.",
+    admission_migration_required: "Your existing account needs a service migration before it can be linked.",
+    legacy_account_migration_required: "Your existing account history needs migration and review before linking. Your saved account and history have been kept.",
+    legacy_wallet_migration_required: "Your existing wallet and purchase history need migration and review before linking. Your saved account and history have been kept.",
+    canceled: "Sign-in canceled.", storage: "Studio could not safely save this sign-in.",
+    network: "Sign-in was not confirmed. Start a fresh sign-in when ready.",
+  };
+  const notify = () => { for (const card of cards) card.paint(); };
+  const take = (next) => { if (next && typeof next === "object") { state = next; revision++; notify(); } };
+  async function refresh() {
+    const mine = revision;
+    try { const result = await api()?.studioAccount?.("status"); if (mine === revision && result?.ok) take(result.status); } catch {}
+  }
+  async function run(action, onSignedIn) {
+    if (busy && action !== "cancel") return;
+    busy = true; feedback = ""; notify();
+    try {
+      const result = await api()?.studioAccount?.(action);
+      if (result?.status) take(result.status);
+      feedback = result?.ok ? action === "signOut" ? "Signed out of Studio on this PC." : "" : ERRORS[result?.error] || "The account action did not finish.";
+      if (result?.ok && result.status?.linked && result.status?.socialAccess === true) onSignedIn?.();
+    } catch { feedback = ERRORS.network; }
+    finally { busy = false; notify(); }
+  }
+  function card({ onSignedIn, compact = false } = {}) {
+    const root = node("section", "", "community-account"); root.setAttribute("aria-label", "Studio account");
+    const referrals = compact ? null : window.MefiReferrals?.card?.({ accountStatus: () => state });
+    const entry = { paint, root }; cards.add(entry);
+    const button = (label, action, disabled = false) => { const el = node("button", label, "ghost"); el.type = "button"; el.disabled = disabled; el.addEventListener("click", () => { if (!el.disabled) void run(action, onSignedIn); }); return el; };
+    function paint() {
+      root.replaceChildren(node("h3", "Studio account"));
+      const detail = node("p", feedback || ERRORS[state?.error] || (state?.state === "waitlisted" ? "You are on the Studio waitlist at position " + state.waitlistPosition + ". Social rooms, Shop and cash trading become available when you are admitted." : state?.linked ? "Signed in as " + state.user.name + "." : state?.signingIn ? "Continue in your browser, then return to Studio." : state?.configured ? "Use Google for your Studio account, or link it to the account you already use." : ERRORS.unavailable));
+      detail.setAttribute("role", "status"); root.append(detail);
+      const actions = node("div", "", "community-row");
+      if (state?.signingIn) actions.append(button("Cancel Google sign-in", "cancel"));
+      else {
+        actions.append(button(state?.linked ? "Switch Google account" : "Sign in with Google", "google", busy || !state?.configured));
+        if (!compact) {
+          actions.append(button("Link Google to my existing account", "linkGoogle", busy || !state?.configured));
+          if (state?.selected) actions.append(button("Sign out of Studio", "signOut", busy), button("Use my linked Discord account", "useDiscord", busy));
+        }
+      }
+      root.append(actions);
+      if (referrals) { referrals.accountChanged?.(state); root.append(referrals); }
+      else if (compact && window.MefiReferrals) {
+        const link = node("button", "Referral rewards", "ghost"); link.type = "button";
+        link.addEventListener("click", () => window.MefiReferrals.open()); root.append(link);
+      }
+      if (!compact) root.append(node("p", "Linking keeps one Studio account. Separate existing accounts are never merged automatically. Your Discord link remains available.", "muted"));
+    }
+    root.dispose = () => { referrals?.dispose?.(); cards.delete(entry); };
+    if (!listening) { listening = true; api()?.onStudioAccount?.(take); }
+    paint(); void refresh(); return root;
+  }
+  window.MefiAccount = { card, refresh, status: () => state };
+})();
 // Friends' front door: the sign-in card and The Lobby (window.MefiFriendsFront).
 //
 // gate({ onSignedIn }) is what Friends shows a member who has not signed in:
@@ -85127,7 +85454,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // connection can actually be made). The Lobby, the Project hub and Your PCs use it.
   function hubState(hub) {
     if (!hub?.configured) return { action: null, text: "This copy of Studio can't reach the room service." };
-    if (!hub.linked) return { action: "signin", text: "Sign in with Discord to use Friends." };
+    if (!hub.linked) return { action: "signin", text: "Sign in to your Studio account to use Friends." };
+    if (hub.account?.selected && hub.account.state === "waitlisted") return { action: "signin", text: "Studio waitlist position " + hub.account.waitlistPosition + ". Social access is pending admission." };
+    if (hub.account?.selected && ["auth", "expired", "stale_account"].includes(hub.error)) return { action: "signin", text: "Sign in to your Studio account again." };
+    if (hub.account?.selected && hub.error === "not-member") return { action: "signin", text: "This Studio account does not currently have social access." };
     if (hub.error === "not-member") return { action: "join", text: "Your Discord account isn't in the Void Engine server yet. Join it, then check again." };
     if (hub.error === "auth") return { action: "signin", text: "Your Discord sign-in has run out. Sign in with Discord again." };
     if (hub.error === "version") return { action: "update", text: "The room service needs a newer Studio. Update Studio; Friends reconnects by itself after the update." };
@@ -85163,6 +85493,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const signIn = button("Sign in with Discord", () => { void start(); }, "friends-gate-signin", "friends-gate-signin");
     actions.append(signIn);
     root.append(title, lead, actions, status, fine, points);
+    if (window.MefiAccount?.card) { const accountCard = window.MefiAccount.card({ onSignedIn, compact: true }); root.append(accountCard); root.dispose = () => accountCard.dispose?.(); }
 
     async function connected() {
       status.textContent = "Signed in. Connecting…";
@@ -85193,6 +85524,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       busy = true;
       signIn.disabled = true;
       status.textContent = "Discord is asking in your browser. Press Authorize there, then come back.";
+      const selected = await bridge()?.studioAccount?.("useDiscord");
+      if (selected && !selected.ok) { busy = false; signIn.disabled = false; status.textContent = "Studio could not switch sign-in methods."; return; }
       const linked = await community.link();
       busy = false;
       signIn.disabled = false;
@@ -85567,6 +85900,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       } else if (page.ownRoom) invite.append(node("span", "", "Getting your invite code…"));
       else invite.append(button("Make a room to invite friends", () => goPlace("rooms"), "ghost", "friends-front-make"));
       bar.append(invite);
+      if (window.MefiReferrals) bar.append(button("Referral rewards", () => window.MefiReferrals.open(), "ghost", "friends-front-referrals"));
       return bar;
     }
 
@@ -86460,6 +86794,828 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   window.MefiFriendsEvents = { card, timeLeft, holdWords };
 })();
 
+// Membership is a current-account projection from the Hub. Browser returns,
+// saved request IDs and permanent Donor history never grant creator access.
+(() => {
+  "use strict";
+  const cards = new Set(), ID = /^[A-Za-z0-9_-]{8,80}$/;
+  const STORAGE = "mefi.billing.requests.v1:";
+  let actor = null, epoch = 0, hub = null, data = null, readAt = 0;
+  let reading = null, working = false, listening = false, hubRevision = 0;
+  let requests = {}, message = "", retryAt = 0;
+  const api = () => window.mefiStudio;
+  const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+  const notify = () => { for (const card of cards) card.paint(); };
+  const available = () => hub?.state === "ready" && hub.billing === true && Boolean(actor) && typeof api()?.hubBilling === "function";
+  const current = (who, version) => actor === who && epoch === version && available();
+  const date = (value) => { const d = new Date(value); return Number.isFinite(d.valueOf()) ? d.toLocaleString() : "Date unavailable"; };
+  const money = (amount, currency) => currency === "usd"
+    ? `$${Math.floor(amount / 100).toLocaleString("en-US")}.${String(amount % 100).padStart(2, "0")} USD`
+    : `${amount.toLocaleString()} ${currency.toUpperCase()} minor units`;
+  const messages = {
+    unauthorized: "Sign in again to check your membership.",
+    billing_origin_required: "Billing is not available in this connection yet.",
+    checkout_policy_denied: "Your eligibility changed. Review your refreshed membership before continuing.",
+    checkout_not_enabled: "New purchases are unavailable. Existing membership and billing management can still be checked.",
+    billing_operation_in_progress: "That request is still being processed. Refresh status, then retry the same request.",
+    checkout_already_pending: "An existing checkout needs to be recovered. Refresh status to continue it.",
+    subscription_already_exists: "A subscription already exists. Check membership or use billing management when available.",
+    billing_session_complete: "This checkout has completed. Refresh membership for its verified result.",
+    billing_session_expired: "This checkout has expired. Refresh membership before considering another purchase.",
+    billing_session_unavailable: "This checkout is unavailable. Refresh membership before continuing.",
+    billing_request_recovery_required: "This purchase needs support recovery. Please contact support before trying another purchase.",
+    customer_recovery_required: "Your billing account needs support recovery. Please contact support before trying again.",
+    billing_rate_limited: "Please wait before retrying. The original request will be reused.",
+    browser_unavailable: "The browser could not be opened. Continue the same request to try again.",
+    network: "The service did not confirm the result. Refresh status or retry the original request.",
+    bad_response: "The service returned an unreadable result. Your original request is kept for recovery.",
+    stripe_unavailable: "Billing is temporarily unavailable. Your original request is kept for recovery.",
+    adapter_unavailable: "Billing is temporarily unavailable. Your original request is kept for recovery.",
+  };
+  const words = (result) => messages[result?.error] || "Membership is unavailable just now. Refresh status before continuing.";
+  function save() {
+    if (!actor) return;
+    try {
+      if (Object.keys(requests).length) window.localStorage?.setItem(STORAGE + actor, JSON.stringify(requests));
+      else window.localStorage?.removeItem(STORAGE + actor);
+    } catch { /* server status still restores a durable Checkout request */ }
+  }
+  function restore() {
+    requests = {};
+    try {
+      const raw = window.localStorage?.getItem(STORAGE + actor);
+      if (!raw || raw.length > 512) return;
+      const saved = JSON.parse(raw);
+      for (const action of ["checkout", "portal"]) {
+        const item = saved?.[action];
+        if (item && typeof item.id === "string" && ID.test(item.id) && ["uncertain", "open", "resolved", "support"].includes(item.phase)) requests[action] = { id: item.id, phase: item.phase };
+      }
+    } catch { /* untrusted local state is only a recovery hint */ }
+  }
+  function takeHub(next) {
+    const who = typeof next?.user?.id === "string" ? next.user.id : null;
+    if (actor !== who || (hub?.state === "ready" && (next?.state !== "ready" || next?.billing !== true))) {
+      epoch += 1; data = null; reading = null; working = false; message = ""; retryAt = 0;
+      if (actor !== who) { actor = who; requests = {}; if (actor) restore(); }
+    }
+    hub = next;
+    if (!available()) data = null;
+  }
+  function applyStatus(result) {
+    data = result; readAt = Date.now();
+    const pending = result.pending;
+    if (pending.requestId) requests.checkout = { id: pending.requestId, phase: pending.checkout === "payment_review" || (requests.checkout?.id === pending.requestId && requests.checkout.phase === "support") ? "support" : "open" };
+    else if (pending.checkout === "none" && ["open", "resolved", "support"].includes(requests.checkout?.phase)) delete requests.checkout;
+    save();
+  }
+  async function call(action, payload = {}) {
+    try { return await api().hubBilling(action, payload); }
+    catch { return { ok: false, error: "network" }; }
+  }
+  async function refresh() {
+    if (reading) return reading;
+    if (working) return null;
+    const operation = (async () => {
+      const revision = hubRevision, identity = epoch;
+      let next;
+      try { next = (await api()?.hubStatus?.())?.status; } catch { next = null; }
+      if (revision !== hubRevision) {
+        // A same-account ready push can arrive while hubStatus is pending.
+        // Use that newer snapshot and finish the canonical billing read; the
+        // push's refresh already coalesced into this promise. Identity or
+        // connection changes still cancel the original operation.
+        if (identity !== epoch) return null;
+        next = hub;
+      }
+      takeHub(next); reading = operation; notify();
+      if (!available()) return null;
+      const who = actor, version = epoch;
+      const result = await call("status");
+      if (!current(who, version)) return null;
+      if (result?.ok) applyStatus(result);
+      else {
+        data = null; message = words(result);
+        if (result?.error === "unauthorized") { requests = {}; save(); }
+      }
+      return result;
+    })();
+    reading = operation; notify();
+    try { return await operation; }
+    finally { if (reading === operation) reading = null; notify(); }
+  }
+  function requestId() {
+    try { const id = crypto.randomUUID(); return ID.test(id) ? id : null; } catch { return null; }
+  }
+  function actionAllowed(action) {
+    if (!data || !available() || !data.actions[action] || retryAt > Date.now() || requests[action]?.phase === "support") return false;
+    if (action === "checkout") return Boolean(data.offer) && ["none", "open"].includes(data.pending.checkout)
+      && (data.pending.checkout !== "open" || Boolean(data.pending.requestId));
+    return true;
+  }
+  function safeUrl(action, value) {
+    try {
+      if (typeof value !== "string" || value.length > 2048 || !value.startsWith("https://") || /[\s\\\u0000-\u001f\u007f]/.test(value)) return false;
+      const parsed = new URL(value);
+      return !parsed.username && !parsed.password && parsed.origin === (action === "checkout" ? "https://checkout.stripe.com" : "https://billing.stripe.com");
+    } catch { return false; }
+  }
+  async function start(action, reviewed, owner) {
+    if (owner.gone || working || reading || reviewed !== data || !actionAllowed(action)) return;
+    const who = actor, version = epoch, reviewedId = requests[action]?.id || null;
+    const refreshed = await refresh();
+    if (owner.gone || !current(who, version) || !refreshed?.ok || working || !actionAllowed(action)) return;
+    if (action === "checkout" && (reviewed.offer?.version !== data.offer?.version || reviewedId !== (requests.checkout?.id || null))) {
+      message = "Your offer or pending checkout changed. Review the current details before continuing."; notify(); return;
+    }
+    const id = requests[action]?.id || requestId();
+    if (!id) { message = "A secure request could not be created. Please reopen Studio before trying again."; notify(); return; }
+    requests[action] = { id, phase: "uncertain" }; save();
+    working = true; message = action === "checkout" ? "Preparing your secure checkout…" : "Preparing billing management…"; notify();
+    try {
+      const result = await call(action, { requestId: id });
+      if (!current(who, version)) return;
+      if (result?.ok && safeUrl(action, result.url)) {
+        requests[action] = { id, phase: "open" }; save();
+        if (owner.gone) { message = "Your request is ready. Continue it when you are ready to open the browser."; return; }
+        let opened;
+        try { opened = await api().hubBillingOpen(action, result.url, who); } catch { opened = { ok: false, error: "browser_unavailable" }; }
+        if (!current(who, version)) return;
+        if (opened?.ok) {
+          if (action === "portal") { delete requests.portal; save(); }
+          message = "Opened in your browser. Return here and refresh membership to check the verified result.";
+        } else message = words(opened);
+      } else {
+        const failure = result?.ok ? { ok: false, error: "bad_response" } : result;
+        message = words(failure);
+        if (failure?.error === "unauthorized") { requests = {}; data = null; save(); }
+        if (["billing_request_recovery_required", "customer_recovery_required"].includes(failure?.error)) { requests[action].phase = "support"; save(); }
+        if (["billing_session_complete", "billing_session_expired", "billing_session_unavailable"].includes(failure?.error)) { requests[action].phase = "resolved"; save(); }
+        retryAt = Date.now() + Math.max(5000, Math.min(3600000, Number(failure?.retryAfter) || 5000));
+        // Keep the old projection visible, but require an explicit status read
+        // before a second payment action. No automatic mutation retry exists.
+        data = null;
+      }
+    } finally {
+      if (current(who, version)) working = false;
+      notify();
+    }
+  }
+  function listen() {
+    if (listening) return;
+    listening = true;
+    api()?.onHubEvent?.((event) => {
+      if (event?.type !== "status") return;
+      hubRevision += 1; takeHub(event.status); notify();
+      if (cards.size && available()) void refresh();
+    });
+    const returned = () => { if (cards.size && document.visibilityState !== "hidden" && !working) void refresh(); };
+    window.addEventListener?.("focus", returned);
+    document.addEventListener?.("visibilitychange", returned);
+  }
+  function card() {
+    const root = node("section", "membership");
+    root.setAttribute("aria-label", "Membership");
+    const owner = { gone: false, paint };
+    const button = (label, run, disabled = false, cls = "") => { const el = node("button", `membership-button ${cls}`, label); el.type = "button"; el.disabled = disabled; el.addEventListener("click", () => { if (!el.disabled) return run(); }); return el; };
+    function paint() {
+      if (owner.gone) return;
+      const head = node("header", "membership-head");
+      head.append(node("p", "membership-eyebrow", "MAKE SOMETHING YOURS"), node("h2", "", "Vibe Studio membership"),
+        node("p", "membership-note", "Create custom pets and stickers with the same creator benefits through paid membership, lifetime membership, or intro access. Your existing creations stay yours."));
+      const content = node("div", "membership-content"), tools = node("div", "membership-actions");
+      const statusLine = node("p", "membership-message", message); statusLine.setAttribute("role", "status"); statusLine.setAttribute("aria-live", "polite");
+      root.setAttribute("aria-busy", String(Boolean(reading || working)));
+      if (!data) {
+        content.append(node("p", "membership-empty", reading ? "Checking membership…" : !actor ? "Sign in with Discord in Friends to check membership." : !available() ? "Membership is not available on this connection yet." : "Refresh to check your current membership."));
+      } else {
+        const m = data.membership, facts = node("div", "membership-facts"), membership = node("article", "membership-fact");
+        const title = m.active ? ({ paid: "Paid monthly membership", lifetime: "Lifetime membership", intro: "Intro access" }[m.kind]) : "Membership inactive";
+        membership.append(node("span", "membership-label", "CURRENT MEMBERSHIP"), node("h3", "", title),
+          node("p", "membership-note", m.active ? `Confirmed active at ${date(data.now)}.` : m.reason === "expired" ? "Your previous membership has ended." : "No active membership is confirmed."));
+        if (m.until !== null) {
+          membership.append(node("p", "membership-note", `Recorded ${m.active ? "end" : "previous end"}: ${date(m.until)}.`));
+          if (m.until <= data.now + Math.max(0, Date.now() - readAt)) membership.append(node("p", "membership-note", "The recorded term has elapsed. Refresh to check current access."));
+        } else if (m.kind === "lifetime") membership.append(node("p", "membership-note", "No monthly renewal or expiry."));
+        const donor = node("article", "membership-fact");
+        donor.append(node("span", "membership-label", "DONOR"), node("h3", "", m.donor ? "Permanent Donor active" : "Donor benefits inactive"),
+          node("p", "membership-note", "Donor status is separate from an active membership."), node("p", "membership-note", m.everSupported ? "Supporter history is recorded." : "No supporter history is recorded."));
+        facts.append(membership, donor); content.append(facts);
+        if (["owner_revoked", "verification_due", "billing_review_required", "unavailable"].includes(m.reason)) content.append(node("p", "membership-notice", "Membership needs verification or support review before its status can change."));
+        if (data.offer) {
+          const offer = data.offer, terms = node("article", "membership-offer");
+          terms.append(node("h3", "", "Your current offer"), node("p", "membership-price", `${money(offer.firstPeriodAmount, offer.currency)} initial month`),
+            node("p", "membership-note", `${money(offer.renewalAmount, offer.currency)} each month on renewal.`),
+            node("p", "membership-note", offer.referralApplied ? "Referral pricing is applied to this offer." : "Referral pricing is not applied to this offer."),
+            node("p", "membership-note", offer.taxMode === "exclusive" ? "Any applicable tax is added in checkout." : "No additional tax is configured for this offer."));
+          content.append(terms);
+        }
+        if (data.pending.checkout === "expiring") content.append(node("p", "membership-notice", "An earlier checkout is being resolved. Refresh status later; a replacement purchase is unavailable until it is settled."));
+        if (data.pending.checkout === "payment_review") content.append(node("p", "membership-notice", "A completed payment needs support review. Please contact support. No new purchase is available while it is reviewed."));
+        const reviewed = data;
+        if (data.actions.checkout && ["none", "open"].includes(data.pending.checkout) && data.offer) tools.append(button(requests.checkout ? "Continue existing checkout" : "Continue to secure checkout", () => start("checkout", reviewed, owner), working || Boolean(reading) || !actionAllowed("checkout"), "is-primary"));
+        else content.append(node("p", "membership-note", "New purchases are currently unavailable for this account."));
+        if (data.actions.portal) tools.append(button("Manage billing", () => start("portal", reviewed, owner), working || Boolean(reading) || !actionAllowed("portal")));
+        content.append(node("p", "membership-note", "Checkout and billing management open securely in your browser. Membership updates only after payment verification."));
+      }
+      if (retryAt > Date.now()) content.append(node("p", "membership-note", `You can retry after ${date(retryAt)}. Refresh status first.`));
+      tools.append(button("Refresh membership", () => { message = ""; return refresh(); }, working || Boolean(reading)),
+        button("Open Creator studio", () => window.MefiCollectibles?.open?.("creator")));
+      root.replaceChildren(head, content, tools, statusLine);
+    }
+    cards.add(owner); listen(); paint(); void refresh();
+    root.dispose = () => { if (owner.gone) return; owner.gone = true; cards.delete(owner); };
+    return root;
+  }
+  window.MefiMembership = { card, refresh };
+})();
+
+// Cash marketplace UI. Server snapshots select prices, fees and delivery.
+// Browser return only refreshes actor-bound order history; it never grants goods.
+(() => {
+  "use strict";
+  const cards = new Set(), STORAGE = "mefi.commerce.drafts.v2:";
+  const ID = /^[A-Za-z0-9_-]{8,80}$/, LISTING = /^[A-Za-z0-9:_-]{1,100}$/, VERSION = /^[a-f0-9]{64}$/, ORDER = /^cash_[a-f0-9]{32}$/;
+  const api = () => window.mefiStudio;
+  const node = (tag, cls, text) => { const el = document.createElement(tag); if (cls) el.className = cls; if (text != null) el.textContent = text; return el; };
+  const copy = (v) => JSON.parse(JSON.stringify(v));
+  const money = (amount, currency, minorUnit) => {
+    if (!Number.isSafeInteger(amount) || amount < 0) return "Not calculated yet";
+    if (!Number.isInteger(minorUnit) || minorUnit < 0 || minorUnit > 3) return `${amount.toLocaleString()} ${String(currency).toUpperCase()} minor units`;
+    const scale = 10n ** BigInt(minorUnit), value = BigInt(amount), whole = (value / scale).toString(), fraction = (value % scale).toString().padStart(minorUnit, "0");
+    return `${whole}${minorUnit ? "." + fraction : ""} ${String(currency).toUpperCase()}`;
+  };
+  const date = (at) => { const d = new Date(at); return Number.isFinite(d.valueOf()) ? d.toLocaleString() : "Time unavailable"; };
+  const percent = (bps) => `${Math.floor(bps / 100)}${bps % 100 ? `.${String(bps % 100).padStart(2, "0").replace(/0$/, "")}` : ""}%`;
+  let actor = null, epoch = 0, hub = null, hubRevision = 0, listening = false;
+  let working = false, reading = null, message = "", retryAt = 0, drafts = Object.create(null);
+  let market = {}, seller = null, selectedListing = null, selectedAsset = null, assetKind = "collectible-instance", priceText = "", currency = "", sellerPending = null, onboardingPending = null;
+  let sellerRefusal = null, sellerSetup = null, countryPending = null, countryChoice = "";
+  const LISTING_NOT_APPLIED = new Set(["listing_changed", "listing_exists", "listing_limit", "invalid_price", "asset_reserved", "seller_not_ready"]);
+  let orders = [], nextCursor = null, scope = "pending", selected = null, visited = new Set(), hydrated = new Set();
+  const available = () => hub?.state === "ready" && (hub.commerceSellerSetup === true || hub.commerceRetireOrders === true || hub.commerceOrders === true || hub.commerceCatalog === true || hub.commerceSeller === true) && Boolean(actor) && typeof api()?.hubCommerce === "function";
+  const current = (who, version) => actor === who && epoch === version && available();
+  const notify = () => { for (const card of cards) card.paint(); };
+  const words = (result) => ({
+    unauthorized: "Sign in again to recover your orders.", stale_account: "The signed-in account changed. Refresh this account's marketplace.",
+    cash_request_unauthorized: "Sign in again to recover the original order.",
+    cash_checkout_unavailable: "New checkout is unavailable. Existing orders remain available for status recovery.",
+    cash_fee_eligibility_unavailable: "The seller's fee eligibility is being verified. No higher fee has been substituted.",
+    cash_order_cursor_invalid: "This history page expired. Refresh to start at the newest orders.",
+    cash_listing_unavailable: "This listing changed or is unavailable. Review its current details before starting a new order.",
+    cash_request_conflict: "This saved request needs support recovery. Do not start another purchase for it.",
+    cash_quote_stale: "This order's unstarted quote expired. It cannot be used for a new payment.",
+    cash_operation_in_progress: "Your existing order is still being processed. Refresh its status before continuing.",
+    cash_checkout_recovery_required: "This payment needs support recovery. Keep the order reference and do not pay again.",
+    cash_rate_limited: "Please wait before retrying. Your original order is kept.",
+    network: "The service did not confirm the result. Recover the original order before trying another purchase.",
+    bad_response: "The service returned an unreadable result. Your original request is kept for recovery.",
+    browser_unavailable: "The browser could not be opened. Refresh and continue the same request.",
+    cash_seller_setup_unavailable: "Seller country preparation is unavailable on this connection.",
+    cash_seller_country_locked: "Your declared country is locked because payment account preparation has started.",
+    cash_seller_country_unsupported: "This country is not currently enabled for seller setup.",
+    onboarding_link_expired: "This setup link expired. Refresh seller setup before explicitly opening a fresh link.",
+  }[result?.error] || "The marketplace is unavailable just now. Refresh to recover the current state.");
+  function save() {
+    if (!actor) return false;
+    try {
+      const value = JSON.stringify(drafts);
+      window.localStorage.setItem(STORAGE + actor, value);
+      return window.localStorage.getItem(STORAGE + actor) === value;
+    } catch { return false; }
+  }
+  function restore() {
+    drafts = Object.create(null);
+    try {
+      const raw = window.localStorage.getItem(STORAGE + actor); if (!raw || raw.length > 12000) return;
+      const value = JSON.parse(raw); if (!value || typeof value !== "object" || Array.isArray(value)) return;
+      for (const [key, d] of Object.entries(value).slice(0, 16)) {
+        if (!ID.test(key) || !d || !LISTING.test(d.listingId) || !VERSION.test(d.listingVersion) || d.requestId !== key || !(d.orderId === null || ORDER.test(d.orderId))) continue;
+        drafts[key] = { listingId: d.listingId, listingVersion: d.listingVersion, requestId: key, orderId: d.orderId };
+      }
+    } catch { /* Saved IDs are hints only; server history is canonical. */ }
+  }
+  function takeHub(next) {
+    const who = typeof next?.user?.id === "string" ? next.user.id : null;
+    if (who !== actor || hub?.state === "ready" && (next?.state !== "ready" || next?.commerceOrders !== hub.commerceOrders || next?.commerceRetireOrders !== hub.commerceRetireOrders || next?.commerceCatalog !== hub.commerceCatalog || next?.commerceSeller !== hub.commerceSeller || next?.commerceOnboarding !== hub.commerceOnboarding || next?.commerceSellerSetup !== hub.commerceSellerSetup)) {
+      epoch += 1; orders = []; selected = null; nextCursor = null; visited = new Set(); hydrated = new Set();
+      reading = null; working = false; message = ""; retryAt = 0; market = {}; seller = null; selectedListing = null; selectedAsset = null; priceText = ""; currency = ""; sellerPending = null; sellerRefusal = null; sellerSetup = null; countryChoice = "";
+      actor = who; restore(); restoreSeller(); restoreOnboarding(); restoreCountry();
+    }
+    hub = next;
+    if (!available()) { orders = []; selected = null; nextCursor = null; }
+  }
+  function retryReady() {
+    if (retryAt <= Date.now()) return true;
+    message = "Please wait " + Math.ceil((retryAt - Date.now()) / 1000) + " seconds before retrying. Your saved request is kept.";
+    notify(); return false;
+  }
+  async function call(action, payload) {
+    try { return await api().hubCommerce(action, payload); } catch { return { ok: false, error: "network" }; }
+  }
+  function remember(order) {
+    const clean = copy(order); delete clean.url; delete clean.status; delete clean.ok; delete clean.replayed;
+    const index = orders.findIndex((o) => o.orderId === clean.orderId);
+    if (index >= 0) orders[index] = clean;
+    if (selected?.orderId === clean.orderId || !selected) selected = clean;
+    for (const [id, draft] of Object.entries(drafts)) if (draft.orderId === clean.orderId && ["fulfilled", "closed"].includes(clean.state)) delete drafts[id];
+    save(); return clean;
+  }
+  async function rehydrate(order, who, version) {
+    if (!order.receipt || order.state !== "fulfilled") return;
+    const key = order.orderId + ":" + order.receipt.version;
+    if (hydrated.has(key) || !current(who, version)) return;
+    try {
+      // The first read can be a pre-delivery coalesced flight. Its completion
+      // precedes a fresh canonical read; no receipt is applied to local assets.
+      for (const collection of [window.MefiCollectibles, window.MefiShop]) {
+        if (typeof collection?.refresh !== "function") continue;
+        await collection.refresh(); if (!current(who, version)) return;
+        const answer = await collection.refresh(); if (!current(who, version) || answer?.ok === false) return;
+      }
+      hydrated.add(key);
+    } catch { /* Status stays delivered; users can refresh their collection. */ }
+  }
+  async function refresh({ more = false } = {}) {
+    if (reading || working) return reading;
+    const operation = (async () => {
+      const revision = hubRevision, identity = epoch;
+      let next; try { next = (await api()?.hubStatus?.())?.status; } catch { next = null; }
+      if (revision !== hubRevision) { if (identity !== epoch) return null; next = hub; }
+      takeHub(next); reading = operation; notify(); if (!available() || !hub.commerceOrders) return null;
+      const who = actor, version = epoch, requestedScope = scope, cursor = more ? nextCursor : null;
+      if (more && !cursor) return null;
+      const answer = await call("listOrders", { scope: requestedScope, limit: 25, cursor });
+      if (!current(who, version) || scope !== requestedScope) return null;
+      if (!answer?.ok) { message = words(answer); return answer; }
+      if (more && (answer.orders.some((o) => orders.some((old) => old.orderId === o.orderId)) || answer.nextCursor && visited.has(answer.nextCursor))) {
+        message = "The service repeated a history page. Refresh to recover the newest orders."; nextCursor = null; return null;
+      }
+      if (!more) { orders = []; visited = new Set(); }
+      orders.push(...answer.orders); nextCursor = answer.nextCursor; if (cursor) visited.add(cursor);
+      if (selected) {
+        const status = await call("getOrder", { orderId: selected.orderId });
+        if (!current(who, version) || scope !== requestedScope) return null;
+        if (status?.ok) remember(status); else message = words(status);
+      }
+      for (const order of orders) { await rehydrate(order, who, version); if (!current(who, version)) return null; }
+      return answer;
+    })();
+    reading = operation; notify();
+    try { return await operation; } finally { if (reading === operation) reading = null; notify(); }
+  }
+  async function inspect(orderId) {
+    if (!available() || working || reading) return;
+    const who = actor, version = epoch; working = true; message = "Checking order…"; notify();
+    try {
+      const result = await call("getOrder", { orderId }); if (!current(who, version)) return;
+      if (result?.ok) { selected = remember(result); message = ""; await rehydrate(selected, who, version); }
+      else message = words(result);
+    } finally { if (current(who, version)) working = false; notify(); }
+  }
+  async function recover(draft) {
+    if (!available() || working || reading || !retryReady() || drafts[draft.requestId] !== draft) return;
+    if (draft.orderId) return inspect(draft.orderId);
+    const who = actor, version = epoch; working = true; message = "Recovering the original request…"; notify();
+    try {
+      const result = await call("createOrder", { listingId: draft.listingId, listingVersion: draft.listingVersion, requestId: draft.requestId });
+      if (!current(who, version)) return;
+      if (result?.ok) { draft.orderId = result.orderId; save(); selected = remember(result); message = "Review the confirmed order before opening checkout."; }
+      else { message = words(result); retryAt = Date.now() + Math.max(5000, Math.min(3600000, result?.retryAfter || 5000)); }
+    } finally { if (current(who, version)) working = false; notify(); }
+  }
+  async function resolveRequest(draft) {
+    if (!available() || !hub.commerceRetireOrders || working || reading || draft.orderId || drafts[draft.requestId] !== draft) return;
+    const who = actor, version = epoch; working = true; message = "Checking the saved request without creating a new order…"; notify();
+    try {
+      const result = await call("retireOrderRequest", { listingId: draft.listingId, listingVersion: draft.listingVersion, requestId: draft.requestId });
+      if (!current(who, version)) return;
+      if (!result?.ok) { message = words(result); return; }
+      if (result.outcome === "applied") { draft.orderId = result.order.orderId; save(); selected = remember(result.order); message = "The original order exists. Review its current status."; }
+      else if (result.outcome === "not-applied") { delete drafts[draft.requestId]; save(); selectedListing = null; message = "This request cannot create an order. Browse and review current listing terms before starting another purchase."; }
+    } finally { if (current(who, version)) working = false; notify(); }
+  }
+  async function prepare(listing) {
+    if (!available() || !hub.commerceOrders || working || reading || !retryReady() || !listing || !LISTING.test(listing.id) || !VERSION.test(listing.version)) return;
+    const old = Object.values(drafts).find((d) => d.listingId === listing.id && d.listingVersion === listing.version);
+    if (old) return recover(old);
+    if (Object.keys(drafts).length >= 16) { message = "Recover your saved requests before starting another order."; notify(); return; }
+    let id; try { id = crypto.randomUUID(); } catch { id = null; }
+    if (!id || !ID.test(id)) { message = "A secure request could not be created."; notify(); return; }
+    const draft = { listingId: listing.id, listingVersion: listing.version, requestId: id, orderId: null };
+    drafts[id] = draft;
+    if (!save()) { delete drafts[id]; message = "Studio could not save the recovery reference. Enable local storage before starting an order."; notify(); return; }
+    await recover(draft);
+  }
+  const checkoutAllowed = (o) => o && ["quoted", "creating", "awaiting_payment"].includes(o.state) && !o.needsReview && !o.receipt;
+  async function checkout(reviewed, owner) {
+    if (owner.gone || selected !== reviewed || !available() || working || reading || !checkoutAllowed(reviewed) || !retryReady()) return;
+    const who = actor, version = epoch; working = true; message = "Checking this order before checkout…"; notify();
+    try {
+      const fresh = await call("getOrder", { orderId: reviewed.orderId });
+      if (owner.gone || !current(who, version)) return;
+      if (!fresh?.ok) { message = words(fresh); return; }
+      const originalTerms = JSON.stringify([reviewed.listing, reviewed.quote, reviewed.commission]);
+      selected = remember(fresh);
+      if (originalTerms !== JSON.stringify([fresh.listing, fresh.quote, fresh.commission]) || !checkoutAllowed(fresh)) {
+        message = "The order changed. Review its current status before continuing."; return;
+      }
+      const result = await call("checkout", { orderId: fresh.orderId });
+      if (!current(who, version)) return;
+      if (!result?.ok) { message = words(result); retryAt = Date.now() + Math.max(5000, Math.min(3600000, result?.retryAfter || 5000)); return; }
+      selected = remember(result);
+      if (owner.gone || !result.url || result.needsReview || result.state !== "awaiting_payment") { message = "Order status updated. No payment page is ready to open."; return; }
+      let opened; try { opened = await api().hubCommerceOpen(result.orderId, result.url, who); } catch { opened = { ok: false, error: "browser_unavailable" }; }
+      if (!current(who, version)) return;
+      message = opened?.ok ? "Checkout opened in your browser. Return and refresh orders to check payment and delivery." : words(opened);
+    } finally { if (current(who, version)) working = false; notify(); }
+  }
+  function parsePrice(value, policy) {
+    if (!policy || typeof value !== "string" || !/^\d{1,16}(?:\.\d{1,3})?$/.test(value) || !Number.isInteger(policy.minorUnit) || policy.minorUnit < 0 || policy.minorUnit > 3 || !Number.isSafeInteger(policy.amountIncrementMinor) || policy.amountIncrementMinor < 1 || !Number.isSafeInteger(policy.minSaleMinor) || policy.minSaleMinor < 1 || !Number.isSafeInteger(policy.maxSaleMinor) || policy.maxSaleMinor < policy.minSaleMinor) return null;
+    const [whole, fraction = ""] = value.split("."); if (fraction.length > policy.minorUnit) return null;
+    const minor = BigInt(whole) * (10n ** BigInt(policy.minorUnit)) + BigInt(fraction.padEnd(policy.minorUnit, "0") || "0");
+    if (minor > BigInt(Number.MAX_SAFE_INTEGER) || minor < BigInt(policy.minSaleMinor) || minor > BigInt(policy.maxSaleMinor) || minor % BigInt(policy.amountIncrementMinor) !== 0n) return null;
+    return Number(minor);
+  }
+  function policyMoney(value, p) {
+    const scale = 10 ** p.minorUnit, whole = Math.floor(value / scale), fraction = String(value % scale).padStart(p.minorUnit, "0");
+    return `${whole.toLocaleString()}${p.minorUnit ? "." + fraction : ""} ${p.code.toUpperCase()}`;
+  }
+  function sellerSave() {
+    if (!actor) return false;
+    try { if (!sellerPending) { window.localStorage.removeItem(STORAGE + "seller:" + actor); return true; }
+      const value = JSON.stringify(sellerPending); window.localStorage.setItem(STORAGE + "seller:" + actor, value); return window.localStorage.getItem(STORAGE + "seller:" + actor) === value;
+    } catch { return false; }
+  }
+  function restoreSeller() {
+    sellerPending = null;
+    try {
+      const raw = window.localStorage.getItem(STORAGE + "seller:" + actor); if (!raw || raw.length > 1400) return;
+      const value = JSON.parse(raw), p = value?.payload;
+      if (!["publishListing", "updateListing", "unlistListing"].includes(value?.action) || !p || !ID.test(p.requestId)) return;
+      // The native exact schema validates this hint again before any mutation.
+      sellerPending = { action: value.action, payload: p };
+    } catch { /* A missing hint does not alter server listings or ownership. */ }
+  }
+  const marketKey = (action) => action === "sellerAssets" ? action + ":" + assetKind : action;
+  const marketId = (item) => item.id ?? item.asset?.item?.id ?? item.asset?.id;
+  async function loadMarket(action, more = false) {
+    if (!available() || working || reading || (["catalog", "listing"].includes(action) ? !hub.commerceCatalog : !hub.commerceSeller)) return;
+    const who = actor, version = epoch, kind = assetKind, key = marketKey(action), prior = market[key];
+    if (more && !prior?.nextCursor) return;
+    const cursor = more ? prior.nextCursor : null;
+    working = true; notify();
+    try {
+      const input = action === "seller" ? {} : { cursor, ...(action === "sellerAssets" ? { kind } : {}) };
+      const result = await call(action, input); if (!current(who, version)) return;
+      if (!result?.ok) { message = words(result); return; }
+      if (action === "seller") { seller = result; if (!seller.pricing.currencies.some((p) => p.code === currency)) currency = seller.pricing.currencies[0]?.code || ""; return; }
+      if (more && (result.items.some((i) => prior.items.some((p) => marketId(p) === marketId(i))) || result.nextCursor && prior.visited.has(result.nextCursor))) {
+        message = "The service repeated a marketplace page. Refresh this view before continuing."; prior.nextCursor = null; return;
+      }
+      const visited = more ? new Set(prior.visited) : new Set(); if (cursor) visited.add(cursor);
+      market[key] = { items: more ? [...prior.items, ...result.items] : result.items, nextCursor: result.nextCursor, visited };
+    } finally { if (current(who, version)) working = false; notify(); }
+  }
+  async function loadSection(view) {
+    if (view === "browse") return loadMarket("catalog");
+    if (view === "sell") { await loadSellerSetup(); await loadMarket("seller"); await loadMarket("sellerAssets"); await loadMarket("sellerListings"); }
+    else if (view === "orders") return refresh();
+  }
+  async function inspectListing(id) {
+    if (!hub?.commerceCatalog || !available() || working || reading) return;
+    const who = actor, version = epoch; working = true; notify();
+    try { const result = await call("listing", { listingId: id }); if (!current(who, version)) return; if (result?.ok) { selectedListing = result.listing; selected = null; } else message = words(result); }
+    finally { if (current(who, version)) working = false; notify(); }
+  }
+  async function buyListing(reviewed, owner) {
+    if (owner.gone || selectedListing !== reviewed || !hub?.commerceOrders || working || reading) return;
+    const who = actor, version = epoch; working = true; notify(); let fresh;
+    try { const result = await call("listing", { listingId: reviewed.id }); if (owner.gone || !current(who, version)) return; if (!result?.ok) { message = words(result); return; } fresh = result.listing;
+      if (fresh.version !== reviewed.version) { selectedListing = fresh; message = "This listing changed. Review the new item and price before ordering."; fresh = null; }
+    } finally { if (current(who, version)) working = false; notify(); }
+    if (fresh && !owner.gone && current(who, version)) await prepare(fresh);
+  }
+  async function sellerMutation(action, payload, owner, retry = false) {
+    if (owner.gone || !available() || !hub.commerceSeller || working || reading || !retryReady()) return;
+    if (sellerPending && !retry) { message = "Recover the saved listing request before making another change."; notify(); return; }
+    let pending = sellerPending;
+    if (!retry) {
+      let requestId; try { requestId = crypto.randomUUID(); } catch { requestId = null; }
+      if (!requestId || !ID.test(requestId)) return;
+      pending = { action, payload: { ...payload, requestId } }; sellerPending = pending;
+      if (!sellerSave()) { sellerPending = null; message = "Studio could not save the listing recovery reference."; notify(); return; }
+    }
+    if (!pending) return;
+    const who = actor, version = epoch; working = true; notify();
+    try {
+      const result = await call(pending.action, pending.payload); if (!current(who, version)) return;
+      if (!result?.ok) { sellerRefusal = LISTING_NOT_APPLIED.has(result.error) ? { requestId: pending.payload.requestId, code: result.error } : null; message = words(result); retryAt = Date.now() + Math.max(5000, Math.min(3600000, result?.retryAfter || 5000)); return; }
+      sellerRefusal = null; sellerPending = null; sellerSave(); selectedAsset = null; priceText = "";
+      message = result.listing.status === "listed" ? "Your listing is published with its confirmed price." : "Listing status updated.";
+    } finally { if (current(who, version)) working = false; notify(); }
+    if (current(who, version) && !sellerPending) await loadSection("sell");
+  }
+  function saveCountry() {
+    if (!actor) return false;
+    try {
+      const key = STORAGE + "seller-country:" + actor;
+      if (!countryPending) { window.localStorage.removeItem(key); return true; }
+      const value = JSON.stringify(countryPending); window.localStorage.setItem(key, value); return window.localStorage.getItem(key) === value;
+    } catch { return false; }
+  }
+  function restoreCountry() {
+    countryPending = null;
+    try {
+      const raw = window.localStorage.getItem(STORAGE + "seller-country:" + actor); if (!raw || raw.length > 256) return;
+      const v = JSON.parse(raw);
+      if (v && Object.keys(v).length === 2 && typeof v.country === "string" && /^[A-Z]{2}$/.test(v.country) && typeof v.requestId === "string" && ID.test(v.requestId)) countryPending = { country: v.country, requestId: v.requestId };
+    } catch { /* Only an account-bound declared country and recovery ID are stored. */ }
+  }
+  async function loadSellerSetup() {
+    if (!available() || !hub.commerceSellerSetup || working || reading) return;
+    const who = actor, version = epoch; working = true; sellerSetup = null; notify();
+    try {
+      const result = await call("readSellerSetup", {}); if (!current(who, version)) return;
+      if (result?.ok) sellerSetup = result; else message = words(result);
+    } finally { if (current(who, version)) working = false; notify(); }
+  }
+  async function prepareCountry(country, reviewed, owner, retry = false) {
+    if (owner.gone || !available() || !hub.commerceSellerSetup || working || reading || !retryReady()) return;
+    if (retry ? !countryPending : countryPending || reviewed !== sellerSetup || !reviewed?.canPrepare || !reviewed.countries.includes(country)) return;
+    const who = actor, version = epoch; working = true; notify();
+    try {
+      if (!retry) {
+        const fresh = await call("readSellerSetup", {}); if (owner.gone || !current(who, version)) return;
+        if (!fresh?.ok) { sellerSetup = null; message = words(fresh); return; }
+        sellerSetup = fresh;
+        if (!fresh.canPrepare || !fresh.countries.includes(country) || fresh.declaredCountry !== reviewed.declaredCountry) { message = "Seller country setup changed. Review the current declaration before confirming."; return; }
+        let requestId; try { requestId = crypto.randomUUID(); } catch { requestId = null; }
+        if (!requestId || !ID.test(requestId)) return;
+        countryPending = { country, requestId };
+        if (!saveCountry()) { countryPending = null; message = "Studio could not save the country request for recovery."; return; }
+      }
+      const result = await call("prepareSellerSetup", { ...countryPending }); if (!current(who, version)) return;
+      if (!result?.ok) { message = words(result); retryAt = Date.now() + Math.max(5000, Math.min(3600000, result?.retryAfter || 5000)); return; }
+      countryPending = null; saveCountry(); countryChoice = ""; sellerSetup = null; seller = null;
+      message = "Country declaration saved. Refreshing current seller setup before payment onboarding.";
+    } finally { if (current(who, version)) working = false; notify(); }
+    if (current(who, version) && !countryPending) await loadSection("sell");
+  }
+  function saveOnboarding() {
+    if (!actor) return false;
+    try { const value = JSON.stringify(onboardingPending); window.localStorage.setItem(STORAGE + "onboarding:" + actor, value); return window.localStorage.getItem(STORAGE + "onboarding:" + actor) === value; } catch { return false; }
+  }
+  function restoreOnboarding() {
+    onboardingPending = null;
+    try {
+      const raw = window.localStorage.getItem(STORAGE + "onboarding:" + actor); if (!raw || raw.length > 512) return;
+      const v = JSON.parse(raw);
+      if (v && typeof v.id === "string" && ID.test(v.id) && ["uncertain", "ready", "opened", "expired"].includes(v.phase) && (v.expiresAt === null || Number.isSafeInteger(v.expiresAt) && v.expiresAt >= 0)) onboardingPending = { id: v.id, phase: v.phase, expiresAt: v.expiresAt };
+    } catch { /* Only recovery references are stored; links remain memory-only. */ }
+  }
+  async function onboard(owner, renew = false) {
+    if (owner.gone || !available() || !hub.commerceSeller || !hub.commerceOnboarding || !seller?.onboarding.canStart || countryPending || hub.commerceSellerSetup && !sellerSetup || working || reading || !retryReady()) return;
+    const who = actor, version = epoch, reviewed = seller;
+    working = true; notify();
+    try {
+      const status = await call("seller", {}); if (owner.gone || !current(who, version)) return;
+      if (!status?.ok) { message = words(status); return; }
+      seller = status;
+      if (!seller.onboarding.canStart || reviewed.onboarding.state !== seller.onboarding.state) { message = "Seller setup changed. Review the current status before continuing."; return; }
+      if (renew && onboardingPending && !["opened", "expired"].includes(onboardingPending.phase) && !(onboardingPending.expiresAt !== null && onboardingPending.expiresAt <= Date.now())) return;
+      if (!onboardingPending || renew) {
+        let id; try { id = crypto.randomUUID(); } catch { id = null; } if (!id || !ID.test(id)) return;
+        onboardingPending = { id, phase: "uncertain", expiresAt: null };
+        if (!saveOnboarding()) { onboardingPending = null; message = "Studio could not save the setup recovery reference."; return; }
+      }
+      const pending = onboardingPending;
+      const result = await call("onboarding", { requestId: pending.id }); if (!current(who, version)) return;
+      if (!result?.ok) {
+        if (result?.error === "onboarding_link_expired") { pending.phase = "expired"; saveOnboarding(); }
+        message = words(result); retryAt = Date.now() + Math.max(5000, Math.min(3600000, result?.retryAfter || 5000)); return;
+      }
+      pending.expiresAt = result.expiresAt; pending.phase = result.expiresAt <= Date.now() ? "expired" : "ready"; saveOnboarding();
+      if (owner.gone || pending.phase === "expired") { message = "This setup link expired. You can explicitly request a fresh one."; return; }
+      let opened; try { opened = await api().hubCommerceOpen("onboarding", result.url, who); } catch { opened = { ok: false, error: "browser_unavailable" }; }
+      if (!current(who, version)) return;
+      if (opened?.ok) { pending.phase = "opened"; saveOnboarding(); message = "Secure seller setup opened in your browser. Return and refresh seller setup to check readiness."; }
+      else message = words(opened);
+    } finally { if (current(who, version)) working = false; notify(); }
+  }
+  function listen() {
+    if (listening) return; listening = true;
+    api()?.onHubEvent?.((event) => { if (event?.type !== "status") return; hubRevision += 1; takeHub(event.status); notify(); if (cards.size && available()) void refresh(); });
+    const returned = () => { if (cards.size && document.visibilityState !== "hidden" && !working) void refresh().then(async () => { for (const card of cards) await card.reload?.(); }); };
+    window.addEventListener?.("focus", returned); document.addEventListener?.("visibilitychange", returned);
+  }
+  function card() {
+    const root = node("section", "commerce"); root.setAttribute("aria-label", "Cash marketplace");
+    const owner = { gone: false, paint, reload: () => loadSection(view) }; let view = "browse", listingReview = null, unlistReview = null, countryReview = null;
+    const button = (label, run, disabled = false) => { const who = actor, version = epoch; const b = node("button", "commerce-button", label); b.type = "button"; b.disabled = disabled; b.addEventListener("click", () => { if (!b.disabled && !owner.gone && who === actor && version === epoch) return run(); }); return b; };
+    function orderDetail(o) {
+      const box = node("article", "commerce-detail");
+      const title = { quoted: "Review your order", creating: "Checkout is being prepared", awaiting_payment: "Awaiting payment confirmation", fulfilled: "Delivered", closed: "Order closed", review: "Payment or delivery needs review" }[o.state];
+      box.append(node("p", "commerce-eyebrow", title), node("h3", "", o.listing.name), node("p", "commerce-note", o.orderId));
+      const q = o.quote, terms = node("dl", "commerce-terms");
+      const line = (label, value) => terms.append(node("dt", "", label), node("dd", "", value));
+      line("Item price", money(q.saleMinor, q.currency, q.minorUnit));
+      line("Tax", q.taxStatus === "pending" ? "Calculated at secure checkout" : money(q.taxMinor, q.currency, q.minorUnit));
+      line("Buyer processing fee", money(q.buyerFeeMinor, q.currency, q.minorUnit));
+      if (q.totalMinor !== null) line("Confirmed quote total", money(q.totalMinor, q.currency, q.minorUnit));
+      line("Studio seller commission", `${percent(o.commission.basisPoints)} · ${money(o.commission.amountMinor, q.currency, q.minorUnit)}`);
+      box.append(terms, node("p", "commerce-note", "The Studio commission is deducted from the seller's sale. It is not added to your item price."));
+      if (o.commission.schedule === "commission-5-10-15-v3") box.append(node("p", "commerce-note", "The seller also pays the actual verified payment processing cost from their proceeds. That cost is confirmed after payment; it is not a buyer surcharge or an estimated deduction here."));
+      if (q.taxStatus === "pending") box.append(node("p", "commerce-notice", "Tax and the final amount appear in secure checkout before you confirm payment."));
+      if (o.settlement) box.append(node("p", "commerce-total", `Verified payment: ${money(o.settlement.totalMinor, o.settlement.currency, o.settlement.minorUnit)} · tax ${money(o.settlement.taxMinor, o.settlement.currency, o.settlement.minorUnit)}`));
+      if (o.receipt) box.append(node("p", "commerce-note", `Delivered ${date(o.receipt.deliveredAt)}. Item reference: ${o.receipt.reference}.`));
+      if (o.settlement && !o.receipt) box.append(node("p", "commerce-notice", "Payment is verified. Delivery is still being resolved; do not pay again."));
+      if (o.needsReview || o.state === "review") box.append(node("p", "commerce-notice", "This order needs payment, refund, dispute, or delivery review. Keep the order reference for support. Refreshing does not issue another payment."));
+      if (o.state === "quoted") box.append(node("p", "commerce-note", `Unstarted quote valid until ${date(o.expiresAt)}.`));
+      const actions = node("div", "commerce-actions");
+      if (checkoutAllowed(o)) actions.append(button(o.state === "quoted" ? "Continue to secure checkout" : "Continue existing checkout", () => checkout(o, owner), working || Boolean(reading)));
+      actions.append(button("Refresh this order", () => inspect(o.orderId), working || Boolean(reading)));
+      box.append(actions); return box;
+    }
+    function assetSummary(asset) {
+      const box = node("div", "commerce-asset");
+      if (asset.type === "collectible-instance") {
+        const item = asset.item, art = node("div", "commerce-art");
+        if (item.kind === "sticker") { const sticker = window.MefiCollectibles?.renderSticker?.(item); if (sticker) art.append(sticker); }
+        else { const canvas = node("canvas"); canvas.width = 240; canvas.height = 150; canvas.setAttribute("role", "img"); canvas.setAttribute("aria-label", `${item.name}, ${item.rarity} ${item.stage} pet`); art.append(canvas); try { window.MefiPets?.paintPreview?.(canvas, { ...item, time: 0 }); } catch {} }
+        box.append(art, node("h3", "", item.name), node("p", "commerce-note", `${item.rarity === "none" ? "Original" : item.rarity} · quality ${item.quality}/100 · ${item.stage} · ${item.size}`),
+          node("p", "commerce-note", item.blurb), node("p", "commerce-note", `Exact instance ${item.id} · design ${item.definitionId}`),
+          node("p", "commerce-note", `Traits: ${item.traits.length ? item.traits.map((t) => t.name).join(", ") : "None yet"}. Born ${date(item.bornAt)}. ${item.careDays} care days. Unlocked sizes: ${item.unlockedSizes.join(", ")}.`));
+        if (item.tradeHoldUntil) box.append(node("p", "commerce-note", `Recorded trade hold ends ${date(item.tradeHoldUntil)}.`));
+      } else {
+        box.append(node("h3", "", asset.name), node("p", "commerce-note", asset.description), node("p", "commerce-note", `${asset.type === "community-pack-license" ? "Community pack license" : "Studio catalog license"} · ${asset.id}`));
+        if (asset.preview.kind === "palette") {
+          const swatches = node("div", "commerce-swatches");
+          for (const [name, color] of Object.entries(asset.preview.palette)) { const chip = node("span", "commerce-swatch"); chip.style.backgroundColor = color; chip.title = `${name}: ${color}`; chip.setAttribute("aria-label", chip.title); swatches.append(chip); }
+          box.append(swatches);
+        } else box.append(node("p", "commerce-note", `Local catalog category: ${asset.preview.catalogKind}.`));
+      }
+      return box;
+    }
+    function listingCard(l, own = false) {
+      const box = node("article", "commerce-order"); box.append(assetSummary(l.asset), node("p", "commerce-price", money(l.saleMinor, l.currency, l.minorUnit)), node("p", "commerce-note", `By ${l.seller.name}`));
+      if (!own) box.append(button("Review listing", () => inspectListing(l.id), working || Boolean(reading)));
+      else {
+        box.append(node("p", "commerce-note", `Listing ${l.status}${l.reason === "origin_review_required" ? " · Original acquisition needs review" : ""}`));
+        const actions = node("div", "commerce-actions");
+        actions.append(button("Change cash price", () => { selectedAsset = { asset: l.asset, eligibility: { canList: true, reason: null }, listingId: l.id, listingRecord: l }; currency = l.currency; const p = seller?.pricing.currencies.find((c) => c.code === currency); priceText = p ? (BigInt(l.saleMinor) / 10n ** BigInt(p.minorUnit)).toString() + (p.minorUnit ? "." + (BigInt(l.saleMinor) % 10n ** BigInt(p.minorUnit)).toString().padStart(p.minorUnit, "0") : "") : ""; listingReview = null; paint(); }, !seller?.canList || working || Boolean(reading)));
+        if (l.status === "listed") actions.append(button("Unlist", () => { unlistReview = { listing: l, actor, epoch }; paint(); }, working || Boolean(reading)));
+        box.append(actions);
+      }
+      return box;
+    }
+    function browseParts(content) {
+      if (!hub.commerceCatalog) { content.append(node("p", "commerce-empty", "The cash catalog is not available on this connection yet.")); return; }
+      content.append(button("Refresh marketplace", () => loadMarket("catalog"), working || Boolean(reading)));
+      const page = market.catalog, grid = node("div", "commerce-orders");
+      for (const l of page?.items || []) grid.append(listingCard(l)); content.append(grid);
+      if (!page?.items.length) content.append(node("p", "commerce-empty", working ? "Loading creations…" : "No eligible cash listings are available right now."));
+      if (page?.nextCursor) content.append(button("More creations", () => loadMarket("catalog", true), working || Boolean(reading)));
+      if (selectedListing) {
+        const l = selectedListing, detail = node("article", "commerce-detail");
+        detail.append(assetSummary(l.asset), node("p", "commerce-price", `${money(l.saleMinor, l.currency, l.minorUnit)} item price`), node("p", "commerce-note", `Seller: ${l.seller.name}. Listing ${l.id}.`),
+          node("p", "commerce-note", l.kind === "collectible-instance" ? "You receive this existing instance with its current rarity, traits and growth. This purchase does not roll a new rarity." : "Review the exact pack or catalog license before ordering."),
+          button("Review order and fees", () => buyListing(l, owner), !hub.commerceOrders || working || Boolean(reading)));
+        if (!hub.commerceOrders) detail.append(node("p", "commerce-note", "Purchases are not enabled on this connection."));
+        content.append(detail);
+      }
+      if (selected) content.append(orderDetail(selected));
+    }
+    function priceForm(content) {
+      if (!selectedAsset || !seller) return;
+      const box = node("article", "commerce-detail"), chosen = selectedAsset;
+      box.append(assetSummary(chosen.asset));
+      const form = node("div", "commerce-form"), currencyLabel = node("label", "", "Currency"), select = node("select", "commerce-input");
+      for (const p of seller.pricing.currencies) { const o = node("option", "", p.code.toUpperCase()); o.value = p.code; o.selected = p.code === currency; select.append(o); }
+      select.value = currency; currencyLabel.append(select); form.append(currencyLabel);
+      const priceLabel = node("label", "", "Fixed item price"), input = node("input", "commerce-input"); input.type = "text"; input.inputMode = "decimal"; input.value = priceText; input.placeholder = "Enter an exact price"; priceLabel.append(input); form.append(priceLabel);
+      const hint = node("p", "commerce-note"), review = button("Review listing", () => {
+        const policy = seller.pricing.currencies.find((p) => p.code === currency), saleMinor = parsePrice(priceText, policy); if (saleMinor === null || !seller.canList) return;
+        listingReview = { selectedAsset: chosen, currency, saleMinor, policy: copy(policy), fee: copy(seller.fee) }; paint();
+      }, true);
+      const update = () => { const p = seller.pricing.currencies.find((c) => c.code === currency); const amount = parsePrice(priceText, p); hint.textContent = p ? `Allowed: ${policyMoney(p.minSaleMinor, p)} to ${policyMoney(p.maxSaleMinor, p)}. At most ${p.minorUnit} fractional digits; increments of ${money(p.amountIncrementMinor, p.code, p.minorUnit)}.` : "No reviewed currency is configured."; review.disabled = amount === null || !seller.canList || working || Boolean(reading) || Boolean(sellerPending); };
+      select.addEventListener("change", () => { currency = select.value; listingReview = null; update(); }); input.addEventListener("input", () => { priceText = input.value; listingReview = null; update(); }); update();
+      box.append(form, hint, review, node("p", "commerce-note", "Cash price changes create a new listing version. Published crate prices and rarity chances remain locked."));
+      if (listingReview?.selectedAsset === chosen) {
+        const r = listingReview, confirm = node("div", "commerce-notice");
+        confirm.append(node("p", "", `Publish ${policyMoney(r.saleMinor, r.policy)} item price. Studio seller commission: ${r.fee.state === "known" ? percent(r.fee.basisPoints) : "awaiting verification"}.`),
+          button(chosen.listingRecord ? "Confirm price change" : "Confirm publication", () => {
+            if (listingReview !== r) return;
+            const assetId = chosen.asset.item?.id ?? chosen.asset.id;
+            return sellerMutation(chosen.listingRecord ? "updateListing" : "publishListing", chosen.listingRecord
+              ? { listingId: chosen.listingRecord.id, listingVersion: chosen.listingRecord.version, currency: r.currency, saleMinor: r.saleMinor }
+              : { assetType: chosen.asset.type, assetId, currency: r.currency, saleMinor: r.saleMinor }, owner);
+          }, working || Boolean(reading) || !seller.canList || r.fee.state !== "known")); box.append(confirm);
+      }
+      content.append(box);
+    }
+    function sellParts(content) {
+      content.append(button("Refresh seller setup", () => loadSection("sell"), working || Boolean(reading)));
+      if (hub.commerceSellerSetup) {
+        const setup = node("article", "commerce-detail");
+        setup.append(node("h3", "", "Seller country"), node("p", "commerce-note", "Declare your country of residence or legal business establishment. Stripe verifies identity and bank details during hosted onboarding."));
+        if (!sellerSetup) setup.append(node("p", "commerce-note", "Refresh seller setup to read enabled countries."));
+        else {
+          setup.append(node("p", "commerce-note", sellerSetup.declaredCountry ? "Current declared country: " + sellerSetup.declaredCountry + "." : "No country has been declared."));
+          if (sellerSetup.locked) setup.append(node("p", "commerce-note", "This declaration is locked because payment account preparation has started."));
+          else if (!sellerSetup.canPrepare) setup.append(node("p", "commerce-note", words({ error: sellerSetup.reason })));
+          if (sellerSetup.canPrepare && !countryPending) {
+            const label = node("label", "", "Declared country"), select = node("select", "commerce-input"); select.setAttribute("aria-label", "Declared country");
+            const empty = node("option", "", "Choose a country"); empty.value = ""; select.append(empty);
+            for (const code of sellerSetup.countries) { const option = node("option", "", code); option.value = code; select.append(option); }
+            select.value = sellerSetup.countries.includes(countryChoice) ? countryChoice : "";
+            select.disabled = working || Boolean(reading);
+            select.addEventListener("change", () => { countryChoice = select.value; countryReview = null; paint(); });
+            label.append(select); setup.append(label, button("Review country declaration", () => { countryReview = { country: countryChoice, setup: sellerSetup, actor, epoch }; paint(); }, !sellerSetup.countries.includes(countryChoice) || working || Boolean(reading)));
+          }
+        }
+        if (countryPending) setup.append(node("p", "commerce-note", "The declaration for " + countryPending.country + " has not been confirmed. Keep its original request until the service confirms it."),
+          button("Recover country declaration", () => prepareCountry(null, null, owner, true), working || Boolean(reading)));
+        if (countryReview && countryReview.actor === actor && countryReview.epoch === epoch && countryReview.setup === sellerSetup && !countryPending) {
+          const review = countryReview;
+          setup.append(node("p", "commerce-notice", "Save " + review.country + " as your declared country? It becomes locked when payment account preparation starts."),
+            button("Confirm country declaration", () => prepareCountry(review.country, review.setup, owner), working || Boolean(reading)),
+            button("Cancel country declaration", () => { countryReview = null; paint(); }));
+        }
+        content.append(setup);
+      }
+      if (!hub.commerceSeller) { content.append(node("p", "commerce-empty", "Seller setup and listings are not available on this connection yet.")); return; }
+
+      if (!seller) { content.append(node("p", "commerce-empty", "Refresh to check your seller eligibility.")); return; }
+      const status = node("article", "commerce-detail"); status.append(node("h3", "", seller.canSell ? "Seller checkout ready" : "Seller setup pending"), node("p", "commerce-note", `Studio commission: ${seller.fee.state === "known" ? percent(seller.fee.basisPoints) : "verification pending"}.`), node("p", "commerce-note", `Payment account: ${seller.onboarding.state}.`));
+      status.append(node("p", "commerce-note", "The displayed commission is not a confirmed net payout. Processing costs follow each order's accepted policy; unknown costs are not treated as zero."));
+      if (seller.onboarding.canStart && !countryPending && (!hub.commerceSellerSetup || sellerSetup)) {
+        status.append(node("p", "commerce-note", "Payment-account setup opens on the provider's website. Studio does not collect bank details."));
+        if (hub.commerceOnboarding) {
+          const renewal = onboardingPending && (["opened", "expired"].includes(onboardingPending.phase) || onboardingPending.expiresAt !== null && onboardingPending.expiresAt <= Date.now());
+          status.append(button(renewal ? "Open a fresh setup link" : onboardingPending ? "Continue existing setup" : "Set up seller payments", () => onboard(owner, Boolean(renewal)), working || Boolean(reading)));
+        } else status.append(node("p", "commerce-note", "Secure seller onboarding is not supported by this connection yet."));
+      }
+      if (!seller.canList) status.append(node("p", "commerce-notice", "Your current account or payment setup cannot publish cash listings yet. Existing assets remain in your collection."));
+      if (sellerPending) {
+        status.append(button("Recover saved listing request", () => sellerMutation(null, null, owner, true), working || Boolean(reading)));
+        if (sellerRefusal?.requestId === sellerPending.payload.requestId) {
+          status.append(node("p", "commerce-notice", "The service confirmed this listing request did not apply: " + sellerRefusal.code.replaceAll("_", " ") + "."));
+          status.append(button("Review current listing terms", async () => {
+            sellerPending = null; sellerRefusal = null; sellerSave(); selectedAsset = null; selectedListing = null;
+            listingReview = null; unlistReview = null; priceText = ""; message = "Review the current asset and price, then confirm a new request.";
+            await loadSection("sell");
+          }, working || Boolean(reading)));
+        }
+      }
+      content.append(status);
+      const choices = node("div", "commerce-actions");
+      for (const [kind, label] of [["collectible-instance", "Pets and stickers"], ["community-pack-license", "Community packs"]]) { const b = button(label, () => { assetKind = kind; selectedAsset = null; listingReview = null; paint(); void loadMarket("sellerAssets"); }, working || Boolean(reading)); b.setAttribute("aria-pressed", String(assetKind === kind)); choices.append(b); } content.append(choices);
+      const page = market[marketKey("sellerAssets")], assets = node("div", "commerce-orders");
+      for (const a of page?.items || []) { const box = node("article", "commerce-order"); box.append(assetSummary(a.asset));
+        if (!a.eligibility.canList) box.append(node("p", "commerce-note", a.eligibility.reason === "origin_review_required" ? "Original acquisition needs review before cash resale. Your item is still yours." : "This asset is currently unavailable for cash listing."));
+        box.append(button("Set a cash price", () => { selectedAsset = a; listingReview = null; priceText = ""; paint(); }, !a.eligibility.canList || !seller.canList || Boolean(a.listingId) || working || Boolean(reading))); assets.append(box); }
+      content.append(assets); if (!page?.items.length) content.append(node("p", "commerce-empty", "No assets in this view."));
+      if (page?.nextCursor) content.append(button("More owned assets", () => loadMarket("sellerAssets", true), working || Boolean(reading)));
+      priceForm(content);
+      content.append(node("h3", "", "Your cash listings")); const listed = market.sellerListings, grid = node("div", "commerce-orders");
+      for (const l of listed?.items || []) grid.append(listingCard(l, true)); content.append(grid);
+      if (listed?.nextCursor) content.append(button("More of your listings", () => loadMarket("sellerListings", true), working || Boolean(reading)));
+      if (unlistReview && unlistReview.actor === actor && unlistReview.epoch === epoch) { const l = unlistReview.listing, confirm = node("div", "commerce-notice"); confirm.append(node("p", "", `Unlist ${l.name}? Pending purchases can keep this item reserved until their payment outcome is verified.`), button("Confirm unlist", () => sellerMutation("unlistListing", { listingId: l.id, listingVersion: l.version }, owner), working || Boolean(reading)), button("Keep listing", () => { unlistReview = null; paint(); })); content.append(confirm); }
+    }
+    function paint() {
+      if (owner.gone) return;
+      root.setAttribute("aria-busy", String(working || Boolean(reading)));
+      const header = node("header", "commerce-head"), navigation = node("div", "commerce-actions");
+      header.append(node("p", "commerce-eyebrow", "MEMBER MARKETPLACE"), node("h2", "", "Creations worth collecting"), node("p", "commerce-note", "Buy creator goods and trade the exact pets and stickers you own. Credits and cash purchases stay separate."));
+      for (const [id, label] of [["browse", "Browse"], ["sell", "Sell"], ["orders", "My orders"]]) { const b = button(label, () => { view = id; paint(); void loadSection(view); }); b.setAttribute("aria-pressed", String(view === id)); navigation.append(b); }
+      const content = node("div", "commerce-content"), status = node("p", "commerce-message", message); status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+      if (!available()) content.append(node("p", "commerce-empty", !actor ? "Sign in to your Studio account in Friends to open your marketplace." : "Cash marketplace is not available on this connection yet."));
+      else if (view === "browse") browseParts(content);
+      else if (view === "sell") sellParts(content);
+      else if (!hub.commerceOrders && !hub.commerceRetireOrders) content.append(node("p", "commerce-empty", "Order recovery is not supported by this connection yet."));
+      else {
+        const filters = node("div", "commerce-actions");
+        for (const [id, label] of [["pending", "Pending orders"], ["history", "All orders"]]) { const b = button(label, () => { scope = id; selected = null; nextCursor = null; orders = []; void refresh(); }, working || Boolean(reading)); b.setAttribute("aria-pressed", String(scope === id)); filters.append(b); }
+        filters.append(button("Refresh orders", () => { message = ""; return refresh(); }, working || Boolean(reading))); content.append(filters);
+        for (const d of Object.values(drafts)) {
+          content.append(button(d.orderId ? "Recover " + d.orderId : "Recover saved request for " + d.listingId, () => recover(d), !hub.commerceOrders || working || Boolean(reading)));
+          if (!d.orderId && hub.commerceRetireOrders) content.append(button("Resolve saved request", () => resolveRequest(d), working || Boolean(reading)));
+        }
+        if (!orders.length) content.append(node("p", "commerce-empty", reading ? "Checking your orders…" : "No orders in this view."));
+        const list = node("div", "commerce-orders");
+        for (const o of orders) { const row = node("article", "commerce-order"); row.append(node("h3", "", o.listing.name), node("p", "commerce-note", `${o.state.replaceAll("_", " ")} · ${money(o.quote.saleMinor, o.quote.currency, o.quote.minorUnit)} item price`), button("View order", () => inspect(o.orderId), working || Boolean(reading))); list.append(row); }
+        content.append(list);
+        if (nextCursor) content.append(button("More orders", () => refresh({ more: true }), working || Boolean(reading)));
+        if (selected) content.append(orderDetail(selected));
+      }
+      root.replaceChildren(header, navigation, content, status);
+    }
+    cards.add(owner); listen(); paint(); void refresh().then(() => { if (!owner.gone) return loadSection(view); });
+    root.dispose = () => { if (owner.gone) return; owner.gone = true; cards.delete(owner); };
+    return root;
+  }
+  window.MefiCommerce = { card, refresh, prepare, parsePrice };
+})();
 // The Shop (window.MefiShop): scales for Ember, menu effects, node styles and
 // themes (Studio's own style packs) for the credits members earn by making and
 // playing things (credits are never bought with money), and the style packs
@@ -86564,7 +87720,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const ABOUT = "New looks for Studio, for the credits you earn with friends. Credits are never bought, and everything Studio comes with stays free.";
   const KINDS = ["pet", "skin", "effect", "nodestyle", "pack"];
   // The views, in the row's order. "studio" (Home) and "packs" (Community) keep their old names for every way in.
-  const VIEWS = [["studio", "Home"], ["pets", "Pets"], ["collectibles", "Pets & collectibles"], ["effects", "Menu effects"], ["nodestyles", "Node styles"], ["themes", "Themes"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"]];
+  const VIEWS = [["studio", "Home"], ["pets", "Pets"], ["collectibles", "Pets & collectibles"], ["effects", "Menu effects"], ["nodestyles", "Node styles"], ["themes", "Themes"], ["packs", "Community"], ["owned", "Owned"], ["make", "Make a style"], ["membership", "Membership"], ["commerce", "Cash marketplace"]];
   const STUDIO_VIEWS = ["studio", "pets", "effects", "nodestyles", "themes"];
   const viewOf = (wanted) => (VIEWS.some(([id]) => id === wanted) ? wanted : { home: "studio", community: "packs", mine: "make" }[wanted] ?? null);
   // Studio's categories: a heading and a line each. Pets and their scales share one.
@@ -87154,6 +88310,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     balance.hidden = true;
     const earn = button("How to earn credits", () => window.MefiNav?.go?.("friends-page", { place: "events" }), "friends-shop-earn", "friends-shop-link");
     headTools.append(balance, earn);
+    headTools.append(button("Cash marketplace", () => show("commerce"), "friends-shop-commerce", "friends-shop-link"));
+    headTools.append(button("Membership", () => show("membership"), "friends-shop-membership", "friends-shop-link"));
     if (window.MefiTrades) headTools.append(button("Trade items", () => { void window.MefiTrades.open(); }, "friends-shop-trades", "friends-shop-link"));
     head.append(headWords, headTools);
     // Friends' places as a row, for when the list column is not showing them (Social, a small window).
@@ -87186,7 +88344,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     asked = null;
     lastView = view;
     let ready = false, me = null, balanceNow = null, canEarn = true, hold = null;
-    let collectiblesCard = null;
+    let collectiblesCard = null, membershipCard = null, commerceCard = null;
     // Studio's list: the relay's (signed in) or this PC's copy (the showroom), with the drops and the Featured shelf.
     let catalog = null; // { items, drops, featured, featuredUntil, local, at }
     let items = [], next = null, mine = [], busy = false, gone = false, seq = 0, autoConnected = false, loading = false;
@@ -87243,7 +88401,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const known = Number.isFinite(balanceNow);
       balance.hidden = !known;
       if (known) balance.replaceChildren(gem(), node("span", "", credits(balanceNow)));
-      const shown = ready || showroom();
+      const shown = ready || showroom() || view === "membership" || view === "commerce";
       tabs.hidden = !shown;
       root.dataset.view = view;
       for (const tab of tabs.children) {
@@ -88019,6 +89177,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (signIn && !signIn.disabled) signIn.click?.();
     }
     function viewParts() {
+      if (view === "commerce" && window.MefiCommerce?.card) {
+        commerceCard ??= window.MefiCommerce.card();
+        return [commerceCard];
+      }
+      if (view === "membership" && window.MefiMembership?.card) {
+        membershipCard ??= window.MefiMembership.card();
+        return [membershipCard];
+      }
       if (view === "collectibles" && window.MefiCollectibles?.card) {
         collectiblesCard ??= window.MefiCollectibles.card();
         return [collectiblesCard];
@@ -88320,11 +89486,16 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const wanted = viewOf(id);
       if (!wanted) return;
       const moved = view !== wanted;
+      const leavingCommerce = moved && view === "commerce";
+      if (leavingCommerce) { commerceCard?.dispose?.(); commerceCard = null; }
+      const leavingMembership = moved && view === "membership";
+      if (leavingMembership) { membershipCard?.dispose?.(); membershipCard = null; }
       view = wanted;
       lastView = wanted;
       confirm = confirm?.where === "banner" ? confirm : null;
       reporting = null;
       closeDetail({ focus: false });
+      if (leavingMembership || leavingCommerce) { paint(); void load(); return; }
       if (!ready) { paint(); return; }
       // Studio's categories share one read of the Studio list.
       if (moved && !(STUDIO_VIEWS.includes(wanted) && catalog && !catalog.local)) { items = []; next = null; loading = true; }
@@ -88347,7 +89518,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
     async function loadView({ more = false, fresh = false } = {}) {
       if (!ready) return;
-      if (view === "collectibles") { loading = false; paint(); return; }
+      if (view === "collectibles" || view === "membership" || view === "commerce") { loading = false; paint(); return; }
       const mineSeq = ++seq;
       const wanted = view;
       const studio = STUDIO_VIEWS.includes(wanted);
@@ -88464,6 +89635,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       try { hub = (await api.hubStatus())?.status; } catch { hub = null; }
       if (gone) return;
       me = hub?.user?.id ?? me;
+      if (view === "membership" || view === "commerce") { ready = hub?.state === "ready" && hub?.shop !== false; cataloguing = false; setStatus(""); paint(); return; }
       if (!explain(hub)) { await loadShowroom(); return; }
       if (status.textContent === "Checking the room service…" || status.textContent === "Connecting…") setStatus("");
       void refresh();
@@ -88491,6 +89663,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       gone = true;
       seq += 1;
       collectiblesCard?.dispose?.();
+      membershipCard?.dispose?.();
+      commerceCard?.dispose?.();
       endTry();
       closeDetail({ focus: false });
       releaseLive();
@@ -88620,6 +89794,249 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   try { window.addEventListener?.("mefi:nav", (event) => { if (event?.detail?.id === "studio") mountSettings(); }); } catch { /* no navigation here */ }
 })();
 
+// Optional topic/budget crates. The service supplies every recipe and exact
+// quote; the client cannot change creator odds, allocate credits or grant items.
+(function () {
+  "use strict";
+  const sessions = new Map();
+  const controllers = new Set();
+  function notify(account) {
+    for (const controller of controllers) {
+      const actor = controller.context();
+      if (actor.enabled && actor.account === account) controller.changed();
+    }
+  }
+  const RARITIES = ["none", "common", "uncommon", "rare", "epic", "legendary"];
+  const terminal = new Set(["quote-expired", "pool-changed", "terms-changed", "quote-consumed", "quote-unavailable", "recipe-unavailable", "quote-mismatch", "request-conflict", "owned", "own", "needs", "not-available", "gone"]);
+  const newId = () => globalThis.crypto?.randomUUID?.() || `crate-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  function create({ ui, call, context, changed, message, refreshOwned, reveal, errorWords }) {
+    const { node, btn, field, input, select, title, empty, credits, chanceText } = ui;
+    let disposed = false;
+    const controller = { context, changed: () => { if (!disposed) changed(); } };
+    controllers.add(controller);
+    const current = () => {
+      const value = context();
+      if (!value.enabled || !value.account) return null;
+      if (!sessions.has(value.account)) {
+        if (sessions.size >= 2) sessions.delete(sessions.keys().next().value);
+        sessions.set(value.account, { recipes: null, clockOffset: 0, topic: "", tier: "", optIn: false, quote: null, quoteRequest: null, openRequest: null,
+          contributions: null, contributionIdentity: value.identity, contributionGeneration: 0, contributionCursors: new Set(), shown: 40, busy: false });
+      }
+      const data = sessions.get(value.account);
+      if (data.contributionIdentity !== value.identity) { resetContributions(data); data.contributionIdentity = value.identity; }
+      return data;
+    };
+    const redraw = () => { if (!disposed) notify(context().account); };
+    const valid = (before) => { const now = context(); return !disposed && now.enabled && before.account === now.account && before.identity === now.identity; };
+    async function send(action, payload, success) {
+      const data = current(), before = context();
+      if (!data || data.busy || disposed) return null;
+      data.busy = true; message("Checking with the community service…"); redraw();
+      try {
+        const answer = await call(action, payload);
+        if (!valid(before)) return null;
+        if (answer?.ok) await success(answer, data, before);
+        else message(errorWords(answer));
+        return answer;
+      } finally {
+        data.busy = false;
+        // The sending card may have unmounted. Current cards still need the
+        // settled busy state, without accepting that old actor's response.
+        notify(before.account);
+      }
+    }
+    async function loadRecipes() {
+      return send("crateRecipes", {}, (answer, data) => {
+        data.recipes = answer; data.clockOffset = answer.now - Date.now();
+        if (!answer.topics.some((entry) => entry.id === data.topic)) data.topic = answer.topics[0]?.id || "";
+        if (!answer.tiers.some((entry) => entry.id === data.tier)) data.tier = answer.tiers[0]?.id || "";
+        message(answer.recipes.length ? "Choose a topic and a credit budget, then review its exact quote." : "This service has no topic crates available yet.");
+      });
+    }
+    const selectedRecipe = (data) => data.recipes?.recipes.find((entry) => entry.topicId === data.topic && entry.tierId === data.tier);
+    function changeSelection(data) {
+      // An uncertain opening must be recovered with its original key before a
+      // different quote can be opened. Repainting never manufactures a new key.
+      if (!data.openRequest) { data.quote = null; data.quoteRequest = null; }
+      redraw();
+    }
+    async function quoteRecipe() {
+      const data = current(), recipe = data && selectedRecipe(data);
+      if (!recipe || !recipe.available || data.openRequest) return;
+      if (!data.quoteRequest) data.quoteRequest = { recipeId: recipe.id, requestId: newId(), communityOptIn: data.optIn };
+      const answer = await send("crateQuote", data.quoteRequest, (reply, live) => {
+        live.quote = reply.quote; message("Nothing has been spent. Review every price pool and its original creator chances below.");
+      });
+      if (answer && !answer.ok && terminal.has(answer.error)) { data.quoteRequest = null; data.quote = null; redraw(); }
+    }
+    async function openQuote(reviewed) {
+      const data = current(), quote = reviewed.quote;
+      if (!valid(reviewed) || !data || data.quote !== quote || quote.id !== reviewed.quoteId || quote.poolVersion !== reviewed.poolVersion
+        || quote.price !== reviewed.price || data.quoteRequest?.requestId !== reviewed.quoteRequestId || (data.openRequest?.requestId || null) !== reviewed.openRequestId) {
+        message("This quote changed in another view. Review the current quote and confirm its exact terms again."); redraw(); return;
+      }
+      if (data.busy) return;
+      if (!quote || (!data.openRequest && quote.expiresAt <= Date.now() + data.clockOffset)) { message("This quote expired. Get a fresh quote and review its terms again."); redraw(); return; }
+      data.openRequest ??= { quoteId: quote.id, requestId: newId(), price: quote.price, poolVersion: quote.poolVersion, communityOptIn: data.quoteRequest.communityOptIn };
+      const answer = await send("crateOpen", data.openRequest, async (reply, live, before) => {
+        if (reply.quoteId !== quote.id || reply.paid !== quote.price || !Array.isArray(reply.rewards) || reply.rewards.length !== quote.count) {
+          message("The opening receipt did not match the reviewed quote. Recover this same opening to read its saved receipt; no new quote will be spent."); return;
+        }
+        live.openRequest = null; live.quoteRequest = null; live.quote = null;
+        // Refresh both authoritative ledgers. A license payload is never applied
+        // or trusted as a local ownership grant, even when returned in a receipt.
+        const refreshed = await refreshOwned();
+        if (!valid(before)) return;
+        message(refreshed ? `Opened for ${credits(reply.paid)}. Your ownership is refreshed.` : `Opened for ${credits(reply.paid)}. Your receipt is saved; reconnect to refresh ownership.`);
+        reveal(reply.rewards);
+      });
+      if (answer && !answer.ok && terminal.has(answer.error)) { data.openRequest = null; data.quoteRequest = null; data.quote = null; redraw(); }
+    }
+    function quoteView(data) {
+      const quote = data.quote, box = node("section", "collectibles-quote");
+      const reviewed = { ...context(), quote, quoteId: quote.id, poolVersion: quote.poolVersion, price: quote.price,
+        quoteRequestId: data.quoteRequest?.requestId, openRequestId: data.openRequest?.requestId || null };
+      box.append(title("Your exact opening", `${quote.count} rewards · ${credits(quote.price)} total · ${credits(quote.unspentBudget)} of your ${credits(quote.budget)} budget stays in your wallet.`));
+      box.append(node("p", "collectibles-note", `Quote expires ${new Date(quote.expiresAt).toLocaleTimeString()}.`));
+      const poolDetails = node("details", "collectibles-quote-details");
+      poolDetails.append(node("summary", "", "See reward pool and exact odds"));
+      poolDetails.append(node("p", "collectibles-note", "Selection is uniform without replacement within each price pool; this opening cannot repeat a design or license."));
+      const slotLine = quote.slots.map((slot) => `Reward ${slot.index + 1}: ${credits(slot.price)}`).join(" · ");
+      poolDetails.append(node("p", "", slotLine));
+      for (const pool of quote.pools) {
+        const details = node("details", "collectibles-pool"), count = quote.slots.filter((slot) => slot.poolId === pool.id).length;
+        const chance = pool.selectionChance;
+        details.append(node("summary", "", `${credits(pool.price)} pool · ${count} ${count === 1 ? "reward" : "rewards"} · ${pool.candidates.length} candidates`));
+        details.append(node("p", "collectibles-note", `Each candidate: ${chance.numerator}/${chance.denominator} chance per slot (${chanceText(100 * chance.numerator / chance.denominator)}); ${count}/${pool.candidates.length} chance of appearing in this opening. Creator rarity chances below apply only if that design is selected. Licenses have no rarity roll.`));
+        if (pool.collectibleCount) {
+          const odds = node("dl", "collectibles-odds");
+          for (const rarity of RARITIES) {
+            const numerator = pool.rarityWeightsTotal[rarity] || 0;
+            if (numerator) odds.append(node("dt", "", rarity === "none" ? "Original" : rarity), node("dd", "", `${numerator}/${pool.rarityDenominator} (${chanceText(100 * numerator / pool.rarityDenominator)})`));
+          }
+          details.append(node("p", "collectibles-note", "Rarity chance per slot, including the possibility of a license. These marginal chances do not make successive draws independent."), odds);
+        }
+        const list = node("ul", "collectibles-pool-candidates");
+        for (const candidate of pool.candidates) {
+          const item = node("li");
+          item.append(node("strong", "", candidate.name), node("span", "collectibles-note", ` · ${candidate.type === "collectible" ? candidate.kind : candidate.type === "community-pack-license" ? "Community pack license" : "Shop license"}`));
+          if (candidate.type === "collectible") item.append(node("p", "collectibles-note", RARITIES.filter((rarity) => candidate.rarityWeights?.[rarity] > 0).map((rarity) => `${rarity === "none" ? "Original" : rarity}: ${candidate.rarityWeights[rarity]}/10000 (${chanceText(candidate.rarityWeights[rarity] / 100)})`).join(" · ")));
+          list.append(item);
+        }
+        details.append(list); poolDetails.append(details);
+      }
+      box.append(poolDetails);
+      const consent = input("checkbox"), consentLabel = node("label", "collectibles-optin");
+      consentLabel.append(consent, node("span", "", "I reviewed these exact prices, candidate pools and unchanged creator chances.")); box.append(consentLabel);
+      const retry = Boolean(data.openRequest);
+      const open = btn(retry ? "Recover this opening" : `Open ${quote.count} rewards · ${credits(quote.price)}`, () => {
+        if (!retry && !consent.checked) { message("Review the exact quote and tick the confirmation before spending."); return; }
+        return openQuote(reviewed);
+      }, true);
+      const updateOpen = () => { open.disabled = data.busy || (!retry && (!consent.checked || quote.expiresAt <= Date.now() + data.clockOffset)); };
+      consent.addEventListener("change", updateOpen);
+      updateOpen(); box.append(open);
+      if (retry) box.append(node("p", "collectibles-note", data.busy ? "Opening this exact quote. Your request is saved for recovery if the connection is interrupted." : "The previous reply was interrupted. Recovery uses the same request and cannot charge or roll this opening twice, even if the quote has expired."));
+      else box.append(btn("Discard quote", () => { if (valid(reviewed) && !data.busy && data.quote === quote) { data.quote = null; data.quoteRequest = null; redraw(); } }));
+      return box;
+    }
+    function crates() {
+      const section = node("section", "collectibles-dynamic"), data = current();
+      if (!data) return section;
+      section.append(title("Build a discovery crate", "Choose a topic and an earned-credit budget. The service finds an exact reward count within that budget; you review the complete quote before spending. Each creator keeps their original published rarity chances."));
+      if (!data.recipes) { const load = btn("Explore topic crates", loadRecipes); load.disabled = data.busy; section.append(load); return section; }
+      if (!data.recipes.recipes.length) { section.append(empty("No topic crates yet", "Topics and credit budgets appear when this community service makes them available."), btn("Refresh topic crates", loadRecipes)); return section; }
+      const topic = select(data.recipes.topics.map((entry) => [entry.id, entry.name]), data.topic), tier = select(data.recipes.tiers.map((entry) => [entry.id, `${entry.name} · up to ${credits(entry.budget)} · ${entry.rewardCount} rewards`]), data.tier);
+      topic.disabled = tier.disabled = data.busy || Boolean(data.openRequest);
+      topic.addEventListener("change", () => { if (!data.busy) { data.topic = topic.value; changeSelection(data); } }); tier.addEventListener("change", () => { if (!data.busy) { data.tier = tier.value; changeSelection(data); } });
+      const choices = node("div", "collectibles-filters"); choices.append(field("Discovery topic", topic), field("Credit budget", tier)); section.append(choices);
+      const refreshChoices = btn("Refresh topics and budgets", () => { if (!data.busy && !data.openRequest) { data.quote = null; data.quoteRequest = null; return loadRecipes(); } });
+      refreshChoices.disabled = data.busy || Boolean(data.openRequest); section.append(refreshChoices);
+      const include = input("checkbox"); include.checked = data.optIn; include.disabled = data.busy || Boolean(data.openRequest);
+      include.addEventListener("change", () => { if (!data.busy) { data.optIn = include.checked; changeSelection(data); } });
+      const label = node("label", "collectibles-optin"); label.append(include, node("span", "", "Include community creations in my quote. Nothing is bought until I review the exact pool and confirm opening.")); section.append(label);
+      if (data.quote) section.append(quoteView(data));
+      else {
+        const recipe = selectedRecipe(data), quote = btn(data.quoteRequest ? "Recover quote" : "Get exact quote · no charge", quoteRecipe, true);
+        quote.disabled = data.busy || !recipe?.available; section.append(quote);
+        if (!recipe?.available) section.append(node("p", "collectibles-note", "No complete set of eligible rewards fits this topic and budget right now. Try another configured choice."));
+      }
+      return section;
+    }
+    function resetContributions(data) {
+      data.contributions = null; data.shown = 40; data.contributionCursors = new Set(); data.contributionGeneration += 1;
+    }
+    async function loadContributions() {
+      const data = current();
+      if (!data || data.busy || disposed) return;
+      resetContributions(data);
+      const generation = data.contributionGeneration;
+      return send("crateContributions", { limit: 100 }, (answer, live) => {
+        if (live !== data || live.contributionGeneration !== generation) return;
+        live.contributions = answer; message("Review your current creation terms before choosing discovery topics.");
+      });
+    }
+    async function loadMoreContributions() {
+      const data = current(), source = data?.contributions, cursor = source?.next;
+      if (!cursor || data.busy || disposed) return;
+      const generation = data.contributionGeneration;
+      return send("crateContributions", { cursor, limit: 100 }, (answer, live) => {
+        if (live !== data || live.contributionGeneration !== generation || live.contributions !== source) return;
+        const existing = new Set(source.items.map((item) => `${item.type}:${item.id}`));
+        if (JSON.stringify(source.topics) !== JSON.stringify(answer.topics) || answer.items.some((item) => existing.has(`${item.type}:${item.id}`))
+          || (answer.next && (answer.next === cursor || live.contributionCursors.has(answer.next)))) {
+          resetContributions(live); message("Your creation list changed while loading. Reload creation terms before changing permission."); return;
+        }
+        live.contributionCursors.add(cursor);
+        live.contributions = { ...answer, items: [...source.items, ...answer.items] };
+        live.shown = Math.min(live.contributions.items.length, live.shown + 40);
+        message(answer.next ? "More creation terms loaded. Keep browsing to reach older creations." : "All current creation terms are loaded.");
+      });
+    }
+    async function saveContribution(item, enabled, topics) {
+      const answer = await send("updateCrateContribution", { type: item.type, id: item.id, enabled, topics, termsVersion: item.termsVersion }, (_reply, data) => {
+        resetContributions(data); message(enabled ? "Topic crate permission saved for these exact terms." : "Topic crate permission removed immediately.");
+      });
+      if (answer?.error === "terms-changed") { const data = current(); if (data) resetContributions(data); redraw(); }
+    }
+    function contributions() {
+      const section = node("section", "collectibles-contributions"), data = current();
+      if (!data) return section;
+      section.append(title("Dynamic crates · creator permission", "Existing creators can choose discovery topics or withdraw dynamic crate permission. This never changes a design's published price, rarity chances, or separate creation-time community crate permission. Unlisting stops both kinds of new participation. A change to a pack's purchase terms requires fresh consent."));
+      if (!data.contributions) { const load = btn("Manage topic crate permissions", loadContributions); load.disabled = data.busy; section.append(load); return section; }
+      const source = data.contributions;
+      const refreshPermission = btn("Refresh creation terms", loadContributions); refreshPermission.disabled = data.busy; section.append(refreshPermission);
+      if (!source.items.length && !source.next) { section.append(empty("No eligible creations", "Your eligible published designs and community packs appear here.")); return section; }
+      for (const item of source.items.slice(0, data.shown)) {
+        const details = node("details", "collectibles-pool"); details.append(node("summary", "", `${item.name} · ${credits(item.price)} · ${item.consent.enabled ? "Permission on" : "Permission off"}`));
+        details.append(node("p", "collectibles-note", item.type === "collectible" ? `Permanent chances: ${RARITIES.filter((rarity) => item.rarityWeights?.[rarity] > 0).map((rarity) => `${rarity === "none" ? "Original" : rarity} ${chanceText(item.rarityWeights[rarity] / 100)}`).join(" · ")}` : "Community pack license · no rarity roll · nontransferable"));
+        const choices = node("div", "collectibles-topic-choices"), checked = new Map();
+        for (const topic of source.topics) {
+          const check = input("checkbox"); check.checked = item.consent.topics.includes(topic.id); check.disabled = data.busy; checked.set(topic.id, check);
+          const label = node("label", "collectibles-optin"); label.append(check, node("span", "", topic.name)); choices.append(label);
+        }
+        details.append(choices);
+        const agreed = input("checkbox"); agreed.disabled = data.busy;
+        const consent = node("label", "collectibles-optin"); consent.append(agreed, node("span", "", `I allow this creation in the selected topics at ${credits(item.price)} and the exact terms shown above. I can withdraw this topic permission later.`)); details.append(consent);
+        const save = btn("Save topic permission", () => {
+          const topics = [...checked].filter(([, check]) => check.checked).map(([id]) => id);
+          if (!topics.length || !agreed.checked) { message("Choose at least one topic and confirm its current terms before saving permission."); return; }
+          return saveContribution(item, true, topics);
+        }, true); save.disabled = data.busy || !source.topics.length; details.append(save);
+        if (item.consent.enabled) { const remove = btn("Withdraw topic permission", () => saveContribution(item, false, [])); remove.disabled = data.busy; details.append(remove); }
+        section.append(details);
+      }
+      if (source.items.length > data.shown) {
+        const more = btn(`Show more creations (${source.items.length - data.shown} more loaded)`, () => { if (!data.busy) { data.shown = Math.min(source.items.length, data.shown + 40); redraw(); } });
+        more.disabled = data.busy; section.append(more);
+      } else if (source.next) { const more = btn("Load more creations", loadMoreContributions); more.disabled = data.busy; section.append(more); }
+      return section;
+    }
+    return { crates, contributions, dispose: () => { disposed = true; controllers.delete(controller); }, loadRecipes };
+  }
+  window.MefiDynamicCrates = { create };
+})();
+
 // Pets & collectibles inside the Shop: an authoritative inventory, transparent
 // crate odds, growing pets, owned stickers, the market and the supporter studio.
 // The relay owns all credits, rolls, rights, traits and holds. This renderer never
@@ -88645,7 +90062,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return `${rounded !== chance ? "≈ " : ""}${rounded.toLocaleString(undefined, { maximumSignificantDigits: 6, useGrouping: false })}%`;
   };
   const clone = (value) => value == null ? value : JSON.parse(JSON.stringify(value));
-  let state = null, readFlight = null, epoch = 0, identityEpoch = 0, requestedView = "collection", dirty = false, accountId = null, connectionReady = true;
+  let state = null, readFlight = null, epoch = 0, identityEpoch = 0, statusEpoch = 0, requestedView = "collection", dirty = false, accountId = null, connectionReady = true, dynamicCratesAvailable = false;
   const listeners = new Set();
   const cards = new Set();
   // An uncertain acquisition keeps its id across tab changes and inventory
@@ -88658,8 +90075,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   const interested = () => Boolean(window.MefiPets?.state?.()?.chosen?.instanceId) || [...cards].some((root) => root.isConnected !== false && !root.closest?.("[hidden]") && document.visibilityState !== "hidden");
   const ERRORS = {
-    "monthly-required": "An active monthly membership is needed to make new pets or stickers. Your existing creations stay yours.",
-    "supporter-required": "Selling requires supporter history. Adding rarity requires an active monthly membership.",
+    "monthly-required": "Active paid, lifetime or intro membership is needed to make new pets or stickers. Your existing creations stay yours.",
+    "supporter-required": "Selling requires supporter history. Adding rarity requires active paid, lifetime or intro membership.",
     "trade-hold": "This item is still on trade hold. Check the time shown on its card.",
     "short": "You do not have enough earned credits for this.",
     "pool-changed": "The community pool changed. Review the updated odds and opt in again.",
@@ -88681,6 +90098,21 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     "not-configured": "This copy of Studio has no room service configured.",
     "unsupported": "Pets & collectibles needs the updated community service.",
     "incomplete-inventory": "Your complete collection could not be read. Your equipped pet has been kept; try again to refresh.",
+    "dynamic-crates-unavailable": "Topic crates are not available on this community service yet.",
+    "recipe-unavailable": "That topic and budget are no longer available. Refresh the configured choices.",
+    "empty-pool": "There are not enough eligible rewards for this exact count and budget.",
+    "pool-too-large": "This pool is too large to quote safely. Choose another configured topic or budget.",
+    "quote-expired": "This quote expired. Get a new quote and review it before opening.",
+    "quote-unavailable": "This quote is no longer available. Review a fresh quote before opening.",
+    "quote-consumed": "This quote has already been opened. Refresh your collection to see its rewards.",
+    "quote-mismatch": "These opening terms do not match the saved quote. Review a new quote.",
+    "request-conflict": "This request no longer matches its saved terms. Review a new quote.",
+    "terms-changed": "The creation's terms changed. Read the current terms and confirm again.",
+    "opt-in-required": "This recipe needs your explicit permission to include community creations before it can be quoted.",
+    "rate-limited": "Too many quotes were requested recently. Please wait before asking for another.",
+    "read-only": "This account currently has read-only community access.",
+    "paused": "The community service is paused. Your existing collection remains yours.",
+    "bad-response": "The service returned an incomplete quote or receipt. Nothing new will be opened; retry the same request to recover its result.",
   };
   const errorWords = (answer) => ERRORS[answer?.error] || (typeof answer?.why === "string" ? answer.why : "The community service could not complete that. Try again.");
   const call = async (action, payload = {}) => {
@@ -88722,25 +90154,63 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return readFlight;
   }
   const rarityOf = (id) => state?.rarities?.find((entry) => entry.id === id) || { id, name: id === "none" ? "Original" : word(id), color: "#a7afbd" };
-  const stickerGlyph = (item) => GLYPHS[item?.visual?.glyph] || "✦";
+  const stickerGlyph = (item) => Object.hasOwn(GLYPHS, item?.visual?.glyph) ? GLYPHS[item.visual.glyph] : "✦";
   const stickerSource = (item) => STICKER_ASSETS.includes(item?.visual?.asset) ? `../assets/stickers/studio-${item.visual.asset}.png` : null;
+  const stickerMotif = (item) => ["stars", "sparkles", "stripes"].includes(item?.visual?.motif) ? item.visual.motif : "plain";
+  const stickerPreviews = new Map();
+  // One bounded painter serves the book, creator preview, room chat and PNG.
+  // Only fixed shapes, allowlisted glyphs and validated hex colors are drawn.
+  function paintSticker(canvas, item, edge) {
+    const ctx = canvas.getContext?.("2d"); if (!ctx) return false;
+    canvas.width = edge; canvas.height = edge; ctx.scale(edge / 512, edge / 512);
+    const primary = cleanColor(item?.visual?.primary), secondary = cleanColor(item?.visual?.secondary, "#172039");
+    const motif = stickerMotif(item);
+    ctx.beginPath(); ctx.roundRect(0, 0, 512, 512, 116); ctx.fillStyle = secondary; ctx.fill();
+    ctx.save(); ctx.clip(); ctx.globalAlpha = 0.28; ctx.fillStyle = primary; ctx.strokeStyle = primary;
+    if (motif === "stripes") {
+      ctx.lineWidth = 24; ctx.beginPath();
+      for (let offset = -512; offset <= 512; offset += 128) { ctx.moveTo(offset, 0); ctx.lineTo(offset + 512, 512); }
+      ctx.stroke();
+    } else if (motif !== "plain") {
+      const points = motif === "stars" ? 5 : 4, inner = motif === "stars" ? 10 : 5;
+      for (let row = 0; row < 4; row += 1) for (let col = 0; col < 4; col += 1) {
+        ctx.beginPath();
+        for (let point = 0; point < points * 2; point += 1) {
+          const angle = -Math.PI / 2 + point * Math.PI / points, radius = point % 2 ? inner : 26;
+          const x = 64 + col * 128 + Math.cos(angle) * radius, y = 64 + row * 128 + Math.sin(angle) * radius;
+          if (!point) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.restore(); ctx.fillStyle = primary; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = "bold 330px sans-serif"; ctx.fillText(stickerGlyph(item), 256, 256);
+    return true;
+  }
+  function stickerPreview(item) {
+    // A full room book may repeat many instances of the same artwork. Retain
+    // only 64 small encoded previews, never a canvas per visible instance.
+    const key = JSON.stringify([stickerGlyph(item), cleanColor(item?.visual?.primary), cleanColor(item?.visual?.secondary, "#172039"), stickerMotif(item)]);
+    if (stickerPreviews.has(key)) { const source = stickerPreviews.get(key); stickerPreviews.delete(key); stickerPreviews.set(key, source); return source; }
+    const canvas = node("canvas"); if (!paintSticker(canvas, item, 96)) return null;
+    const source = canvas.toDataURL("image/png"); stickerPreviews.set(key, source);
+    if (stickerPreviews.size > 64) stickerPreviews.delete(stickerPreviews.keys().next().value);
+    return source;
+  }
   function renderSticker(item) {
     const art = node("span", "collectibles-sticker", stickerGlyph(item));
     art.style.color = cleanColor(item?.visual?.primary);
     art.style.backgroundColor = cleanColor(item?.visual?.secondary, "#172039");
     art.dataset.rarity = RARITIES.includes(item?.rarity) ? item.rarity : "none";
     art.setAttribute("role", "img"); art.setAttribute("aria-label", item?.name || "Sticker");
-    const source = stickerSource(item);
+    const source = stickerSource(item) || stickerPreview(item);
     if (source) { const image = node("img"); image.src = source; image.alt = item?.name || "Sticker"; image.loading = "lazy"; art.replaceChildren(image); }
     return art;
   }
   function downloadSticker(item) {
     let source = stickerSource(item);
     if (!source) {
-      const canvas = document.createElement("canvas"); canvas.width = 512; canvas.height = 512;
-      const ctx = canvas.getContext?.("2d"); if (!ctx) return;
-      ctx.fillStyle = cleanColor(item?.visual?.secondary, "#172039"); ctx.fillRect(0, 0, 512, 512);
-      ctx.fillStyle = cleanColor(item?.visual?.primary); ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "bold 330px sans-serif"; ctx.fillText(stickerGlyph(item), 256, 256);
+      const canvas = document.createElement("canvas"); if (!paintSticker(canvas, item, 512)) return;
       source = canvas.toDataURL("image/png");
     }
     const link = node("a"); link.href = source; link.download = `${String(item?.name || "sticker").replace(/[^a-z0-9_-]/gi, "-").slice(0, 50)}.png`; document.body.append(link); link.click(); link.remove();
@@ -88804,6 +90274,27 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const reveal = node("dialog", "collectibles-reveal"); reveal.setAttribute("aria-label", "Your crate rewards");
     root.append(hero, tabs, status, confirmation, body, reveal);
     const say = (message) => { status.textContent = message; };
+    const dynamic = window.MefiDynamicCrates?.create?.({
+      ui: { node, btn, field, input, select, title, empty, credits, chanceText }, call,
+      context: () => ({ enabled: connectionReady && dynamicCratesAvailable, account: accountId, identity: identityEpoch }),
+      changed: () => paint(), message: say, errorWords,
+      refreshOwned: async () => {
+        const refreshIdentity = identityEpoch;
+        epoch += 1; if (readFlight) await readFlight;
+        if (refreshIdentity !== identityEpoch) return false;
+        const freshShop = async () => {
+          if (typeof window.MefiShop?.refresh !== "function") return { ok: false };
+          // Shop.refresh can return a read that began before the grant, while
+          // queuing another internally. Drain it, then await a post-grant read.
+          try { await window.MefiShop.refresh(); } catch { /* the fresh read below decides success */ }
+          if (refreshIdentity !== identityEpoch) return { ok: false };
+          return window.MefiShop.refresh();
+        };
+        const results = await Promise.allSettled([refresh(), freshShop()]);
+        return results.every((entry) => entry.status === "fulfilled" && entry.value?.ok);
+      },
+      reveal: (rewards) => { if (!gone && view === "crates") showRewards(rewards, true); },
+    });
     const focusRestore = (active) => { if (active?.dataset?.focus) body.querySelector(`[data-focus="${active.dataset.focus}"]`)?.focus?.(); };
     function ask(message, label, run) {
       confirmation.hidden = false; confirmation.replaceChildren(node("p", "", message), btn(label, async () => { if (busy) return; confirmation.hidden = true; await run(); }, true), btn("Cancel", () => { confirmation.hidden = true; }));
@@ -88879,12 +90370,21 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       if (items.length > inventoryShown[itemKind]) section.append(btn(`Show more ${stickers ? "stickers" : "pets"} (${items.length - inventoryShown[itemKind]} more)`, () => { inventoryShown[itemKind] += 60; paint(); }));
       return section;
     }
-    function showRewards(items) {
+    function showRewards(items, typed = false) {
       clearTimeout(revealTimer); reveal.replaceChildren(); reveal.dataset.phase = motionOff() ? "revealed" : "opening";
       const heading = node("h3", "", "A new chapter for your collection");
       const opening = node("div", "collectibles-opening", "✦"); opening.setAttribute("aria-hidden", "true");
       const rewards = node("div", "collectibles-grid");
-      for (const item of items || []) { const { card: itemEl, words } = itemCard(item); words.append(node("p", "collectibles-note", item.kind === "pet" ? "Born today. Ready to grow with you." : "A new page in your sticker book.")); rewards.append(itemEl); }
+      for (const reward of items || []) {
+        const item = typed ? reward.item : reward;
+        if (!typed || reward.type === "collectible") {
+          const { card: itemEl, words } = itemCard(item); words.append(node("p", "collectibles-note", item.kind === "pet" ? "Born today. Ready to grow with you." : "A new page in your sticker book.")); rewards.append(itemEl);
+        } else if (["catalog-license", "community-pack-license"].includes(reward.type)) {
+          const itemEl = node("article", "collectibles-item"), words = node("div", "collectibles-item-words");
+          words.append(node("span", "collectibles-rarity", "Shop license"), node("h4", "", item.name), node("p", "collectibles-note", reward.type === "community-pack-license" ? "A community pack for your Studio. This license stays with your account." : "A new look for your Studio. Open Owned in the Shop to apply it."), btn("Open Shop ownership", () => { reveal.close?.(); window.MefiShop?.open?.("owned"); }));
+          itemEl.append(words); rewards.append(itemEl);
+        }
+      }
       const revealNow = () => { clearTimeout(revealTimer); reveal.dataset.phase = "revealed"; skip.hidden = true; done.focus?.(); };
       const skip = btn("Skip animation", revealNow); skip.hidden = motionOff();
       const done = btn("Add to my day", () => { reveal.close?.(); view = "collection"; paint(); }, true);
@@ -88919,7 +90419,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         if (crate.available === false || crate.claimed === true) { openButton.disabled = true; openButton.textContent = crate.claimed ? "Already claimed" : "No eligible items yet"; }
         cardEl.append(openButton); grid.append(cardEl);
       }
-      section.append(available.length ? grid : empty("No matching crate right now", "Try another reward type or collection. Community pools need eligible creators to opt their work in.")); return section;
+      section.append(available.length ? grid : empty("No matching crate right now", "Try another reward type or collection. Community pools need eligible creators to opt their work in."));
+      if (dynamic) section.append(dynamic.crates()); return section;
     }
     function market() {
       const section = node("section"); section.append(title("The community market", "Find a look you love, or leave one order for a match. Original items have a 15-minute trade hold after transfer; every rarity tier has a one-hour hold. Growth and traits stay with the pet."));
@@ -88990,9 +90491,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       return section;
     }
     function creator() {
-      const section = node("section"); section.append(title("Give your imagination a home", "Monthly members can create pets and stickers and choose their rarity chances. Price, visuals and rarity chances are permanently locked when created. Past members keep their existing rarity items and trading rights, and can list or take down their designs."));
+      const section = node("section"); section.append(title("Give your imagination a home", "Active membership lets you create pets and stickers and choose their rarity chances. Price, visuals and rarity chances are permanently locked when created. Past members keep their existing rarity items and trading rights, and can list or take down their designs."));
+      section.append(btn("View membership", () => window.MefiShop?.open?.("membership")));
       const allowed = state?.entitlements?.canCreate === true;
-      if (!allowed) section.append(empty("A monthly member's studio", "Active monthly membership unlocks creation and rarity editing. Your existing collection and free community participation stay available."));
+      if (!allowed) section.append(empty("Creation needs active membership", "Paid, lifetime and unexpired intro membership provide the same creator benefits. Your existing collection and free community participation stay available."));
       else {
         const editor = node("div", "collectibles-editor");
         const kind = select(["pet", "sticker"], "pet"), name = input("text", "My little companion"), blurb = input("text"), bodyChoice = select(["dragon", "cloud", "phoenix", "wisp"], "dragon"), glyph = select(Object.entries(GLYPHS).map(([id, value]) => [id, `${value} ${word(id)}`]), "star"), primary = input("color", "#8b7cf6"), secondary = input("color", "#73d6cf"), motif = select(["plain", "stars", "sparkles", "stripes"], "stars"), price = input("number", 0, 0, 250);
@@ -89009,7 +90511,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
         const listed = input("checkbox"); listed.checked = true;
         const listedLabel = node("label", "collectibles-optin"); listedLabel.append(listed, node("span", "", "List in the community shop.")); editor.append(listedLabel);
         const inCrates = input("checkbox"); inCrates.checked = false;
-        const cratesLabel = node("label", "collectibles-optin"); cratesLabel.append(inCrates, node("span", "", "Permanently allow this design in opt-in community crates while listed. The crate's credits are split across rewards and creators receive their share, subject to community earning limits.")); editor.append(cratesLabel);
+        const cratesLabel = node("label", "collectibles-optin"); cratesLabel.append(inCrates, node("span", "", "Permanently allow this design in opt-in community crates while listed. The crate's credits are split across rewards and creators receive their share.")); editor.append(cratesLabel);
         editor.append(btn("Review creation", () => {
           if ([...weights.values()].some((chance) => { const value = Number(chance.value); return !Number.isFinite(value) || value < 0 || value > 100 || Math.abs(value * 100 - Math.round(value * 100)) > 0.000001; })) { say("Each rarity chance must be from 0 to 100%, with at most two decimal places."); return; }
           const rarityWeights = Object.fromEntries([...weights].map(([rarity, chance]) => [rarity, Math.round(Number(chance.value) * 100)]).filter(([, weight]) => weight > 0));
@@ -89024,6 +90526,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       }
       section.append(title("Your published designs", "Taking a design down stops new copies. Everyone who already owns one keeps it."));
       for (const definition of state?.creations || []) { const row = node("div", "collectibles-market-row"); row.append(node("span", "", `${definition.name} · ${credits(definition.price)} · ${definition.listed ? "Listed" : "Unlisted"}`), btn(definition.listed ? "Take down" : "List again", () => act("updateCreation", { definitionId: definition.id, listed: !definition.listed }, definition.listed ? "Design unlisted. Existing copies remain owned." : "Design listed again."))); section.append(row); }
+      if (dynamic) section.append(dynamic.contributions());
       return section;
     }
     function paint(nextView = null) {
@@ -89036,16 +90539,31 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       const content = view === "collection" ? collection() : view === "stickers" ? collection(true) : view === "crates" ? crates() : view === "market" ? market() : creator();
       body.replaceChildren(content); focusRestore(active);
     }
-    async function load() { const answer = await refresh(); if (gone || answer?.error === "stale") return; loaded = true; say(answer?.ok ? "" : errorWords(answer)); paint(); }
+    async function load() {
+      const before = identityEpoch, beforeStatus = statusEpoch;
+      if (typeof window.mefiStudio?.hubStatus === "function") {
+        try {
+          const hub = (await window.mefiStudio.hubStatus())?.status;
+          if (gone || before !== identityEpoch) return;
+          if (beforeStatus === statusEpoch) {
+            dynamicCratesAvailable = hub?.state === "ready" && hub?.collectibles === true && hub?.dynamicCrates === true;
+            if (hub?.state === "ready" && hub.user?.id) accountId = hub.user.id;
+          }
+        } catch { if (beforeStatus === statusEpoch) dynamicCratesAvailable = false; }
+      }
+      const answer = await refresh(); if (gone || answer?.error === "stale") return; loaded = true; say(answer?.ok ? "" : errorWords(answer)); paint();
+    }
     listeners.add(paint); cards.add(root);
-    root.dispose = () => { gone = true; listeners.delete(paint); cards.delete(root); clearTimeout(revealTimer); reveal.close?.(); };
+    root.dispose = () => { gone = true; dynamic?.dispose(); listeners.delete(paint); cards.delete(root); clearTimeout(revealTimer); reveal.close?.(); };
     paint(); void load(); return root;
   }
   window.MefiCollectibles = { card, open, refresh, snapshot: () => clone(state), stickerGlyph, renderSticker, stickers: (roomId) => call("stickers", { roomId }), share: (instanceId, roomId, shared) => call("share", { instanceId, roomId, shared }), errorWords };
   function invalidate() { epoch += 1; dirty = true; if (connectionReady && interested()) void refresh(); }
   window.mefiStudio?.onHubEvent?.((event) => {
     if (event?.type === "status") {
+      statusEpoch += 1;
       connectionReady = event.status?.state === "ready";
+      dynamicCratesAvailable = connectionReady && event.status?.collectibles === true && event.status?.dynamicCrates === true;
       const nextAccount = event.status?.user?.id || null;
       if (!connectionReady || (accountId && nextAccount !== accountId)) {
         epoch += 1; identityEpoch += 1; state = null; dirty = false;
@@ -91908,10 +93426,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     body.after(setupBox);
     void call("communitySetup").then(paint);
   }
+  let studioAccountCard = null;
   function renderSettings() {
     const body = $("community-settings-body");
     if (!body) return;
     setupSection();
+    if (!studioAccountCard && window.MefiAccount?.card) { studioAccountCard = window.MefiAccount.card(); body.after(studioAccountCard); }
     const focused = focusedAction();
     rendered = [];
     const state = view();

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
+import nativeFixture from "./fixtures/native-account-host.cjs";
 
 // main.cjs's pet (the "Rooms hub" block) in a vm: hub:pet hands the hub
 // client the pet's own three fields only (or null, as for a pet that is off),
@@ -26,15 +27,16 @@ function host() {
     setPet: (pet) => { pets.push(pet); return pet === null || pet.kind === "dragon"; },
   };
   const context = vm.createContext({
+    ...nativeFixture.nativeHostPorts(),
     process: { env: {} }, Date, Boolean, Number, Object, String,
     community: {}, discordOAuth: {}, COMMUNITY_ACCESS_MARGIN_MS: 60_000, communityTokens: null,
     communityClientId: () => "1234567890",
     communityRead: async () => ({ state: { link: { userId: "42" } } }),
     checkCommunity: async () => ({ ok: true }), publishCommunity: async () => ({}),
-    send: (channel, payload) => sent.push([channel, payload]), logLine: () => {}, require: () => null,
+    send: (channel, payload) => sent.push([channel, payload]), logLine: () => {},
     optionalHelper: () => ({ configuredUrl: () => "https://hub.example.test", createHubClient: (options) => { created = options; return client; } }),
   });
-  vm.runInContext(`${block}\nthis.api = { hubPet, hubInstance };`, context);
+  vm.runInContext(`${block}\nthis.api = { hubPet, hubInstance, studioAccountReady };`, context);
   return { api: context.api, pets, sent, created: () => created };
 }
 
@@ -59,7 +61,7 @@ test("hub:pet hands the hub client the pet's own three fields, or null", async (
 
 test("a room's pets from the hub client reach the renderer on hub:event", async () => {
   const h = host();
-  h.api.hubInstance();
+  await h.api.studioAccountReady(); h.api.hubInstance();
   const event = { type: "roomPets", roomId: "room_a", pets: [{ id: "200000000000000001", userId: "200000000000000001", name: "Alice", pet: { kind: "dragon", skin: "theme", name: "Ember" } }] };
   h.created().onEvent(event);
   assert.deepEqual(plain(h.sent), [["hub:event", event]]);

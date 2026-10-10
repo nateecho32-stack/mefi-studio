@@ -1,0 +1,31 @@
+.commerce { display: grid; gap: 18px; max-width: 1120px; margin: 0 auto; color: var(--text); }
+.commerce-head { padding: 22px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
+.commerce-head h2 { margin: 5px 0 10px; font-size: clamp(22px, 3vw, 34px); }
+.commerce-eyebrow { margin: 0; color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.commerce-note { color: var(--muted); font-size: 13px; line-height: 1.55; overflow-wrap: anywhere; }
+.commerce-content { display: grid; gap: 14px; }
+.commerce-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.commerce-button { border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); padding: 9px 13px; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.commerce-button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.commerce-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.commerce-button:disabled { opacity: .55; cursor: default; }
+.commerce-orders { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 12px; }
+.commerce-order, .commerce-detail { padding: 18px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface); min-width: 0; overflow-wrap: anywhere; }
+.commerce-order h3, .commerce-detail h3 { margin: 6px 0; font-size: 17px; }
+.commerce-terms { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr); gap: 8px 18px; font-size: 14px; }
+.commerce-terms dt { color: var(--muted); }
+.commerce-terms dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.commerce-notice, .commerce-empty { padding: 15px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); line-height: 1.5; }
+.commerce-total { font-weight: 700; }
+.commerce-message { min-height: 1.5em; color: var(--muted); line-height: 1.5; overflow-wrap: anywhere; }
+@media (max-width: 650px) { .commerce-head, .commerce-detail { padding: 14px; } .commerce-terms { grid-template-columns: 1fr; gap: 3px; } .commerce-terms dd { text-align: left; margin-bottom: 8px; } }
+.commerce-art { display: grid; place-items: center; min-height: 120px; overflow: hidden; }
+.commerce-art canvas { width: min(240px, 100%); height: auto; }
+.commerce-art img { width: 110px; height: 110px; object-fit: contain; }
+.commerce-price { font-size: 20px; font-weight: 700; }
+.commerce-swatches { display: flex; gap: 7px; padding: 10px 0; }
+.commerce-swatch { width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px; }
+.commerce-form { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(150px, 2fr); gap: 12px; }
+.commerce-form label { display: grid; gap: 6px; }
+.commerce-input { min-width: 0; width: 100%; padding: 9px; box-sizing: border-box; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; }
+@media (max-width: 650px) { .commerce-form { grid-template-columns: 1fr; } }

@@ -32,7 +32,7 @@ const PC_ID = /^[A-Za-z0-9_.:-]{1,64}$/;
 const KEY = /^[A-Za-z0-9+/]{43}=$/;
 const PROJECT_KEY = /^p-[0-9a-f]{16}$/;
 const TASK_ID = /^[A-Za-z0-9_.:-]{1,80}$/;
-const SNOWFLAKE = /^\d{17,20}$/;
+const { actorId } = require("./actor-contract.cjs");
 
 const object = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 const rows = (value) => (Array.isArray(value) ? value.filter(object) : []);
@@ -241,9 +241,10 @@ const DECLINES = Object.freeze({
 
 function cleanPeer(raw) {
   if (!object(raw) || !PC_ID.test(String(raw.id ?? "")) || !RELATIONS.includes(raw.relation)) return null;
+  if (raw.uid != null && !actorId(raw.uid)) return null;
   if (!object(raw.keys) || !KEY.test(String(raw.keys.sign)) || !KEY.test(String(raw.keys.box))) return null;
   return {
-    id: raw.id, name: line(raw.name, 40) || "PC", relation: raw.relation, uid: SNOWFLAKE.test(String(raw.uid ?? "")) ? String(raw.uid) : null,
+    id: raw.id, name: line(raw.name, 40) || "PC", relation: raw.relation, uid: raw.uid == null ? null : actorId(raw.uid),
     keys: { sign: raw.keys.sign, box: raw.keys.box }, pairedAt: Number.isFinite(raw.pairedAt) ? raw.pairedAt : 0,
     ...(raw.relation === "borrower" ? { auto: raw.auto === true } : {}),
     ...(Number.isFinite(raw.lastSeen) ? { lastSeen: raw.lastSeen } : {}),

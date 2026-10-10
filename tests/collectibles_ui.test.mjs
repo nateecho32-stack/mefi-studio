@@ -196,3 +196,59 @@ test('rarity names retain theme text contrast while their dots carry rarity colo
   assert.equal(badge.style.color, undefined); assert.match(badge.textContent, /rare/); assert.equal(badge.querySelector('.collectibles-rarity-dot').style.backgroundColor, '#ffaa66');
   assert.equal(badge.querySelector('.collectibles-rarity-dot').getAttribute('aria-hidden'), 'true');
 });
+
+test('custom sticker motifs are visible and PNG downloads use the same artwork as the book and room renderer', async () => {
+  const sticker = { ...clone(pet), id: 'sticker_motif', kind: 'sticker', name: 'Star friend', visual: { ...pet.visual, glyph: 'heart', motif: 'stars' } };
+  const data = snapshot(); data.inventory = [sticker];
+  const e = env({ data }); await flush();
+  const create = e.document.createElement, drawings = new Map(), encoded = [], links = [];
+  e.document.createElement = (tag) => {
+    const el = create(tag);
+    if (tag === 'canvas') {
+      const commands = [], ctx = {};
+      for (const method of ['scale', 'beginPath', 'roundRect', 'fill', 'save', 'clip', 'moveTo', 'lineTo', 'stroke', 'closePath', 'restore', 'fillText']) ctx[method] = (...args) => commands.push([method, ...args]);
+      for (const property of ['fillStyle', 'strokeStyle', 'globalAlpha', 'lineWidth', 'textAlign', 'textBaseline', 'font']) Object.defineProperty(ctx, property, { set: (value) => commands.push([property, value]) });
+      el.getContext = () => ctx;
+      el.toDataURL = (type) => {
+        const source = `data:image/png;base64,${Buffer.from(JSON.stringify(commands)).toString('base64')}`;
+        encoded.push({ type, width: el.width, commands: clone(commands), source }); drawings.set(source, commands); return source;
+      };
+    }
+    if (tag === 'a') el.click = () => links.push({ href: el.href, download: el.download });
+    return el;
+  };
+  const picture = (motif, visual = {}) => {
+    const art = e.api.renderSticker({ ...sticker, visual: { ...sticker.visual, motif, ...visual } });
+    const image = art.querySelector('img'); assert.ok(image, 'custom stickers use the shared room/book artwork');
+    assert.equal(art.querySelector('canvas'), null, 'a large sticker book never retains a canvas per instance');
+    assert.equal(art.dataset.rarity, 'rare', 'the existing rarity frame remains independent of the artwork');
+    return drawings.get(image.src).filter(([command]) => command !== 'scale');
+  };
+  const motifs = ['plain', 'stars', 'sparkles', 'stripes'].map((motif) => picture(motif));
+  assert.equal(new Set(motifs.map((commands) => JSON.stringify(commands))).size, 4, 'all four selectable finishes produce different artwork');
+  assert.equal(motifs[0].filter(([command]) => command === 'lineTo').length, 0, 'Original plain artwork has no added motif');
+  assert.ok(motifs.slice(1).every((commands) => commands.some(([command]) => command === 'lineTo')), 'each patterned finish paints shapes');
+  assert.ok(motifs[1].some(([command, value]) => command === 'fillStyle' && value === sticker.visual.primary));
+  assert.ok(motifs[1].some(([command, value]) => command === 'fillStyle' && value === sticker.visual.secondary));
+  assert.ok(motifs[1].some(([command, glyph]) => command === 'fillText' && glyph === '♥'));
+  assert.deepEqual(picture('<svg onload=evil>'), motifs[0], 'unknown motifs fall back to plain shapes');
+  const hostile = picture('plain', { glyph: '__proto__', primary: 'url(https://invalid.test)' });
+  assert.ok(hostile.some(([command, glyph]) => command === 'fillText' && glyph === '✦'));
+  assert.ok(hostile.some(([command, color]) => command === 'fillStyle' && color === '#8b7cf6'));
+  const cachedCount = encoded.length; picture('stars'); assert.equal(encoded.length, cachedCount, 'duplicate artwork reuses its encoded preview');
+  assert.ok(encoded.every((image) => image.width === 96), 'room/book previews use a small fixed raster');
+  await e.tab('Sticker book');
+  const book = drawings.get(e.root.querySelector('.collectibles-sticker img').src).filter(([command]) => command !== 'scale');
+  assert.deepEqual(book, motifs[1], 'book and room helper retain the same saved motif');
+  await e.button('Download image').click();
+  const exported = encoded.at(-1); assert.equal(exported.type, 'image/png'); assert.equal(exported.width, 512);
+  assert.deepEqual(exported.commands.filter(([command]) => command !== 'scale'), book, 'download preserves motif, palette and glyph at export resolution');
+  assert.deepEqual(links[0], { href: exported.source, download: 'Star-friend.png' });
+  assert.ok(e.calls.every(([action]) => action === 'list'), 'rendering and downloading do not claim or transfer ownership');
+  const bundled = e.api.renderSticker({ ...sticker, visual: { asset: 'happy' } });
+  assert.equal(bundled.querySelector('img').src, '../assets/stickers/studio-happy.png');
+  assert.equal(bundled.querySelector('canvas'), null, 'bundled PNG originals are preserved');
+  for (let index = 0; index < 65; index += 1) picture('plain', { primary: `#${index.toString(16).padStart(6, '0')}` });
+  const afterEviction = encoded.length; picture('stars');
+  assert.equal(encoded.length, afterEviction + 1, 'the bounded cache evicts old artwork rather than retaining every design');
+});
