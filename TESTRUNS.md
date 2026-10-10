@@ -39,6 +39,24 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-08 The window reads like a desktop: one bar across the top, the rail and the columns under it, window tabs, solid panes
+
+Detached worktree C:\wt\os-shell, off origin/main a2aaa86 (rebased from b640d29 after "Opening a project no longer
+dead-ends" landed; the CHANGELOG conflict was resolved by hand and the booklet rebuilt). The owner asked for the Studio's
+design and layout cleaned up so the app feels like an OS. Changed: shell.css's top bar spans the window (left 0, z-shell + 1)
+and #app-rail, .vibe-rail, the list column, the rail and list splitters and the Studio project panel start under its foot
+(--shell-y0 minus --shell-tabs-h); agents.css no longer sets --shell-local-h: 60px for the Team section, so the bar is 56 px
+on every page; tabs.css draws the strip as a sunk band with the open tab in the page's fill; --os-r/--os-edge/--os-fill give
+Social's cards, the docked conversation and the inspector's cards one radius, edge and opaque fill. Checked: `npm run check`
+ok (314 targets, every selector used); `npm run audit` ok (0 findings); `npm run lint` 0 errors, 47 warnings (unchanged).
+Suites: shell_frame_css, shell_frame_bars, shell_frame_splitters, shell_frame_state, shell_frame_wiring, layout_contract_css,
+layout_contract_nav, vibe_frame, app_rail, tabs_strip, tabs_render, chrome_theme, check_css, check_css_unused,
+agents_overview_paint 266/266; shell_render, today_render, sessions_render, startup_render, size_render, tabs_host,
+tabs_model, tabs_observer, tabs_persist, workspace_ui 199/199 after two fixture pins moved with the design (shell-render-
+electron: the bar spans the window and the list and its splitter start under it; both had pinned the bar starting where the
+list ended). Offscreen Electron tour at 1920x1080 and 1366x768 (Social Home, Friends, Studio Home, a session, Tasks, Team,
+Settings, both project menus, the list drawer, the collapsed rail): the bar is 0,0,W,56 on every page, rail and list at y 56.
+
 ## 2026-10-08 The launch screen and Vibe New app offer to stop the agents when a switch is refused for running work
 
 Detached worktree C:\wt\stopswitch, off main b640d29. The owner's screenshot: opening or starting a project on the launch
@@ -495,39 +513,6 @@ the store (model_performance, learning_host, model_routing, model_routing_eviden
 planning_routing, usage_tracker_host, task_cap_host, kind_routes_host, jev_model_routing_host,
 explicit_route_fallback, builder_thinking_host, build_home_host, ai_route_gate): 201/201. Not run: the full
 `npm test` (hosted CI runs the Node stage on the branch).
-
-## 2026-10-06 My PCs: the owner's PCs live, splitting the queue, and a laptop that hands off on low battery
-
-Branch `feat/my-pcs` (C:\wt\pcs, merged with main twice in C:\wt\pcs2: the CHANGELOG kept from both sides, the
-relay import line, its README row and hub_client's hello assertion kept from both, `renderer/booklet.html` rebuilt,
-not merged). New: scripts/pc-trust.cjs, pc-fleet.cjs, pc-power.cjs, pc-handoff.cjs, relay/src/pcs.mjs,
-renderer/pc-fleet.js, docs/my-pcs.md; main.cjs "My PCs" block plus small guarded hooks (spawnNextJob's "battery"
-stop, applyKeepAwake, hubInstance's onEvent, hubPresenceWanted, startPcs at boot, pcs:* IPC); backlog.workState's
-moved card and battery/friend/came-back holds. The push guard in attempt_snapshots_host now lets a branch be named in
-full (`refs/heads/`, the handoff branches) and still refuses every other ref. Kill switch `MEFI_STUDIO_NO_PCS=1`.
-
-Measured: the four modules take 18.6 ms to require, so they load on first use; one battery read is one PowerShell
-call (3.3 s wall on this laptop at 392 MB free; it read 61%, on battery), every 3 min above 40%, 1 min under, 30 s
-under 25%, 5 min on mains, 30 min without a battery.
-
-`npm run check` ok, `npm run audit` 0 findings, eslint on the changed files 0 new problems (main.cjs keeps its 5
-older warnings). New suites: pc_trust 7, pc_power 7, pc_fleet 12, pc_handoff 4 (real git: park leaves the tree,
-index and HEAD alone; pick-up claims once; a clash stays on GitHub), pcs_host 7 (several PCs in vms on a fake relay:
-pairing by the six numbers, a stranger refused, a low battery moving two cards that come back done, a full PC
-declining, work started elsewhere and refused for a closed project, an unpaired sender refused, the stop line and
-Continue, a friend's lent PC holding the task), pc_fleet_ui 7, relay_pcs 9, hub_client_pcs 7. On the merged tree
-through `npm run test:one`: 247/248 across hub_host, hub_client(_pcs, _remote), relay_core/e2e/connect/pcs/events/
-credits, pcs_host, pc_fleet_ui, pc_sync_ui, pc_remote_ui, paired_worker_ui, module_purity, booklet_build,
-remote_host, cowork_host, link_compat, paired_reconnect, hub_rooms; the one failure was pcs_host removing a PC's
-temp folder while a write was pending (fixed: cleanup waits; then 7/7 four runs in a row, after its waits became
-"until the delivery lands"). Electron, one at a time: companion_hub_render, friends_render (no text under 12 px at
-four sizes), paired_worker_render, friends_two_render 4/4. A first full `npm test` on the pre-merge tree was stopped
-in the Node stage after 91 min at 392 MB free: its one real failure was the push guard (fixed); rust_parity_*/sync
-suites ran 25-70 min each and failed on time limits under that load (the known pattern), not rerun here. Hosted CI
-(ci.yml, Windows) green on 69cf256 (8 min 12 s); then main moved (Resources, Other apps): merged with both
-sides' blocks kept, and 327/330 (3 skipped, 0 failed) here across app_wide_ipc, preload_fanout, module_purity,
-booklet_build, the pc_* and pcs_host suites, hub_host, remote_host/admission/gate, studio_api_*, resource_*,
-resources_ui, settings_nav, backlog_engine and attempt_snapshots_host. Not run here: a real two-PC or laptop-battery test (owner).
 
 ## Read Before Any Tests
 

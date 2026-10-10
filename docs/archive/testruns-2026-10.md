@@ -6,6 +6,39 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 My PCs: the owner's PCs live, splitting the queue, and a laptop that hands off on low battery
+
+Branch `feat/my-pcs` (C:\wt\pcs, merged with main twice in C:\wt\pcs2: the CHANGELOG kept from both sides, the
+relay import line, its README row and hub_client's hello assertion kept from both, `renderer/booklet.html` rebuilt,
+not merged). New: scripts/pc-trust.cjs, pc-fleet.cjs, pc-power.cjs, pc-handoff.cjs, relay/src/pcs.mjs,
+renderer/pc-fleet.js, docs/my-pcs.md; main.cjs "My PCs" block plus small guarded hooks (spawnNextJob's "battery"
+stop, applyKeepAwake, hubInstance's onEvent, hubPresenceWanted, startPcs at boot, pcs:* IPC); backlog.workState's
+moved card and battery/friend/came-back holds. The push guard in attempt_snapshots_host now lets a branch be named in
+full (`refs/heads/`, the handoff branches) and still refuses every other ref. Kill switch `MEFI_STUDIO_NO_PCS=1`.
+
+Measured: the four modules take 18.6 ms to require, so they load on first use; one battery read is one PowerShell
+call (3.3 s wall on this laptop at 392 MB free; it read 61%, on battery), every 3 min above 40%, 1 min under, 30 s
+under 25%, 5 min on mains, 30 min without a battery.
+
+`npm run check` ok, `npm run audit` 0 findings, eslint on the changed files 0 new problems (main.cjs keeps its 5
+older warnings). New suites: pc_trust 7, pc_power 7, pc_fleet 12, pc_handoff 4 (real git: park leaves the tree,
+index and HEAD alone; pick-up claims once; a clash stays on GitHub), pcs_host 7 (several PCs in vms on a fake relay:
+pairing by the six numbers, a stranger refused, a low battery moving two cards that come back done, a full PC
+declining, work started elsewhere and refused for a closed project, an unpaired sender refused, the stop line and
+Continue, a friend's lent PC holding the task), pc_fleet_ui 7, relay_pcs 9, hub_client_pcs 7. On the merged tree
+through `npm run test:one`: 247/248 across hub_host, hub_client(_pcs, _remote), relay_core/e2e/connect/pcs/events/
+credits, pcs_host, pc_fleet_ui, pc_sync_ui, pc_remote_ui, paired_worker_ui, module_purity, booklet_build,
+remote_host, cowork_host, link_compat, paired_reconnect, hub_rooms; the one failure was pcs_host removing a PC's
+temp folder while a write was pending (fixed: cleanup waits; then 7/7 four runs in a row, after its waits became
+"until the delivery lands"). Electron, one at a time: companion_hub_render, friends_render (no text under 12 px at
+four sizes), paired_worker_render, friends_two_render 4/4. A first full `npm test` on the pre-merge tree was stopped
+in the Node stage after 91 min at 392 MB free: its one real failure was the push guard (fixed); rust_parity_*/sync
+suites ran 25-70 min each and failed on time limits under that load (the known pattern), not rerun here. Hosted CI
+(ci.yml, Windows) green on 69cf256 (8 min 12 s); then main moved (Resources, Other apps): merged with both
+sides' blocks kept, and 327/330 (3 skipped, 0 failed) here across app_wide_ipc, preload_fanout, module_purity,
+booklet_build, the pc_* and pcs_host suites, hub_host, remote_host/admission/gate, studio_api_*, resource_*,
+resources_ui, settings_nav, backlog_engine and attempt_snapshots_host. Not run here: a real two-PC or laptop-battery test (owner).
+
 ## 2026-10-06 Other apps: the Studio API, MCP server and skill, and the setup prompt
 
 Branch `feat/studio-api` (C:\wt\apilink), merged with main twice (the CHANGELOG kept from both sides,
