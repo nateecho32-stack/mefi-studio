@@ -162,6 +162,7 @@
     pane.append(head);
     if (category.id === "ui") {
       pane.append(scaleControl());
+      pane.append(onTopControl());
       // Layout v2's Tab behaviour card (renderer/tabs.js): null, and so nothing here, unless the tab strip is running.
       const tabs = window.MefiTabs?.configCard?.();
       if (tabs) pane.append(tabs);
@@ -242,6 +243,28 @@
     box.append(label, foot);
     return box;
   }
+  // Keep Studio above other windows (main.cjs setStayOnTop). Minimizing lets go of it.
+  function onTopControl() {
+    const box = el("div", "config-scale");
+    box.dataset.key = "stay-on-top";
+    const label = el("label", "config-scale-row");
+    const check = el("input");
+    check.type = "checkbox";
+    check.checked = state.onTop !== false;
+    check.disabled = !api()?.uiStayOnTop;
+    label.append(el("span", "config-scale-name", "Keep Studio on top"), check);
+    const hint = el("p", "config-pane-about", api()?.uiStayOnTop ? "Studio stays above the apps and tests it opens. Minimize it to see them; Ctrl+Shift+T toggles it." : "Keeping Studio on top is set in the desktop app.");
+    check.addEventListener("change", async () => {
+      try {
+        const result = await api().uiStayOnTop({ on: check.checked });
+        if (result?.ok === false) throw new Error(result.error || "That was not saved.");
+        state.onTop = result?.on ?? check.checked;
+      } catch (error) { check.checked = !check.checked; window.MefiToast?.(error?.message || "That was not saved.", "bad"); }
+    });
+    box.append(label, hint);
+    api()?.uiStayOnTopGet?.().then((result) => { if (result?.ok !== false && typeof result?.on === "boolean") { state.onTop = result.on; check.checked = result.on; } }).catch(() => {});
+    return box;
+  }
   async function setZoom(factor) {
     try {
       const result = await api().uiZoom({ factor });
@@ -306,6 +329,7 @@
       clearTimeout(zoomTold);
       zoomTold = setTimeout(() => window.MefiToast?.(`Interface scale ${Math.round(payload.factor * 100)}%`), 350);
     });
+    api()?.onUiStayOnTop?.((payload) => { if (typeof payload?.on === "boolean") { state.onTop = payload.on; if (isOpen() && state.category === "ui" && !state.query) render(); } });
     $("search").addEventListener("input", () => { state.query = $("search").value; render(); });
     $("search").addEventListener("keydown", (event) => {
       if (event.key === "Enter") { const first = $("pane").querySelector(".config-item"); if (first) { event.preventDefault(); first.click(); } }

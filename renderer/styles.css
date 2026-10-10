@@ -5283,3 +5283,5 @@ html[data-frame] #idle-hud #map-zoom .glyph { width: 14px; height: 14px; }
   html[data-frame] #idle-hud { --command-rail-width: 252px; }
   html[data-frame] #idle-hud #map-legend { display: none; }
 }
+.walkthrough-easy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 10px 0; }
+.walkthrough-easy-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--hairline); border-radius: 10px; }

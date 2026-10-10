@@ -5293,6 +5293,8 @@ html[data-frame] #idle-hud #map-zoom .glyph { width: 14px; height: 14px; }
   html[data-frame] #idle-hud { --command-rail-width: 252px; }
   html[data-frame] #idle-hud #map-legend { display: none; }
 }
+.walkthrough-easy-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 10px 0; }
+.walkthrough-easy-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--hairline); border-radius: 10px; }
 
 /* Integrated music room. Shared theme tokens also colour Command and boards. */
 :root[data-studio-theme] .primary { background: linear-gradient(180deg, var(--gold-bright), var(--gold)); }
@@ -17495,7 +17497,18 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
       <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
-        <h3 id="walkthrough-cli-heading">Use the account you already have</h3>
+        <h3 id="walkthrough-cli-heading">Get your AI started</h3>
+        <div id="walkthrough-cli-easy" class="walkthrough-easy">
+          <p>The easiest start is one of these two. Each opens its own website, and you pick a plan or a key there.</p>
+          <div class="walkthrough-easy-grid">
+            <div class="walkthrough-easy-card"><strong>OpenCode</strong><span class="muted">Free models to begin with, or its paid plans for more. Studio installs it for you.</span>
+              <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-easy-opencode" type="button">Set up OpenCode</button><button class="ghost mini" data-provider-page="opencode:site" type="button">Website</button><button class="ghost mini" data-provider-page="opencode:plans" type="button">See plans</button></div></div>
+            <div class="walkthrough-easy-card"><strong>OpenRouter</strong><span class="muted">One key that reaches many models. You pay for what you use.</span>
+              <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-easy-openrouter" type="button">Get a key</button><button class="ghost mini" data-provider-page="openrouter:site" type="button">Website</button><button class="ghost mini" data-provider-page="openrouter:plans" type="button">See models</button></div></div>
+          </div>
+          <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-easy-existing" type="button">Already have a provider? Set up here</button></div>
+        </div>
+        <div id="walkthrough-cli-existing" hidden>
         <p>One subscription can do it all: chatting, mapping, planning and building. Pick your tool, sign in in its own window, then check the connection. Your plan's own limits still apply.</p>
         <label for="walkthrough-cli-choice">Your AI tool</label>
         <select id="walkthrough-cli-choice"><option value="codex">Codex · ChatGPT plan</option><option value="claude">Claude Code · Claude subscription</option><option value="grok">Grok · Grok account</option><option value="antigravity">Antigravity · Google account</option><option value="opencode">OpenCode · free models, or accounts you link</option></select>
@@ -17507,10 +17520,14 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
           <button class="primary" id="walkthrough-cli-use" type="button">Use for the whole studio</button>
           <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
           <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
+          <button class="ghost mini" id="walkthrough-cli-site" type="button">Website</button>
+          <button class="ghost mini" id="walkthrough-cli-plans" type="button">See plans</button>
         </div>
         <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window that downloads the tool, and Node.js too if the tool needs it. Studio looks for the tool again when that window closes. Check connection sends one small test, which counts toward your plan. Your password stays in the company's own sign-in window.</p>
         <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-cli-keys" type="button">I have an API key or a local model server</button></div>
         <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription? Paste a key from z.ai, OpenRouter, OpenCode Go or Zen, use your own server, or pick LM Studio in Team › Providers. The guide takes you there, then scans again so Use this setup can map your project with it.</p>
+        <div class="walkthrough-panel-actions"><button class="ghost mini" id="walkthrough-easy-back" type="button">Back to the easy start</button></div>
+        </div>
         <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
       </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>
@@ -67451,6 +67468,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     pane.append(head);
     if (category.id === "ui") {
       pane.append(scaleControl());
+      pane.append(onTopControl());
       // Layout v2's Tab behaviour card (renderer/tabs.js): null, and so nothing here, unless the tab strip is running.
       const tabs = window.MefiTabs?.configCard?.();
       if (tabs) pane.append(tabs);
@@ -67531,6 +67549,28 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     box.append(label, foot);
     return box;
   }
+  // Keep Studio above other windows (main.cjs setStayOnTop). Minimizing lets go of it.
+  function onTopControl() {
+    const box = el("div", "config-scale");
+    box.dataset.key = "stay-on-top";
+    const label = el("label", "config-scale-row");
+    const check = el("input");
+    check.type = "checkbox";
+    check.checked = state.onTop !== false;
+    check.disabled = !api()?.uiStayOnTop;
+    label.append(el("span", "config-scale-name", "Keep Studio on top"), check);
+    const hint = el("p", "config-pane-about", api()?.uiStayOnTop ? "Studio stays above the apps and tests it opens. Minimize it to see them; Ctrl+Shift+T toggles it." : "Keeping Studio on top is set in the desktop app.");
+    check.addEventListener("change", async () => {
+      try {
+        const result = await api().uiStayOnTop({ on: check.checked });
+        if (result?.ok === false) throw new Error(result.error || "That was not saved.");
+        state.onTop = result?.on ?? check.checked;
+      } catch (error) { check.checked = !check.checked; window.MefiToast?.(error?.message || "That was not saved.", "bad"); }
+    });
+    box.append(label, hint);
+    api()?.uiStayOnTopGet?.().then((result) => { if (result?.ok !== false && typeof result?.on === "boolean") { state.onTop = result.on; check.checked = result.on; } }).catch(() => {});
+    return box;
+  }
   async function setZoom(factor) {
     try {
       const result = await api().uiZoom({ factor });
@@ -67595,6 +67635,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       clearTimeout(zoomTold);
       zoomTold = setTimeout(() => window.MefiToast?.(`Interface scale ${Math.round(payload.factor * 100)}%`), 350);
     });
+    api()?.onUiStayOnTop?.((payload) => { if (typeof payload?.on === "boolean") { state.onTop = payload.on; if (isOpen() && state.category === "ui" && !state.query) render(); } });
     $("search").addEventListener("input", () => { state.query = $("search").value; render(); });
     $("search").addEventListener("keydown", (event) => {
       if (event.key === "Enter") { const first = $("pane").querySelector(".config-item"); if (first) { event.preventDefault(); first.click(); } }
@@ -89504,6 +89545,24 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       ? `${cli.name} is installed. Choose ${cli.id === "opencode" ? "Scan OpenCode" : "Check connection"} next.`
       : `Studio cannot find ${cli.name} yet. If its setup finished, choose Refresh installed tools. If not, choose Install and sign in again.`);
   }
+  // The easy start (OpenCode / OpenRouter) shows first; "Already have a provider?"
+  // swaps it for the full picker. Both live in the same panel.
+  function showExisting(on, id = "") {
+    if ($("cli-easy")) $("cli-easy").hidden = on;
+    if ($("cli-existing")) $("cli-existing").hidden = !on;
+    if (id && $("cli-choice")) $("cli-choice").value = id;
+    renderCliSetup();
+  }
+  // The host owns every URL; the guide only names a provider and a page.
+  async function openProviderPage(id, page) {
+    const fn = hostApi("cliSetupAction");
+    if (!fn) { setPanelStatus("cli-status", "Open the desktop app to open provider pages."); return; }
+    try {
+      const result = await fn({ id, action: page });
+      if (!result?.ok) throw new Error(result?.error || "Could not open that page.");
+      setPanelStatus("cli-status", "Opened in your browser.");
+    } catch (error) { setPanelStatus("cli-status", error.message, true); }
+  }
   async function cliSetupAction(action) {
     if (cliSetupBusy || mapBusy || scanBusy) return;
     const id = $("cli-choice")?.value || "codex";
@@ -90040,6 +90099,16 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     $("cli-choice")?.addEventListener("change", () => { setPanelStatus("cli-status", ""); renderCliSetup(); });
     $("cli-refresh")?.addEventListener("click", () => { void refreshCliSetup(); });
     $("cli-keys")?.addEventListener("click", () => keyPath());
+    $("easy-opencode")?.addEventListener("click", () => { showExisting(true, "opencode"); void cliSetupAction("install"); });
+    $("easy-openrouter")?.addEventListener("click", () => { void openProviderPage("openrouter", "keys"); keyPath(); });
+    $("easy-existing")?.addEventListener("click", () => showExisting(true));
+    $("easy-back")?.addEventListener("click", () => showExisting(false));
+    $("cli-site")?.addEventListener("click", () => { void openProviderPage($("cli-choice")?.value || "codex", "site"); });
+    $("cli-plans")?.addEventListener("click", () => { void openProviderPage($("cli-choice")?.value || "codex", "plans"); });
+    for (const button of document.querySelectorAll("#walkthrough-cli-easy [data-provider-page]")) button.addEventListener("click", () => {
+      const [id, page] = button.dataset.providerPage.split(":");
+      void openProviderPage(id, page);
+    });
     for (const action of ["install", "login", "check", "use", "docs"]) $("cli-" + action)?.addEventListener("click", () => {
       void cliSetupAction(action);
     });

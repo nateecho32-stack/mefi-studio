@@ -58,31 +58,37 @@ function host({ settings = {}, heavy = null, observations = [], codexCache = nul
 const claude = () => ({ cli: "claude", model: "sonnet", via: "claude cli · sonnet" });
 const go = () => ({ cli: "opencode", model: "opencode-go/deepseek-v4.1-flash", modelArgs: " --model opencode-go/deepseek-v4.1-flash", via: "opencode-go/deepseek-v4.1-flash" });
 
-test("on Auto a fresh card thinks light, and each miss steps it up", async () => {
+test("on Auto a fresh card thinks light, and a miss moves it up a model tier first", async () => {
   const h = host({ heavy: "opus" });
   const first = await h.think(claude());
   assert.equal(first.runRoute.effort, "low");
   assert.equal(first.runRoute.model, "sonnet");
   assert.deepEqual([first.thinking.level, first.thinking.source, first.thinking.misses, first.thinking.stronger], ["light", "auto", 0, null]);
   const second = await h.think(claude(), { runFailures: 1 });
-  assert.equal(second.runRoute.effort, "medium");
-  assert.equal(second.runRoute.model, "sonnet", "one miss only thinks harder");
-  assert.match(h.logs.at(-1), /missed 1 time: this attempt runs balanced thinking/);
+  assert.equal(second.runRoute.model, "opus", "a miss moves up a model tier first");
+  assert.equal(second.runRoute.effort, "low", "effort stays low while a stronger model is left");
+  assert.match(h.logs.at(-1), /missed 1 time: this attempt runs opus with light thinking/);
 });
 
-test("after two misses the Heavy tier's model takes the card, and the next miss thinks harder on it", async () => {
+test("a stuck card's move to the Heavy tier's model names the attempt it steps up from", async () => {
   const h = host({ heavy: "opus" });
-  const third = await h.think(claude(), { runFailures: 1, verifyAttempts: 1, lastAttempt: { runId: "run_7_1" } });
-  assert.equal(third.runRoute.model, "opus");
-  assert.equal(third.runRoute.effort, "medium");
-  assert.equal(third.runRoute.via, "claude cli · opus · stronger model after 2 misses");
-  assert.equal(third.thinking.stronger, "opus");
-  assert.equal(third.thinking.after, "run_7_1", "the ledger row can name the attempt it steps up from");
-  const fourth = await h.think(claude(), { runFailures: 3 });
-  assert.equal(fourth.runRoute.effort, "high");
-  const fifth = await h.think(claude(), { runFailures: 4 });
-  assert.equal(fifth.runRoute.effort, "high", "Max waits for the owner");
-  assert.equal(fifth.thinking.held, "max");
+  const moved = await h.think(claude(), { runFailures: 1, lastAttempt: { runId: "run_7_1" } });
+  assert.equal(moved.runRoute.model, "opus");
+  assert.equal(moved.thinking.stronger, "opus");
+  assert.equal(moved.thinking.after, "run_7_1", "the ledger row can name the attempt it steps up from");
+});
+
+test("at the top tier thinking climbs one step per miss, and Max waits for the owner", async () => {
+  const h = host({ heavy: "opus" });
+  const top = { ...claude(), model: "opus", via: "claude cli · opus" };
+  const second = await h.think(top, { runFailures: 1 });
+  assert.equal(second.runRoute.model, "opus", "no stronger model left: the same model keeps the card");
+  assert.equal(second.runRoute.effort, "medium", "one step harder");
+  const third = await h.think(top, { runFailures: 3 });
+  assert.equal(third.runRoute.effort, "high");
+  const fourth = await h.think(top, { runFailures: 4 });
+  assert.equal(fourth.runRoute.effort, "high", "Max waits for the owner");
+  assert.equal(fourth.thinking.held, "max");
   assert.match(h.logs.at(-1), /Max thinking waits for you/);
 });
 

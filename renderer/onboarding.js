@@ -384,6 +384,24 @@
       ? `${cli.name} is installed. Choose ${cli.id === "opencode" ? "Scan OpenCode" : "Check connection"} next.`
       : `Studio cannot find ${cli.name} yet. If its setup finished, choose Refresh installed tools. If not, choose Install and sign in again.`);
   }
+  // The easy start (OpenCode / OpenRouter) shows first; "Already have a provider?"
+  // swaps it for the full picker. Both live in the same panel.
+  function showExisting(on, id = "") {
+    if ($("cli-easy")) $("cli-easy").hidden = on;
+    if ($("cli-existing")) $("cli-existing").hidden = !on;
+    if (id && $("cli-choice")) $("cli-choice").value = id;
+    renderCliSetup();
+  }
+  // The host owns every URL; the guide only names a provider and a page.
+  async function openProviderPage(id, page) {
+    const fn = hostApi("cliSetupAction");
+    if (!fn) { setPanelStatus("cli-status", "Open the desktop app to open provider pages."); return; }
+    try {
+      const result = await fn({ id, action: page });
+      if (!result?.ok) throw new Error(result?.error || "Could not open that page.");
+      setPanelStatus("cli-status", "Opened in your browser.");
+    } catch (error) { setPanelStatus("cli-status", error.message, true); }
+  }
   async function cliSetupAction(action) {
     if (cliSetupBusy || mapBusy || scanBusy) return;
     const id = $("cli-choice")?.value || "codex";
@@ -920,6 +938,16 @@
     $("cli-choice")?.addEventListener("change", () => { setPanelStatus("cli-status", ""); renderCliSetup(); });
     $("cli-refresh")?.addEventListener("click", () => { void refreshCliSetup(); });
     $("cli-keys")?.addEventListener("click", () => keyPath());
+    $("easy-opencode")?.addEventListener("click", () => { showExisting(true, "opencode"); void cliSetupAction("install"); });
+    $("easy-openrouter")?.addEventListener("click", () => { void openProviderPage("openrouter", "keys"); keyPath(); });
+    $("easy-existing")?.addEventListener("click", () => showExisting(true));
+    $("easy-back")?.addEventListener("click", () => showExisting(false));
+    $("cli-site")?.addEventListener("click", () => { void openProviderPage($("cli-choice")?.value || "codex", "site"); });
+    $("cli-plans")?.addEventListener("click", () => { void openProviderPage($("cli-choice")?.value || "codex", "plans"); });
+    for (const button of document.querySelectorAll("#walkthrough-cli-easy [data-provider-page]")) button.addEventListener("click", () => {
+      const [id, page] = button.dataset.providerPage.split(":");
+      void openProviderPage(id, page);
+    });
     for (const action of ["install", "login", "check", "use", "docs"]) $("cli-" + action)?.addEventListener("click", () => {
       void cliSetupAction(action);
     });

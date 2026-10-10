@@ -639,6 +639,8 @@ function attemptRecord({ run, job, code, errorMessage = null, lastWords: tail = 
     spoke: run.spoke === true,
     sessionId,
     ...(run.routeLabel ? { route: run.routeLabel } : {}),
+    // The model this attempt ran on: a retry stays on it (main.cjs spawnNextJob).
+    ...(run.routeModel ? { model: run.routeModel, cli: run.routeCli ?? null } : {}),
     // A coding CLI's own session and token totals (live progress,
     // scripts/cli-stream.cjs), bounded copies, never the live objects.
     ...(run.cliSession?.id ? { cliSession: executorResume.cliSessionRecord(run.cliSession) } : {}),

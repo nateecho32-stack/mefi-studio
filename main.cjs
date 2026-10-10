@@ -109,6 +109,7 @@ const agentTools = require("./scripts/agent-tools.cjs");
 const agentToolConfigs = require("./scripts/agent-tool-configs.cjs");
 const agentModels = require("./scripts/agent-models.cjs");
 const cliSetup = require("./scripts/cli-setup.cjs");
+const providerSetups = require("./scripts/provider-setups.cjs");
 const cliText = require("./scripts/cli-text.cjs");
 const cliAccounts = require("./scripts/cli-accounts.cjs");
 const modelLadder = require("./scripts/model-ladder.cjs");
@@ -950,6 +951,7 @@ function applicationMenu() {
         { label: "Zoom in (=)", accelerator: "CmdOrCtrl+=", visible: false, click: () => { stepUiZoom(1).catch(() => {}); } },
         { label: "Zoom out", accelerator: "CmdOrCtrl+-", click: () => { stepUiZoom(-1).catch(() => {}); } },
         { type: "separator" },
+        { label: "Keep Studio on top", type: "checkbox", checked: typeof stayOnTopOn === "boolean" ? stayOnTopOn : true, accelerator: "CmdOrCtrl+Shift+T", click: (item) => { setStayOnTop(item.checked).catch(() => {}); } },
         { role: "togglefullscreen" },
       ],
     },
@@ -17458,10 +17460,14 @@ const SEAT_DEFAULTS = Object.freeze({
 const SEAT_EFFORTS = Object.freeze(["minimal", "low", "medium", "high", "xhigh", "max"]);
 function seatChoice(settings, seat) {
   const saved = settings?.agentSeats?.[seat];
-  const base = SEAT_DEFAULTS[seat] ?? SEAT_DEFAULTS.lead;
+  // A seat nobody has saved takes the provider the user set up (Claude's tiers
+  // for Claude); with no setup it keeps the built-in default (Zen).
+  // typeof: seatChoice is sliced into test hosts without the provider setups.
+  const setupSeat = typeof providerSetups !== "undefined" ? providerSetups.seatPlanFor(settings?.aiProvider, seat) : null;
+  const base = setupSeat ?? SEAT_DEFAULTS[seat] ?? SEAT_DEFAULTS.lead;
   const effort = saved?.effort === "" || SEAT_EFFORTS.includes(saved?.effort) ? saved.effort : base.effort;
   const provider = ["auto", "zai", "opencode", "zen", "openrouter", "claude", "codex", "chatgpt", "grok", "antigravity", "lmstudio", "custom"].includes(saved?.provider) ? saved.provider : base.provider;
-  const model = typeof saved?.model === "string" ? saved.model.trim() : provider === "zen" ? base.model : "";
+  const model = typeof saved?.model === "string" ? saved.model.trim() : setupSeat ? setupSeat.model : provider === "zen" ? base.model : "";
   const fast = provider === "zen" && (typeof saved?.fast === "boolean" ? saved.fast : base.fast);
   return { provider, model, effort, fast };
 }
@@ -20491,6 +20497,21 @@ async function spawnNextJob(options) {
   // missing (builderThinking). After routing and the owner's own picks, whose
   // model it keeps; a parked stronger model falls back below like a routed one.
   // typeof: spawnNextJob is sliced into test hosts without the ladder.
+  // A card that has missed stays on the model its last attempt ran on, so a
+  // retry never hops between models at one level; a stronger step (below) is
+  // the only thing that moves it, one tier at a time.
+  // typeof: spawnNextJob is sliced into test hosts without the ladder.
+  const kept = typeof modelLadder !== "undefined" ? modelLadder.keptModel({
+    lastModel: typeof job?.ref?.lastAttempt?.model === "string" ? job.ref.lastAttempt.model : "",
+    lastCli: typeof job?.ref?.lastAttempt?.cli === "string" ? job.ref.lastAttempt.cli : "",
+    cli: runRoute.cli, currentModel: runRoute.model,
+    missed: (Number(job?.ref?.runFailures) || 0) + (Number(job?.ref?.verifyAttempts) || 0) > 0,
+    ownerPick: Boolean(ownerPick),
+  }) : null;
+  if (kept && typeof useBuilderModel === "function") {
+    const pinned = await useBuilderModel(runRoute, runRoute.cli, kept, "keeps the model its last attempt ran on").catch(() => false);
+    if (pinned) routeDecision = null;
+  }
   const steppedFrom = runRoute.model;
   if (typeof builderThinking === "function") {
     try { if ((await builderThinking(runRoute, job, { workKind, ownerPick }))?.stronger && runRoute.model !== steppedFrom) routeDecision = null; }
@@ -21640,6 +21661,8 @@ async function spawnNextJob(options) {
     autopilot.waiting = null; // a job actually spawned — the emit below carries it
     runLabel = label;
     entry.routeLabel = label;
+    entry.routeModel = typeof route?.model === "string" && route.model ? route.model : null;
+    entry.routeCli = typeof route?.cli === "string" && route.cli ? route.cli : null;
     entry.activity = null;
     entry.lastOutputAt = null;
     entry.activityPrivateKey = false;
@@ -23840,6 +23863,26 @@ async function stepUiZoom(direction) {
   window.webContents.setZoomFactor(next);
   await updateSettings((settings) => { settings.ui = { ...(settings.ui ?? {}), zoom: next }; });
   send("ui:zoom-changed", { factor: next });
+}
+// Keep Studio above other windows (settings.ui.stayOnTop, on unless saved off).
+// A minimized window leaves the pin by itself, so minimizing is how apps being
+// built or tested get the screen; restoring brings the pin back. Smoke and
+// capture runs never pin.
+let stayOnTopOn = true;
+function applyStayOnTop() {
+  if (!window || window.isDestroyed() || SMOKE || CAPTURE) return;
+  try {
+    if (stayOnTopOn && !window.isMinimized()) window.setAlwaysOnTop(true, "floating");
+    else window.setAlwaysOnTop(false);
+  } catch { /* the window is going away */ }
+}
+async function setStayOnTop(on, { save = true } = {}) {
+  stayOnTopOn = on !== false;
+  applyStayOnTop();
+  Menu.setApplicationMenu(applicationMenu());
+  if (save) await updateSettings((settings) => { settings.ui = { ...(settings.ui ?? {}), stayOnTop: stayOnTopOn }; });
+  send("ui:stay-on-top-changed", { on: stayOnTopOn });
+  return stayOnTopOn;
 }
 async function traceChannels() {
   const channels = [];
@@ -26880,6 +26923,8 @@ function registerIpc() {
     await updateSettings((settings) => { settings.ui = { ...(settings.ui ?? {}), zoom: value }; });
     return { ok: true, factor: value };
   });
+  ipcMain.handle("ui:stay-on-top-get", async () => ({ ok: true, on: stayOnTopOn }));
+  ipcMain.handle("ui:stay-on-top", async (_event, { on } = {}) => ({ ok: true, on: await setStayOnTop(on) }));
   ipcMain.handle("trace:channels", () => traceChannels());
   ipcMain.handle("trace:read", (_event, payload = {}) => traceRead(payload ?? {}));
   ipcMain.handle("eyes:log", async (_event, { lines = 220 } = {}) => {
@@ -28033,6 +28078,11 @@ function createWindow() {
   if (saved?.maximized && !AT_LOGIN) window.maximize();
   else if (saved?.maximized) { const created = window; created.once("show", () => { if (!created.isDestroyed()) created.maximize(); }); }
   guardWindowNavigation(window.webContents, page);
+  // Pinned above other windows unless the owner saved it off; minimize lets go, restore pins again.
+  window.on("minimize", () => applyStayOnTop());
+  window.on("restore", () => applyStayOnTop());
+  window.on("show", () => applyStayOnTop());
+  readSettings().then((settings) => { stayOnTopOn = settings?.ui?.stayOnTop !== false; applyStayOnTop(); Menu.setApplicationMenu(applicationMenu()); }).catch(() => {});
   // The page's bridge (preload.cjs) says it is listening and holds no
   // assistant state yet, on its first onAssistant: send whole keys again.
   window.webContents.ipc.on("eyes:assistant-sync", () => assistantPush.resync());

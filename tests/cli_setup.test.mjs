@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { CLIS, INSTALL_FOLDERS, singleProvider, setupScript, createCliSetup } from "../scripts/cli-setup.cjs";
 import profiles from "../scripts/agent-profiles.cjs";
+import providerSetups from "../scripts/provider-setups.cjs";
 
 for (const provider of ["codex", "claude", "grok", "antigravity"]) test(`${provider} alone configures every role without other keys or model leakage`, () => {
   const settings = { aiProvider: "zen", aiRoleProviders: { heavy: "zai" }, aiModels: { heavy: "foreign-model" }, apiKeyEncrypted: "keep", executorTier: "free", agentSubtasks: { cli: "opencode", model: "other-model" }, aiModelsByProvider: { [provider]: { routine: "my-model" } }, agentSeats: { lead: { provider: "zen", model: "gpt-other" } } };
@@ -12,14 +13,17 @@ for (const provider of ["codex", "claude", "grok", "antigravity"]) test(`${provi
   assert.equal(settings.modelSelection, "fixed");
   assert.equal(settings.executorTier, "auto");
   assert.deepEqual(settings.aiModels, {});
-  assert.equal(settings.executorModel, "");
+  assert.equal(settings.executorModel, providerSetups.planFor(provider)?.routine.model ?? "", "builders take Sonnet 5.5 where the provider has a tier map");
   assert.deepEqual(settings.aiRoleProviders, { routine: provider, heavy: provider });
   assert.deepEqual(settings.aiAutoProviders, [provider]);
   assert.equal(settings.aiAutoFallback, false);
   assert.equal(settings.aiFallbackOpenCode, false);
-  assert.ok(Object.values(settings.agentSeats).every((seat) => seat.provider === provider && !seat.fast && !seat.effort));
+  // A provider with a verified tier map starts its seats at low effort (Haiku takes none)
+  // and fills blank tier models; the rest keep the old blank seats.
+  const plan = providerSetups.planFor(provider);
+  assert.ok(Object.values(settings.agentSeats).every((seat) => seat.provider === provider && !seat.fast && (plan ? seat.effort === "" || seat.effort === "low" : !seat.effort)));
   assert.equal(settings.agentSeats.companion.model, "my-model");
-  assert.equal(settings.agentSeats.lead.model, "");
+  assert.equal(settings.agentSeats.lead.model, plan ? plan.heavy.model : "");
   assert.deepEqual(settings.agentSubtasks, { cli: "auto", model: "" });
   assert.equal(settings.apiKeyEncrypted, "keep");
   assert.equal(profiles.validate(profiles.extract(settings)), null);
@@ -100,4 +104,17 @@ test("an added login signs in under its own folder, named by id and resolved by 
   children[1].emit("close", 0);
   for (let i = 0; i < 5; i++) await Promise.resolve();
   assert.deepEqual(closed, [{ id: "claude", action: "login", account: "claude-a1b2" }]);
+});
+
+test("provider site, plans and key pages open from fixed URLs only", async () => {
+  const opened = [];
+  const setup = createCliSetup({ spawn() { throw new Error("no spawn"); }, openExternal: async (url) => { opened.push(url); }, platform: "linux" });
+  for (const cli of CLIS) {
+    assert.deepEqual(await setup.action({ id: cli.id, action: "site" }), { ok: true });
+    assert.match(cli.plans, /^https:\/\//);
+  }
+  assert.deepEqual(await setup.action({ id: "openrouter", action: "keys" }), { ok: true });
+  assert.equal(opened.at(-1), "https://openrouter.ai/keys");
+  assert.equal((await setup.action({ id: "codex", action: "keys" })).ok, false);
+  assert.equal((await setup.action({ id: "https://evil.example", action: "site" })).ok, false);
 });

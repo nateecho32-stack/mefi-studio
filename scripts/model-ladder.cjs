@@ -1,9 +1,9 @@
 "use strict";
 // How hard a model thinks, and when a stuck coding job moves to a stronger
-// model. The owner's rule (2026-10-05): every job starts with light thinking
-// and thinks harder only when it gets stuck. A coding job that fails its check
-// retries one step harder; after two misses on one model a stronger model
-// takes it; Max thinking waits for the owner unless they turned that ask off.
+// model. The owner's rules: every job starts with light thinking (2026-10-05),
+// and a stuck job moves up a model tier first, at the same thinking level
+// (2026-10-07). Thinking only goes harder at the top tier, and Max thinking
+// waits for the owner unless they turned that ask off.
 // When a harder step worked for a kind of job, the next job of that kind
 // starts there (learnedStart reads the model ledger's settled attempts).
 //
@@ -124,11 +124,12 @@ function startLevel({ mode = "auto", explicit = null, learned = null } = {}) {
 
 // How the next attempt of one coding card runs, from how many of its attempts
 // have missed (charged run failures plus failed checks). With "step up" off,
-// every retry runs like the first. With it on, Auto thinks one step harder per
-// miss, and after two misses a stronger model takes the card when one exists:
-//   misses 0: start level            1: one step harder
-//          2: stronger model, same   3: stronger model, one step harder
-//          4: one step more (Max only when the owner allowed it)
+// every retry runs like the first. With it on, a miss moves the card to the
+// next model tier up when one exists, at the same thinking level. Only at the
+// top tier does Auto think one step harder per miss:
+//   misses 0: start level                  1+: stronger model, same level
+//   no stronger model left: 1: one step harder, 2: two, 3+: three
+//   (Max only when the owner allowed it)
 // A fixed team mode keeps its thinking and only moves the model. The card
 // itself parks after its fifth charged failure (executor-core
 // MAX_RUN_FAILURES), which is where the owner decides about Max or a heavier
@@ -137,8 +138,11 @@ function builderStep({ mode = "auto", climb = true, askMax = true, misses = 0, s
   const n = Math.max(0, Math.floor(Number(misses) || 0));
   const base = Math.max(0, indexOf(LEVELS.includes(start) ? start : "light"));
   if (!climb || n === 0) return { level: LEVELS[base], stronger: false, held: null, reason: null };
-  const stronger = Boolean(hasStronger) && n >= 2;
-  const steps = mode !== "auto" ? 0 : hasStronger ? [0, 1, 1, 2, 3][Math.min(n, 4)] : Math.min(n, 3);
+  // Escalation order (owner, 2026-10-07): a stuck card moves to the next model
+  // tier up first, at the same thinking level. Thinking only goes harder once
+  // there is no stronger model left to move to.
+  const stronger = Boolean(hasStronger);
+  const steps = mode !== "auto" || stronger ? 0 : Math.min(n, 3);
   const top = askMax ? indexOf("deep") : indexOf("max");
   const want = base + steps;
   const at = Math.min(want, Math.max(base, top));
@@ -146,7 +150,7 @@ function builderStep({ mode = "auto", climb = true, askMax = true, misses = 0, s
     level: LEVELS[at],
     stronger,
     held: askMax && want > at && want >= indexOf("max") ? "max" : null,
-    reason: stronger && (n === 2 || steps === 0) ? "stronger-model" : at > base ? "thinks-harder" : "retry",
+    reason: stronger ? "stronger-model" : at > base ? "thinks-harder" : "retry",
   };
 }
 
@@ -175,6 +179,14 @@ function learnedStart(observations = [], { provider, model, taskType } = {}, { w
     }
   }
   return null;
+}
+
+// The model a missed card stays on: the model its last attempt ran on, when the
+// same CLI runs this attempt. Null when nothing needs pinning (no miss yet, the
+// owner picked the model, another CLI runs it, or it already runs on that model).
+function keptModel({ lastModel = "", lastCli = "", cli = "", currentModel = "", missed = false, ownerPick = false } = {}) {
+  if (!missed || ownerPick || !lastModel || !lastCli || lastCli !== cli || currentModel === lastModel) return null;
+  return lastModel;
 }
 
 // A stronger model in the same family, for a builder whose Heavy tier names
@@ -235,5 +247,5 @@ const wordsFor = (level) => WORDS[levelOf(level)] ?? "the model's own thinking";
 
 module.exports = {
   LEVELS, MODES, LEVEL_EFFORT, EFFORT_ORDER, DEFAULTS, CLAUDE_EFFORTS, CODEX_EFFORTS,
-  thinking, validate, levelOf, effortOf, cliEfforts, fitEffort, effortArgs, startLevel, builderStep, learnedStart, strongerSibling, parseOpencodeModels, codexLevelsFrom, wordsFor,
+  thinking, validate, levelOf, effortOf, cliEfforts, fitEffort, effortArgs, startLevel, builderStep, learnedStart, keptModel, strongerSibling, parseOpencodeModels, codexLevelsFrom, wordsFor,
 };

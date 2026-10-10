@@ -2237,7 +2237,18 @@
       </div>
       <div class="walkthrough-activity" id="walkthrough-activity" hidden><div class="walkthrough-activity-track"><span id="walkthrough-activity-fill"></span></div><span id="walkthrough-activity-label"></span></div>
       <div id="walkthrough-cli-setup" class="walkthrough-panel" hidden>
-        <h3 id="walkthrough-cli-heading">Use the account you already have</h3>
+        <h3 id="walkthrough-cli-heading">Get your AI started</h3>
+        <div id="walkthrough-cli-easy" class="walkthrough-easy">
+          <p>The easiest start is one of these two. Each opens its own website, and you pick a plan or a key there.</p>
+          <div class="walkthrough-easy-grid">
+            <div class="walkthrough-easy-card"><strong>OpenCode</strong><span class="muted">Free models to begin with, or its paid plans for more. Studio installs it for you.</span>
+              <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-easy-opencode" type="button">Set up OpenCode</button><button class="ghost mini" data-provider-page="opencode:site" type="button">Website</button><button class="ghost mini" data-provider-page="opencode:plans" type="button">See plans</button></div></div>
+            <div class="walkthrough-easy-card"><strong>OpenRouter</strong><span class="muted">One key that reaches many models. You pay for what you use.</span>
+              <div class="walkthrough-panel-actions"><button class="primary" id="walkthrough-easy-openrouter" type="button">Get a key</button><button class="ghost mini" data-provider-page="openrouter:site" type="button">Website</button><button class="ghost mini" data-provider-page="openrouter:plans" type="button">See models</button></div></div>
+          </div>
+          <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-easy-existing" type="button">Already have a provider? Set up here</button></div>
+        </div>
+        <div id="walkthrough-cli-existing" hidden>
         <p>One subscription can do it all: chatting, mapping, planning and building. Pick your tool, sign in in its own window, then check the connection. Your plan's own limits still apply.</p>
         <label for="walkthrough-cli-choice">Your AI tool</label>
         <select id="walkthrough-cli-choice"><option value="codex">Codex · ChatGPT plan</option><option value="claude">Claude Code · Claude subscription</option><option value="grok">Grok · Grok account</option><option value="antigravity">Antigravity · Google account</option><option value="opencode">OpenCode · free models, or accounts you link</option></select>
@@ -2249,10 +2260,14 @@
           <button class="primary" id="walkthrough-cli-use" type="button">Use for the whole studio</button>
           <button class="ghost mini" id="walkthrough-cli-refresh" type="button">Refresh installed tools</button>
           <button class="ghost mini" id="walkthrough-cli-docs" type="button">Setup instructions</button>
+          <button class="ghost mini" id="walkthrough-cli-site" type="button">Website</button>
+          <button class="ghost mini" id="walkthrough-cli-plans" type="button">See plans</button>
         </div>
         <p class="muted" data-info-anchor="walkthrough-cli-heading">Install opens a setup window that downloads the tool, and Node.js too if the tool needs it. Studio looks for the tool again when that window closes. Check connection sends one small test, which counts toward your plan. Your password stays in the company's own sign-in window.</p>
         <div class="walkthrough-panel-actions"><button class="ghost" id="walkthrough-cli-keys" type="button">I have an API key or a local model server</button></div>
         <p class="muted" data-info-anchor="walkthrough-cli-heading">No subscription? Paste a key from z.ai, OpenRouter, OpenCode Go or Zen, use your own server, or pick LM Studio in Team › Providers. The guide takes you there, then scans again so Use this setup can map your project with it.</p>
+        <div class="walkthrough-panel-actions"><button class="ghost mini" id="walkthrough-easy-back" type="button">Back to the easy start</button></div>
+        </div>
         <p id="walkthrough-cli-status" role="status" aria-live="polite"></p>
       </div>
       <div id="walkthrough-scan" class="walkthrough-panel" hidden>

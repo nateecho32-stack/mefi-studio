@@ -72,14 +72,17 @@ test("thinking starts from the owner's pick, then the team's mode, then what wor
   assert.deepEqual(ladder.startLevel({}), { level: "light", source: "auto" });
 });
 
-test("on Auto a stuck card thinks harder, then a stronger model takes it, and Max waits for the owner", () => {
+test("on Auto a stuck card moves up a model tier first, and thinks harder only at the top", () => {
   const run = (misses, extra = {}) => ladder.builderStep({ mode: "auto", climb: true, askMax: true, misses, start: "light", hasStronger: true, ...extra });
   assert.deepEqual(run(0), { level: "light", stronger: false, held: null, reason: null });
-  assert.deepEqual(run(1), { level: "balanced", stronger: false, held: null, reason: "thinks-harder" });
-  assert.deepEqual(run(2), { level: "balanced", stronger: true, held: null, reason: "stronger-model" });
-  assert.deepEqual(run(3), { level: "deep", stronger: true, held: null, reason: "thinks-harder" });
-  assert.deepEqual(run(4), { level: "deep", stronger: true, held: "max", reason: "thinks-harder" });
-  assert.deepEqual(run(4, { askMax: false }), { level: "max", stronger: true, held: null, reason: "thinks-harder" });
+  assert.deepEqual(run(1), { level: "light", stronger: true, held: null, reason: "stronger-model" });
+  assert.deepEqual(run(2), { level: "light", stronger: true, held: null, reason: "stronger-model" });
+  assert.deepEqual(run(4), { level: "light", stronger: true, held: null, reason: "stronger-model" });
+  // At the top tier there is no stronger model: thinking climbs, Max waits for the owner.
+  const top = (misses, extra = {}) => ladder.builderStep({ mode: "auto", climb: true, askMax: true, misses, start: "light", hasStronger: false, ...extra });
+  assert.deepEqual(top(1), { level: "balanced", stronger: false, held: null, reason: "thinks-harder" });
+  assert.deepEqual(top(3), { level: "deep", stronger: false, held: "max", reason: "thinks-harder" });
+  assert.deepEqual(top(3, { askMax: false }), { level: "max", stronger: false, held: null, reason: "thinks-harder" });
 });
 
 test("with no stronger model the card only thinks harder", () => {
@@ -91,7 +94,7 @@ test("with no stronger model the card only thinks harder", () => {
 
 test("a fixed team mode keeps its thinking and only moves the model", () => {
   const run = (misses) => ladder.builderStep({ mode: "balanced", misses, start: "balanced", hasStronger: true });
-  assert.deepEqual([0, 1, 2, 3].map((n) => [run(n).level, run(n).stronger]), [["balanced", false], ["balanced", false], ["balanced", true], ["balanced", true]]);
+  assert.deepEqual([0, 1, 2, 3].map((n) => [run(n).level, run(n).stronger]), [["balanced", false], ["balanced", true], ["balanced", true], ["balanced", true]]);
   assert.equal(run(2).reason, "stronger-model");
 });
 

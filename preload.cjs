@@ -215,6 +215,9 @@ const api = {
   // Configuration's interface scale (main.cjs ui:zoom).
   uiZoom: (payload) => ipcRenderer.invoke("ui:zoom", payload ?? {}),
   uiZoomGet: () => ipcRenderer.invoke("ui:zoom-get"),
+  uiStayOnTop: (payload) => ipcRenderer.invoke("ui:stay-on-top", payload ?? {}),
+  uiStayOnTopGet: () => ipcRenderer.invoke("ui:stay-on-top-get"),
+  onUiStayOnTop: (callback) => ipcRenderer.on("ui:stay-on-top-changed", (_event, payload) => callback(payload)),
   // Ctrl +, Ctrl - and Ctrl 0 changed the scale (main.cjs stepUiZoom): { factor }.
   onUiZoom: (callback) => ipcRenderer.on("ui:zoom-changed", (_event, payload) => callback(payload)),
   eyesPinsRead: () => ipcRenderer.invoke("eyes:pins-read"),

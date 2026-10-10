@@ -71,7 +71,7 @@ test("every saved project team takes the subscription, keeping its own rules and
   // Each team is rewritten from its own saved copy: the site's own Claude models fill its seats.
   assert.equal(projects.project_site.configuration.agentSeats.companion.model, "claude-haiku-5");
   assert.equal(projects.project_site.configuration.agentSeats.lead.model, "claude-opus-5");
-  assert.equal(projects.project_game.configuration.agentSeats.lead.model, "", "no other provider's model rides along");
+  assert.equal(projects.project_game.configuration.agentSeats.lead.model, "claude-opus-5-5", "a team with no Claude models of its own takes the subscription's tier models");
   assert.deepEqual(projects.project_none, before.agentTeams.projects.project_none, "the placeholder entry is left alone");
   assert.deepEqual(settings.agentTeams.presets, before.agentTeams.presets, "saved presets are templates, not teams in use");
   assert.equal(settings.agentTeams.revision, 6, "one revision bump per team rewritten, as agentProfiles.update does");

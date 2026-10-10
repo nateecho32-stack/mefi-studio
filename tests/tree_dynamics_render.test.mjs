@@ -22,8 +22,12 @@ test("tree shape, music and video controls transform real painted nodes while re
     const child = spawn(executable, [path.join(studio, "tests", "fixtures", "command-render-electron.cjs")], { cwd: studio, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
     let output = "";
     for (const stream of [child.stdout, child.stderr]) stream.on("data", chunk => { output = (output + chunk).slice(-12000); });
-    const timer = setTimeout(() => child.kill(), 65000);
-    const code = await new Promise((resolve, reject) => { child.once("close", resolve); child.once("error", reject); }).finally(() => clearTimeout(timer));
+    // Electron's helper processes inherit the stdio pipes, so "close" can wait for them
+    // after the main process is gone; "exit" fires when the process itself ends. On
+    // Windows the whole tree is killed so no helper keeps the run open.
+    const stop = () => { if (process.platform === "win32" && child.pid) spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }); else child.kill("SIGKILL"); };
+    const timer = setTimeout(stop, 65000);
+    const code = await new Promise((resolve, reject) => { child.once("exit", resolve); child.once("error", reject); }).finally(() => clearTimeout(timer));
     let report; try { report = JSON.parse(await readFile(path.join(fixture, "report.json"), "utf8")); } catch {}
     const capture = process.env.MEFI_TREE_DYNAMICS_OUTPUT;
     if (capture && path.isAbsolute(capture)) {

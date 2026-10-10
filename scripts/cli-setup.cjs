@@ -1,14 +1,22 @@
 "use strict";
 
+const providerSetups = require("./provider-setups.cjs");
+
 // Only these vendor-owned commands can be launched by the setup IPC. Neither
 // commands nor URLs are accepted from the renderer. See docs/cli-setup.md.
 const CLIS = Object.freeze([
-  { id: "codex", name: "Codex", cmd: "codex", package: "@openai/codex", login: "codex login", docs: "https://developers.openai.com/codex/cli" },
-  { id: "claude", name: "Claude Code", cmd: "claude", install: "irm https://claude.ai/install.ps1 | iex", login: "claude auth login", docs: "https://code.claude.com/docs/en/setup" },
-  { id: "grok", name: "Grok", cmd: "grok", package: "@xai-official/grok", login: "grok login", docs: "https://docs.x.ai/build/cli/reference" },
-  { id: "antigravity", name: "Antigravity", cmd: "agy", install: "irm https://antigravity.google/cli/install.ps1 | iex", login: "agy", docs: "https://www.antigravity.google/docs/cli/install/" },
-  { id: "opencode", name: "OpenCode", cmd: "opencode", package: "opencode-ai", login: "opencode auth login", docs: "https://opencode.ai/docs/" },
+  { id: "codex", name: "Codex", cmd: "codex", package: "@openai/codex", login: "codex login", docs: "https://developers.openai.com/codex/cli", site: "https://openai.com/codex", plans: "https://openai.com/chatgpt/pricing" },
+  { id: "claude", name: "Claude Code", cmd: "claude", install: "irm https://claude.ai/install.ps1 | iex", login: "claude auth login", docs: "https://code.claude.com/docs/en/setup", site: "https://claude.com/product/claude-code", plans: "https://claude.com/pricing" },
+  { id: "grok", name: "Grok", cmd: "grok", package: "@xai-official/grok", login: "grok login", docs: "https://docs.x.ai/build/cli/reference", site: "https://x.ai/grok", plans: "https://grok.com/plans" },
+  { id: "antigravity", name: "Antigravity", cmd: "agy", install: "irm https://antigravity.google/cli/install.ps1 | iex", login: "agy", docs: "https://www.antigravity.google/docs/cli/install/", site: "https://antigravity.google", plans: "https://one.google.com/about/google-ai-plans/" },
+  { id: "opencode", name: "OpenCode", cmd: "opencode", package: "opencode-ai", login: "opencode auth login", docs: "https://opencode.ai/docs/", site: "https://opencode.ai", plans: "https://opencode.ai/go" },
 ]);
+// Key-only providers have no tool to install: the guide just opens their pages.
+// Fixed here, like the CLIs' pages, so the renderer never hands over a URL.
+const LINK_ONLY = Object.freeze([
+  { id: "openrouter", name: "OpenRouter", site: "https://openrouter.ai", plans: "https://openrouter.ai/models", keys: "https://openrouter.ai/keys" },
+]);
+const PAGE_ACTIONS = Object.freeze(["site", "plans", "keys"]);
 const SUBSCRIPTIONS = Object.freeze(["codex", "claude", "grok", "antigravity"]);
 
 function singleProvider(settings, provider) {
@@ -31,6 +39,23 @@ function singleProvider(settings, provider) {
   settings.agentSubtasks = { cli: "auto", model: "" };
   // Per-kind-of-job routes to other tools would break "only this provider".
   delete settings.agentKinds;
+  // A provider with a verified tier map gets its models picked, not left blank:
+  // heavy seats (lead, desk, overseer) take Opus, companion and scout take
+  // Haiku, and builders take Sonnet for changes. Every seat starts at low effort.
+  const plan = providerSetups.planFor(provider);
+  if (plan) {
+    // A tier the owner already picked for this provider keeps its model; only blanks are filled.
+    const saved = settings.aiModelsByProvider?.[provider] || {};
+    settings.aiModelsByProvider = { ...(settings.aiModelsByProvider || {}), [provider]: { heavy: saved.heavy || plan.heavy.model, routine: saved.routine || plan.quick.model } };
+    // Builders on the Auto tier use executorModel (main.cjs executorModelOverride), so they
+    // take Sonnet 5.5 for changes. Haiku takes no reasoning effort (model-ladder cliEfforts),
+    // so its seats keep none.
+    settings.executorModel = plan.routine.model;
+    settings.agentSeats = Object.fromEntries(["lead", "desk", "companion", "scout", "overseer"].map((seat) => {
+      const tier = seat === "companion" || seat === "scout" ? "routine" : "heavy";
+      return [seat, { provider, model: settings.aiModelsByProvider[provider][tier], effort: tier === "heavy" ? plan.heavy.effort : "", fast: false }];
+    }));
+  }
   return settings;
 }
 
@@ -96,6 +121,12 @@ function createCliSetup({ spawn, openExternal, refresh = async () => {}, closed 
   const running = new Set();
   async function action(payload) {
     const { id, action, account = null } = payload || {};
+    if (PAGE_ACTIONS.includes(action)) {
+      const page = [...CLIS, ...LINK_ONLY].find((item) => item.id === id)?.[action];
+      if (!page) return { ok: false, error: "That provider has no such page." };
+      await openExternal(page);
+      return { ok: true };
+    }
     const cli = CLIS.find((item) => item.id === id);
     if (!cli || !["install", "login", "docs"].includes(action)) return { ok: false, error: "Unknown CLI setup action." };
     if (action === "docs") { await openExternal(cli.docs); return { ok: true }; }
@@ -127,4 +158,4 @@ function createCliSetup({ spawn, openExternal, refresh = async () => {}, closed 
   return { action };
 }
 
-module.exports = { CLIS, SUBSCRIPTIONS, INSTALL_FOLDERS, singleProvider, singleProviderEverywhere, wholeStudioMessage, setupScript, createCliSetup };
+module.exports = { CLIS, LINK_ONLY, SUBSCRIPTIONS, INSTALL_FOLDERS, singleProvider, singleProviderEverywhere, wholeStudioMessage, setupScript, createCliSetup };
