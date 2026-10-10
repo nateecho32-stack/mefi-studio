@@ -142,8 +142,8 @@
   SITE.urls.discord = SITE.discord.invite;
   SITE.urls.enhancements = `https://github.com/${SITE.repo}/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement+sort%3Areactions-%2B1-desc`;
 
-  // Live member and online counts from the invite (counts only; the server
-  // widget, which would publish names, stays off). Rejects on any failure.
+  // Live member and online counts from the invite; the community page also
+  // embeds Discord's separately enabled public widget. Rejects on any failure.
   let pulsePromise = null;
   SITE.fetchDiscordCounts = function () {
     if (pulsePromise) return pulsePromise;

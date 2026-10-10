@@ -1,5 +1,13 @@
 # Website changelog
 
+## 2026-10-10 — Live Discord widget
+
+- Show the official Discord widget on Community, with online members and voice channels in a responsive embed.
+- Keep a separate Join button available if the widget is blocked or its invite channel is unset.
+- Use the server's current Vibe Studio name in the community introduction.
+
+Validation: official widget renders online members and voice channels. Community checked at 1440 and 390 px without broken images, console errors or horizontal overflow; JavaScript syntax and diff whitespace checks pass. Site-only branch; app gates do not apply.
+
 ## 2026-10-09 — Vibe Studio refresh
 
 - Rebrand public pages, the guide and link previews as Vibe Studio, with a lime-and-mint palette and a new V/spark mark.

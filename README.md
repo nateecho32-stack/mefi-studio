@@ -76,6 +76,12 @@ Add a markdown file under `wiki/pages/` and list it in `wiki/pages.json` (title,
 - Screenshots in `assets/shots/` use the real renderer with synthetic "Notes app" sample data (`tools/promo/prepare.cjs` on `main`). They contain no live user data.
 - The earlier showreel and Discord post copy stay in `media/`.
 
+## Discord widget
+
+The community page embeds Discord's official dark widget for server `1345380333302059129`, outside the tabs so it stays visible. It loads lazily and has a separate Join button using the permanent invite, so joining works even when Discord's iframe is blocked or has no invite channel.
+
+In Discord Server Settings → Widget, enable the widget, choose a public welcome/start channel under **Invite Channel**, and save. The public status can be checked at `https://discord.com/api/guilds/1345380333302059129/widget.json`. No bot token is needed. Do not save the returned member list in this repository.
+
 ## Checking a change
 
 Preview with a loopback-only static server. Before pushing, check pages at 1440 and 390 px wide with no console errors, no missing files and no sideways scrolling.

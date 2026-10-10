@@ -183,6 +183,20 @@
 .cm-links .card-link p { flex: 0 0 auto; }
 .cm-links .more { margin-top: auto; padding-top: 14px; }
 
+/* ---- Live Discord widget ---- */
+.cm-discord {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 350px);
+  align-items: center; gap: clamp(24px, 5vw, 80px); margin-bottom: 64px;
+}
+.cm-discord-copy { min-width: 0; max-width: 760px; }
+.cm-discord-copy h2 { font-size: clamp(2rem, 4vw, 3.6rem); line-height: 1.08; }
+.cm-discord-note { color: var(--muted); font-size: .92rem; }
+.cm-discord-frame { display: block; width: 100%; max-width: 350px; height: 500px; border: 0; border-radius: var(--r-lg); background: #1e1f22; }
+@media (max-width: 720px) {
+  .cm-discord { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .cm-discord-frame { justify-self: center; }
+}
+
 /* ---- responsive ---- */
 @media (min-width: 961px) {
   .cm-tabset > [role="tablist"] { position: sticky; top: 88px; z-index: 20; }
