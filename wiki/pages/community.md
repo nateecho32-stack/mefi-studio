@@ -45,7 +45,7 @@ The owner's plan for the community has started: sharing projects, credits and ra
 - Cosmetics and creator styles you can get with credits.
 - Shared mixes, with the most-played lists for people who choose to share their music taste.
 
-Participation earns credits, with optional monthly credit packs and support ranks in the launch plan. See [launch rewards and support](../../index.html#support). Every theme and node style stays free. The [roadmap](../roadmap.html) shows these plans and what's being built now. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>.
+Participation earns credits, with optional subscription membership benefits in the launch plan. See [launch rewards and support](../../index.html#support). Every theme and node style stays free. The [roadmap](../roadmap.html) shows these plans and what's being built now. A "Hey Studio" voice shortcut is an <span class="status idea">Idea</span>.
 
 ## Ask for something
 

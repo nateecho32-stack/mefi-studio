@@ -27,6 +27,17 @@
   // The orbs
   // =========================================================================
   var heroOrb = null, heroHost = $("#hero-orb"), orbFriends = 0;
+  // CSS moves the supplied artwork; observer events only pause/resume it.
+  function brandMotion() {
+    var mark = $("#hero-brand");
+    if (!mark) return;
+    var inView = false;
+    function update() { mark.classList.toggle("is-active", inView && !document.hidden && !still()); }
+    visible(mark, function (shown) { inView = shown; update(); });
+    document.addEventListener("visibilitychange", update);
+    if (reduce.addEventListener) reduce.addEventListener("change", update);
+    else if (reduce.addListener) reduce.addListener(update);
+  }
   function mountOrbs() {
     if (!window.MefiOrb) return;
     if (heroHost) {
@@ -539,6 +550,7 @@
     safely("old links", oldAnchors);
     window.addEventListener("hashchange", function () { safely("old links", oldAnchors); });
     safely("orbs", mountOrbs);
+    safely("brand motion", brandMotion);
     safely("friend chips", friendChips);
     var gated = false;
     safely("gate", function () { if (root.classList.contains("gate-on")) gated = startGate(); });

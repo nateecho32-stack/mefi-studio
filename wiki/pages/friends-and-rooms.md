@@ -72,7 +72,7 @@ Anyone a week or more in the Void Engine server can make a room, and you can own
 - **Feature** spends 100 credits to put your project at the top of the hub for a day, once a week.
 - **Report** someone else's project if it's spam or a broken link, not safe to open, or someone else's work.
 
-Participation earns credits. The announced launch subscription also adds monthly credit packs, higher daily earnings and a 3-day project booster. Discovery prioritizes Builder, then Donor, then current rank, with ratings helping new projects get seen. These launch offers replace the older participation-only credit policy; see [support and early-member rewards](../../index.html#support). Ranks go Spark, Ember, Flame, Comet, Star, Nova and Void by the credits you've earned. Your balance is yours alone; others see your rank.
+Participation earns credits. Subscription membership benefits remain separate from earned credits; there are no paid credit packs. Discovery prioritizes Builder, then Donor, then current rank, with ratings helping new projects get seen. These launch offers replace the older participation-only credit policy; see [support and early-member rewards](../../index.html#support). Ranks go Spark, Ember, Flame, Comet, Star, Nova and Void by the credits you've earned. Your balance is yours alone; others see your rank.
 
 ## Events <span class="status next">Coming in 0.5</span>
 

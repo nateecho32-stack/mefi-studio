@@ -2,13 +2,13 @@
 
 ## Is Studio free?
 
-Yes. Vibe Studio is free and open source under the MIT license. Every theme and node style has been free since 0.4.4, including the Void collection. AI services may charge for the account or API you connect.
+The desktop project tools stay free and open source under the MIT license. The owner manages the hosted social service separately. Every theme and node style in the released desktop app is free. AI services may charge for the account or API you connect.
 
 ## Will there be paid extras?
 
-The core app stays free and free members can post. The announced launch plan offers a **$5 first donation** for a lifetime Donor rank and **50% off the first subscription month**, plus an optional **$10/month** Builder subscription with higher daily credit earnings, monthly credits, a 3-day project booster and higher room visibility.
+The planned subscription starts at **USD $5 for the first month**, including a permanent Donor bonus, then **$10/month**. Inviting five unique admitted Studio members earns a permanent $5 discount on monthly renewals. There are no paid credit packs or cash payouts; earned-credit purchases stay separate from subscription checkout.
 
-First-week launch members get the monthly Donor rank free for life; first-month launch members get a free Supporter rank and higher-rank permissions. Early members can get custom ranks, flair, cosmetic requests, welcome bonuses and a user number. Existing Discord members can claim the announced ranks too. The launch date and claim steps will be announced in Discord. See [launch rewards](../../index.html#launch) and [support plans](../../index.html#support).
+First admitted Studio signups in launch week one get 500 credits once, lifetime subscription access while using Studio, and a permanent Donor bonus. First admitted signups after week one during launch month one get 100 credits once, free introductory access and a permanent Donor bonus. These credit offers do not stack, and linked sign-ins or rejoining do not reset eligibility. The offer windows start at launch; the launch date, introductory expiry and prelaunch Discord eligibility will be confirmed before signup. Social admission is planned for 1,000 unique accounts, then a waitlist. See [launch rewards](../../index.html#launch) and [support plans](../../index.html#support).
 
 ## Can I join the community without using the app?
 

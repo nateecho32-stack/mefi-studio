@@ -2,7 +2,7 @@
 :root:not([data-theme]) {
   --accent: #c5ff73; --accent-bright: #deffb1; --accent-rgb: 197 255 115;
   --bright-rgb: 222 255 177; --accent-2: #86efdd; --accent-2-rgb: 134 239 221;
-  --accent-3: #b9a1ff; --accent-3-rgb: 185 161 255;
+  --accent-3: #45cbb5; --accent-3-rgb: 69 203 181;
   --bg: #080c0b; --bg-rgb: 8 12 11; --bg-2: #101714; --bg-2-rgb: 16 23 20;
   --panel-rgb: 20 30 25; --panel-2-rgb: 28 40 34; --panel-solid: #141e19;
   --panel-raised: #1c2822; --text: #e0e7e2; --muted: #b0bdb4; --dim: #8e9d94;
@@ -81,3 +81,23 @@
   .visibility-row { padding: 24px; }
 }
 @media (prefers-reduced-motion: reduce) { .vibe-hero-stamp { transform: none; } }
+
+/* The owner’s folded V artwork: full image, lime foil and aqua edges. */
+:root:not([data-theme]) { --grad: linear-gradient(110deg, #efffd1 0%, #c5ff73 30%, #86efdd 62%, #d8fff7 80%, #c5ff73 100%); --metal: linear-gradient(115deg, #edffb8 0%, #c5ff73 38%, #86efdd 78%, #b6fff0); --metal-hover: linear-gradient(115deg, #f6ffd9, #d5ff96 38%, #a4fff0 78%, #d6fff7); }
+:root:not([data-theme]) .btn-primary { border-color: rgb(222 255 177 / .7); box-shadow: inset 0 1px 0 rgb(255 255 255 / .7), 0 8px 32px -16px rgb(134 239 221 / .5); }
+.hero-brand-art { position: absolute; width: 78%; height: auto; inset: 8% 0 auto; margin: auto; object-fit: contain; border-radius: 28px; box-shadow: 0 0 90px -34px rgb(var(--accent-2-rgb) / .3), 0 30px 70px -40px rgb(0 0 0 / .7); }
+.home .hero-stage { pointer-events: none; }
+.brand img, .gate-brand img { object-fit: contain; }
+@media (max-width: 920px) { .hero-brand-art { width: 82%; inset: 5% 0 auto; } .vibe-hero-stamp { bottom: 1%; } }
+.hero-brand-art { overflow: hidden; transform-origin: 50% 58%; animation: brand-float 9s ease-in-out infinite; animation-play-state: paused; }
+.hero-brand-art img { width: 100%; height: auto; }
+.hero-brand-foil { position: absolute; inset: 0; pointer-events: none; mix-blend-mode: screen; clip-path: polygon(14% 23%, 35% 25%, 54% 69%, 70% 42%, 86% 32%, 71% 74%, 56% 85%, 36% 80%); }
+.hero-brand-foil::before { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 36%, rgb(230 255 242 / .25) 47%, transparent 58%); animation: brand-foil 7s ease-in-out infinite; animation-play-state: paused; }
+.hero-brand-star { position: absolute; left: 66.7%; top: 26.7%; width: 18%; aspect-ratio: 1; transform: translate(-50%, -50%); pointer-events: none; background: radial-gradient(ellipse, rgb(240 255 235 / .7), transparent 70%); opacity: 0; mix-blend-mode: screen; animation: brand-star 5s ease-in-out infinite; animation-play-state: paused; }
+.hero-brand-art.is-active, .hero-brand-art.is-active .hero-brand-foil::before, .hero-brand-art.is-active .hero-brand-star { animation-play-state: running; }
+@keyframes brand-float { 0%, 100% { transform: perspective(1200px) translateY(0) rotateY(-3deg) rotateZ(-.6deg); } 50% { transform: perspective(1200px) translateY(-8px) rotateY(3deg) rotateZ(.6deg); } }
+@keyframes brand-foil { 0%, 15%, 100% { transform: translateX(-65%); opacity: 0; } 40%, 65% { opacity: .6; } 85% { transform: translateX(65%); opacity: 0; } }
+@keyframes brand-star { 0%, 45%, 100% { opacity: 0; } 60%, 72% { opacity: .65; } }
+@media (max-width: 700px) { .hero-brand-art { animation-name: brand-float-mobile; } }
+@keyframes brand-float-mobile { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@media (prefers-reduced-motion: reduce) { .hero-brand-art, .hero-brand-art .hero-brand-foil::before, .hero-brand-art .hero-brand-star { animation: none !important; transform: none; } .hero-brand-foil, .hero-brand-star { display: none; } }

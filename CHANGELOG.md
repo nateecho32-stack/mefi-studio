@@ -1,5 +1,14 @@
 # Website changelog
 
+## 2026-10-10 — Supplied V icon and launch terms
+
+- Use the owner's exact V/star artwork in the header, hero, favicon and share card, with a coordinated dark, lime and aqua finish.
+- Add slow V movement, a foil sweep and independent star glimmer; pause decoration offscreen or in hidden tabs and keep reduced motion static.
+- Clarify the non-stacking 500/100 signup offers, lifetime versus introductory subscription, permanent Donor bonus, planned support and unopened checkout.
+- Preserve navigation, theme choices and the explicitly simulated project demo.
+
+Validation: six pages at desktop and mobile widths, phone navigation, demo entry, nine pages / 325 local references with none missing, JavaScript syntax and whitespace. Real renderer motion sampling passed for normal and reduced motion; the 1200×630 share card was rendered and visually checked. No app release or private service deployment.
+
 ## 2026-10-10 — Live Discord widget
 
 - Show the official Discord widget on Community, with online members and voice channels in a responsive embed.

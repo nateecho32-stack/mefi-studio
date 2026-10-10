@@ -87,6 +87,6 @@ Then adjust **Density** (**Comfortable** or **Compact**), **Glass intensity** an
 
 ## Looks from the community <span class="status planned">Planned</span>
 
-Every theme and node style in Studio today stays free. The owner's community plan adds new cosmetics, and styles that other people make, which you could get with credits. Participation earns credits in 0.5; optional launch subscriptions also include monthly credit packs and higher daily earnings. Cosmetics and styles for credits aren't built yet. See the [roadmap](../roadmap.html).
+Every theme and node style in Studio today stays free. The owner's community plan adds new cosmetics, and styles that other people make, which you could get with credits. Participation earns credits in 0.5; subscription membership benefits remain separate from earned credits; there are no paid credit packs. Cosmetics and styles for credits aren't built yet. See the [roadmap](../roadmap.html).
 
 See also: [Settings and Configuration](#/settings) and [Your companion](#/companion).
