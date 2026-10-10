@@ -181,22 +181,25 @@ html.page-lock { overflow: hidden; }
 /* Home's sections sit closer than the site default (:where keeps the sections' own padding rules winning). */
 :where(.home main) > section { padding-block: clamp(48px, 5.5vw, 84px); }
 
-/* Rolling words (home.js rotators()): the next word rises in while the last one lifts away blurred,
-   and the box eases to the new word's width, so the line around it re-centres smoothly. */
-/* Each line of a rolling headline is its own block, so a word changing width never re-wraps the
-   heading; the outgoing and incoming words share one grid cell, which keeps them on the text's baseline. */
+/* One phrase per slot, in normal text flow. Natural wrapping also works before
+   web fonts arrive and when browser zoom leaves a narrow layout viewport. */
 .rot-head .ln { display: block; }
 .nw { white-space: nowrap; }
-.rot { display: inline-block; white-space: nowrap; }
-.rot-live { display: inline-grid; vertical-align: baseline; transition: width .65s var(--ease-out); }
-.rot-live .rot-w { grid-area: 1 / 1; justify-self: start; white-space: nowrap; transition: transform .7s var(--ease-out), opacity .45s ease, filter .5s ease; }
-.rot-w.enter { transform: translateY(.62em); opacity: 0; filter: blur(8px); }
-.rot-w.leave { transform: translateY(-.62em); opacity: 0; filter: blur(8px); }
+.rot-head .nw { white-space: normal; }
+.rot, .rot-w { display: inline; white-space: normal; }
 /* Inside a gradient line each word carries the gradient itself (moving children lose the parent's clip).
    Gradient text is painted only inside its box, so the boxes reach past the tight line height
    (padding, taken back by a negative margin) to keep ascenders and descenders whole. */
 .grad .rot-w { background: var(--grad); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; }
-.rot-head .ln.grad, .grad .rot-live .rot-w { padding-block: .1em .18em; margin-block: -.1em -.18em; }
+.rot-head .ln.grad { padding-block: .1em .18em; margin-block: -.1em -.18em; }
+/* A phone at 200% browser zoom can leave less than 320 CSS pixels. Keep the
+   header's menu reachable without adding sideways scroll to this page. */
+@media (max-width: 320px) {
+  .home .head-inner { gap: 6px; }
+  .home .site-head .brand { min-width: 0; gap: 6px; white-space: normal; font-size: .8rem; }
+  .home .site-head .brand img { flex: 0 0 28px; width: 28px; height: 28px; }
+  .home .menu { flex-shrink: 0; }
+}
 .win {
   position: relative; border-radius: 18px; overflow: hidden; background: #09090c; isolation: isolate;
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1), 0 70px 140px -50px rgb(0 0 0 / 0.95), 0 30px 60px -30px rgb(0 0 0 / 0.8), 0 0 180px -70px rgb(var(--accent-2-rgb) / 0.55);

@@ -1,5 +1,13 @@
 # Website changelog
 
+## 2026-10-10 — Readable changing headlines
+
+- Replace each changing term in one text element, so outgoing and incoming words cannot overlap.
+- Let both headline lines wrap naturally, including long provider names and MCP phrases at increased browser zoom; keep the small-screen menu within the viewport.
+- Keep offscreen and hidden-tab updates paused and reduced motion static. Version the changed assets so published pages pick up the fix.
+
+Validation: two complete desktop and phone-width word cycles; real renderer checks at 320, 390, 768 and 1440 px, including 125–200% zoom and reduced motion; no headline overlap, paragraph collision, horizontal overflow or page errors. System fonts require no download or measured-width cache. JavaScript syntax and whitespace checks pass. Site-only change.
+
 ## 2026-10-10 — Supplied V icon and launch terms
 
 - Use the owner's exact V/star artwork in the header, hero, favicon and share card, with a coordinated dark, lime and aqua finish.

@@ -404,38 +404,28 @@
 
   // =========================================================================
   // Words that roll over to the next one: "Keep using [Claude Code]", "Ready to build [a study timer]".
-  // Each .rot holds one .rot-w; the next word rolls in from below while the box eases to its width.
-  // They roll only while on screen; with reduced motion the first word stays.
+  // Keep one text node in each slot. Layered gradient words can remain visible
+  // through a parent's text clip even while their own opacity is zero.
+  // Words change only while on screen; reduced motion keeps the first phrase.
   // =========================================================================
   var rots = [];
-  // The box takes the word's width in em, so it stays right when the headline's size follows the window.
-  function fit(rot, w) { rot.style.width = (w.offsetWidth / (parseFloat(getComputedStyle(rot).fontSize) || 16)).toFixed(3) + "em"; }
   function rotators() {
-    $$(".rot[data-rot]").forEach(function (rot, n) {
-      var r = { el: rot, words: rot.dataset.rot.split("|"), i: 0, timer: 0, on: false, offset: n * 900 };
+    $$(".rot[data-rot]").forEach(function (rot) {
+      var r = { el: rot, words: rot.dataset.rot.split("|"), i: 0, timer: 0, on: false };
       rots.push(r);
       if (still() || r.words.length < 2) return;
-      rot.classList.add("rot-live");
-      fit(rot, $(".rot-w", rot));
-      function loop() { clearTimeout(r.timer); if (!r.on || document.hidden) return; r.timer = setTimeout(function () { roll(r); loop(); }, 2600); }
-      visible(rot, function (v) { r.on = v; if (v) { clearTimeout(r.timer); r.timer = setTimeout(function () { roll(r); loop(); }, 1400 + r.offset); } else clearTimeout(r.timer); });
+      function loop() { clearTimeout(r.timer); if (!r.on || document.hidden || still()) return; r.timer = setTimeout(function () { roll(r); loop(); }, 2600); }
+      visible(rot, function (v) { r.on = v; loop(); });
       document.addEventListener("visibilitychange", loop);
-    });
-    // The first measure may be in a fallback font: measure again once the page's fonts are in.
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () {
-      rots.forEach(function (r) { var w = $(".rot-w:not(.leave)", r.el); if (w && r.el.classList.contains("rot-live")) fit(r.el, w); });
+      reduce.addEventListener("change", function () { if (still()) { r.i = 0; roll(r, r.words[0]); } loop(); });
     });
   }
   function roll(r, word) {
-    var rot = r.el, cur = $(".rot-w:not(.leave)", rot);
+    var rot = r.el, cur = $(".rot-w", rot);
     if (word == null) { r.i = (r.i + 1) % r.words.length; word = r.words[r.i]; }
-    var w = document.createElement("span");
-    w.className = "rot-w enter"; w.textContent = word;
-    rot.appendChild(w);
-    fit(rot, w);
-    void w.offsetWidth;
-    w.classList.remove("enter");
-    if (cur) { cur.classList.add("leave"); setTimeout(function () { cur.remove(); }, 700); }
+    if (!cur) { cur = document.createElement("span"); cur.className = "rot-w"; }
+    cur.textContent = word;
+    rot.replaceChildren(cur);
   }
   // Puts a word first (the project the visitor built in the demo), and shows it now.
   function rotLead(rot, word) {
@@ -445,7 +435,7 @@
     rot.dataset.rot = words.join("|");
     if (!r) { var w0 = $(".rot-w", rot); if (w0) w0.textContent = word; return; }
     r.words = words; r.i = 0;
-    if (rot.classList.contains("rot-live")) roll(r, word); else $(".rot-w", rot).textContent = word;
+    roll(r, word);
   }
 
   // =========================================================================
