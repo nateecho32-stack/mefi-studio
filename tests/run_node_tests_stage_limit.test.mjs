@@ -25,7 +25,9 @@ test("a stage that runs past its limit is stopped, names what was still running,
   await writeFile(path.join(copy, "tests", "hang.test.mjs"),
     'import test from "node:test";\nimport { spawn } from "node:child_process";\n' +
     'test("waits on a child that never ends", () => new Promise(() => { spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" }); }));\n');
-  const env = { ...process.env, MEFI_TEST_STAGE_LIMIT_MIN: "0.05", MEFI_TEST_LEASE_DIR: path.join(copy, "lease"), MEFI_TEST_TIMINGS: path.join(copy, "timings.json"), MEFI_TEST_LEASE: "" };
+  // This fixture needs the quick suite beside the hanging suite even when the
+  // real desktop gate uses one suite at a time to stay within available memory.
+  const env = { ...process.env, MEFI_TEST_WIDTH: "2", MEFI_TEST_STAGE_LIMIT_MIN: "0.05", MEFI_TEST_LEASE_DIR: path.join(copy, "lease"), MEFI_TEST_TIMINGS: path.join(copy, "timings.json"), MEFI_TEST_LEASE: "" };
   delete env.NODE_TEST_CONTEXT;
   const started = Date.now();
   const child = spawn(process.execPath, ["scripts/run-node-tests.mjs", "--fast"], { cwd: copy, env, stdio: ["ignore", "pipe", "pipe"] });

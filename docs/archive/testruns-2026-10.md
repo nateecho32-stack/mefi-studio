@@ -6,6 +6,48 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 Make it yours, Ember, menu effects and the Shop; the Map's state rings and fill; Shop node styles
+
+Branch `feat/style-shop` (C:\wt\style; feat/shop-relay, feat/shop-ui, feat/light-look and feat/node-styles-shop merged
+in, then main 9859b92). The owner: "improve the existing styles, node tree, layouts, and look of the studio", a first
+run with light, dark and stylized and "a little popup that says where to find what", "a dragon that flys around as a
+pet", "menus that dissolve away", and a credits Shop on the social side (Cloudflare) where members make and sell
+styles; from their Discord: "every studio comes with a free dragon", pets that play with friends' pets, no money and
+no pay-to-win. Node tree, their picks: state at a glance, fill the screen, new node styles for the Shop.
+
+Measured: Ember's paint 0.15 ms a frame (p95 0.4 ms), its step 0.016 ms; rest 15 fps, sleep 6 fps, a hidden window
+draws nothing, motion Off draws one still pose. A closing menu held for its effect in the real app (fresh profile, CDP
+reads inside the page at 60 ms, 40% and 80%): display block, opacity 1, mask on, for Dissolve 430 ms, Burn away 620 ms
+and Stardust 560 ms. The Shop's node styles (built by a helper agent, merged here): lab paint, 20 nodes and 19 wires,
+raster forced: Dragon scales 1.30 ms a frame (Singularity 1.31), Star chart 0.83 (Prism 0.81, Classic orbs 0.79); the
+whole Command view, 150 tasks in 3D (tools/profile_studio.mjs, frame JS mean / p95): orbs 4.53 / 5.30 ms, Dragon
+scales 5.11 / 6.05 (+0.58 ms, inside the 1.5 ms gate), Star chart 4.58 / 5.50. "Constellation" was renamed Star chart:
+the Map already has a Constellation layout.
+
+Real windows, one at a time under the lease: a lane run of 51 suites at about 700 MB free failed 17; every one passed
+alone except builder_render, which failed the same way on main da9b951 (the compact pass set the greeting on one 49.7
+px row; its fixture asked for more than 100) and passes with the floor at 40 (198a999). node_paint_cache was killed at
+its 30 s limit in the lane and takes 4.4 s alone. After merging main: friends_render (the Shop's views and main's
+Connect another PC walk), setup_helper_render, today_render, tabs_render and sessions_render all pass (106, 78, 53, 99
+and 92 s). Node stage here (`npm run test:fast`, 7696 tests): one real failure, type_into_menu (closeSelect read
+`window` in a vm; fixed); the time-budget failures (project_search, codex_harness, attempt_review_host) pass alone,
+and the git-heavy suites that timed out at 100–430 s (sync, sync_changes, rust_parity_repo, pc_vault, pc_vault_turns,
+attempt_snapshots_host) passed in hosted CI: Studio checks (Windows) run 37555684927, Node stage 7698 tests, 0 fail,
+34 skipped; its Python contracts failed on test_mefi_studio_idle's pinned bubble hexes, which the light sweep had made
+theme-aware (pin updated, 248 OK here). Hosted CI on the branch: Studio checks (Windows) run 37557710737 (after the
+merge with main and the review fixes) and 37559002683 (with the node styles) green. On the final tree: friends_render,
+settings_render, node_views_render, node_paint_cache, command_render and setup_helper_render pass, and a fresh profile
+in the real app opens the look note beside Social's rail Settings 9.4 s after the welcome, once the tour's toast has
+gone, with no key tip or toast left beside it (both fixed here).
+
+A review of the branch (security, credits, the v6 migration, leaks) found no security or money problems and three
+bugs, each fixed with a test that fails without it: a menu that closed under an effect came back invisible once the
+effect was off (a Try that ended, motion Off); a friend's pet could not leave with motion Off, and Ember's loop never
+woke when motion came back; Moderation's Remove pack sent a report's many-line reason the removal refused. Also: a
+small tree's fill eases both ways, and the rings and the fill have kill switches (`mefiStudio.mapRings`,
+`mefiStudio.mapFill`). check ok, lint 47 warnings (as main), audit ok; the relay's `wrangler deploy --dry-run` bundles
+278 KiB.
+
 ## 2026-10-06 Social is about people: the QA pass's findings, on ui/social-simple, with Your PCs' Connect another PC
 
 Branch `ui/social-simple` (71c45d6, 3e7a6b9, merge 5c8f2ef of `ui/pcs-walkthrough` 0a35dcb built by a subagent in
