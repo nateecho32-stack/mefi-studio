@@ -6,6 +6,32 @@ stay). `scripts/rotate-testruns.mjs` moves each row here verbatim as one
 block - heading, H3 subsections and unheaded paragraphs together - newest
 first. The frozen archive below the guide in `TESTRUNS.md` stays there.
 
+## 2026-10-06 model_performance: the corrupt-ledger race, and the store's cache compares a fresh ledger's bytes
+
+Branch `fix/model-perf-race` (C:\wt\mperf), landed from `land/model-perf-race` (off main 86cfa93, main merged in up to 89639b4). Hosted Windows CI failed "corrupt ledger failures preserve the file and
+do not poison subsequent operations" once (run 37455162395 on fx/scaling, attempt 1: "Missing expected rejection" at
+line 165; the re-run passed). The test's last outside edit rewrote the ledger in place, on the same inode, at the
+very length the store had written ("10" for "0" pays for the store's trailing newline: 1007 bytes both). The store
+keyed its cache on `[dev, ino, size, mtimeNs, ctimeNs]`, and file times move once per clock tick (15.6 ms on Windows
+by default; that test took 10 ms on the runner). When the store's save and the edit shared a tick, all five fields
+matched, `record()` reused the ledger `snapshot()`/`read()` had cached, and it resolved. The store now follows git's
+racy rule like `settings-cache.cjs`: for 2 s after the file's mtime or ctime, a cache hit reads the file and compares
+bytes before reusing the parsed ledger; past that the five fields decide alone (`racyMs: 0` turns it off). The
+corrupt-ledger test is unchanged; the external-edits test now asserts its ctime-only case instead of skipping it;
+two new tests hold the file times in one tick and pin the check and its off switch.
+
+Loops, one `node --test --test-name-pattern="corrupt ledger" tests/model_performance.test.mjs` at a time under a
+suites lease. Old store: quiet 34/200 failed, all at line 165 (a later quiet run 0/200: the file clock here steps
+1 ms while an app holds a fine timer resolution); 15 spinning threads 0/200 (load spreads the steps over ticks);
+with a preload rounding `fs.promises.stat` file times to 1 s, 98/100 failed at line 165. Fixed store, test
+unchanged: 1 s rounding 200/200 passed; quiet 200/200; 8 spinning threads (holding the Electron lane, so no fixture
+ran beside them) 100/100. `snapshot()` on a 10,000-row ledger (4.57 MB): a miss ~110 ms and a settled hit ~5.8 ms
+as before; a hit within 2 s of a change ~15 ms against ~6 ms (one async read and a byte compare). `npm run check` ok, `npm run audit` 0/0, eslint clean on both files, `npm run test:one` on the 14 suites that reach
+the store (model_performance, learning_host, model_routing, model_routing_evidence, model_win_evaluator,
+planning_routing, usage_tracker_host, task_cap_host, kind_routes_host, jev_model_routing_host,
+explicit_route_fallback, builder_thinking_host, build_home_host, ai_route_gate): 201/201. Not run: the full
+`npm test` (hosted CI runs the Node stage on the branch).
+
 ## 2026-10-06 My PCs: the owner's PCs live, splitting the queue, and a laptop that hands off on low battery
 
 Branch `feat/my-pcs` (C:\wt\pcs, merged with main twice in C:\wt\pcs2: the CHANGELOG kept from both sides, the

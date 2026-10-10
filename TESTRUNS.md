@@ -39,6 +39,34 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-09 Scratch tier WP2: the JavaScript store, its settings and the Resources line
+
+Branch `feat/scratch-wp2` (C:\wt\scratch-wp2, off main b640d29, rebased onto a2aaa86 and then b4ff7d8 without a
+conflict beyond CHANGELOG's Unreleased list, both entries kept; the booklet rebuilt byte for byte). WP2 of
+docs/plans/scratch-tier.md, the first scratch work package to land: scripts/scratch-rules.cjs (pure: the key
+grammar, KINDS, QUOTAS, FALLBACK_LIMITS, the tokenizer and BM25 scorer with its tie-break on a hand-worked corpus
+so WP1's Rust arena ranks the same, eviction, the index record, prefs with MEFI_STUDIO_NO_SCRATCH and
+MEFI_SCRATCH_DIR, historyReady, the stats line, a buddy-allocator model), scripts/scratch-host.cjs (the plain-file
+store: content-addressed blobs, index.jsonl plus a checkpoint, a pid lock, 20,000 keys and 4 MB of index in
+memory, partial search past 8 MB, a torn last line survived and given its line end before the next append),
+rust-modules.cjs "scratch", local-dirs.cjs scratchDir, main.cjs "Scratch tier" (scratchFor per project on first
+use; scratch:stats, scratch:compact, scratch:set; scratch:state), preload, the Resources line with Compact
+(renderer/resources.js) and Settings › System › Storage (renderer/scratch.js, new). Here: scratch_rules 15,
+scratch_host 12, scratch_ipc 7, scratch_storage_ui 5, resources_ui 12, rust_modules 11, module_purity 73,
+log_core 9, booklet_build 5 pass, 0 fail. check ok (317 targets); lint 0 errors, 48 warnings, none in a touched
+file; audit 0 findings. `npm test` on 9fa645e ran 7845 s with two other sessions' Electron lanes going (the shared
+checkout's own npm test and C:\wt\os-shell): the parallel stage failed only run_node_tests_fast "--list hands over
+the whole list" at its 60 s timeout (the load-dependent row above), and the Electron stage waited 731 s for a
+turn, saw review_render and sessions_render take 50 min each and was stopped at its 90 min limit before
+settings_render ran; nothing in it names this change. So the fallback gate: `npm run test:fast` 571 suites, 7899 tests, 7885 pass, 0 fail,
+14 skipped, exit 0; then settings_render (1 pass, 73 s) and team_render (1 pass, 85 s) alone, the two page
+fixtures the Storage card and the Resources line sit in. After the second rebase (d5f4e43 on b4ff7d8): check ok
+(318 targets), audit 0 findings, lint unchanged (48 warnings, the main.cjs ones at lines 2947 and 14476 are from
+2026-09-27), and the nine touched suites together 150 pass, 0 fail, after a 13 min wait for the suites lane behind
+the shared checkout's and WP1's own runs. Left out: the live proof in the dev Studio under both hosts
+(no Rust binary built here; WP1 brings it) and the Electron fixtures for the Resources line and the Storage card
+beyond the two page fixtures, since neither page has a dedicated render fixture.
+
 ## 2026-10-08 The window reads like a desktop: one bar across the top, the rail and the columns under it, window tabs, solid panes
 
 Detached worktree C:\wt\os-shell, off origin/main a2aaa86 (rebased from b640d29 after "Opening a project no longer
@@ -487,32 +515,6 @@ buttons (507 of 715 px before); fixtures that pinned old words (the welcome's ti
 On the landed tree, one window suite at a time under the lease: agent_setup_render (one missed click, then 2/2), project_map_render, size_render, workflow_render, team_render, friends_render, shell_render, settings_render, setup_helper_render, unified_studio_render and command_render (84 s) all pass. `npm run test:fast`:
 7589 tests, 7572 pass, 14 skipped, 3 failed under about 400 MB free with the Electron lane busy and all 3 pass alone (paired_reconnect 6/6, resource_helper_win 1/1, rust_parity_git 4/4 in 188 s). `npm run check` ok, `npm run audit` 0 findings. Not run here: a second full `npm test` (the lane
 results above cover every suite the fixes touch).
-
-## 2026-10-06 model_performance: the corrupt-ledger race, and the store's cache compares a fresh ledger's bytes
-
-Branch `fix/model-perf-race` (C:\wt\mperf), landed from `land/model-perf-race` (off main 86cfa93, main merged in up to 89639b4). Hosted Windows CI failed "corrupt ledger failures preserve the file and
-do not poison subsequent operations" once (run 37455162395 on fx/scaling, attempt 1: "Missing expected rejection" at
-line 165; the re-run passed). The test's last outside edit rewrote the ledger in place, on the same inode, at the
-very length the store had written ("10" for "0" pays for the store's trailing newline: 1007 bytes both). The store
-keyed its cache on `[dev, ino, size, mtimeNs, ctimeNs]`, and file times move once per clock tick (15.6 ms on Windows
-by default; that test took 10 ms on the runner). When the store's save and the edit shared a tick, all five fields
-matched, `record()` reused the ledger `snapshot()`/`read()` had cached, and it resolved. The store now follows git's
-racy rule like `settings-cache.cjs`: for 2 s after the file's mtime or ctime, a cache hit reads the file and compares
-bytes before reusing the parsed ledger; past that the five fields decide alone (`racyMs: 0` turns it off). The
-corrupt-ledger test is unchanged; the external-edits test now asserts its ctime-only case instead of skipping it;
-two new tests hold the file times in one tick and pin the check and its off switch.
-
-Loops, one `node --test --test-name-pattern="corrupt ledger" tests/model_performance.test.mjs` at a time under a
-suites lease. Old store: quiet 34/200 failed, all at line 165 (a later quiet run 0/200: the file clock here steps
-1 ms while an app holds a fine timer resolution); 15 spinning threads 0/200 (load spreads the steps over ticks);
-with a preload rounding `fs.promises.stat` file times to 1 s, 98/100 failed at line 165. Fixed store, test
-unchanged: 1 s rounding 200/200 passed; quiet 200/200; 8 spinning threads (holding the Electron lane, so no fixture
-ran beside them) 100/100. `snapshot()` on a 10,000-row ledger (4.57 MB): a miss ~110 ms and a settled hit ~5.8 ms
-as before; a hit within 2 s of a change ~15 ms against ~6 ms (one async read and a byte compare). `npm run check` ok, `npm run audit` 0/0, eslint clean on both files, `npm run test:one` on the 14 suites that reach
-the store (model_performance, learning_host, model_routing, model_routing_evidence, model_win_evaluator,
-planning_routing, usage_tracker_host, task_cap_host, kind_routes_host, jev_model_routing_host,
-explicit_route_fallback, builder_thinking_host, build_home_host, ai_route_gate): 201/201. Not run: the full
-`npm test` (hosted CI runs the Node stage on the branch).
 
 ## Read Before Any Tests
 
