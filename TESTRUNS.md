@@ -39,6 +39,21 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-09 - Codex updater baseline comparison complete
+
+Clean origin/main b73a22e reproduces unified_studio_render narrow navigation clipping, today_render focus wrap, agent_setup_render unreachable walkthrough install control, command_toolbar CSS scoping and tabs_host shortcut overlap. The attempt_review_host, resource_helper_win and run_node_tests_fast comparison passes. No updater regression was found. Full gate remains red; repair is preserved on wip/github-download rather than landed on main. See the preceding GitHub beta download repair row for live installation and gate results.
+
+## 2026-10-09 Codex GitHub beta download repair and live installation
+
+- Fixed Actions artifact HTTP 415 by selecting GitHub JSON Accept for the archive endpoint while retaining octet-stream for release assets. Adopted the existing shared-checkout header fix and regression rather than replacing another session's work.
+- Fixed Electron's Invalid package/default_app.asar extraction failure with original-fs for updater bytes; plain Node keeps node:fs. A real Electron regression verifies exact opaque ASAR bytes and restaging without global noAsar changes.
+- Focused gate: `npm run test:one -- tests/update_asar.test.mjs tests/development_updater.test.mjs tests/release_updater.test.mjs`: 25 passed, no failures/skips. `npm run check`: 317 targets and 646 specs passed. `npm run audit`: zero findings. `npm run lint`: zero errors, 48 existing warnings, none in changed files.
+- Full `npm test`: Node parallel stage 7897 tests, 7854 passed, 4 failed, 1 cancelled, 38 skipped; Electron lane 70 tests, 66 passed, 3 failed, 1 skipped. Serialized Command and eyes tests passed; occlusion skipped on absent desktop capability. Python contracts: 248 tests, passed with 1 skip; normalized-path lock passed. Whole gate remains red; no green-main claim.
+- Clean origin/main b73a22e comparison: agent_setup_render fails on unreachable walkthrough-cli-install, command_toolbar fails on walkthrough-easy-grid frame scoping, tabs_host fails on Ctrl+Shift+T overlap. attempt_review_host, resource_helper_win, run_node_tests_fast pass in the quieter comparison. Today keyboard focus fails identically on clean main. Unified studio comparison pending at log creation. No affected application/test files differ between repair tree and clean main outside the updater.
+- Live app: downloaded the complete GitHub run 474 artifact after the header bootstrap, reverified digest, inner checksum, build/run/commit provenance and portable identity, staged with raw disk I/O, and applied the existing rollback helper. Installed 0.4.5-dev.474.1 reports renderer boot health after update and after restarting with the persistent local downloader repair. Existing project/task/tab state remained visible; rollback retains 0.4.5 and data stays in its separate live folder.
+- Live tour: Lobby, Rooms/composer, Shop, Updates and Studio mode/layout controls observed. GitHub Check reports development/beta up to date at v0.4.5-dev.474.1. No real social messages or purchases sent. Full gate's Friends layout and two-instance relay social tests passed. Earlier root rehearsals: 57 update/safety checks plus 31 Friends/social/navigation checks passed.
+- Preserve patch on a pushed wip branch while unrelated baseline failures prevent the required full gate. Shared dirty main checkout, local data and other worktrees were not reset, stashed or switched.
+
 ## 2026-10-09 Scratch tier WP2: the JavaScript store, its settings and the Resources line
 
 Branch `feat/scratch-wp2` (C:\wt\scratch-wp2, off main b640d29, rebased onto a2aaa86 and then b4ff7d8 without a
@@ -470,51 +485,6 @@ clock, which read 5m on a slow run, and passed again), team_render, settings_ren
 worktrees_render, skills_render, review_render and map_render all pass. Unit suites: 764/764 across today_*, vibe_*,
 sessions_*, settings_*, agents_*, team_*, friends_*, shell_frame_*, size_*, layout_contract_css, studio_ui, info_tips,
 file_inputs (a new test for the idle marker), booklet_build and module_purity; `npm run check` ok.
-
-## 2026-10-06 Linux CI: My PCs' battery and Resources stop asking Node for the platform
-
-Branch `fix/linux-ci-battery-resources` (b06201c, off main 8f84614, in C:\wt\lxci), with PR #7 open so
-studio-linux.yml ran on the branch (it triggers on main pushes and pull requests only). Studio checks (Linux) had failed
-on every main push since c4b9e2e (resource_host: the journal after Slow down/Pause, and a launch putting back what the
-last Studio held) and 89639b4 (pcs_host: the low-battery handoff, and the stop line with Continue). Both suites play a
-Windows PC on any host; the code under test asked Node instead: main.cjs's pcsPowerLook now passes process.platform to
-pc-power's readBattery, and resource-host joins its helper's folder with path.win32 when its platform is win32. No test
-changed, and Windows behaves the same. Here (Windows): a preload that makes Node report linux and load path.posix
-reproduced the four CI failures with their messages, and pcs_host, resource_host and pc_power pass 29 of 29 under it
-after the fix; `npm run test:one` over the ten My PCs and Resources suites (resource_helper_win included) 153 of 153;
-check ok, lint 47 warnings (as main), audit ok; `electron . --smoke` with a fresh profile 45 cards. Hosted CI on the
-branch, all green: Studio checks (Linux) run 37527676158 (PR #7), Node stage 7589 tests, 0 fail, 58 skipped, then the
-audit and the Xvfb smoke (45 cards), which had not run on Linux since c4b9e2e because the red Tests step stopped the
-job first; Studio checks (Windows) runs 37527647312 (push) and 37527676135 (PR), Node stage 7589 tests, 0 fail, 34
-skipped, Python contracts 248 OK, audit and the portable package ok.
-
-## 2026-10-06 The 0.5 polish pass: a full gate, every window failure checked against main, and the fixes
-
-Branches `polish/0.5` (C:\wt\v05, with `polish/names` and `polish/tour` merged in; the owner merged it as #6, feb4a29)
-and `polish/0.5-b` (C:\wt\v05b, landed here), found with a fresh-profile run of the real app (C:\wt\probe: isolated
-profile, coding CLIs blocked, driven over CDP: every place and page in both modes, 12 themes, interface scale, menus).
-Fixed: a blank Studio menu after Social to Studio, Configuration and Friends leaving their layer claims, the old tree
-strip over Settings, Plans laid out by its own room, key tips over the welcome, the welcome's AI choice never applied
-on Continue (and never re-read after a sign-in in its own window: now on window focus, Check again and Continue),
-queued tasks shown as running with agents off, Events in the menu, the Help sheet's links, a place row (picker below
-760 px, out of the way below 520 px of height), the first task carried from Start a new app into the welcome,
-GETTING_STARTED.md rewritten for 0.5.
-
-Full `npm test` on polish/0.5 (ab7d4ea, about 2 h at 700 MB free): Node stage 7587 tests, 7572 pass, 1 fail (a test
-still matching the old setup advice "is selected"; fixed on main as 0c4633c), 14 skipped; Python contracts pass;
-Electron lane 69 tests, 62 pass, 6 fail, plus command_render. Each failing window suite then ran alone on a control
-worktree of main before the polish (4d23e3c, C:\wt\ctl) and on the branch: all passed on the control, so all were
-the polish's. Causes and fixes: the menu's default pin moved to 1600 px changed every fixture's layout at 1100 and
-1440 px (Size went to two columns, Home's composer moved with its drawer, the project map's Browse stayed open,
-unified_studio's hover dwell) - reverted to main's 1100 px default; Team's place row took the row a 400 px window
-needs (agent_setup_render) - picker and short-window rule; the frame's right margin overrode styles.css's narrow one
-below 900 px - restored; Size's kept-in-view picture now stays within two thirds of the pane with its caption and
-buttons (507 of 715 px before); fixtures that pinned old words (the welcome's titles and buttons, "Folder mapped" now
-"Project mapped", the hidden tree strip that command_render waited to see painting on a tab page).
-
-On the landed tree, one window suite at a time under the lease: agent_setup_render (one missed click, then 2/2), project_map_render, size_render, workflow_render, team_render, friends_render, shell_render, settings_render, setup_helper_render, unified_studio_render and command_render (84 s) all pass. `npm run test:fast`:
-7589 tests, 7572 pass, 14 skipped, 3 failed under about 400 MB free with the Electron lane busy and all 3 pass alone (paired_reconnect 6/6, resource_helper_win 1/1, rust_parity_git 4/4 in 188 s). `npm run check` ok, `npm run audit` 0 findings. Not run here: a second full `npm test` (the lane
-results above cover every suite the fixes touch).
 
 ## Read Before Any Tests
 

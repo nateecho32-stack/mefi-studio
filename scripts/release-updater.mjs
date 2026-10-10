@@ -9,13 +9,19 @@
 // Importing this file has no side effects, so tests drive it from plain node.
 
 import { createHash } from "node:crypto";
-import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, open, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { once } from "node:events";
 import { pipeline } from "node:stream/promises";
 import zlib from "node:zlib";
+
+// Portable payloads contain .asar files. Electron's patched fs treats them as
+// virtual directories, even while extraction is writing an incomplete archive.
+// Use raw disk I/O for update bytes; the Node engine and packager keep Node fs.
+const disk = createRequire(import.meta.url)(process.versions.electron ? "original-fs" : "node:fs");
+const { createReadStream, createWriteStream } = disk;
+const { mkdir, open, readdir, readFile, rm, stat, writeFile } = disk.promises;
 
 export const DEFAULT_REPO = "nateecho32-stack/mefi-studio";
 // The host's release watcher reads this cadence: GitHub every 20 minutes.
@@ -288,6 +294,13 @@ function safeFileName(name) {
   return base.toLowerCase().endsWith(".zip") ? base : `${base}.zip`;
 }
 
+// Release asset API urls hand over the bytes only for an octet-stream Accept.
+// The Actions artifact zip endpoint answers that same header with 415 and
+// wants the ordinary GitHub Accept, then redirects to the archive.
+export function downloadAccept(url) {
+  return /\/actions\/artifacts\/\d+\/zip$/.test(String(url ?? "")) ? "application/vnd.github+json" : "application/octet-stream";
+}
+
 // Streams the asset to disk, hashing and reporting as it goes. `asset.url` is
 // the API url for API-described assets, which works for public and private
 // repositories alike because the Accept header asks for the bytes.
@@ -303,7 +316,7 @@ export async function downloadAsset({
   if (typeof fetchImpl !== "function") throw new Error("no fetch implementation available");
   await mkdir(directory, { recursive: true });
   const headers = githubHeaders(token);
-  headers.Accept = "application/octet-stream";
+  headers.Accept = downloadAccept(asset.url);
   const response = await fetchImpl(asset.url, { headers, redirect: "follow", signal: timeoutSignal(timeoutMs) });
   if (!response.ok) throw new Error(`download failed: GitHub answered ${response.status}`);
   const total = Number(response.headers?.get?.("content-length")) || Number(asset.size) || 0;

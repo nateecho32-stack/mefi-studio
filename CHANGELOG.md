@@ -7,6 +7,11 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **GitHub beta updates download and stage correctly.** Actions artifacts use
+  GitHub's archive request header, and Electron reads and writes the portable
+  build's ASAR files as ordinary files. This fixes HTTP 415 downloads and the
+  "Invalid package ... default_app.asar" failure before installation.
+
 - **Resources is easier to use.** The CPU and memory pill on the status bar
   opens Team › Resources, the list of apps on this PC. Each app now shows its
   CPU, its memory, Close and End, and a More button for Slow down, Pause, Free
