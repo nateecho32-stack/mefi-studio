@@ -5,6 +5,13 @@
 // random token. Each call is handed to `handle` (the Agent Brain's askDesk),
 // which resolves when the desk has answered or sent the question to the owner.
 //
+// A relaunched engine rebinds the port and token the last one saved (`port`
+// and `token` from journal/<projectId>/desk.json, agent-brain-host
+// prepareDeskTool), so a builder adopted from the old engine keeps reaching
+// the desk through the config file it was started with. When that port is
+// taken the OS picks another (`reused: false`): runs started under the old
+// one keep working until they end, and their config files are not rewritten.
+//
 // Per-run MCP config files name the server for the worker CLI: an OpenCode
 // config (read through OPENCODE_CONFIG) and a Claude Code --mcp-config file.
 // They are written to the OS temp folder and removed when the run ends. That
@@ -20,10 +27,23 @@ const fsp = require("node:fs/promises");
 
 const MAX_BODY = 16 * 1024;
 
-function createDeskServer({ handle, token = crypto.randomBytes(24).toString("hex"), host = "127.0.0.1" } = {}) {
+function createDeskServer({ handle, token = crypto.randomBytes(24).toString("hex"), host = "127.0.0.1", port = 0 } = {}) {
   if (typeof handle !== "function") throw new Error("createDeskServer needs handle(request)");
   let server = null;
   let listening = null;
+  const wanted = Number.isInteger(port) && port > 0 && port < 65536 ? port : 0;
+
+  // One listen on `at` (0: the OS picks), resolving the bound server.
+  function listenOn(at) {
+    return new Promise((resolve, reject) => {
+      const candidate = http.createServer(onRequest);
+      candidate.once("error", (error) => { try { candidate.close(() => {}); } catch {} reject(error); });
+      candidate.listen(at, host, () => {
+        candidate.unref?.();
+        resolve(candidate);
+      });
+    });
+  }
 
   function respond(res, status, body) {
     res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
@@ -64,14 +84,18 @@ function createDeskServer({ handle, token = crypto.randomBytes(24).toString("hex
 
   async function start() {
     if (listening) return listening;
-    const attempt = new Promise((resolve, reject) => {
-      server = http.createServer(onRequest);
-      server.on("error", reject);
-      server.listen(0, host, () => {
-        server.unref?.();
-        resolve({ url: `http://${host}:${server.address().port}/desk`, token });
-      });
-    });
+    // The saved port first; when it is taken (or refused), the OS picks one.
+    const attempt = (async () => {
+      let reused = false;
+      if (wanted) {
+        try { server = await listenOn(wanted); reused = true; }
+        catch { server = null; }
+      }
+      if (!server) server = await listenOn(0);
+      server.on("error", () => {});
+      const bound = server.address().port;
+      return { url: `http://${host}:${bound}/desk`, token, port: bound, reused };
+    })();
     // A failed listen is forgotten, so the next start tries again instead of
     // handing back the same rejection until stop().
     listening = attempt.catch((error) => {
@@ -89,7 +113,7 @@ function createDeskServer({ handle, token = crypto.randomBytes(24).toString("hex
     listening = null;
   }
 
-  return { start, stop, token };
+  return { start, stop, token, port: wanted };
 }
 
 // The two per-run config files, and the environment the MCP server reads.

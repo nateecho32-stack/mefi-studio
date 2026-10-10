@@ -420,6 +420,9 @@ function applyEvent(run, item, now) {
       account: string(facts.account) || null,
       cwd: string(facts.cwd) || null,
       at: now,
+      // A session the host resumed (executor-resume resumable): the CLI
+      // answers under the same id, and the record says so.
+      ...(string(facts.resume) && facts.resume === session.id ? { resumed: true } : {}),
     };
     changed.session = true;
   }

@@ -134,6 +134,10 @@ function createAgentBrain(options = {}) {
     // app-wide file when the host gives one (appDataFile), else per project.
     appDataFile = null,
     modules = {},
+    // The desk server's saved port and token ({ read(), write(state) },
+    // journal/<projectId>/desk.json through the host), so a relaunched engine
+    // rebinds what the runs it adopts were started with. Null: a fresh port.
+    deskState = null,
   } = options;
   if (typeof dataFile !== "function") throw new Error("createAgentBrain needs dataFile(name)");
   const mods = {
@@ -782,23 +786,42 @@ function createAgentBrain(options = {}) {
   // The per-run MCP config files that put ask_desk beside a builder, written
   // when the owner's deskTool switch is on and removed when the run ends.
   const deskTool = { server: null, address: null, files: new Map() };
+  // The one loopback server, started on first use: on the port and token the
+  // last engine saved when the host keeps them (deskState), else fresh. The
+  // address it got is saved back, so the next engine can rebind it.
+  async function ensureDeskServer(runInProject) {
+    const deskServer = modules.deskServer ?? require("./desk-server.cjs");
+    if (!deskTool.server) {
+      let saved = null;
+      if (deskState && typeof deskState.read === "function") {
+        try { saved = await deskState.read(); } catch { saved = null; }
+      }
+      // A call arrives outside any project context; the run's own project
+      // answers it, so the desk reads the right task and pipeline.
+      const owners = deskTool.owners = new Map();
+      deskTool.server = deskServer.createDeskServer({
+        handle: (request) => {
+          const owner = owners.get(request.runId);
+          const call = () => askDesk(request);
+          return owner && typeof runInProject === "function" ? runInProject(owner, call) : call();
+        },
+        ...(saved && typeof saved.token === "string" && /^[0-9a-f]{16,128}$/.test(saved.token) ? { token: saved.token } : {}),
+        ...(saved && Number.isInteger(saved.port) ? { port: saved.port } : {}),
+      });
+    }
+    if (!deskTool.address) {
+      deskTool.address = await deskTool.server.start();
+      if (deskState && typeof deskState.write === "function") {
+        try { await deskState.write({ port: deskTool.address.port, token: deskTool.address.token }); } catch (error) { warn("desk state", error); }
+      }
+      if (deskTool.address.reused === false && deskTool.server.port) logLine(`[brain] desk port ${deskTool.server.port} was taken; runs started under it keep their own config until they end`);
+    }
+    return deskServer;
+  }
   async function prepareDeskTool({ taskId, runId, script, runInProject = null } = {}) {
     if (!taskId || !runId || !script) return null;
     try {
-      const deskServer = modules.deskServer ?? require("./desk-server.cjs");
-      if (!deskTool.server) {
-        // A call arrives outside any project context; the run's own project
-        // answers it, so the desk reads the right task and pipeline.
-        const owners = deskTool.owners = new Map();
-        deskTool.server = deskServer.createDeskServer({
-          handle: (request) => {
-            const owner = owners.get(request.runId);
-            const call = () => askDesk(request);
-            return owner && typeof runInProject === "function" ? runInProject(owner, call) : call();
-          },
-        });
-      }
-      deskTool.address ??= await deskTool.server.start();
+      const deskServer = await ensureDeskServer(runInProject);
       deskTool.owners.set(runId, scope().id);
       const files = await deskServer.writeRunConfigs({ ...deskTool.address, taskId, runId, script });
       if (files) deskTool.files.set(runId, files);
@@ -806,6 +829,20 @@ function createAgentBrain(options = {}) {
     } catch (error) {
       warn("desk tool", error);
       return null;
+    }
+  }
+  // A run adopted from an earlier engine (main.cjs "Run journal"): its config
+  // file already names the server, so only its owner is registered, and the
+  // server is up on the saved port for it. True when the desk answers it.
+  async function adoptDeskTool({ runId, runInProject = null } = {}) {
+    if (!runId) return false;
+    try {
+      await ensureDeskServer(runInProject);
+      deskTool.owners.set(runId, scope().id);
+      return deskTool.address?.reused !== false;
+    } catch (error) {
+      warn("desk tool", error);
+      return false;
     }
   }
   function releaseDeskTool(runId) {
@@ -1135,6 +1172,7 @@ function createAgentBrain(options = {}) {
     rebuildMap: () => rebuildMap(scope()),
     askDesk,
     prepareDeskTool,
+    adoptDeskTool,
     releaseDeskTool,
     seen,
     welcome,

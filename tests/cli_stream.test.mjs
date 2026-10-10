@@ -176,6 +176,27 @@ test("applyEvent folds events into the run and says what changed", () => {
   assert.deepEqual(applyEvent(null, { usage: {} }, 1), { session: false, tool: false, todos: false, progress: false, usage: false });
 });
 
+// A resumed session (the host's `claude -p --resume <id>` / `codex exec
+// resume <id>`, executor-resume resumable) answers under the id it was
+// resumed with: the decoder reads it as any session, and applyEvent marks the
+// record resumed when it is the one the host asked for.
+test("a resumed stream's session id is read back, and marked as resumed when it is the one asked for", () => {
+  const id = "0f8d6c1e-5b8a-4a51-9a33-9d0c2f3e4b5a";
+  const items = createDecoder("claude").push(jsonl({ type: "system", subtype: "init", session_id: id, model: "claude-haiku-4-5" }));
+  assert.deepEqual(items[0], { session: { id, cli: "claude", model: "claude-haiku-4-5" } });
+  const run = { liveStream: { cli: "claude", model: "haiku", account: null, cwd: "C:/repo", resume: id } };
+  assert.equal(applyEvent(run, items[0], 5).session, true);
+  assert.equal(run.cliSession.resumed, true);
+  assert.equal(run.cliSession.id, id);
+  const other = { liveStream: { cli: "claude", model: "haiku", resume: "11111111-2222-4333-8444-555555555555" } };
+  applyEvent(other, items[0], 5);
+  assert.equal(other.cliSession.resumed, undefined, "a different session than the one asked for is a fresh one");
+  const codex = createDecoder("codex").push(jsonl({ type: "thread.started", thread_id: "thread_42" }));
+  const codexRun = { liveStream: { cli: "codex", model: "gpt-6", resume: "thread_42" } };
+  applyEvent(codexRun, codex[0], 6);
+  assert.deepEqual([codexRun.cliSession.id, codexRun.cliSession.resumed], ["thread_42", true]);
+});
+
 test("live progress is on unless settings.executor.liveProgress is false or MEFI_STUDIO_LIVE_PROGRESS=0", () => {
   assert.equal(liveProgressEnabled({}, {}), true);
   assert.equal(liveProgressEnabled(null, {}), true);

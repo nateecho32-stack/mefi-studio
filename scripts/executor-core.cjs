@@ -392,6 +392,11 @@ function settleAttemptRow(task, outcome, { now, maxHandoffs, startGrace, clip })
   // pick goes back to the ordinary worth order.
   delete row.pin;
   delete row.pinAt;
+  // The attempt resumed the previous one's CLI session (executor-resume
+  // resumable, WP0-C): the card's log says so, as its own kind of line.
+  if (run.resumedSession?.id) {
+    executorResume.appendLog(row, `resumed session ${String(run.resumedSession.id).slice(0, 60)} after ${String(run.resumedSession.reason ?? "an interruption").slice(0, 100)}${run.resumedSession.fellBack ? " · it said nothing, so one ordinary attempt followed" : ""}`, { at: now, kind: "resumed" });
+  }
   const { branch } = classifyRunEnd({ ok, userStop, startKilled: run.startKilled === true, startFailures: Number(row.startFailures) || 0, startGrace, providerOutage: outage });
   const release = () => {
     row.status = "open";
@@ -778,7 +783,16 @@ function codexMcpArgs(servers) {
 // Codex's app server has its own facade and is not affected. Off, every
 // command line is exactly the text-mode one.
 const SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null, platform = "win32", shim = () => null, promptFile = null, codexHarness = "exec", live = false, sessionId = null, ownMcp = false } = {}) {
+// `journal` (scripts/run-journal.cjs): the open file the builder's stdout and
+// stderr go to instead of pipes (`{ fd }`), so the child outlives the engine;
+// stdin still carries the prompt. `resume` ({ cli, id }, executor-resume
+// resumable) makes the attempt continue that CLI's own session: Claude Code
+// `--resume <id>` in place of a fresh `--session-id`, Codex `exec resume
+// <id>`, OpenCode `--session <id>`; the invocation reports it as `resumed`.
+const RESUME_ID = /^[A-Za-z0-9._:-]{1,100}$/;
+function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = () => "", desk = null, platform = "win32", shim = () => null, promptFile = null, codexHarness = "exec", live = false, sessionId = null, ownMcp = false, journal = null, resume = null } = {}) {
+  const out = Number.isInteger(journal?.fd) && journal.fd >= 0 ? journal.fd : "pipe";
+  const resumed = resume?.id && RESUME_ID.test(String(resume.id)) && resume.cli === (cli ?? "opencode") ? { cli: cli ?? "opencode", id: String(resume.id) } : null;
   if (cli === "grok") {
     // A headless agentic session. --prompt-file both starts grok's headless
     // mode and keeps a brief of up to EXECUTOR_PROMPT_MAX off every command
@@ -789,7 +803,7 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     if (!promptFile) throw new Error("the grok brief was not written to its prompt file");
     const selected = route.model ? modelArg(route.model) : "";
     const args = ["--output-format", "plain", "--always-approve", "--max-turns", "60", "--no-alt-screen", "--verbatim", ...(selected ? ["-m", selected] : []), "--prompt-file", promptFile];
-    return { ...binaryLaunch("grok", args, platform, shim), stdio: ["ignore", "pipe", "pipe"], stdin: null, env: route.env, dropped: [] };
+    return { ...binaryLaunch("grok", args, platform, shim), stdio: ["ignore", out, out], stdin: null, env: route.env, dropped: [] };
   }
   // `route.effort` is how hard this attempt thinks (the host's builder step,
   // scripts/model-ladder.cjs): one of the ladder's fixed words, never free text.
@@ -807,9 +821,11 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     // host's MEFI_STUDIO_WORKER_OWN_MCP=1) gives a run the owner's servers back.
     // --mcp-config takes a list, so it goes last.
     const selected = modelArg(route.model);
-    const session = live && SESSION_UUID.test(String(sessionId ?? "")) ? ["--session-id", String(sessionId)] : [];
-    const args = ["-p", "--output-format", ...(live ? ["stream-json", "--verbose", ...session] : ["text"]), "--dangerously-skip-permissions", ...(ownMcp ? [] : ["--strict-mcp-config"]), ...(selected ? ["--model", selected] : []), ...thinking, ...(desk?.claude ? ["--mcp-config", desk.claude] : [])];
-    return { ...shellLaunch("claude", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: [], ...(live ? { stream: "claude" } : {}) };
+    // A resumed session takes --resume and no new --session-id (Claude Code
+    // keeps the id it was started under).
+    const session = resumed ? ["--resume", resumed.id] : live && SESSION_UUID.test(String(sessionId ?? "")) ? ["--session-id", String(sessionId)] : [];
+    const args = ["-p", "--output-format", ...(live ? ["stream-json", "--verbose", ...session] : ["text", ...session]), "--dangerously-skip-permissions", ...(ownMcp ? [] : ["--strict-mcp-config"]), ...(selected ? ["--model", selected] : []), ...thinking, ...(desk?.claude ? ["--mcp-config", desk.claude] : [])];
+    return { ...shellLaunch("claude", args, platform), stdio: ["pipe", out, out], stdin: prompt, env: route.env, dropped: [], ...(live ? { stream: "claude" } : {}), ...(resumed ? { resumed } : {}) };
   }
   if (cli === "codex") {
     if (codexHarness === "app-server") return codexAppServer.appServerInvocation(route, prompt, { modelArg, desk, platform, shim, launch: shellLaunch });
@@ -819,8 +835,10 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     // With live progress, --json prints its events on stdout as JSONL.
     const selected = modelArg(route.model);
     const mcp = codexMcpArgs(desk?.servers);
-    const args = ["exec", ...(live ? ["--json"] : []), "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", "--color", "never", ...(selected ? ["-m", selected] : []), ...thinking, ...mcp.args, "-"];
-    return { ...shellLaunch("codex", args, platform), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: mcp.dropped, ...(live ? { stream: "codex" } : {}) };
+    // `codex exec resume <id>` takes the same flags but --color (checked
+    // against codex exec resume --help, 2026-10-08).
+    const args = ["exec", ...(resumed ? ["resume", resumed.id] : []), ...(live ? ["--json"] : []), "--dangerously-bypass-approvals-and-sandbox", "--skip-git-repo-check", ...(resumed ? [] : ["--color", "never"]), ...(selected ? ["-m", selected] : []), ...thinking, ...mcp.args, "-"];
+    return { ...shellLaunch("codex", args, platform), stdio: ["pipe", out, out], stdin: prompt, env: route.env, dropped: mcp.dropped, ...(live ? { stream: "codex" } : {}), ...(resumed ? { resumed } : {}) };
   }
   if (cli === "antigravity") {
     // The Antigravity CLI's agentic print mode. Every flag precedes `-p` (with
@@ -832,7 +850,7 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
     const selected = agyModelArg(route.model);
     if (selected) args.push("--model", selected);
     args.push("--dangerously-skip-permissions", "--print-timeout", "60m", "--output-format", "text", "-p");
-    return { ...binaryLaunch("agy", args, platform, shim), stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env: route.env, dropped: [] };
+    return { ...binaryLaunch("agy", args, platform, shim), stdio: ["pipe", out, out], stdin: prompt, env: route.env, dropped: [] };
   }
   // --auto: nobody is at the keyboard to answer a permission prompt, so a
   // headless run without it stops at the first edit and reports back prose.
@@ -846,7 +864,9 @@ function cliInvocation(route, cli, prompt, { modelArg = () => "", agyModelArg = 
   // --variant is OpenCode's reasoning effort; the host sets route.effort only
   // to a variant this model lists, since an unknown one fails the run.
   const variant = thinking.length ? ` ${thinking.join(" ")}` : "";
-  return { command: "cmd.exe", args: ["/d", "/s", "/c", `opencode run --auto${route.modelArgs ?? ""}${variant}`], verbatim: false, stdio: ["pipe", "pipe", "pipe"], stdin: prompt, env, dropped: [] };
+  // --session continues the store session the previous attempt left.
+  const continued = resumed ? ` --session ${resumed.id}` : "";
+  return { command: "cmd.exe", args: ["/d", "/s", "/c", `opencode run --auto${route.modelArgs ?? ""}${variant}${continued}`], verbatim: false, stdio: ["pipe", out, out], stdin: prompt, env, dropped: [], ...(resumed ? { resumed } : {}) };
 }
 
 // ---- a heavier retry ------------------------------------------------------------------

@@ -598,6 +598,41 @@ test("each builder CLI gets its headless command line, and the brief never rides
   }
 });
 
+// The run journal (scripts/run-journal.cjs): the builder's stdout and stderr
+// go to the journal's file descriptor, stdin still carries the prompt. A
+// resumed CLI session (executor-resume resumable) continues under the CLI's
+// own flag: Claude Code --resume in place of a fresh --session-id, `codex exec
+// resume <id>`, OpenCode --session; a resume for another CLI is ignored.
+test("a journal replaces the pipes, and a resumed session rides each CLI's own flag", () => {
+  const modelArg = (value) => /^[A-Za-z0-9._:/-]{1,80}$/.test(String(value ?? "")) ? String(value) : "";
+  const run = (route, cli, extra = {}) => core.cliInvocation(route, cli, "PROMPT", { modelArg, agyModelArg: (value) => value, promptFile: "C:\\p.txt", ...extra });
+  for (const cli of [null, "claude", "codex", "antigravity"]) {
+    const launch = run({ model: "m", env: {} }, cli, { journal: { fd: 7 } });
+    assert.deepEqual(launch.stdio, ["pipe", 7, 7], `${cli ?? "opencode"}: output to the journal, the prompt on stdin`);
+    assert.equal(launch.stdin, "PROMPT");
+  }
+  assert.deepEqual(run({ model: "grok-4", env: {} }, "grok", { journal: { fd: 7 } }).stdio, ["ignore", 7, 7]);
+  assert.deepEqual(run({}, "claude", { journal: { fd: -1 } }).stdio, ["pipe", "pipe", "pipe"], "no usable descriptor: pipes as before");
+  const id = "0f8d6c1e-5b8a-4a51-9a33-9d0c2f3e4b5a";
+  const claude = run({ model: "opus" }, "claude", { live: true, sessionId: "123e4567-e89b-12d3-a456-426614174000", resume: { cli: "claude", id } });
+  assert.equal(claude.args[3], `"claude -p --output-format stream-json --verbose --resume ${id} --dangerously-skip-permissions --strict-mcp-config --model opus"`);
+  assert.deepEqual(claude.resumed, { cli: "claude", id });
+  assert.equal(claude.stream, "claude", "the resumed run still streams its events");
+  assert.equal(run({ model: "opus" }, "claude", { resume: { cli: "claude", id } }).args[3], `"claude -p --output-format text --resume ${id} --dangerously-skip-permissions --strict-mcp-config --model opus"`);
+  const codex = run({ model: "gpt-6" }, "codex", { live: true, resume: { cli: "codex", id } });
+  assert.equal(codex.args[3], `"codex exec resume ${id} --json --dangerously-bypass-approvals-and-sandbox --skip-git-repo-check -m gpt-6 -"`, "codex exec resume has no --color");
+  assert.deepEqual(codex.resumed, { cli: "codex", id });
+  assert.equal(codex.stdin, "PROMPT");
+  const opencode = run({ modelArgs: " --model opencode-go/deepseek-v4.1-flash", env: {} }, null, { resume: { cli: "opencode", id: "ses_0123abc" } });
+  assert.equal(opencode.args[3], "opencode run --auto --model opencode-go/deepseek-v4.1-flash --session ses_0123abc");
+  assert.deepEqual(opencode.resumed, { cli: "opencode", id: "ses_0123abc" });
+  const mismatch = run({ model: "opus" }, "claude", { live: true, sessionId: "123e4567-e89b-12d3-a456-426614174000", resume: { cli: "codex", id } });
+  assert.match(mismatch.args[3], /--session-id 123e4567/, "another CLI's session is not this run's to resume");
+  assert.equal(mismatch.resumed, undefined);
+  assert.equal(run({ model: "opus" }, "claude", { resume: { cli: "claude", id: "x && del" } }).resumed, undefined, "only an id-shaped session reaches cmd.exe");
+  assert.equal(run({ model: "grok-4", env: {} }, "grok", { resume: { cli: "grok", id } }).resumed, undefined, "grok has no resume");
+});
+
 // How hard an attempt thinks (scripts/model-ladder.cjs) rides each CLI's own
 // flag: Claude Code's --effort, Codex's model_reasoning_effort override and
 // OpenCode's --variant. Grok and Antigravity take none.

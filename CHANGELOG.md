@@ -7,6 +7,29 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Builders keep working while Studio restarts.** A builder's output now
+  goes to a journal file on this PC (`journal/<project>/runs/` in Studio's
+  local folder) instead of a pipe, so a live update, a crash or a restart of
+  Studio no longer kills the agent mid-build. The next Studio picks the run up
+  where it was: the card keeps running, the log reads on from the journal, and
+  the run finishes and settles as usual (a builder that finished while Studio
+  was away is settled from what it wrote). The desk (`ask_desk`) comes back on
+  the same port, and a live update now restarts at once when every running
+  build can be picked up, instead of waiting for them to end. Set
+  `MEFI_STUDIO_NO_RUN_ADOPT=1` (or `executor.adoptRuns: false` in settings)
+  to keep the old behaviour.
+
+- **An interrupted build picks up its own conversation.** When a builder's
+  process dies (the provider went down, the PC slept, the CLI was killed), the
+  next attempt continues the same Claude Code, Codex or OpenCode session with
+  a short "your run was interrupted, the workspace is as you left it, verify
+  before redoing, finish and report" prompt instead of starting the whole
+  brief again, as long as the same CLI, model, login and folder apply. The
+  card's log says "resumed session … after …", and an outage never counts as
+  a failed attempt. A resumed session that says nothing gets one ordinary
+  attempt. Set `MEFI_STUDIO_NO_SESSION_RESUME=1` (or
+  `executor.resumeSessions: false`) to keep the old behaviour.
+
 - **A wave of new accounts can't farm credits for someone.** When more than
   three members in their first 30 days in the server pay the same member in a
   week (by playing their project, starring it or buying their pack), the

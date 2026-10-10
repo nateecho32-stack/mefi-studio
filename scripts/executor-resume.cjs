@@ -24,7 +24,16 @@ function cliSessionRecord(session) {
     ...(session.reportedModel ? { reportedModel: text(session.reportedModel, 120) } : {}),
     account: session.account ? text(session.account, 80) : null, cwd: session.cwd ? text(session.cwd, 400) : null,
     at: Number.isFinite(session.at) ? session.at : null,
+    ...(session.resumed === true ? { resumed: true } : {}),
   };
+}
+// The run's journal (scripts/run-journal.cjs): where the builder's output is
+// kept on disk and how far this engine had read it, so a relaunched engine
+// reads on from there. Absent when the run writes to pipes.
+function journalRecord(journal) {
+  if (!journal?.path) return null;
+  const offset = Number(journal.offset);
+  return { path: text(journal.path, 600), offset: Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0, format: journal.format === "claude" || journal.format === "codex" ? journal.format : null };
 }
 function usageRecord(usage) {
   const count = (value) => (Number.isFinite(value) && value > 0 ? Math.floor(value) : 0);
@@ -41,6 +50,7 @@ function checkpoint(entry, now = Date.now()) {
     sessionId: entry.sessionId || null,
     ...(entry.cliSession?.id ? { cliSession: cliSessionRecord(entry.cliSession) } : {}),
     ...(entry.cliUsage ? { usage: usageRecord(entry.cliUsage) } : {}),
+    ...(entry.journal?.path ? { journal: journalRecord(entry.journal) } : {}),
     progress: Number.isFinite(entry.progress) ? Math.max(0, Math.min(1, entry.progress)) : null,
     todos: rows(entry.todos ?? prior?.todos).filter(Boolean).slice(0, 40).map((todo) => ({ content: text(todo.content, 500), status: text(todo.status, 40) })),
     outputTail: rows(entry.outputTail?.length ? entry.outputTail : prior?.outputTail).slice(-8).map((line) => text(line, 500)),
@@ -146,4 +156,73 @@ function brief(row, maxChars = 2200) {
   return details.join("\n").slice(0, maxChars);
 }
 
-module.exports = { checkpoint, held, recover, compare, brief, appendLog, settleActiveTool, retireTimedOutTool, ACTIVE_TOOL_SETTLE_MS, cliSessionRecord, usageRecord };
+// ---- resuming the CLI's own session (docs/plans/scratch-tier.md, WP0-C) ----
+// An outage (a provider down, the PC asleep, a killed CLI) ends with the run
+// finished, not restarted from zero: when the previous attempt's CLI session
+// matches the route the next attempt takes, that attempt resumes the session
+// (`claude -p --resume`, `codex exec resume`, `opencode run --session`) with
+// a short recovery prompt instead of the whole brief. brief() above stays the
+// fallback when nothing can be resumed, or when the resumed process exits
+// without speaking.
+const RECOVERY_MAX = 1200;
+const CLI_ROUTES = new Set(["claude", "codex", "grok", "antigravity"]);
+const SESSION_ID = /^[A-Za-z0-9._:-]{1,100}$/;
+const sameDir = (a, b) => String(a ?? "").replace(/[\\/]+/g, "/").replace(/\/$/, "").toLowerCase() === String(b ?? "").replace(/[\\/]+/g, "/").replace(/\/$/, "").toLowerCase();
+
+// The kill switches: MEFI_STUDIO_NO_SESSION_RESUME=1, or
+// settings.executor.resumeSessions set to false.
+function resumeEnabled(settings, env = {}) {
+  if (env?.MEFI_STUDIO_NO_SESSION_RESUME === "1") return false;
+  return settings?.executor?.resumeSessions !== false;
+}
+
+// Whether the saved checkpoint's session can be resumed on this route:
+// { ok, cli, id } when the CLI, the model, the login and the folder all match
+// (an OpenCode run resumes its store session; it keeps no cliSession), else
+// { ok: false, reason }. Grok and Antigravity have no resume.
+function resumable(checkpoint, route) {
+  if (!checkpoint || typeof checkpoint !== "object") return { ok: false, reason: "no checkpoint" };
+  const cli = CLI_ROUTES.has(route?.cli) ? route.cli : "opencode";
+  const session = checkpoint.cliSession;
+  if (session?.id) {
+    if (session.cli !== cli) return { ok: false, reason: `the session is ${session.cli ?? "unknown"}, the route is ${cli}` };
+    if (cli !== "claude" && cli !== "codex") return { ok: false, reason: `${cli} has no resume` };
+    if (!SESSION_ID.test(String(session.id))) return { ok: false, reason: "session id not usable" };
+    if (String(session.model ?? "") !== String(route?.model ?? "")) return { ok: false, reason: "model changed" };
+    if ((session.account ?? null) !== (route?.account ?? null)) return { ok: false, reason: "login changed" };
+    if (session.cwd && route?.cwd && !sameDir(session.cwd, route.cwd)) return { ok: false, reason: "folder changed" };
+    return { ok: true, cli, id: String(session.id) };
+  }
+  if (cli === "opencode" && checkpoint.sessionId && SESSION_ID.test(String(checkpoint.sessionId))) {
+    if (checkpoint.cwd && route?.cwd && !sameDir(checkpoint.cwd, route.cwd)) return { ok: false, reason: "folder changed" };
+    return { ok: true, cli, id: String(checkpoint.sessionId) };
+  }
+  return { ok: false, reason: cli === "grok" || cli === "antigravity" ? `${cli} has no resume` : "no session to resume" };
+}
+
+// The recovery prompt a resumed session gets instead of the whole brief: what
+// was interrupted and where it stood, the workspace as it was left, verify
+// before redoing, no repeated commits, then finish and report. Budgeted to
+// RECOVERY_MAX; the todo list gives way first.
+function recoveryPrompt(checkpoint, { reason = "", max = RECOVERY_MAX, doneMark = "MEFI_JOB_DONE" } = {}) {
+  const saved = checkpoint ?? {};
+  const why = String(reason ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  const head = `CONTINUE INTERRUPTED WORK IN THIS SAME SESSION. Your previous run${saved.runId ? ` (${text(saved.runId, 60)})` : ""} was interrupted${why ? ` (${why})` : ""}; this resumes it.`;
+  const progress = Number.isFinite(saved.progress) ? `Last reported progress: ${Math.round(saved.progress * 100)}%.` : "";
+  const todos = rows(saved.todos).filter((todo) => todo?.content);
+  const done = todos.filter((todo) => todo.status === "completed").map((todo) => text(todo.content, 80));
+  const open = todos.filter((todo) => todo.status !== "completed").map((todo) => `${todo.status === "in_progress" ? "[in progress] " : ""}${text(todo.content, 80)}`);
+  const tail = [
+    "The workspace is as you left it. Verify what is already done before redoing it, and do not repeat commits that are already in `git log`.",
+    `Finish the remaining steps, then report one MEFI_RESULT: line (done: ...; remaining: ...) and print ${doneMark} on its own line, as your brief says.`,
+  ];
+  const fixed = [head, progress, ...tail].filter(Boolean);
+  const room = Math.max(0, max - fixed.join("\n").length - 2);
+  const steps = [];
+  if (done.length) steps.push(`Done: ${done.join("; ")}.`);
+  if (open.length) steps.push(`Still open: ${open.join("; ")}.`);
+  const stepsText = steps.join("\n").slice(0, room);
+  return [head, progress, stepsText, ...tail].filter(Boolean).join("\n").slice(0, max);
+}
+
+module.exports = { checkpoint, held, recover, compare, brief, appendLog, settleActiveTool, retireTimedOutTool, ACTIVE_TOOL_SETTLE_MS, cliSessionRecord, usageRecord, journalRecord, resumable, resumeEnabled, recoveryPrompt, RECOVERY_MAX };

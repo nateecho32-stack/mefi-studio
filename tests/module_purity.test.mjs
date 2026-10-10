@@ -38,6 +38,8 @@ const PROMISES = [
   { file: "scripts/task-oversight.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads (time is", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/work-admission.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/executor-core.cjs", says: "Pure module: no Electron, no filesystem, no network, no processes, no", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
+  // The run journal's rules (docs/plans/scratch-tier.md WP0-B); run-journal-host.cjs and main.cjs "Run journal" own the files and the tail.
+  { file: "scripts/run-journal.cjs", says: "Pure module: no Electron, no filesystem, no network, no clock reads.", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   // The Agent Brain's pure halves (docs/roadmap-0.4.0.md); agent-brain-host.cjs owns their I/O.
   { file: "scripts/pipelines.cjs", says: "Pure module: no Electron, no filesystem, no clock reads (time is injected),", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },
   { file: "scripts/playbook.cjs", says: "Pure module: no Electron, no filesystem, no clock reads (time is injected),", keeps: ["electron", "filesystem", "network", "processes", "timers", "clock"] },

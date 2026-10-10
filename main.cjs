@@ -1078,7 +1078,10 @@ async function applyRestart(files, { counted = true, stopAgents = false } = {}) 
   updateDrainRequested = true;
   if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
   const running = autopilot.jobs;
-  if (running.length) {
+  // Runs that write a journal are adopted by the relaunched Studio (the "Run
+  // journal" block): a restart waits only for the ones that are not.
+  const adoptable = () => typeof runJournalAdoptableAll === "function" && runJournalAdoptableAll();
+  if (running.length && !adoptable()) {
     // An updater restart is finished by the updater's own phase events. A
     // manual one has none: the drain held every later dispatch and no restart
     // ever followed. It retries itself once the builds end, and gives the
@@ -1119,7 +1122,7 @@ async function applyRestart(files, { counted = true, stopAgents = false } = {}) 
   // final check and exit below are synchronous, so adoption cannot be cut
   // off between saving the old project and selecting the new one.
   if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
-  if (autopilot.jobs.length) return { deferred: true, reason: `${autopilot.jobs.length} build job(s) finishing before update; new dispatches wait` };
+  if (autopilot.jobs.length && !adoptable()) return { deferred: true, reason: `${autopilot.jobs.length} build job(s) finishing before update; new dispatches wait` };
   // An automatic restart waits for a paired check to finish; the updater
   // tries again. A manual Restart goes ahead and the check is recorded as
   // interrupted, as before.
@@ -1131,8 +1134,10 @@ async function applyRestart(files, { counted = true, stopAgents = false } = {}) 
     // project or game that began during that wait before the synchronous exit.
     if (projectSwitching) return { deferred: true, reason: "Project switch is saving progress before update" };
     if (activeChild && activeChild.exitCode === null) return { deferred: true, reason: "Love2D is running" };
-    if (autopilot.jobs.length) return { deferred: true, reason: `${autopilot.jobs.length} build job(s) finishing before update; new dispatches wait` };
+    if (autopilot.jobs.length && !adoptable()) return { deferred: true, reason: `${autopilot.jobs.length} build job(s) finishing before update; new dispatches wait` };
   }
+  // The journal offsets the next Studio reads on from are saved first.
+  if (autopilot.jobs.length && typeof runJournalPrepareRestart === "function") { try { await runJournalPrepareRestart(); } catch {} }
   stopUpdateWatch();
   stopEyesWatch();
   stopMachineWatch();
@@ -17231,6 +17236,369 @@ function cliStreamEvent(entry, item) {
 }
 // ---- end of live progress --------------------------------------------------------
 
+// ---- Run journal ----
+// Runs outlive the engine (docs/plans/scratch-tier.md, WP0-B and WP0-C). A
+// builder's stdout and stderr go to a journal file under the local folder
+// (journal/<projectId>/runs/<runId>.out, scripts/run-journal-host.cjs) instead
+// of pipes, so a live update, a crash or the owner's restart no longer kills
+// it; the engine tails the file through the same wire()/take() path, so
+// cli-stream and every consumer read unchanged lines, and the checkpoint keeps
+// {path, offset, format}. On the next housekeeping pass, a row whose worker is
+// still alive (or whose journal already holds the verdict) is adopted as a
+// job with no child process: a pid watcher ends it through the ordinary settle
+// (executorCore.settleAttemptRow), and the side-effects-once rule
+// (runJournal.alreadySettled) keeps a settle the old engine ran from repeating.
+// The updater restarts at once when every running job is adoptable. WP0-C: a
+// next attempt whose route matches the saved CLI session resumes that session
+// with a short recovery prompt (executorResume.resumable, recoveryPrompt);
+// one that exits without a word gets one ordinary attempt. Kill switches:
+// MEFI_STUDIO_NO_RUN_ADOPT=1 / settings.executor.adoptRuns: false (pipes, and
+// the updater waits), MEFI_STUDIO_NO_SESSION_RESUME=1 /
+// settings.executor.resumeSessions: false. Every hook into spawnNextJob, the
+// boot pass, the updater and the exit path is one guarded line; a failure here
+// never fails a dispatch, a board write or a run.
+let runJournalLoaded = null;
+let runJournalSwitch = null; // the last-read adoptRuns switch; null until a run or a pass asked
+let runJournalRootCache = null;
+const runJournalPending = []; // rows chosen inside a board transaction, adopted after it commits
+const runJournalTried = new Set(); // run ids this process already adopted or declined
+const runJournalScanned = new Set(); // project ids whose dead-pid journals were read once
+function runJournalLib() {
+  if (runJournalLoaded) return runJournalLoaded;
+  const rules = require("./scripts/run-journal.cjs");
+  const watch = (file, onChange) => {
+    const watcher = require("node:fs").watch(file, { persistent: false }, () => onChange());
+    watcher.on("error", () => {});
+    return watcher;
+  };
+  const host = require("./scripts/run-journal-host.cjs").createRunJournalHost({ watch, log: (line) => logLine(line) });
+  runJournalLoaded = { rules, host };
+  return runJournalLoaded;
+}
+// The local folder's run journals and desk file for a project (local-dirs).
+async function runJournalRoot() {
+  if (runJournalRootCache) return runJournalRootCache;
+  const dirs = optionalHelper("./scripts/local-dirs.cjs", () => require("./scripts/local-dirs.cjs"), null);
+  if (!dirs) return null;
+  const settings = await readSettings().catch(() => ({}));
+  const userData = app.getPath("userData");
+  const chosen = SMOKE || CAPTURE ? path.join(userData, "local") : typeof settings?.storage?.localDir === "string" ? settings.storage.localDir : null;
+  runJournalRootCache = dirs.localRoot({ platform: process.platform, env: process.env, homedir: os.homedir(), userData, chosen });
+  return runJournalRootCache;
+}
+async function runJournalOn() {
+  let settings = null;
+  try { settings = await readSettings(); } catch { settings = null; }
+  runJournalSwitch = runJournalLib().rules.adoptEnabled(settings, process.env);
+  return runJournalSwitch;
+}
+// The desk server's saved port and token, per project (agent-brain-host deskState).
+function runJournalDeskState() {
+  const file = async () => {
+    const root = await runJournalRoot();
+    const id = typeof projects === "object" && typeof projects?.current === "function" ? projects.current()?.id : null;
+    return root && id ? path.join(root.journalDir(id), "desk.json") : null;
+  };
+  return {
+    read: async () => { const at = await file(); return at ? runJournalLib().host.readJson(at) : null; },
+    write: async (state) => { const at = await file(); if (at) await runJournalLib().host.writeJsonAtomic(at, { port: state.port, token: state.token, at: Date.now() }); },
+  };
+}
+// ---- the spawn side: a journal per run, tailed in place of the pipes ----
+// Opens the run's journal before spawn (never on the spawn's own synchronous
+// path). Off, or on any failure, the run keeps its pipes.
+async function runJournalOpen(entry) {
+  try {
+    if (!(await runJournalOn())) return null;
+    const root = await runJournalRoot();
+    if (!root || !entry?.id) return null;
+    const opened = await runJournalLib().host.open({ dir: root.runsDir(entry.projectId ?? "default"), runId: entry.id });
+    entry.journal = { path: opened.path, offset: 0, format: null, fd: opened.fd, close: opened.close, tail: null, owner: null };
+    return entry.journal;
+  } catch (error) {
+    logLine(`[autopilot] run journal not opened (pipes instead): ${String(error?.message ?? error).slice(0, 160)}`);
+    return null;
+  }
+}
+// cliInvocation's `journal` option: the open file's descriptor.
+function runJournalFd(entry) {
+  return Number.isInteger(entry?.journal?.fd) ? { fd: entry.journal.fd } : null;
+}
+// What wire() reads for this attempt: the child's own stdout when it has one
+// (a Codex app-server facade keeps its pipes, and the journal is then unused
+// and dropped), else a tail of the journal from where the engine had read it.
+function runJournalTail(entry, owner, child) {
+  try {
+    if (child?.stdout) {
+      if (entry.journal) { try { entry.journal.close?.(); } catch {} delete entry.journal; }
+      return child.stdout;
+    }
+    if (!entry?.journal?.path) return null;
+    if (entry.journal.tail) { entry.journal.tail.stop().catch(() => {}); entry.journal.tail = null; }
+    entry.journal.format = entry.liveStream?.format ?? null;
+    const tail = runJournalLib().host.tail({ path: entry.journal.path, offset: entry.journal.offset });
+    entry.journal.tail = tail;
+    entry.journal.owner = owner;
+    tail.on("data", () => { entry.journal.offset = tail.offset; });
+    tail.start();
+    return tail;
+  } catch (error) {
+    logLine(`[autopilot] run journal tail failed: ${String(error?.message ?? error).slice(0, 160)}`);
+    return null;
+  }
+}
+// The process exited: read what it wrote last, then end the tail.
+async function runJournalDrain(entry, owner) {
+  const tail = entry?.journal?.tail;
+  if (!tail || entry.journal.owner !== owner) return;
+  try { await tail.drain(); } catch {}
+}
+function runJournalClose(entry) {
+  const journal = entry?.journal;
+  if (!journal) return;
+  try { journal.tail?.stop?.().catch(() => {}); } catch {}
+  journal.tail = null;
+  try { journal.close?.(); } catch {}
+  journal.close = null;
+  journal.fd = null;
+}
+// ---- the updater and the exit path ----
+function runJournalAdoptableAll() {
+  try { return runJournalLib().rules.restartSafe(autopilot.jobs, { enabled: runJournalSwitch === true }); }
+  catch { return false; }
+}
+// The journal offsets the next engine resumes from are saved before a restart.
+async function runJournalPrepareRestart() {
+  const { rules } = runJournalLib();
+  await Promise.allSettled(autopilot.jobs.filter((entry) => rules.adoptableJob(entry)).map((entry) => queueExecutorCheckpoint(entry, { force: true })));
+}
+// A job the next engine can adopt is left running when this one exits.
+function runJournalKeeps(entry) {
+  try { return runJournalSwitch === true && runJournalLib().rules.adoptableJob(entry); }
+  catch { return false; }
+}
+// ---- WP0-C: the next attempt resumes the CLI's own session ----
+async function runJournalResumePlan(entry, route) {
+  const saved = entry?.resumeCheckpoint;
+  if (!saved) return null;
+  let settings = null;
+  try { settings = await readSettings(); } catch { settings = null; }
+  if (!executorResume.resumeEnabled(settings, process.env)) return null;
+  const cli = ["grok", "claude", "codex", "antigravity"].includes(route?.cli) ? route.cli : "opencode";
+  // The Codex app server has its own session plan (thread/resume is not wired): today's brief.
+  if (cli === "codex" && route?.codexHarness === "app-server" && !entry.codexExecOnly) return null;
+  const found = executorResume.resumable(saved, { cli, model: String(route?.model ?? ""), account: route?.account?.id ?? null, cwd: entry.worktree?.path || entry.projectPath || null });
+  if (!found.ok) { logLine(`[autopilot] not resuming the last session of "${assistantClip(entry.title, 60)}": ${found.reason}`); return null; }
+  const reason = String(entry.ref?.lastRunError || (saved.interruptedAt ? "the run was interrupted" : "an interruption")).slice(0, 120);
+  return { cli: found.cli, id: found.id, reason, prompt: executorResume.recoveryPrompt(saved, { reason, doneMark: EXECUTOR_DONE_MARK }) };
+}
+// ---- adopt on boot: runs an earlier engine left alive ----
+// Once per project: the journals of rows whose worker is gone are read for
+// the verdict, so a CLI that finished while no engine watched is settled
+// rather than restarted. Every pass: the switch is refreshed.
+async function runJournalBootScan(eyes) {
+  const on = await runJournalOn();
+  if (!on) return null;
+  const projectId = typeof projects === "object" && typeof projects?.current === "function" ? projects.current()?.id ?? null : null;
+  if (!projectId || runJournalScanned.has(projectId)) return null;
+  runJournalScanned.add(projectId);
+  const { rules, host } = runJournalLib();
+  const verdicts = new Map();
+  const tasks = await eyes.readJson(TASKS_PATH, []);
+  const owned = new Set(autopilot.jobs.map((entry) => entry.id));
+  for (const row of Array.isArray(tasks) ? tasks : []) {
+    const found = rules.adoptable(row, { ownerPid: process.pid, isAlive: executorProcessAlive, ownedRuns: owned, verdict: true });
+    if (!found.ok || found.reason !== "dead") continue;
+    try {
+      const slice = await host.readFrom(found.journal.path, { offset: found.journal.offset });
+      const read = rules.readTail(slice.text, { doneMark: EXECUTOR_DONE_MARK, isDone: assistantModule?.isDoneMarkerLine, parseResult: assistantModule?.parseExecutorResult, torn: false });
+      if (read.sawDone || read.resultLine) verdicts.set(row.runId, true);
+    } catch {}
+  }
+  return verdicts;
+}
+// Inside the housekeeping transaction, before recover(): the rows this engine
+// takes over keep their claim (lease rewritten to this pid, run kept live) and
+// are adopted once the write commits.
+function runJournalAdoptInBoard(board, { ownedRuns, liveRuns, now, scan }) {
+  if (runJournalSwitch !== true) return;
+  const { rules } = runJournalLib();
+  for (const row of Array.isArray(board?.tasks) ? board.tasks : []) {
+    if (!row?.runId || runJournalTried.has(row.runId)) continue;
+    const found = rules.adoptable(row, { ownerPid: process.pid, isAlive: executorProcessAlive, ownedRuns, verdict: (runId) => scan?.get?.(runId) === true });
+    if (!found.ok) continue;
+    runJournalTried.add(row.runId);
+    row.lease = { pid: process.pid, at: now };
+    liveRuns.add(row.runId);
+    runJournalPending.push({ row, found });
+  }
+}
+async function runJournalAdoptPending() {
+  while (runJournalPending.length) {
+    const { row, found } = runJournalPending.shift();
+    try { await runJournalAdopt(row, found); }
+    catch (error) { logLine(`[autopilot] run ${row.runId} not adopted: ${String(error?.message ?? error).slice(0, 160)}`); }
+  }
+}
+async function runJournalAdopt(row, found) {
+  const { rules, host } = runJournalLib();
+  const now = Date.now();
+  if (autopilot.jobs.some((entry) => entry.id === row.runId)) return;
+  const entry = rules.adoptedEntry(row, { now, ownerPid: process.pid, journal: found.journal, worker: found.worker });
+  entry.project = projects.current();
+  entry.journal = { ...found.journal, tail: null, owner: null };
+  autopilot.jobs.push(entry);
+  const take = (line, out = true) => {
+    if (entry.finished) return;
+    const read = executorCore.readWorkerLine(entry, line, {
+      now: Date.now(), startedAt: entry.startedAt, doneMark: EXECUTOR_DONE_MARK, maxDepth: EXECUTOR_MAX_DEPTH, maxHandoffs: EXECUTOR_MAX_HANDOFFS,
+      assistant: assistantModule, parseHandoff: typeof parseExecutorHandoff === "function" ? parseExecutorHandoff : () => null,
+      issuesPerRun: Number(typeof issuePolicySeen !== "undefined" ? issuePolicySeen?.perRun : NaN),
+    });
+    if (!read.plain) return;
+    if (typeof executorActivity !== "undefined" && executorActivity?.recordOutput) { try { executorActivity.recordOutput(entry, line, Date.now()); } catch {} }
+    logLine(`[${entry.routeLabel ?? "worker"}] ${read.plain}`, { echo: true, run: entry.id, task: entry.taskId });
+    executorCore.applyWorkerLine(entry, read, { stdout: out });
+    if (typeof agentBrain !== "undefined" && agentBrain) { try { agentBrain.workerLine({ taskId: entry.taskId, runId: entry.id, line, first: read.first }); } catch {} }
+    queueExecutorCheckpoint(entry, read.urgent ? {} : { delay: 30000 });
+  };
+  // Decoded as the live attempt was (cliStreamWire), or split into lines.
+  const decoded = entry.liveStream && typeof cliStreamWire === "function" ? cliStreamWire(entry, null, take) : null;
+  let carry = "";
+  const feed = (chunk) => {
+    if (decoded) { decoded.push(chunk); return; }
+    const split = rules.splitLines(carry, chunk);
+    carry = split.rest;
+    for (const line of split.lines) if (line.trim()) take(line);
+  };
+  const tail = host.tail({ path: entry.journal.path, offset: entry.journal.offset });
+  entry.journal.tail = tail;
+  tail.on("data", (chunk) => { entry.journal.offset = tail.offset; feed(chunk); });
+  tail.on("end", () => { if (decoded) decoded.end(); else if (carry.trim()) take(carry); carry = ""; });
+  tail.start();
+  let watcher = null;
+  const settle = (code, reason) => runJournalSettle(entry, { code, errorMessage: reason ?? null }).catch((error) => logLine(`[autopilot] adopted run settle failed: ${String(error?.message ?? error).slice(0, 160)}`));
+  let stopReason = null;
+  entry.stop = (reason, _fallback = false, kind = "stopped") => {
+    if (entry.finished || entry.finishing) return;
+    if (!stopReason) {
+      stopReason = String(reason ?? "stopped");
+      entry.endKind = kind;
+      entry.stopping = { since: Date.now(), reason: stopReason, error: null, retryAt: null };
+      emitAutopilot();
+    }
+    try { spawn("taskkill", ["/pid", String(entry.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" }).on?.("error", () => {}); } catch {}
+  };
+  entry.reap = (code, reason) => {
+    if (executorProcessAlive(entry.pid) === false) return settle(code ?? null, reason ?? stopReason);
+    entry.stop(reason ?? "stopped", false, "stopped");
+    return Promise.resolve();
+  };
+  const check = () => {
+    if (entry.finished || entry.finishing) { clearInterval(watcher); return; }
+    if (executorProcessAlive(entry.pid) === false) { clearInterval(watcher); settle(null, stopReason); return; }
+    if (!stopReason && Date.now() - entry.startedAt > EXECUTOR_KILL_MS) entry.stop("killed after budget", false, "budget");
+  };
+  watcher = setInterval(check, 2000);
+  watcher.unref?.();
+  const words = found.reason === "dead" ? "its CLI had already finished" : `pid ${entry.pid} still running`;
+  logLine(`[autopilot] adopted "${assistantClip(entry.title, 60)}" from an earlier Studio: ${words}, reading on from its journal`);
+  pushAutopilotHistory("run", `adopted from an earlier Studio: ${entry.title}`);
+  executorLog({ event: "adopt", runId: entry.id, kind: "task", task: entry.taskId, title: String(entry.title ?? "").slice(0, 160), pid: entry.pid, alive: found.reason !== "dead" }).catch(() => {});
+  if (typeof agentBrain !== "undefined" && agentBrain?.adoptDeskTool) {
+    agentBrain.adoptDeskTool({ runId: entry.id, runInProject: (id, fn) => { const project = projects.find?.(id); return project ? projects.run(project, fn) : fn(); } }).catch(() => {});
+  }
+  emitAutopilot();
+  queueExecutorCheckpoint(entry, { force: true });
+  if (typeof watchJobProgress === "function") { try { watchJobProgress(await getEyes(), entry); } catch {} }
+  if (found.reason === "dead") check();
+}
+// The ordinary settle for an adopted run: the journal's tail as its last
+// words, the sentinel as its verdict (there is no exit code for a process
+// this engine did not spawn), settleAttemptRow under the ownership fence, and
+// nothing recorded twice (alreadySettled against the card and executor-log).
+async function runJournalSettle(entry, { code = null, errorMessage = null } = {}) {
+  if (entry.finished || entry.finishing) return;
+  entry.finishing = true;
+  const { rules, host } = runJournalLib();
+  if (entry.journal?.tail) { try { await entry.journal.tail.drain(); } catch {} }
+  entry.finished = true;
+  if (entry.checkpointTimer) clearTimeout(entry.checkpointTimer);
+  runJournalClose(entry);
+  const userStop = entry.stopUser === true;
+  const job = { kind: "task", title: entry.title, ref: entry.ref, source: entry.source };
+  const sessionId = entry.sessionId ?? null;
+  const ok = errorMessage == null && !userStop && entry.sawDone === true;
+  const lastWords = executorCore.lastWords(entry.outputTail, EXECUTOR_DONE_MARK);
+  const providerSaid = !ok && !userStop && typeof assistantModule?.isProviderOutage === "function"
+    && assistantModule.isProviderOutage({ error: errorMessage, lastWords, sawDone: entry.sawDone, resultNote: entry.resultNote }) === true;
+  const providerDown = executorCore.providerOutage({ said: providerSaid, streak: Number(entry.ref?.providerFailures) || 0, lastAttemptAt: Number(entry.ref?.lastAttempt?.at) || 0, upAt: 0 });
+  const logRecords = await host.readJsonlTail(projectDataPath(EXECUTOR_LOG_PATH)).catch(() => []);
+  const attempt = executorCore.attemptRecord({ run: entry, job, code, errorMessage, lastWords, sessionId, now: Date.now(), maxDepth: EXECUTOR_MAX_DEPTH, maxHandoffs: EXECUTOR_MAX_HANDOFFS });
+  let outcome = null;
+  let tries = 0;
+  const write = async () => {
+    try {
+      outcome = await mutateBoard((board) => {
+        const task = board.tasks.find((item) => item?.id === entry.taskId);
+        if (!task) return null;
+        if (rules.alreadySettled(task, entry.id)) return { settled: true, repeated: true };
+        if (task.runId !== entry.id) return null;
+        let queuedJob = null;
+        if (ok && entry.resultNote && typeof assistantModule?.scheduleVerificationOnDone === "function") {
+          const planned = assistantModule.scheduleVerificationOnDone({
+            resultNote: entry.resultNote, task: { ...task, projectPath: entry.projectPath || task.projectPath }, attemptKey: entry.id, queue: verificationJobs,
+            baseCheck: typeof baseCheckForProject === "function" ? baseCheckForProject(entry.projectPath || task.projectPath) : undefined,
+          });
+          if (planned && !planned.projectId && entry.projectId) planned.projectId = entry.projectId;
+          queuedJob = planned ?? (typeof assistantModule?.findQueuedVerification === "function" ? assistantModule.findQueuedVerification({ taskId: task.id, attemptKey: entry.id, queue: verificationJobs }) : null);
+        }
+        board.tasks[board.tasks.indexOf(task)] = executorCore.settleAttemptRow(task,
+          { ok, userStop, providerOutage: providerDown, providerSaid, code, errorMessage, lastWords, attempt, run: entry, queuedJob },
+          { now: Date.now(), maxHandoffs: EXECUTOR_MAX_HANDOFFS, startGrace: EXECUTOR_START_FAILURE_GRACE, clip: assistantClip });
+        if (ok && typeof workTitleKey === "function") board.requests = executorCore.releaseInboxCopies(board.requests, task.title, workTitleKey);
+        return { settled: true };
+      });
+      delete entry.settlementPending;
+      delete entry.settlementError;
+      return true;
+    } catch (error) {
+      entry.settlementPending = true;
+      entry.settlementError = String(error?.message ?? error).slice(0, 200);
+      logLine(`[autopilot] adopted run result not saved; retrying storage: ${entry.settlementError}`);
+      const delay = Math.min(60000, 5000 * 2 ** Math.min(tries++, 4));
+      await new Promise((resolve) => { const timer = setTimeout(resolve, delay); timer.unref?.(); });
+      return tries > 8 ? false : write();
+    }
+  };
+  const saved = await write();
+  autopilot.jobs = autopilot.jobs.filter((item) => item !== entry);
+  if (typeof agentBrain !== "undefined" && agentBrain) { try { agentBrain.releaseDeskTool(entry.id); } catch {} }
+  const repeated = outcome?.repeated === true;
+  if (!saved || !outcome?.settled) {
+    logLine(`[autopilot] adopted run "${assistantClip(entry.title, 60)}" ended but its card is no longer its own; nothing recorded`);
+    emitAutopilot();
+    return;
+  }
+  if (!repeated) {
+    // finish() logs its finish line before the board write, so a crash between the two leaves the line without the settle: logged once, settled once.
+    if (!rules.alreadyLogged(logRecords, entry.id)) executorLog(executorCore.finishLogRecord({ run: entry, job, ok, code, errorMessage, userStop, sessionId, now: Date.now(), doneMark: EXECUTOR_DONE_MARK })).catch(() => {});
+    if (typeof fleetHost !== "undefined" && fleetHost) { try { fleetHost.observeFinish({ runId: entry.id, ok, userStop, result: entry.resultNote ?? null }); } catch {} }
+    if (typeof agentBrain !== "undefined" && agentBrain) { try { agentBrain.runFinished({ task: entry.ref, runId: entry.id, ok, userStop, resultNote: entry.resultNote ?? null }); } catch {} }
+    pushAutopilotHistory(ok ? "review" : userStop ? "stopped" : providerDown ? "requeued" : "failed", `${ok ? "finished, awaiting verification" : userStop ? "stopped on request" : providerDown ? "requeued, no attempt charged" : "failed"} (adopted): ${entry.title}`);
+    logLine(`[autopilot] adopted run of "${assistantClip(entry.title, 60)}" ${ok ? "finished, verifying" : userStop ? "stopped, progress saved" : `ended without the verdict${lastWords ? ` — ${String(lastWords).slice(0, 120)}` : ""}`}`);
+  } else {
+    logLine(`[autopilot] adopted run of "${assistantClip(entry.title, 60)}" was settled by the earlier Studio already; not recorded twice`);
+  }
+  emitAutopilot();
+  if (ok && !repeated && typeof runExecutorHandoffs === "function") await runExecutorHandoffs(entry, job).catch((error) => logLine(`[autopilot] handoff failed: ${error.message}`));
+  if (ok && typeof runVerificationJobs === "function") runVerificationJobs().catch(() => {});
+  if (typeof assistantAskForWork === "function") assistantAskForWork("an adopted run ended");
+  if (typeof refreshAutopilotQueue === "function") { try { refreshAutopilotQueue(await getEyes()).catch(() => {}); } catch {} }
+  if (ok && typeof kickVerificationSettlement === "function") kickVerificationSettlement((typeof VERIFY_DWELL_MS === "number" ? VERIFY_DWELL_MS : 30 * 1000) + 1000);
+}
+// ---- end of the run journal ----
+
 // ---- cache-friendly provider calls (scripts/prompt-cache.cjs) -------------------------
 // A Zen gpt-* call names its prompt cache and an OpenRouter Claude or Gemini
 // call marks its system prompt cacheable, so a repeated prompt is billed as a
@@ -17434,6 +17802,9 @@ const agentBrain = (() => {
         return { ideas, tasks };
       },
       appDataFile: (name) => path.join(STUDIO_ROOT, "data", name),
+      // The desk server's saved port and token (the "Run journal" block), so a
+      // relaunched Studio answers the builders it adopts on the same address.
+      deskState: typeof runJournalDeskState === "function" ? runJournalDeskState() : null,
     });
   } catch (error) {
     console.error(`[brain] disabled: ${error.message}`);
@@ -21063,6 +21434,11 @@ async function spawnNextJob(options) {
   // Live progress (cliLiveProgress): a Claude Code or `codex exec` attempt,
   // first or fallback, reports its steps as it works.
   if (typeof cliLiveProgress === "function") entry.liveProgress = await cliLiveProgress();
+  // Run journal (the "Run journal" block): the file this run's output goes to,
+  // and the CLI session the attempt resumes when the last one's matches.
+  if (typeof runJournalOpen === "function") await runJournalOpen(entry);
+  if (typeof runJournalResumePlan === "function") { try { entry.resumeSession = await runJournalResumePlan(entry, runRoute); } catch { entry.resumeSession = null; } }
+  if (entry.resumeSession) entry.resumedSession = { id: entry.resumeSession.id, cli: entry.resumeSession.cli, reason: entry.resumeSession.reason };
   // Attempt review: the start picture and shot are done (or given up on, after 25 s) before the worker is created, so neither
   // can miss what it changes. The wait can be long, so the gates are read again like after a slow checkout: a stop, a pause or a
   // project switch that landed meanwhile cancels the claim instead of starting a worker nobody tracks.
@@ -21092,6 +21468,7 @@ async function spawnNextJob(options) {
     // exact dispatch identity before freezing the attempt's evidence.
     await attributeRunSession(eyes, entry);
     entry.finished = true;
+    if (typeof runJournalClose === "function") runJournalClose(entry);
     if (typeof agentToolConfigs !== "undefined" && entry.toolConfigs) agentToolConfigs.remove(entry.toolConfigs).catch(() => {});
     if (entry.promptFile) rm(entry.promptFile, { force: true }).catch(() => {});
     if (entry.activityTimer) clearTimeout(entry.activityTimer);
@@ -21587,17 +21964,26 @@ async function spawnNextJob(options) {
   // exec, or this run already fell back to exec after the app server could
   // not start (entry.codexExecOnly).
   const spawnAttempt = (route, cli, harness = route?.codexHarness) => {
-    const invocation = executorCore.cliInvocation(route, cli, prompt, {
+    // A resumed CLI session (entry.resumeSession, the "Run journal" block) gets
+    // the recovery prompt and the resume arguments; its output file, when the
+    // run has one, replaces the pipes.
+    const invocation = executorCore.cliInvocation(route, cli, entry.resumeSession?.prompt ?? prompt, {
       modelArg: (value) => cliModelArg(value), agyModelArg: (value) => agyModelArg(value), desk: entry.toolConfigs ?? entry.deskTool ?? null,
       platform: process.platform, shim: (name) => typeof windowsShim === "function" ? windowsShim(name, process.env) : null, promptFile: entry.promptFile ?? null,
       codexHarness: cli === "codex" && harness === "app-server" && !entry.codexExecOnly ? "app-server" : "exec",
       live: entry.liveProgress === true, sessionId: entry.liveProgress === true && cli === "claude" ? crypto.randomUUID() : null,
       ownMcp: process.env.MEFI_STUDIO_WORKER_OWN_MCP === "1",
+      journal: typeof runJournalFd === "function" ? runJournalFd(entry) : null,
+      resume: entry.resumeSession ? { cli: entry.resumeSession.cli, id: entry.resumeSession.id } : null,
     });
     // With live progress, Claude Code streams its events under a session id
     // chosen here and `codex exec` prints its --json events; `entry.liveStream`
     // names the stream for cliStreamWire, with the route facts a resume must match.
-    entry.liveStream = invocation.stream ? { format: invocation.stream, cli, model: String(route.model ?? ""), account: route.account?.id ?? null, cwd: entry.worktree?.path || runRoot } : null;
+    entry.liveStream = invocation.stream ? { format: invocation.stream, cli, model: String(route.model ?? ""), account: route.account?.id ?? null, cwd: entry.worktree?.path || runRoot, ...(invocation.resumed ? { resume: invocation.resumed.id } : {}) } : null;
+    if (invocation.resumed) {
+      logLine(`[autopilot] resuming the ${cli ?? "opencode"} session of "${assistantClip(job.title, 60)}" after ${entry.resumeSession?.reason ?? "an interruption"}`);
+      executorLog({ event: "resume", kind: "resumed", runId: entry.id, task: job.kind === "task" ? job.ref?.id ?? null : null, title: String(job.title ?? "").slice(0, 160), cli: invocation.resumed.cli, session: invocation.resumed.id, reason: String(entry.resumeSession?.reason ?? "").slice(0, 120) }).catch(() => {});
+    }
     if (invocation.dropped?.length) logLine(`[autopilot] ${cli ?? "opencode"} run of "${assistantClip(job.title, 60)}" goes without MCP server(s) ${invocation.dropped.join(", ")}: not safe to pass on its command line`);
     let child = spawn(invocation.command, invocation.args, {
       cwd: entry.worktree?.path || runRoot,
@@ -21660,6 +22046,7 @@ async function spawnNextJob(options) {
       if (stopAttempt?.timer) clearTimeout(stopAttempt.timer);
       if (!stopReason && nextChild.codex?.startFailed && retryOverExec(`codex app-server exited ${code ?? "?"} before its session started`)) return;
       if (stopReason && stopForFallback && fallbackToOpencode(stopReason)) return;
+      if (!stopReason && entry.resumeSession && !entry.spoke && retryWithoutResume(`the resumed session exited ${code ?? "?"} before speaking`)) return;
       // A CLI that exits nonzero at once without a word on stdout never got
       // going (cmd's "is not recognized", a login prompt, an unknown flag):
       // the CLI failing, not the job, so it falls back once, after the
@@ -21739,7 +22126,22 @@ async function spawnNextJob(options) {
       try { attach(spawnAttempt(route, "codex", "exec"), label, route, allowFallback); return true; }
       catch (retryError) { logLine(`[autopilot] codex exec retry could not start: ${retryError.message}`); return false; }
     }
-    wire(child.stdout, nextChild, true);
+    // A resumed session that exits without a word (the "Run journal" block,
+    // WP0-C) runs once more with the full brief, on the same claim: one
+    // attempt, counted once.
+    function retryWithoutResume(why) {
+      if (!entry.resumeSession || entry.resumeRetried || entry.finished) return false;
+      entry.resumeRetried = true;
+      entry.resumeSession = null;
+      if (entry.resumedSession) entry.resumedSession.fellBack = true;
+      entry.spoke = false;
+      entry.spokeOut = false;
+      logLine(`[autopilot] ${String(why ?? "the resumed session said nothing").slice(0, 160)} — retrying "${assistantClip(job.title, 60)}" with the full brief`);
+      try { attach(spawnAttempt(route, ["grok", "claude", "codex", "antigravity"].includes(route?.cli) ? route.cli : null), label, route, allowFallback); return true; }
+      catch (retryError) { logLine(`[autopilot] retry without the session could not start: ${retryError.message}`); return false; }
+    }
+    // The journal's tail stands in for stdout when the run has one (runJournalTail).
+    wire(typeof runJournalTail === "function" ? runJournalTail(entry, nextChild, child) : child.stdout, nextChild, true);
     wire(child.stderr, nextChild);
     // An early CLI exit can break the piped prompt before the child emits
     // close. Handle the stream's own error event, keep the claim until exit,
@@ -21834,6 +22236,8 @@ async function spawnNextJob(options) {
     }, startBudgetMs);
     startWatchdog?.unref?.();
     child.on("close", (code) => {
+      // A journaled run's last lines are read before its end is judged.
+      if (typeof runJournalDrain === "function" && entry.journal?.tail) { runJournalDrain(entry, nextChild).catch(() => {}).then(() => ended(code, inputError)); return; }
       ended(code, inputError);
     });
     child.on("error", (error) => {
@@ -22428,6 +22832,9 @@ async function autopilotHousekeepingPass() {
   const now = Date.now();
   const assistant = await getAssistant();
   const eyes = await getEyes();
+  // Runs an earlier Studio left: the journals of gone workers are read once
+  // for their verdict before the mutation below (the "Run journal" block).
+  const journalScan = typeof runJournalBootScan === "function" ? await runJournalBootScan(eyes).catch(() => null) : null;
   const verify = assistantModule?.verifyCompletion;
   const verifyMax = Number(assistantModule?.VERIFY_MAX_ATTEMPTS) || 3;
   // Policy Lab PR0 — the verification pass is the trusted runner: as it
@@ -22615,6 +23022,10 @@ async function autopilotHousekeepingPass() {
       const relinked = new Map((Array.isArray(legacy.relinked) ? legacy.relinked : []).map((row) => [row.id, row]));
       board.tasks = [...legacy.tasks, ...(relinked.size ? board.tasks.map((row) => relinked.get(row?.id) ?? row) : board.tasks)];
     }
+    // A row whose worker outlived the engine that started it is this engine's
+    // now (lease, live set), adopted once this write commits; recover() below
+    // leaves it alone.
+    if (typeof runJournalAdoptInBoard === "function") { try { runJournalAdoptInBoard(board, { ownedRuns, liveRuns, now, scan: journalScan }); } catch (error) { logLine(`[autopilot] run adoption skipped: ${String(error?.message ?? error).slice(0, 160)}`); } }
     board.tasks = board.tasks.map((row) => executorResume.recover(row, recovery));
     // A live owner keeps its claims' leases fresh: a claim whose run id is
     // missing from THIS process's live set still belongs to another process
@@ -22987,6 +23398,7 @@ async function autopilotHousekeepingPass() {
     if (typeof settleModelOutcome === "function") settleModelOutcome(runId, "failed");
   }
   const sweep = result.sweeps ?? {};
+  if (typeof runJournalAdoptPending === "function") { try { await runJournalAdoptPending(); } catch (error) { logLine(`[autopilot] run adoption failed: ${String(error?.message ?? error).slice(0, 160)}`); } }
   // One line per legacy request row the pass moved onto the task path.
   for (const note of result.legacyNotes ?? []) logLine(`[autopilot] ${note}`);
   for (const note of result.verifyNotes ?? []) logLine(`[autopilot] ${note}`);
@@ -28707,6 +29119,8 @@ process.on("exit", () => {
   if (stylerSetupChild) spawn("taskkill", ["/pid", String(stylerSetupChild.pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
   saveAssistantSync();
   for (const entry of autopilot.jobs) {
+    // A journaled run is left to the next Studio (the "Run journal" block).
+    if (typeof runJournalKeeps === "function" && runJournalKeeps(entry)) continue;
     const pid = entry.pid ?? entry.child?.pid;
     if (pid) spawn("taskkill", ["/pid", String(pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
   }
