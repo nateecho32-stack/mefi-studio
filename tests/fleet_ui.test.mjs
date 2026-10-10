@@ -133,6 +133,8 @@ test("the graph has a card for every seat, a wire for every pair, and selecting 
   assert.equal(cardOf(h, "builder-2").dataset.status, "waiting", "it asked the desk");
   assert.equal(cardOf(h, "builder-3").dataset.status, "idle");
   assert.equal(cardOf(h, "builder-1").children[2].textContent, "Editing main.cjs");
+  assert.match(cardOf(h, "builder-1").children[3].textContent, /^Working · \d+ min elapsed/);
+  assert.match(cardOf(h, "builder-2").children[2].textContent, /Waiting for: Which test owns this\?/);
   assert.match(cardOf(h, "builder-1").children[3].textContent, /opencode · fable-5 · g1/);
   assert.equal(cardOf(h, "builder-1").style.left !== undefined, true);
   const wires = h.$("graph").querySelectorAll(".fleet-wire");
@@ -221,7 +223,7 @@ test("the table lists a row per seat, sorts on a header, selects on a click and 
   assert.equal(first.children[2].textContent, "opencode");
   assert.equal(first.children[3].textContent, "fable-5");
   assert.equal(first.children[5].children[1].textContent, "Working");
-  assert.equal(first.children[6].textContent, "Editing main.cjs");
+  assert.match(first.children[6].textContent, /^Working · \d+ min elapsed · Last action: Editing main\.cjs$/);
   assert.match(h.$("table").querySelector(".fleet-table-foot").textContent, /^7 seats · 4 working/);
   first.click();
   await h.flush();
@@ -298,9 +300,9 @@ test("health lists what needs a look with the rule behind it, and the loop card 
   const list = h.$("health").querySelector(".fleet-health-list").children;
   const summaries = list.map((item) => item.children[0].children[1].textContent);
   assert.ok(summaries.some((text) => /quiet for/.test(text)), summaries.join(" | "));
-  assert.ok(summaries.some((text) => /waited .* for the desk/.test(text)));
+  assert.ok(summaries.some((text) => /waiting for the desk/.test(text)));
   const quiet = list.find((item) => /quiet for/.test(item.children[0].children[1].textContent));
-  assert.match(quiet.children[2].textContent, /No output, step or tool change from the worker in that time\. Rule: 10 min without output\./);
+  assert.match(quiet.children[2].textContent, /No output, step or tool change from the worker in that time\..*health is unknown.*Rule: 10 min without output\./);
   assert.equal(quiet.children[0].children[0].textContent, "Look");
   assert.equal(h.$("tabs").children.find((tab) => tab.dataset.tab === "health").children[1].textContent, String(h.holder.view.counts.attention));
   const card = h.$("health").querySelector(".fleet-health-loop");

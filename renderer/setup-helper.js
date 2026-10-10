@@ -1678,7 +1678,8 @@
     const add = document.getElementById?.("workspace-add-project");
     if (add || typeof api()?.projectsAdd === "function") rows.push(welcomeRow({ mark: "+", name: "Open a folder…", small: "A folder you already have", key: "open-folder", onClick: () => { if (add && !add.disabled) add.click(); else void api().projectsAdd?.(); } }));
     if (!list.length) lead.textContent = "Studio builds inside a folder on your PC. Start a new app and Studio makes one for you, or open a folder you already have.";
-    body.replaceChildren(...rows);
+    const scope = node("p", "setup-welcome-scope", "Build websites, desktop apps, scripts or games in a project folder. Your coding tool edits the files; running and testing them requires that project's own runtimes and tools. Studio does not bundle every engine or guarantee a finished app.");
+    body.replaceChildren(scope, ...rows);
   }
   // Step 3: the first task, in plain words, with examples a tap fills in. No project open: it says so instead.
   const welcomeProject = () => {

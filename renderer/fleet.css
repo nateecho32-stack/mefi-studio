@@ -144,7 +144,7 @@
 .fleet-tr:hover { background: color-mix(in srgb, var(--ivory) 5%, transparent); }
 .fleet-tr[aria-selected="true"] { background: color-mix(in srgb, var(--gold) 14%, transparent); }
 .fleet-td { padding: 7px 10px; border-top: 1px solid color-mix(in srgb, var(--hairline) 60%, transparent); vertical-align: middle; white-space: nowrap; }
-.fleet-td[data-col="now"] { max-width: 300px; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.fleet-td[data-col="now"] { min-width: 180px; max-width: 300px; white-space: normal; overflow-wrap: anywhere; color: var(--muted); }
 .fleet-td[data-col="actions"] { text-align: right; }
 .fleet-td[data-col="state"] { display: table-cell; }
 .fleet-td[data-col="state"] .fleet-dot { margin-right: 7px; }

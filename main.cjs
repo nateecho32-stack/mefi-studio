@@ -951,7 +951,7 @@ function applicationMenu() {
         { label: "Zoom in (=)", accelerator: "CmdOrCtrl+=", visible: false, click: () => { stepUiZoom(1).catch(() => {}); } },
         { label: "Zoom out", accelerator: "CmdOrCtrl+-", click: () => { stepUiZoom(-1).catch(() => {}); } },
         { type: "separator" },
-        { label: "Keep Studio on top", type: "checkbox", checked: typeof stayOnTopOn === "boolean" ? stayOnTopOn : true, accelerator: "CmdOrCtrl+Shift+T", click: (item) => { setStayOnTop(item.checked).catch(() => {}); } },
+        { label: "Keep Studio on top", type: "checkbox", checked: typeof stayOnTopOn === "boolean" ? stayOnTopOn : true, click: (item) => { setStayOnTop(item.checked).catch(() => {}); } },
         { role: "togglefullscreen" },
       ],
     },
@@ -28185,6 +28185,9 @@ function nameStudioToEmbeds(webSession) {
 
 function createWindow() {
   const saved = savedWindowBounds();
+  // Native fullscreen covers the taskbar as well as the title bar. F11 still
+  // returns to a normal window; hidden test/capture windows keep their sizes.
+  const fullscreen = !SMOKE && !CAPTURE && process.env.MEFI_STUDIO_FULLSCREEN !== "0";
   const page = path.join(STUDIO_ROOT, "renderer", "booklet.html");
   Menu.setApplicationMenu(applicationMenu());
   window = new BrowserWindow({
@@ -28195,6 +28198,7 @@ function createWindow() {
     ...(saved ? { x: saved.x, y: saved.y } : {}),
     // A login launch starts in the tray (the "Start with Windows" block).
     show: !SMOKE && !CAPTURE && !AT_LOGIN,
+    fullscreen,
     backgroundColor: "#0d1118",
     autoHideMenuBar: true,
     title: "Mefi's Studio AI+",
@@ -28220,8 +28224,8 @@ function createWindow() {
   });
   if (typeof startupMarks !== "undefined" && startupMarks) startupMarks.watch(window.webContents); // Startup marks
   // maximize() also shows the window, so a login launch keeps it for later.
-  if (saved?.maximized && !AT_LOGIN) window.maximize();
-  else if (saved?.maximized) { const created = window; created.once("show", () => { if (!created.isDestroyed()) created.maximize(); }); }
+  if (!fullscreen && saved?.maximized && !AT_LOGIN) window.maximize();
+  else if (!fullscreen && saved?.maximized) { const created = window; created.once("show", () => { if (!created.isDestroyed()) created.maximize(); }); }
   guardWindowNavigation(window.webContents, page);
   // Pinned above other windows unless the owner saved it off; minimize lets go, restore pins again.
   window.on("minimize", () => applyStayOnTop());

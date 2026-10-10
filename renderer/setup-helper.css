@@ -185,6 +185,7 @@
 .setup-welcome-title:focus { outline: none; }
 .setup-welcome-lead { max-width: 54ch; margin: 0 0 16px; color: var(--muted); font-size: max(12px, calc(14px * var(--text-scale, 1))); line-height: 1.55; }
 .setup-welcome-body { display: grid; gap: 8px; }
+.setup-welcome-scope { margin: 0 0 6px; color: var(--muted); font-size: max(12px, calc(12.5px * var(--text-scale, 1))); line-height: 1.5; }
 .setup-welcome-opt { display: flex; align-items: center; justify-content: flex-start; gap: 12px; width: 100%; min-height: 62px; margin: 0; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--ivory) 10%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--bg) 45%, transparent); color: var(--ivory); text-align: left; white-space: normal; box-shadow: none; }
 button.setup-welcome-opt { cursor: pointer; }
 button.setup-welcome-opt:hover { border-color: color-mix(in srgb, var(--gold) 40%, transparent); background: var(--tint-gold-1); transform: none; }

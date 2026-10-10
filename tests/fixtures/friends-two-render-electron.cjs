@@ -169,7 +169,7 @@ app.whenReady().then(async () => {
     await go(pc, "rooms");
     await pc.until("document.getElementById('rooms')?.dataset.view", "Rooms is up");
     // The first visit opens the Lobby room; step back to the list.
-    if (await pc.run("return document.getElementById('rooms').dataset.view === 'room';")) await pc.run("document.getElementById('rooms-back').click();");
+    if (await pc.run("return document.getElementById('rooms').dataset.view === 'room';")) await pc.run("(document.querySelector('#shell-pages [data-page=\"rooms:all\"]') || document.querySelector('[data-room-control=\"rooms:all\"]')).click();");
     await pc.until("document.getElementById('rooms').dataset.view === 'rooms'", "the room list");
   };
   const say = (pc, text) => pc.run(`const box = document.getElementById('rooms-compose'); box.value = ${JSON.stringify(text)}; box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));`);
@@ -177,11 +177,14 @@ app.whenReady().then(async () => {
 
   // 1. Both open The Lobby: each signs in, connects and sees the other online.
   for (const pc of [one, two]) await go(pc, "lobby");
-  for (const pc of [one, two]) await pc.until("document.getElementById('friends-front')?.dataset.state === 'ready'", "The Lobby is ready");
+  for (const pc of [one, two]) await pc.until("document.getElementById('rooms')?.dataset.view === 'room' && window.MefiRoomLayout.navigation()?.rows.some(row=>row.key==='room:lobby' && row.current)", "The Lobby chat is ready");
+  await say(one, "Hello from PC one in the Lobby");
+  await two.until("[...document.querySelectorAll('.rooms-message-text')].some(node=>node.textContent==='Hello from PC one in the Lobby')", "the default Lobby delivers real chat across the two windows");
+  await one.capture("two-0-room-desktop-lobby.png");
   await sleep(300);
   for (const pc of [one, two]) {
     await pc.run("window.MefiFriendsFront && document.getElementById('friends-front') && null");
-    await go(pc, "lobby");
+    await go(pc, "lobby", { view: "roundup" });
     await pc.until(`document.querySelector('#friends-front .front-online-count')?.textContent.includes('1 online now') && [...document.querySelectorAll('#friends-front .front-who-text b')].some((node) => node.textContent === ${JSON.stringify(pc === one ? "Nova" : "Mefi")})`, "the other PC is online in The Lobby", 20000);
   }
   await one.capture("two-1-lobby-one.png");
@@ -214,20 +217,21 @@ app.whenReady().then(async () => {
   await two.until("[...document.querySelectorAll('#rooms .rooms-message-text')].some((node) => node.textContent === 'Hello from PC one')", "PC two hears PC one");
   await say(two, "Hi! PC two here");
   await one.until("[...document.querySelectorAll('#rooms .rooms-message-text')].some((node) => node.textContent === 'Hi! PC two here')", "PC one hears PC two");
-  await one.until("document.querySelector('#rooms .rooms-here')?.textContent.includes('1 here')", "PC one sees PC two in the room", 40000);
+  await one.until(`window.MefiRoomLayout.navigation()?.rows.some(row=>row.key==='person:${TWO.id}' && row.label==='Nova')`, "PC one sees PC two in the room", 40000);
   await one.capture("two-2-chat-one.png");
   await two.capture("two-2-chat-two.png");
   report.steps.push("chat both ways, who is here");
 
   // 5. PC two closes Studio; PC one keeps talking; PC two comes back and catches up from PC one's copy.
-  await two.run("document.getElementById('rooms-back').click(); await window.mefiStudio.hubDisconnect();");
-  await one.until("!document.querySelector('#rooms .rooms-here')?.textContent.includes('1 here')", "PC two left", 40000);
+  await toRoomsList(two);
+  await two.run("await window.mefiStudio.hubDisconnect();");
+  await one.until(`!window.MefiRoomLayout.navigation()?.rows.some(row=>row.key==='person:${TWO.id}')`, "PC two left", 40000);
   await say(one, "While you were away: one");
   await sleep(150);
   await say(one, "While you were away: two");
   await sleep(300);
   await two.run("await window.mefiStudio.hubConnect();");
-  await go(two, "rooms");
+  await toRoomsList(two);
   await two.until("[...document.querySelectorAll('#rooms .rooms-card')].some((card) => card.textContent.includes('Two PC test'))", "the room list after coming back");
   await two.run("[...document.querySelectorAll('#rooms .rooms-card')].find((card) => card.textContent.includes('Two PC test')).querySelector('button').click();");
   await two.until("['Hello from PC one', 'Hi! PC two here', 'While you were away: one', 'While you were away: two'].every((text) => [...document.querySelectorAll('#rooms .rooms-message-text')].some((node) => node.textContent === text))", "the missed messages are filled in from PC one's copy", 20000);
@@ -240,6 +244,8 @@ app.whenReady().then(async () => {
   const started = await one.run(`return await window.mefiStudio.hubListen({ roomId: ${JSON.stringify(roomId)}, action: 'start', url: 'https://www.youtube.com/watch?v=jfKfPfyJRdk', label: 'Lo-fi for coding', provider: 'youtube', positionMs: 0 });`);
   assert.equal(started?.ok, true, JSON.stringify(started));
   await two.until("window.__events.some((event) => event.type === 'listen' && event.session?.label === 'Lo-fi for coding')", "PC two hears the shared player");
+  await two.until("document.querySelector('.room-desktop-listening .room-desktop-card-title')?.textContent==='Lo-fi for coding'", "the second room desktop shows the received player label");
+  await two.capture("two-4-room-player-two.png");
   report.steps.push("listen together");
 
   // 7. PC one shares a project; PC two plays it; after two minutes both earn, and PC one hears it.
@@ -262,9 +268,9 @@ app.whenReady().then(async () => {
   finishPlay.fn();
   await one.until("[...document.querySelectorAll('#toast-host .toast')].some((toast) => toast.textContent.includes('Someone played your project: +5 credits'))", "PC one's pop-up for the play");
   await one.capture("two-4-played-one.png");
-  await go(one, "lobby");
+  await go(one, "lobby", { view: "roundup" });
   await one.until("document.querySelector('#friends-front .front-mast')?.textContent.includes('5 credits')", "PC one's Lobby shows the credits");
-  await go(two, "lobby");
+  await go(two, "lobby", { view: "roundup" });
   await two.until("document.querySelector('#friends-front .front-mast')?.textContent.includes('2 credits')", "PC two earned for playing");
   await two.capture("two-5-lobby-two.png");
   report.steps.push("shared a card, played it, both earned");

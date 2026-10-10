@@ -49,8 +49,9 @@
   const SOCIAL_SECTIONS = Object.freeze(["settings", "help", "friends"]);
   function studioOnly(id, params = {}) {
     if (!socialMode() || typeof id !== "string" || allPages()) return false;
-    // Home stays Social's; a session (a task's thread) or the classic chat view is Studio's.
-    if (id === "workspace") return Boolean(params && typeof params === "object" && params.view);
+    // Home stays Social's, and so does the Home tab's own ask for it (view "home", renderer/tabs.js goRoute); a session (a
+    // task's thread) or the classic chat view is Studio's.
+    if (id === "workspace") return Boolean(params && typeof params === "object" && params.view && params.view !== "home");
     if (PAGES.includes(id)) return false;
     const dest = nav()?.get?.(id);
     if (!dest || dest.kind === "action" || dest.layer === "transient") return false;

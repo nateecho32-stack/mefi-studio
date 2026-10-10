@@ -145,6 +145,7 @@ test("the head names the project and its branch and opens the project menu; New 
   const a = await open();
   await a.settle();
   assert.equal(a.text("list", ".sx-proj-words b"), "Snake trial");
+  assert.equal(a.list().getAttribute("tabindex"), "-1", "drawer focus skips the scroll container's transient automatic tab stop");
   assert.equal(a.text("list", ".sx-proj-words small"), "main", "the branch comes from work:where");
   assert.ok(a.api.of("workWhere").length >= 1 && a.api.of("workWhere").length <= 2);
   await a.one("list", "#sessions-project").click(); await a.settle();
@@ -157,7 +158,8 @@ test("the head names the project and its branch and opens the project menu; New 
   await a.one("list", "#sessions-new").click(); await a.settle();
   assert.equal(a.calls.compose, 1, "New task is Home's own message box in its task purpose: pictures, @ # / and chips are all there");
   assert.equal(a.S.selected(), null, "and the thread makes way for it");
-  assert.match(a.one("list", "#sessions-new").textContent, /Ctrl N/);
+  assert.equal(a.one("list", "#sessions-new").getAttribute("aria-label"), "New task");
+  assert.match(a.one("list", "#sessions-new").title, /Ctrl N/);
 });
 
 test("the project menu lists every project with the open one checked, switches through Home's own project buttons, and opens a folder, a new app or all projects", async () => {
@@ -224,7 +226,8 @@ test("under the project: the Git chip is git-sync.js's own, in its list look, an
   rows.splice(1); a.env.emit("mefi:worktrees"); a.env.emit("mefi:workspace-state"); await a.settle();
   assert.equal(a.one("list", "#sessions-worktrees").hidden, true, "no other checkout: no chip");
   const order = a.list().children.map((node) => node.id || node.className);
-  assert.ok(order.indexOf("sessions-project") < order.indexOf("sessions-gitrow") && order.indexOf("sessions-gitrow") < order.indexOf("sessions-new"), "project, then Git and worktrees, then New task");
+  assert.ok(order.indexOf("sx-list-head") < order.indexOf("sessions-gitrow"), "project and New task share the head, then Git and worktrees");
+  assert.equal(a.one("list", ".sx-list-head #sessions-new").getAttribute("aria-label"), "New task");
 });
 
 test("Backlog lists plan drafts first and then ideas, the plans read from the Plans page's own call; a plan opens in Plans, and the two scans are a press away", async () => {
@@ -321,9 +324,10 @@ test("the list says what to do when there is no project, no task or no match", a
   assert.equal(none.calls.sidebar.length, 1);
   const empty = await sessionsApp({ tasks: [] });
   await empty.settle();
-  assert.match(empty.text("list", ".sx-empty"), /Tasks you start show up here/);
-  await empty.one("list", ".sx-empty button").click();
-  assert.equal(empty.calls.compose, 1, "its button starts one");
+  assert.match(empty.text("list", ".sx-empty"), /No sessions yet.*Use \+ beside the project/);
+  assert.equal(empty.one("list", ".sx-empty button"), null, "the empty list does not repeat New task");
+  await empty.one("list", "#sessions-new").click();
+  assert.equal(empty.calls.compose, 1, "the head's button starts one");
 });
 
 test("the list is one tab panel named by the tab that is on, its headings and rows are buttons, and its tab stop is one", async () => {

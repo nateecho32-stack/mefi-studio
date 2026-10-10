@@ -102,3 +102,36 @@ test("createWindow keeps a 600x560 minimum and guards the page it loads", () => 
   assert.ok(body.includes("view.loadFile(page, {"), "the guard allows exactly the page the window loads");
   assert.ok(body.indexOf("guardWindowNavigation(") < body.indexOf("loadView().catch("), "guarded before the first load");
 });
+
+test("normal launches cover the desktop; login stays hidden and harnesses keep their window sizes", () => {
+  const start = slice("function createWindow() {", "\n  guardWindowNavigation(window.webContents, page);") + "\n}";
+  for (const scenario of [
+    { name: "normal", fullscreen: true, show: true },
+    { name: "login", AT_LOGIN: true, fullscreen: true, show: false },
+    { name: "smoke", SMOKE: true, fullscreen: false, show: false },
+    { name: "capture", CAPTURE: true, fullscreen: false, show: false },
+    { name: "opt out", env: "0", fullscreen: false, show: true, maximize: true },
+    { name: "login opt out", AT_LOGIN: true, env: "0", fullscreen: false, show: false, deferred: true },
+  ]) {
+    let options, maximized = false, deferred = false;
+    const context = vm.createContext({
+      SMOKE: false, CAPTURE: false, AT_LOGIN: false, ...scenario,
+      process: { env: { MEFI_STUDIO_FULLSCREEN: scenario.env } },
+      path, STUDIO_ROOT: STUDIO, MIN_WINDOW: { width: 600, height: 560 },
+      savedWindowBounds: () => scenario.SMOKE || scenario.CAPTURE ? null : ({ x: 50, y: 50, width: 1000, height: 700, maximized: true }),
+      Menu: { setApplicationMenu() {} }, applicationMenu: () => [],
+      BrowserWindow: class {
+        constructor(value) { options = value; this.webContents = {}; }
+        maximize() { maximized = true; }
+        once(name) { assert.equal(name, "show"); deferred = true; }
+      },
+    });
+    vm.runInContext(start, context);
+    context.createWindow();
+    assert.equal(options.fullscreen, scenario.fullscreen, scenario.name);
+    assert.equal(options.show, scenario.show, scenario.name);
+    assert.equal(maximized, Boolean(scenario.maximize), `${scenario.name}: saved maximize cannot override fullscreen`);
+    assert.equal(deferred, Boolean(scenario.deferred), `${scenario.name}: login does not show itself`);
+    if (!scenario.SMOKE && !scenario.CAPTURE) assert.deepEqual([options.x, options.y, options.width, options.height], [50, 50, 1000, 700], "restored geometry remains available on leaving fullscreen");
+  }
+});

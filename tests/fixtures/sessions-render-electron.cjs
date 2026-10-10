@@ -78,6 +78,7 @@ function bridge(seedData) {
   const calls = [];
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const data = clone(seedData);
+  let sidebarOriginal = null;
   const { projectId: pid } = data;
   const t = Date.now();
   const hoursAgo = (n) => t - n * 3600000;
@@ -125,7 +126,7 @@ function bridge(seedData) {
     return { items, counts: { total: items.length } };
   };
   const handlers = {
-    projectsList: () => ({ ok: true, activeId: pid, projects: [{ id: pid, name: "Notes app", path: data.root }] }),
+    projectsList: () => ({ ok: true, activeId: pid, projects: data.projects || [{ id: pid, name: "Notes app", path: data.root }] }),
     tasksList: () => ({ ok: true, projectId: pid, tasks: data.tasks }),
     ideasList: () => ({ ok: true, ideas: data.ideas }),
     planningList: () => ({ ok: true, projectId: pid, plans: [] }),
@@ -217,6 +218,14 @@ function bridge(seedData) {
   for (const name of ["onTasks", "onProjects", "onAssistant", "onAssistantStatus", "onProjectPreview", "onSettingsChanged", "onStudioLog", "onAutoSetup", "onReviewChanged", "onMachineStatus"]) api[name] = (callback) => { (callbacks[name] ||= []).push(callback); return () => {}; };
   contextBridge.exposeInMainWorld("mefiStudio", api);
   contextBridge.exposeInMainWorld("sessionsFixture", {
+    sidebarStress: (on) => {
+      if (on && !sidebarOriginal) {
+        sidebarOriginal = { tasks: data.tasks, projects: data.projects };
+        data.tasks = data.tasks.concat(Array.from({ length: 80 }, (_, i) => ({ id: `sidebar_${i}`, projectId: pid, title: `Sidebar task ${i}`, prompt: `Sidebar task ${i}`, status: "open", createdAt: t + i, updatedAt: t + i })));
+        data.projects = Array.from({ length: 12 }, (_, i) => ({ id: i ? `sidebar_project_${i}` : pid, name: i ? `Sidebar project ${i}` : "Notes app", path: data.root }));
+      } else if (!on && sidebarOriginal) { data.tasks = sidebarOriginal.tasks; data.projects = sidebarOriginal.projects; sidebarOriginal = null; }
+      for (const callback of callbacks.onProjects || []) callback(clone(handlers.projectsList()));
+    },
     calls: () => calls, clear: () => { calls.length = 0; }, state: () => clone({ changes: data.changes, tasks: data.tasks.map((row) => ({ id: row.id, title: row.title, status: row.status })), questions: data.questions.length, decisions: data.decisions.length, messages: data.messages.length }),
     push: (name, payload) => { for (const callback of callbacks[name] || []) callback(payload); },
   });
@@ -413,6 +422,47 @@ app.whenReady().then(async () => {
   const settle = () => sleep(450);
   const toastAction = (label) => run(`const node = [...document.querySelectorAll('#toast-host .toast-action')].find((item) => item.textContent.trim() === ${q(label)}); if (!node) throw new Error('no toast action ' + ${q(label)}); node.click();`);
   const waitToast = (label) => until(`[...document.querySelectorAll('#toast-host .toast-action')].some((item) => item.textContent.trim() === ${q(label)})`, `a toast offers ${label}`);
+
+  const verifySidebar = async () => {
+    await run("window.sessionsFixture.sidebarStress(true); await window.MefiWorkspace.refresh(true); window.MefiNav.go('workspace');");
+    await until("document.querySelectorAll('#sessions-list .sx-row').length >= 85", "the sidebar shows the long task list");
+    for (const [width, height, zoom] of [[1440, 900, 1], [900, 480, 1], [600, 560, 1.5]]) {
+      await size(width, height, zoom);
+      await run("window.MefiShell.open('list');");
+      await focusOn("#sessions-tab-backlog"); await press("Enter");
+      await until("document.querySelector('#sessions-list .sx-scan')", "Backlog remains reachable by keyboard");
+      await focusOn("#sessions-tab-sessions"); await press("Enter");
+      await until("document.querySelectorAll('#sessions-list .sx-row').length >= 85", "Sessions restores the long list");
+      await focusOn("#sessions-find"); await press("Down"); await press("End");
+      const end = await run(`const a = document.activeElement, list = document.getElementById('sessions-list-scroll'); const r = a.getBoundingClientRect(), b = list.getBoundingClientRect(); return { inside: r.top >= b.top - 1 && r.bottom <= b.bottom + 1, scroll: list.scrollTop, height: list.clientHeight, overflow: list.scrollHeight > list.clientHeight };`);
+      assert.ok(end.inside && end.scroll > 0 && end.overflow && end.height >= 80, `keyboard End reaches a visible row at ${width}x${height}@${zoom}: ${JSON.stringify(end)}`);
+      await press("Enter");
+      assert.ok(await run("return Boolean(window.MefiSessions.selected());"), "Enter opens the focused session");
+      await run("window.MefiShell.open('list');");
+      await focusOn("#sessions-find"); await contents.insertText("Sidebar task 79");
+      await until("document.querySelectorAll('#sessions-list .sx-row').length === 1", "the filter reaches the last synthetic task");
+      assert.deepEqual(await rows(), ["sidebar_79"]);
+      await press("Escape");
+      await until("document.querySelectorAll('#sessions-list .sx-row').length >= 85", "Escape restores the long list");
+      await focusOn("#sessions-project"); await press("Enter");
+      await until("document.querySelectorAll('#sessions-project-menu [role=menuitemradio]').length === 12", "the project menu includes twelve projects");
+      await press("End");
+      const menu = await run(`const a = document.activeElement, m = document.getElementById('sessions-project-menu'); const r = a.getBoundingClientRect(), b = m.getBoundingClientRect(); return { inside: r.top >= b.top && r.bottom <= b.bottom, bottom: b.bottom, window: innerHeight, scroll: m.scrollTop, overflow: m.scrollHeight > m.clientHeight };`);
+      assert.ok(menu.inside && menu.bottom <= menu.window && (!menu.overflow || menu.scroll > 0), `the last project action is visible and scrolls into view when needed: ${JSON.stringify(menu)}`);
+      await press("Home"); await press("Enter");
+      await until("!document.getElementById('sessions-project-menu')", "choosing the current project closes its menu");
+      await focusOn("#sessions-new"); await press("Enter");
+      await until("window.MefiSessions.selected() === null", "New task reaches the composer");
+      assert.equal(await count("#sessions-new"), 1, "one task creation control in the sidebar");
+      await run("window.MefiShell.open('list');");
+      await capture(`sidebar-${width}x${height}@${zoom}.png`);
+      (report.sidebar ||= []).push({ width, height, zoom, end, menu });
+    }
+    await run("window.sessionsFixture.sidebarStress(false); await window.MefiWorkspace.refresh(true);");
+    await size(1440, 900, 1);
+    step("compact sidebar: eighty extra tasks, twelve projects, filter, creation and keyboard scrolling at three sizes including 150% zoom");
+  };
+  if (only === "sidebar") { await verifySidebar(); report.complete = true; finish(); return; }
 
   // ---- the chrome at 1920x1080, beside the prototype's shots (docs/prototype/): the status bar, Search and the Inbox ----------------------
   // Everything a person reads there is checked in every theme (12 px and 4.5:1, readableProbe). It runs on the board as it starts (the
@@ -1169,6 +1219,7 @@ app.whenReady().then(async () => {
   await run("window.MefiNav.go('workspace');");
   await until("!document.getElementById('shell-inspector').hidden", "back on Home");
   step("the Work view at 1920x1080");
+  await verifySidebar();
   await size(1440, 900, 1);
 
   // ---- switching it off, and on again ---------------------------------------------------------------------------------------------------------

@@ -20,6 +20,39 @@ function view(state, at, extra = {}) {
 
 const seat = (snapshot, id) => snapshot.pods.flatMap((pod) => pod.seats).find((item) => item.id === id);
 
+test("known waits appear immediately, oldest first, preserve age on escalation and clear on answer", () => {
+  const state = fleet.emptyState();
+  const running = ["run_1", "run_2"].map((id, index) => ({ id, taskId: `task_${index}`, startedAt: T0, phase: "building" }));
+  fleet.observeStatus(state, { parallel: 3, running }, T0);
+  fleet.observeEvent(state, { kind: "help.ask", runId: "run_2", at: T0 + MIN, text: "Approve the preview permission" });
+  fleet.observeEvent(state, { kind: "help.ask", runId: "run_1", at: T0 + 2 * MIN, text: "Which test owns this?" });
+  let signals = fleet.health(state, T0 + 3 * MIN);
+  assert.deepEqual(signals.map(item => item.id), ["ask:run_2", "ask:run_1"]);
+  assert.equal(signals[0].reason, "Approve the preview permission");
+  assert.equal(signals[0].severity, "info", "a fresh question is visible without an alarm");
+  fleet.observeEvent(state, { kind: "help.answer", runId: "run_2", at: T0 + 4 * MIN, ok: false, text: "Owner permission required" });
+  const blocked = seat(view(state, T0 + 5 * MIN), "builder-2");
+  assert.equal(blocked.now.waitingSince, T0 + MIN);
+  assert.equal(blocked.now.blocker, "Owner permission required");
+  signals = fleet.health(state, T0 + 20 * MIN);
+  assert.deepEqual(signals.map(item => item.id), ["escalated:run_2", "ask:run_1"], "known waits replace ambiguous quiet warnings");
+  fleet.observeEvent(state, { kind: "help.answer", runId: "run_1", at: T0 + 21 * MIN, ok: true });
+  assert.ok(!fleet.health(state, T0 + 21 * MIN).some(item => item.id === "ask:run_1"));
+  fleet.observeEvent(state, { kind: "help.answer", runId: "run_2", at: T0 + 22 * MIN, ok: true });
+  assert.equal(seat(view(state, T0 + 22 * MIN), "builder-2").status, "working");
+  assert.ok(!fleet.health(state, T0 + 22 * MIN).some(item => item.id === "escalated:run_2"));
+});
+
+test("a long silent tool reports its tool state without claiming failure", () => {
+  const state = fleet.emptyState();
+  fleet.observeStatus(state, { parallel: 3, running: [{ id: "run_1", startedAt: T0, phase: "building", currentStep: "Bash running · full test suite", stepUpdatedAt: T0, tool: { name: "Bash", status: "running", since: T0 } }] }, T0);
+  const quiet = fleet.health(state, T0 + 11 * MIN).find(item => item.id === "quiet:run_1");
+  assert.match(quiet.reason, /full test suite/);
+  assert.match(quiet.why, /Bash is reported in flight/);
+  assert.match(quiet.why, /not proof of a failure/);
+  assert.equal(seat(view(state, T0 + 11 * MIN), "builder-1").status, "working");
+});
+
 function handedOffTasks() {
   const state = fleet.emptyState();
   const tasks = [{ id: "parent_task", title: "Prepare the parser", status: "active" },

@@ -7,6 +7,21 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
 
 ## [Unreleased]
 
+- **Friends opens a room desktop.** Rooms and people sit beside the existing
+  chat, with readable author initials and a rounded composer. Your build,
+  the room player and the week's Build Jam show actual app and service state.
+  Small windows reveal the side panels; offline drafts stay in place.
+  All rooms, invitations and the Lobby roundup remain reachable.
+- **The session sidebar has one New task control beside the project.** Sessions,
+  Backlog and filtering stay together. Long task and project lists scroll to the
+  keyboard's focused item, and Escape clears a filter before closing a narrow drawer.
+- **The selected V-and-star app icon is preserved.** The original supplied artwork
+  is kept with the resized icon used by the window, tray and packaged executable.
+- **Ctrl+Shift+T reopens the last closed tab.** Keep Studio on top remains in
+  the menu and settings, without taking the same shortcut.
+- **Friends stays visible in short windows.** The navigation footer uses its
+  compact controls at increased interface scale, leaving room for all four places.
+
 - **Resources is easier to use.** The CPU and memory pill on the status bar
   opens Team › Resources, the list of apps on this PC. Each app now shows its
   CPU, its memory, Close and End, and a More button for Slow down, Pause, Free
@@ -2031,6 +2046,39 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   repository) is now shown as a problem instead of passing as offline. A Git
   `merge.autoStash` or `rebase.autoStash` setting can no longer move live
   edits during a sync.
+
+## [0.5.0-rc.1] - 2026-10-10
+
+- **Friends brings rooms, chat and your build together.** The existing room
+  chat gains Rooms and Here now, actual project and player summaries, and the
+  current Build Jam. Narrow panels reveal through buttons; offline drafts stay.
+- **A simpler session sidebar.** One New task button sits beside the project;
+  Sessions, Backlog and filtering remain reachable. Keyboard focus scrolls into
+  view, and Escape clears the filter before closing a narrow drawer.
+- **Your selected V-and-star icon.** The original artwork is preserved and the
+  resized image is embedded in the portable executable, window and tray.
+This is a local validation candidate. The hosted account and payment proposals
+remain separate drafts and checkout is closed.
+
+- **Setup starts with an easy provider choice.** The existing coding-tool path
+  still offers install, login, check and use, including narrow windows.
+- **Fleet makes waits and progress easier to follow.** Each running seat shows
+  its state, elapsed time and last action. Questions appear immediately with
+  their exact blocker; waits of the same priority show oldest first. A quiet
+  tool reports its recorded state without claiming that silence proves failure.
+- **Decisions explain what is missing.** Social's existing Needs you list shows
+  the recorded blocker without adding another panel. First-run project setup
+  explains supported project types and the runtimes each project needs.
+- **Resources gives each app reachable controls.** Close, End and More keep
+  the slower Scratch memory tier available alongside the regular memory tools.
+- **Studio opens full screen with the selected app icon.** The same preference
+  is passed through the Electron and Rust host bridges.
+- **Home and Friends stay reachable.** Returning to Home keeps Social available,
+  and compact footer controls leave the four navigation places visible in short windows.
+- **Development updates download the right artifact.** GitHub Actions download
+  requests use the artifact API's JSON response before following its redirect.
+- **Ctrl+Shift+T reopens the last closed tab.** Keep Studio on top remains
+  available in the menu and settings.
 
 ## [0.4.4] - 2026-09-27
 

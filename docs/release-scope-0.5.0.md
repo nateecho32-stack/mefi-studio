@@ -1,6 +1,17 @@
 # 0.5.0 release scope
 
-Updated on the evening of 6 October 2026. The published Windows download is
+The local validation candidate is **0.5.0-rc.1**, not a published release.
+Its fresh portable folder and zip are separate from the installed application.
+The candidate now includes the Friends room desktop in Social and Studio:
+Rooms, actual presence, the existing chat, the local build summary, the room
+player and the current Build Jam. Narrow panels reveal through buttons and
+offline drafts remain in place. The Lobby roundup and all existing Friends
+destinations remain reachable. Chat media embeds are not added by this layout.
+The hosted account, subscription and economy proposals remain private drafts;
+they are not activated by this candidate. Google social sign-in still needs
+registered OAuth configuration and a deployed identity adapter.
+
+Candidate scope updated 10 October 2026. The published Windows download is
 still 0.4.4. This records the scope of the next release; it does not announce a
 release date or replace the packaging and release checks. **0.4.5 and 0.4.6 are
 skipped:** what was planned for them ships in 0.5.0. The plan is
@@ -406,7 +417,10 @@ ranks landed with the Project hub.)
 
 The [site](https://nateecho32-stack.github.io/mefi-studio/) and its
 [roadmap](https://nateecho32-stack.github.io/mefi-studio/roadmap.html) say 0.5
-is being built and that Studio is moving to Rust, in the Chrome look, with
-screenshots of the 0.5 layout. Their source lives on `gh-pages`, separately
+is being built and that Studio is moving to Rust, with screenshots of the
+0.5 layout. The public site now uses the supplied Vibe Studio V/star artwork
+and a dark, lime and aqua finish; the app's existing looks remain available.
+The site labels its demo as simulated and its launch offers as planned, with
+checkout unopened. Their source lives on `gh-pages`, separately
 from the application, and never merges into `main`. Keep the download and
 latest-release labels on 0.4.4 until 0.5.0 is actually published.

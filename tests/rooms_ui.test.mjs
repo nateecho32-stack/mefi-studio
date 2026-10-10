@@ -11,6 +11,7 @@ import vm from "node:vm";
 // the Friends badge. Then main.cjs's HUB_ROOM_METHODS gate.
 
 const source = await readFile(new URL("../renderer/rooms.js", import.meta.url), "utf8");
+const layoutSource = await readFile(new URL("../renderer/friends-room-layout.js", import.meta.url), "utf8");
 const main = (await readFile(new URL("../main.cjs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const flush = async () => { for (let i = 0; i < 30; i += 1) await Promise.resolve(); };
 const ME = { id: "123456789012345678", name: "Mefi" };
@@ -21,6 +22,7 @@ class Element {
   set textContent(value) { this.text = String(value); this.children = []; }
   get textContent() { return this.text + this.children.map((child) => child.textContent).join(""); }
   append(...children) { for (const child of children) { child.parentElement = this; this.children.push(child); } }
+  insertBefore(child, before) { child.parentElement = this; const index = this.children.indexOf(before); if (index < 0) this.children.push(child); else this.children.splice(index, 0, child); }
   replaceChildren(...children) { this.children = []; this.append(...children); }
   setAttribute(key, value) { this.attrs[key] = String(value); }
   getAttribute(key) { return this.attrs[key] ?? null; }
@@ -37,7 +39,7 @@ class Element {
 const room = (overrides = {}) => ({ id: "room_mine", name: "Lo-fi corner", kind: "hangout", policy: "request", listed: true, status: "active", you: "owner", ownerId: ME.id, memberCount: 3, maxMembers: 25, ...overrides });
 const message = (overrides = {}) => ({ id: "423456789012345678", author: { id: FRIEND.id, name: "Aksana", viaStudio: true }, text: "hey <@123456789012345678>", createdAt: Date.UTC(2026, 8, 27, 20), editedAt: null, mentions: [{ id: ME.id, name: "Mefi" }], attachments: [], ...overrides });
 
-function environment({ status = { configured: true, linked: true, state: "ready", user: ME }, rooms = [], requests = [], invites = [], replies = {}, bridge = true, extra = {} } = {}) {
+function environment({ status = { configured: true, linked: true, state: "ready", user: ME }, rooms = [], requests = [], invites = [], replies = {}, bridge = true, extra = {}, desktop = false } = {}) {
   const calls = [];
   let hubEvent = null;
   let hearing = 0;
@@ -59,9 +61,89 @@ function environment({ status = { configured: true, linked: true, state: "ready"
   const window = { mefiStudio: api, confirm: () => true };
   // Timers do nothing here: the Online list's 30-second refresh never fires in a test.
   const context = vm.createContext({ window, document: { createElement: (tag) => new Element(tag) }, Date, Number, Array, Set, Map, Promise, JSON, Object, String, setTimeout: () => 0, clearTimeout: () => {} });
+  if (desktop) vm.runInContext(layoutSource, context);
   vm.runInContext(source, context);
   return { rooms: window.MefiRooms, window, calls, push: (event) => hubEvent(event), setStatus: (next) => { status = next; }, hearing: () => hearing, setLists: (next) => { requests = next.requests ?? requests; invites = next.invites ?? invites; } };
 }
+
+test("room desktop uses real project, presence, player and jam state; live cards preserve the draft", async () => {
+  const updates = {}, reads = [];
+  const tasks = [{ id: "a", projectId: "project-a", title: "Lay out the list", status: "running", contextHistory: [{ text: "private work detail" }] }, { id: "b", projectId: "project-a", title: "Save who brings what", status: "done" }, { id: "c", projectId: "project-a", title: "Check it works", status: "todo" }];
+  const env = environment({ desktop: true, rooms: [room()], status: { configured: true, linked: true, state: "ready", user: ME, front: true, events: true },
+    replies: { messages: { ok: true, messages: [message()], hasMore: false }, front: { ok: true, online: { people: [{ ...FRIEND, rank: "flame", where: { id: "room_mine" } }] } }, events: { ok: true, jam: { theme: "Glow", phase: "entries" } } },
+    extra: { projectsList: async () => { reads.push("projects"); return { ok: true, activeId: "project-a", projects: [{ id: "project-a", name: "Snack list" }] }; },
+      tasksList: async () => { reads.push("tasks"); return { ok: true, projectId: "project-a", tasks }; },
+      assistantStatus: async () => { reads.push("workers"); return { ok: true, status: { projectId: "project-a", running: [{ taskId: "a" }, { taskId: "other" }] } }; },
+      hubEvents: async () => ({ ok: true, jam: { theme: "Glow", phase: "entries" } }),
+      onProjects: (fn) => { updates.projects = fn; }, onTasks: (fn) => { updates.tasks = fn; }, onAssistantStatus: (fn) => { updates.workers = fn; },
+    },
+  });
+  const panel = env.rooms.panel({ room: "room_mine" }); await flush();
+  assert.equal(panel.byClass("room-desktop-board").length, 1);
+  assert.match(panel.byClass("room-desktop-build")[0].textContent, /Snack list.*2 builders working.*1 of 3 tasks done/);
+  assert.equal(panel.byClass("room-desktop-progress")[0].value, 1);
+  assert.match(panel.byClass("room-desktop-jam")[0].textContent, /Glow.*Make something, share it, enter it/);
+  assert.match(panel.byClass("room-desktop-person")[0].textContent, /Aksanaflame/);
+  assert.doesNotMatch(panel.textContent, /private work detail|In sync|Night Bus/);
+  const routes = [];
+  env.window.MefiNav = { go: (...args) => routes.push(args) };
+  panel.buttons("Lay out the list")[0].click();
+  assert.deepEqual(JSON.parse(JSON.stringify(routes)), [["tasks", { taskId: "a", projectId: "project-a", filter: "all" }]], "a summary task opens its existing board route with project scope");
+  const media = [];
+  env.window.MefiMusic = { openAudio: () => media.push("open"), setSource: (value) => media.push(value), openSection: (value) => media.push(value) };
+  env.window.MefiTogether = { status: () => ({ roomId: "elsewhere", session: null }), selectRoom: (id) => { media.push(id); return true; } };
+  panel.byClass("room-desktop-listening")[0].buttons("Listen together")[0].click();
+  assert.deepEqual(media, ["open", "link", "more", "room_mine"], "the chip opens the existing player in this room");
+  const compose = panel.find("rooms-compose"); compose.value = "Keep this unsent";
+  updates.workers({ projectId: "other-project", running: [] }); await flush();
+  assert.match(panel.byClass("room-desktop-build")[0].textContent, /2 builders working/);
+  updates.workers({ projectId: "project-a", running: [] }); await flush();
+  assert.match(panel.byClass("room-desktop-build")[0].textContent, /No builders running/);
+  assert.equal(panel.find("rooms-compose"), compose); assert.equal(compose.value, "Keep this unsent");
+  env.push({ type: "listen", roomId: "room_mine", session: { title: "Actual room track", provider: "youtube", playing: true } }); await flush();
+  assert.match(panel.byClass("room-desktop-listening")[0].textContent, /Actual room track.*Playing/);
+  env.push({ type: "presence", roomId: "room_mine", inStudio: [ME.id, FRIEND.id] }); await flush();
+  assert.deepEqual(panel.byClass("room-desktop-person").map((item) => item.textContent), ["YYou", "AAksanaflame"]);
+  env.push({ type: "status", status: { state: "off" } }); await flush();
+  assert.equal(compose.disabled, true); assert.equal(compose.value, "Keep this unsent");
+  assert.match(panel.textContent, /Offline. Presence is unavailable/);
+  env.push({ type: "status", status: { state: "ready" } }); await flush(); assert.equal(compose.disabled, false);
+  env.push({ type: "status", status: { state: "ready", readOnly: true } }); await flush();
+  assert.equal(compose.disabled, true); assert.match(panel.textContent, /read-only; you can read but not post/);
+  env.push({ type: "status", status: { state: "ready" } }); await flush(); assert.equal(compose.disabled, false);
+  assert.deepEqual(reads, ["projects", "tasks", "workers"], "pushes update the summaries without another board read");
+});
+
+test("room desktop distinguishes unavailable services and can return to the classic room", async () => {
+  const env = environment({ desktop: true, rooms: [room()], replies: { messages: { ok: true, messages: [], hasMore: false } } });
+  const panel = env.rooms.panel({ room: "room_mine" }); await flush();
+  assert.match(panel.textContent, /Project status is unavailable in this build/);
+  assert.match(panel.textContent, /Build Jam unavailable.*does not provide events/);
+  assert.match(panel.textContent, /Waiting for room presence/);
+  assert.match(panel.byClass("room-desktop-listening")[0].textContent, /Open the room player/);
+  env.push({ type: "listen", roomId: "room_mine", session: null }); await flush();
+  assert.match(panel.byClass("room-desktop-listening")[0].textContent, /Nothing playing in this room/);
+  assert.equal(env.calls.some((call) => ["front", "events"].includes(call[0])), false);
+  panel.dispose(); assert.equal(env.window.MefiRoomLayout.navigation(), null);
+  env.window.localStorage = { getItem: () => "classic" };
+  const classic = env.rooms.panel({ room: "room_mine" }); await flush();
+  assert.equal(classic.byClass("room-desktop-board").length, 0);
+  assert.equal(env.rooms.desktopEnabled(), false);
+  assert.ok(classic.find("rooms-compose"));
+});
+
+test("closing a room while presence is pending does not start an event read afterwards", async () => {
+  let answerPresence;
+  let eventReads = 0;
+  const env = environment({ desktop: true, rooms: [room()], status: { configured: true, linked: true, state: "ready", user: ME, front: true, events: true },
+    replies: { messages: { ok: true, messages: [], hasMore: false }, front: () => new Promise(resolve => { answerPresence = resolve; }) },
+    extra: { hubEvents: async () => { eventReads += 1; return { ok: true, jam: null }; } } });
+  const panel = env.rooms.panel({ room: "room_mine" }); await flush();
+  assert.equal(typeof answerPresence, "function");
+  panel.dispose(); answerPresence({ ok: true, online: { people: [] } }); await flush();
+  assert.equal(eventReads, 0);
+  assert.equal(env.window.MefiRoomLayout.navigation(), null);
+});
 
 test("the panel explains itself until the hub is configured, linked and connected", async () => {
   const none = environment({ bridge: false }).rooms.panel();

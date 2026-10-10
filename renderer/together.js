@@ -131,6 +131,19 @@
     } else if (!prefs.share) { try { await bridge().hubDisconnect(); } catch {} }
     render();
   }
+  // A room's chip opens this existing player in that room. Refresh membership
+  // before choosing; selecting a room never turns Listen along on by itself.
+  async function selectRoom(roomId) {
+    if (!available() || typeof roomId !== "string" || !ROOM_ID.test(roomId)) return false;
+    init();
+    await refreshStatus();
+    if (!ready() && canConnect()) await connect();
+    if (!ready()) return false;
+    await joined();
+    if (!state.rooms.some((item) => item.id === roomId)) { note("Join this room before listening with it.", true); render(); return false; }
+    await choose(roomId);
+    return prefs.roomId === roomId;
+  }
   function forgetRoom(reason) {
     // Let go of the room's hold too; Rooms may still hold it for its chat.
     const left = prefs.roomId;
@@ -475,7 +488,7 @@
     // radio does; smoke and capture runs share the owner's profile and stay off.
     void refreshStatus().then(() => { if ((prefs.roomId || prefs.share) && canConnect() && !headless()) void connect(); });
   }
-  window.MefiTogether = { init, status: () => ({ hub: state.hub, roomId: prefs.roomId, following: prefs.following, share: prefs.share, session: state.session }), position, embedCommands };
+  window.MefiTogether = { init, selectRoom, status: () => ({ hub: state.hub, roomId: prefs.roomId, following: prefs.following, share: prefs.share, session: state.session }), position, embedCommands };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();

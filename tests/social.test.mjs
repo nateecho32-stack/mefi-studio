@@ -72,6 +72,8 @@ test("Social keeps to its own pages: a Studio page or a session asked for from S
   for (const id of ["fleet", "command", "tasks", "agents", "trace", "worktrees"]) assert.equal(t.social.studioOnly(id), true, `${id} is Studio's`);
   assert.equal(t.social.studioOnly("workspace", { view: "task", taskId: "t1" }), true, "a session is Studio's");
   assert.equal(t.social.studioOnly("workspace", {}), false, "Home is Social's own");
+  // The Home tab asks for { view: "home" } (renderer/tabs.js goRoute): Friends, then Home, then Friends used to land in Studio's Today.
+  assert.equal(t.social.studioOnly("workspace", { view: "home" }), false, "the Home tab's Home is Social's too");
   for (const id of ["vibe", "friends-page", "inbox", "projects", "activity", "studio", "size", "setup-helper"]) assert.equal(t.social.studioOnly(id), false, `${id} stays in Social`);
   assert.equal(t.social.studioOnly("studio-api"), false, "a page of Settings stays, whatever it is called");
   assert.equal(t.social.studioOnly("shortcuts"), false, "and one of Help");

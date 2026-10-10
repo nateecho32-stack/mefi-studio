@@ -684,6 +684,7 @@ app.whenReady().then(async () => {
     for (const name of ["list", "inspector"]) {
       const toggle = `shell-${name}-toggle`;
       await run(`document.getElementById(${JSON.stringify(toggle)}).focus();`);
+      await run(`window.__drawerEvents=[]; window.__drawerListener=event=>window.__drawerEvents.push({type:event.type,id:event.target.id,cls:event.target.className}); document.addEventListener('focusin',window.__drawerListener); document.addEventListener('focusout',window.__drawerListener);`);
       await run(`document.getElementById(${JSON.stringify(toggle)}).click();`); await settle();
       state = await p();
       const box = state.boxes[name];
@@ -694,7 +695,10 @@ app.whenReady().then(async () => {
       assert.ok(box[1] + box[3] <= state.boxes.status[1] + 1, `${tag}: and above the status bar`);
       assert.ok(box[2] <= state.inner[0] - (name === "list" ? state.rest : 0) + 0.5, `${tag}: and no wider than the room`);
       assert.ok(state.boxes.scrim, `${tag}: the page is dimmed under it`);
-      assert.equal(name === "list" ? state.inList : state.inInspector, true, `${tag}: focus moves into the drawer (it is on ${state.active})`);
+      const drawerFocus = await run(`const host=document.getElementById(${JSON.stringify(`shell-${name}`)}); return [...host.querySelectorAll('button, input, a[href], [tabindex]')].slice(0,12).map(node=>({id:node.id,cls:node.className,tabIndex:node.tabIndex,hidden:node.hidden,rects:node.getClientRects().length,display:getComputedStyle(node).display}));`);
+      const focusEvents = await run(`document.removeEventListener('focusin',window.__drawerListener); document.removeEventListener('focusout',window.__drawerListener); return window.__drawerEvents;`);
+      (report.drawerFocus ||= []).push({ tag, name, active: state.active, candidates: drawerFocus, events: focusEvents });
+      assert.equal(name === "list" ? state.inList : state.inInspector, true, `${tag}: focus moves into the ${name} drawer (it is on ${state.active}; events ${JSON.stringify(focusEvents)}; candidates ${JSON.stringify(drawerFocus)})`);
       assert.deepEqual(state.usable, usableBefore, `${tag}: a drawer takes no room from the page`);
       assert.ok(state.boxes.status && state.boxes.top, `${tag}: the bar and the status bar stay rows`);
       // The bar stays in reach while a drawer is open: the scrim dims the page, not the controls that close the drawer.

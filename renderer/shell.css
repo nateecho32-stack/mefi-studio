@@ -189,13 +189,21 @@ html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:
    "Settings", "Friends" and "Search" stay whole at 12 px (about 43 px in Segoe UI and 49 px in DejaVu Sans; 39 px was left). */
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) { padding-inline: 4px; }
 html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) :is(.app-rail-head, .app-rail-foot-item) { padding-inline: 2px; }
+/* Keep the framed tiles compact too: their more specific tall minimum
+   otherwise overrides studio-ui.css and clips Friends at display scaling. */
+@media (max-height: 600px) {
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 40px; }
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot-item { min-height: 28px; height: 28px; }
+}
 /* The smallest window at 150% zoom is about 373 CSS px tall: a tile keeps its icon and its word but not the tall minimum, so
    Work, Map, Team and Friends all stay in view (studio-ui.css's short-window rail, which the two rules above out-rank). */
 @media (max-height: 440px) {
-  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 40px; }
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-head { min-height: 32px; }
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  html[data-frame]:not([data-rail-pinned]):not([data-rail-drawer]) #app-rail:not(:hover):not(:has(:focus-visible)) .app-rail-foot > :is(.companion-orb, .companion-dock) { justify-self: center; }
 }
 /* One home for Search: the top bar's (Ctrl K), in every window. The rail's copy stays in the page for a page without the
-   frame, and gives its room back to the places: in the smallest window a tile keeps 40 px instead of 32. */
+   frame, and gives its room back to the places. */
 html[data-frame] #app-rail .app-rail-search { display: none; }
 html[data-frame] #app-rail .app-rail-section.current > .app-rail-head,
 html[data-frame] #app-rail .app-rail-foot-item[aria-current="page"] { background: var(--tint-gold-3, color-mix(in srgb, var(--gold) 14%, transparent)); color: var(--ivory); }

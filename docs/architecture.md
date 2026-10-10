@@ -2050,8 +2050,42 @@ failed process stays an error and cannot produce briefing requests.
   smoothly quicken the Overview's spin, sway it round a small figure of eight
   and swell it on the bass, inside room the frame keeps for it.
 
+### Friends' room desktop
+
+Friends opens the Lobby chat when the room service supports it. The same room
+view works in Social and Studio: Rooms and Here now beside the existing chat,
+then Your build, Listening together and This week's Build Jam. The local project,
+task completion and worker counts come from the app's existing scoped reads and
+pushes. Names, ranks, presence, player state and the jam come from the room
+service; missing or unavailable state is labelled rather than filled in.
+
+In Studio, room navigation uses the shell's list column. Social keeps that
+navigation beside the chat. Small windows collapse the side panels into
+Rooms & people and Your build & room buttons; Escape closes a revealed panel
+and returns focus. Chat keeps its own scrolling history and earlier-message
+pager. Disconnecting disables posting while preserving the composer and draft;
+cached player and jam summaries are marked offline.
+
+All rooms & invitations and Lobby roundup retain the previous destinations.
+Invites, requests, reporting, membership, room permissions, the Shop, Project hub,
+Events, Your PCs and Playground still use their existing controls and host gates.
+The listening button opens the existing room player without enabling following
+or autoplay. This layout does not add media embeds to chat. Discord remains the
+external discussion home. The per-device fallback is
+`localStorage mefiStudio.friendsRoomLayout = "classic"`.
+
+`renderer/friends-room-layout.js` only starts its reads when a room panel is
+created. It coalesces pushes into one visible frame, preserves unchanged card
+nodes and stops work after disposal. Reconnection refreshes presence and events;
+returning to a visible room refreshes those reads after a minute, without polling.
+
 ### Fleet: seats, pods and the branches view
 
+- A running seat shows its observed state, elapsed time, last action and current
+  tool. Questions show their blocker immediately; unresolved questions grow in
+  priority after fifteen minutes and sort oldest first within that priority.
+  Known waits and quiet tool calls remain described as waits, without claiming
+  the worker failed. Answering removes that escalation while preserving the run.
 - **Live › Fleet** shows the open project's team the way OpenRig draws a rig
   ([fleet-overhaul-plan.md](fleet-overhaul-plan.md)). Every agent is a **seat**
   with a stable address (`builder-2@project`); each run a seat takes is one
@@ -2912,7 +2946,10 @@ a note, an Ask and a Change go through, what "Done when" says, the chips' host
 calls) stays in builder.js, so the Sessions layout of Home and these panels can
 never disagree. Nothing is drawn unless the layout is on and a shell is there.
 
-- **The list.** This project's tasks as sessions, grouped Needs you, Running,
+- **The list.** One New task button (Ctrl N) sits beside the project; Sessions,
+  Backlog and filtering stay below it. Long task and project menus scroll the
+  keyboard's focused item into view. Escape clears a filter or closes its menu
+  before closing a narrow drawer. This project's tasks as sessions, grouped Needs you, Running,
   Review, Queued and Done, newest first (pinned first), one status dot, a title
   and one line of words each; what a row says follows `html[data-detail]`
   (titles, plus status, everything: the stylesheet decides, the row always

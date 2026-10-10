@@ -497,6 +497,9 @@
 
   function buildList() {
     const root = el("aside", "sx-panel sx-list"); root.id = "sessions-list"; root.setAttribute("aria-label", "Sessions"); root.dataset.short = "false";
+    // Keep the scroll container out of the tab order: drawer focus belongs to
+    // its controls, not an automatic scroll tab stop that vanishes on resize.
+    root.setAttribute("tabindex", "-1");
     const project = button("", "sx-proj", () => openProjectMenu(false), { title: "Switch project" });
     project.id = "sessions-project"; project.setAttribute("aria-haspopup", "menu"); project.setAttribute("aria-expanded", "false");
     project.addEventListener("keydown", (event) => { if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") { event.preventDefault(); openProjectMenu(true); } });
@@ -505,8 +508,9 @@
     const git = el("span", "sx-git");
     const trees = button("", "sx-chip-btn sx-trees", () => window.MefiNav?.go?.("worktrees"), { icon: "g-worktree" }); trees.id = "sessions-worktrees"; trees.hidden = true;
     gitRow.append(git, trees);
-    const fresh = button("New task", "sx-new primary", () => newTask(), { title: "Start a new task (Ctrl N)", icon: "g-add" });
-    fresh.id = "sessions-new"; fresh.append(el("kbd", "", "Ctrl N"));
+    const fresh = button("", "sx-new", () => newTask(), { title: "New task (Ctrl N)", icon: "g-add" });
+    fresh.id = "sessions-new"; fresh.setAttribute("aria-label", "New task");
+    const head = el("div", "sx-list-head"); head.append(project, fresh);
     const tabs = el("div", "sx-switch"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "What to list");
     for (const [id, label] of [["sessions", "Sessions"], ["backlog", "Backlog"]]) {
       const tab = button(label, "", () => { S.tab = id; remember({ tab: id }); if (id === "backlog") readPlans({ force: true }); S.painted.delete("list"); paintList(); byId(`sessions-tab-${id}`)?.focus?.(); }); tab.id = `sessions-tab-${id}`; tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", "sessions-list-scroll"); tab.dataset.tab = id;
@@ -523,7 +527,7 @@
     const groups = el("div", "sx-groups"); groups.id = "sessions-list-scroll"; groups.setAttribute("role", "tabpanel"); groups.setAttribute("aria-labelledby", "sessions-tab-sessions");
     groups.addEventListener("keydown", onListKey);
     const foot = el("div", "sx-foot"); foot.id = "sessions-foot";
-    root.append(project, gitRow, fresh, tabs, find, groups, foot);
+    root.append(head, gitRow, tabs, find, groups, foot);
     S.panels.list = { root, project, gitRow, git, trees, fresh, tabs, input, groups, foot };
   }
   function paintList() {
@@ -574,7 +578,7 @@
       body.push(scanRow());
       if (!backlog.length) body.push(emptyNote(S.query ? "Nothing in the backlog matches that filter." : "The backlog is clear", null, null, S.query ? "" : "Plan drafts, ideas from chats and Mefi's suggestions land here."));
       for (const idea of backlog) body.push(ideaRow(idea));
-    } else if (!model.all) body.push(emptyNote("Tasks you start show up here, like sessions.", "New task", () => newTask()));
+    } else if (!model.all) body.push(emptyNote("No sessions yet", null, null, "Use + beside the project to start a task, or press Ctrl N."));
     else if (!model.total) body.push(emptyNote("No session matches that filter."));
     else for (const group of model.groups) body.push(...groupNodes(group));
     panel.groups.replaceChildren(...body);
@@ -652,13 +656,17 @@
     menu.addEventListener("keydown", (event) => {
       const items = [...menu.querySelectorAll("[role=menuitem], [role=menuitemradio]")];
       const at = items.indexOf(document.activeElement);
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); items[(at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus?.({ preventScroll: true }); }
-      else if (event.key === "Home" || event.key === "End") { event.preventDefault(); items[event.key === "Home" ? 0 : items.length - 1]?.focus?.({ preventScroll: true }); }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); items[(at + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus?.(); }
+      else if (event.key === "Home" || event.key === "End") { event.preventDefault(); items[event.key === "Home" ? 0 : items.length - 1]?.focus?.(); }
       else if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); event.stopPropagation(); closeProjectMenu(true); }
     });
     // Under the head, inside the panel, so the list's own clipping never cuts it.
     const place = panel.project.getBoundingClientRect?.(), frame = panel.root.getBoundingClientRect?.();
-    if (place && frame && menu.style) { menu.style.top = `${Math.max(8, Math.round(place.bottom - frame.top + 4))}px`; menu.style.left = "10px"; }
+    if (place && frame && menu.style) {
+      menu.style.top = `${Math.max(8, Math.round(place.bottom - frame.top + (panel.root.scrollTop || 0) + 4))}px`;
+      menu.style.left = "10px";
+      menu.style.maxHeight = `${Math.max(40, Math.floor(frame.bottom - place.bottom - 12))}px`;
+    }
     panel.root.append(menu);
     if (S.projMenuFocus) { S.projMenuFocus = false; (menu.querySelector("[aria-checked=true]") || menu.querySelector(ITEMS))?.focus?.({ preventScroll: true }); }
     else if (held >= 0) [...menu.querySelectorAll(ITEMS)][held]?.focus?.({ preventScroll: true });
@@ -849,6 +857,7 @@
     if (!target) return;
     for (const node of items) node.tabIndex = node === target ? 0 : -1;
     target.focus?.({ preventScroll: true });
+    target.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }
   function focusByKey(key) {
     const [id, part] = String(key).split("|");
@@ -857,6 +866,7 @@
     if (!target) return;
     for (const node of nodes) node.tabIndex = node === target ? 0 : -1;
     target.focus?.({ preventScroll: true });
+    target.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }
   function onListKey(event) {
     const target = event.target;

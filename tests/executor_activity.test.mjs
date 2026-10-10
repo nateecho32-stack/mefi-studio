@@ -5,6 +5,13 @@ import vm from "node:vm";
 import activity from "../scripts/executor-activity.cjs";
 
 const { cleanActivity, recordOutput, workerActivity } = activity;
+
+test("tool state is explicit, bounded and cleared when the tool settles", () => {
+  const activeTool = { tool: "Bash", status: "running", startedAt: 1000, command: "SECRET_COMMAND", description: "Full test suite" };
+  assert.deepEqual(workerActivity({ activeTool }, 900000).tool, { name: "Bash", status: "running", since: 1000 });
+  assert.ok(!JSON.stringify(workerActivity({ activeTool }, 900000).tool).includes("SECRET_COMMAND"));
+  for (const status of ["completed", "timed_out", "failed"]) assert.equal(workerActivity({ activeTool: { ...activeTool, status } }).tool, null);
+});
 const controls = /[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/;
 
 test("activity text removes terminal commands, hidden OSC payloads and bidi controls", () => {
@@ -149,12 +156,12 @@ test("worker details contain only reported route, output and current checklist s
   const before = JSON.stringify(entry);
   assert.deepEqual(workerActivity(entry), {
     route: "Codex CLI", activity: "Running collision tests", activityAt: 3000,
-    lastOutputAt: 4000, currentStep: "Check wall collisions", stepUpdatedAt: 2500,
+    lastOutputAt: 4000, currentStep: "Check wall collisions", stepUpdatedAt: 2500, tool: null,
   });
   assert.equal(JSON.stringify(entry), before, "reading status must not mutate the worker");
   assert.deepEqual(workerActivity({}), {
     route: null, activity: null, activityAt: null, lastOutputAt: null,
-    currentStep: null, stepUpdatedAt: null,
+    currentStep: null, stepUpdatedAt: null, tool: null,
   }, "absence of observations must not invent a completion claim or percentage");
 });
 

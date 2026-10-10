@@ -93,6 +93,15 @@ test("interrupted and truncated downloads remove partial bytes and retry cleanly
   await assert.rejects(downloadAsset({asset,directory,fetchImpl:async()=>response(stream)}),/interrupted/);
   const result = await downloadAsset({asset,directory,fetchImpl:async()=>response(Readable.from([Buffer.alloc(10)]))}); assert.equal(result.bytes,10);
 });
+test("an Actions artifact downloads with the GitHub Accept, a release asset with octet-stream", async t => {
+  // GitHub answers the artifact zip endpoint's octet-stream Accept with 415.
+  const directory = await mkdtemp(path.join(os.tmpdir(),"mefi-accept-")); t.after(()=>rm(directory,{recursive:true,force:true}));
+  const seen = [];
+  const fetchImpl = async (url, {headers}) => { seen.push(headers.Accept); return {ok:true,headers:{get:()=>null},body:Readable.from([Buffer.alloc(4)])}; };
+  await downloadAsset({asset:{name:"a.zip",url:artifact().archive_download_url,size:4},directory,token:"fixture-token",fetchImpl});
+  await downloadAsset({asset:{name:"b.zip",url:`https://api.github.com/repos/${repo}/releases/assets/1`,size:4},directory,fetchImpl});
+  assert.deepEqual(seen,["application/vnd.github+json","application/octet-stream"]);
+});
 test("real nested development archive verifies both hashes, provenance and staged app identity", async t => {
   const root = await mkdtemp(path.join(os.tmpdir(),"mefi-dev-archive-")); t.after(()=>rm(root,{recursive:true,force:true}));
   const version="0.4.5-dev.100.1", payload=path.join(root,"payload"), bundle=path.join(root,"bundle");

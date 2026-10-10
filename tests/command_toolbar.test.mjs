@@ -39,7 +39,10 @@ const hud = template.slice(template.indexOf('<div id="idle-hud" hidden>'), templ
 const mapBar = block('<div id="map-bar"');
 const mapMenu = block('<div id="map-view-pop"');
 const mapZoom = block('<div id="map-zoom"');
-const mapStyles = styles.slice(styles.indexOf("*/", styles.indexOf("   The Map (layout v2; docs/unified-studio.md \"The Map\")")) + 2);
+const mapStart = styles.indexOf("*/", styles.indexOf("   The Map (layout v2; docs/unified-studio.md \"The Map\")")) + 2;
+const mapEnd = styles.indexOf("/* End Map layout v2.", mapStart);
+assert.ok(mapStart > 1 && mapEnd > mapStart, "the Map styles have explicit boundaries");
+const mapStyles = styles.slice(mapStart, mapEnd);
 
 test("the classic top bar, its popovers, the hint line and the dock are gone from the HUD, the code and the stylesheet", () => {
   assert.ok(hud.length > 0, "the HUD is in the template");

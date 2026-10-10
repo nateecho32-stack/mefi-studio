@@ -72,7 +72,7 @@
   }
   // The second line of a seat card and the table's Now column.
   function nowText(seat) {
-    if (seat.now) return short(seat.now.step || seat.now.title || "starting…", 44);
+    if (seat.now) return [STATE_LABEL[seat.status] ?? seat.status, seat.now.since ? `${duration(seat.now.since)} elapsed` : "Elapsed time unavailable", seat.now.blocker ? `Waiting for: ${seat.now.blocker}` : `Last action: ${seat.now.lastAction || seat.now.step || "No action recorded yet"}`].join(" · ");
     if (seat.text) return short(seat.text, 44);
     if (seat.last) return `${OUTCOME_LABEL[seat.last.outcome] ?? "last run"}${seat.last.endedAt ? ` · ${ago(seat.last.endedAt)}` : ""}`;
     return seat.status === "off" ? "off" : "idle";
@@ -629,13 +629,13 @@
       node.setAttribute("aria-pressed", String(picked));
       node.tabIndex = id === tabStop ? 0 : -1;
       if (!seat) { setText(node.children[2], "waiting on you"); continue; }
-      setText(node.children[2], nowText(seat));
-      setText(node.children[3], [runtimeText(seat.runtime), seat.gen ? `g${seat.gen}` : ""].filter(Boolean).join(" · "));
+      setText(node.children[2], seat.now ? seat.now.blocker ? `Waiting for: ${seat.now.blocker}` : seat.now.lastAction || seat.now.step || "No action recorded yet" : nowText(seat));
+      setText(node.children[3], [seat.now ? `${STATE_LABEL[seat.status] ?? seat.status} · ${seat.now.since ? `${duration(seat.now.since)} elapsed` : "time unknown"}` : "", runtimeText(seat.runtime), seat.gen ? `g${seat.gen}` : ""].filter(Boolean).join(" · "));
       const bar = node.children[4];
       bar.hidden = !(seat.now && Number.isFinite(seat.now.progress));
       bar.children[0].style.width = percent(seat.now?.progress) || "0%";
       node.setAttribute("aria-label", `${seat.address}, ${STATE_LABEL[seat.status] ?? seat.status}, ${nowText(seat)}`);
-      node.title = `${seat.address}${seat.runtime ? ` · ${runtimeText(seat.runtime)}` : ""}`;
+      node.title = `${seat.address} · ${nowText(seat)}${seat.runtime ? ` · ${runtimeText(seat.runtime)}` : ""}`;
     }
     const byId = new Map(layout.wires.map((wire) => [wire.id, wire]));
     const present = new Set();
@@ -721,7 +721,7 @@
     const compare = {
       pod: (a, b) => order.get(a.pod.id) - order.get(b.pod.id) || a.index - b.index,
       seat: byName,
-      state: (a, b) => (STATE_RANK[a.seat.status] ?? 9) - (STATE_RANK[b.seat.status] ?? 9) || byName(a, b),
+      state: (a, b) => (STATE_RANK[a.seat.status] ?? 9) - (STATE_RANK[b.seat.status] ?? 9) || (a.seat.now?.waitingSince ?? Infinity) - (b.seat.now?.waitingSince ?? Infinity) || byName(a, b),
       gen: (a, b) => (a.seat.gen ?? 0) - (b.seat.gen ?? 0) || byName(a, b),
     }[key] ?? byName;
     return rows.sort((a, b) => compare(a, b) * dir);
@@ -760,6 +760,7 @@
     cell(5).children[0].dataset.status = seat.status;
     setText(cell(5).children[1], STATE_LABEL[seat.status] ?? seat.status);
     setText(cell(6), nowText(seat));
+    cell(6).title = nowText(seat);
     setText(cell(7), seat.gen ? `g${seat.gen}` : "");
     cell(8).children[0].hidden = !(seat.now?.taskId || seat.last?.taskId);
     cell(8).children[1].hidden = !canStop(seat);
@@ -976,7 +977,7 @@
     setText(chip, signal.severity === "bad" ? "Needs you" : signal.severity === "warn" ? "Look" : "Note");
     setText(item.children[0].children[1], signal.summary);
     setText(item.children[1], signal.reason ?? "");
-    setText(item.children[2], [signal.why, signal.threshold ? `Rule: ${signal.threshold}.` : ""].filter(Boolean).join(" "));
+    setText(item.children[2], [signal.waitingSince ? `Waiting ${duration(signal.waitingSince)}.` : "", signal.why, signal.threshold ? `Rule: ${signal.threshold}.` : ""].filter(Boolean).join(" "));
     item.children[3].hidden = !(signal.inspect?.seatId || signal.inspect?.taskId);
   }
   function inspectSignal(signal) {

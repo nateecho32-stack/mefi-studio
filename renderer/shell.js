@@ -833,6 +833,10 @@
   // Friends lists its three places (renderer/companion-hub.js friendsPlaces), the one that shows current: the Shop's
   // row while the Shop's own page (route "shop") shows.
   function friendsModel(n, id) {
+    if (id === "friends-page") {
+      const room = window.MefiRoomLayout?.navigation?.();
+      if (room) return room;
+    }
     let places = null;
     try { places = window.MefiCompanionHub?.friendsPlaces?.() ?? null; } catch { places = null; }
     if (!Array.isArray(places) || !places.length) return null;
@@ -920,6 +924,7 @@
       node.append(svg);
     }
     node.append(text("span", "shell-page-label", label));
+    if (extra.count != null) node.append(text("span", "shell-room-count", String(extra.count)));
     for (const [key, className] of [[extra.badge, "count"], [extra.alert, "count warn"]]) {
       if (!key) continue;
       const badge = el("span", className);
@@ -954,11 +959,20 @@
           // A place's list (settingsModel, teamModel, friendsModel): headings over groups, rows with the place's glyph.
           for (const row of model.rows) {
             if (row.kind === "heading") rows.push(text("h3", "shell-pages-group", row.label));
-            else rows.push(pageButton(row.label, row.current, (event) => row.run?.(event), { key: row.key, glyph: row.glyph, sub: row.sub, open: row.open, quiet: row.quiet }));
+            else if (row.kind === "member") {
+              const person = el("div", `shell-room-person${row.mine ? " mine" : ""}`);
+              const face = text("span", "room-desktop-avatar", row.initials);
+              face.setAttribute("aria-hidden", "true"); face.style?.setProperty?.("--person-hue", String(row.hue));
+              const copy = el("span", "room-desktop-person-copy"); copy.append(text("strong", "", row.label));
+              if (row.rank) copy.append(text("span", "muted", row.rank));
+              person.append(face, copy); rows.push(person);
+            } else if (row.kind === "note") rows.push(text("p", "muted room-desktop-note", row.label));
+            else rows.push(pageButton(row.label, row.current, (event) => row.run?.(event), { key: row.key, glyph: row.glyph, sub: row.sub, open: row.open, quiet: row.quiet, count: row.count }));
           }
         } else for (const page of model.pages) rows.push(pageButton(page.label, page.current, () => n?.go?.(page.id), { key: page.id, glyph: page.glyph, badge: page.badge, alert: page.alert }));
       }
       pages.list.replaceChildren(...rows);
+      pages.root.dataset.roomDesktop = String(model?.roomDesktop === true);
       try { n?.paintBadges?.(pages.list); } catch { /* the counts are a courtesy */ }
       if (held) [...(pages.list.querySelectorAll?.(".shell-page") ?? [])].find((node) => node.dataset?.page === held)?.focus?.({ preventScroll: true });
     }
@@ -991,6 +1005,7 @@
     const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : Math.max(0, Math.min(items.length - 1, at + (event.key === "ArrowDown" ? 1 : -1)));
     event.preventDefault?.();
     items[next]?.focus?.({ preventScroll: true });
+    items[next]?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }
 
   // ---- the place bar: a place's pages as one row at the top of its page ----------------------------------
@@ -1010,7 +1025,7 @@
   function paintPlaceBars(model) {
     if (!placeBars.size) return;
     const n = nav();
-    const rows = !model ? [] : model.rows ? model.rows : (model.pages || []).map((page) => ({ kind: "row", key: page.id, label: page.label, current: page.current, run: () => n?.go?.(page.id) }));
+    const rows = !model ? [] : model.rows ? model.rows.filter((row) => ["row", "heading"].includes(row.kind)) : (model.pages || []).map((page) => ({ kind: "row", key: page.id, label: page.label, current: page.current, run: () => n?.go?.(page.id) }));
     const key = JSON.stringify([model?.section ?? null, rows.map((row) => [row.kind, row.key ?? null, row.label, Boolean(row.current), Boolean(row.open), Boolean(row.sub)])]);
     for (const bar of placeBars) {
       if (bar.dataset.key === key) continue;
@@ -1596,6 +1611,9 @@
     if (event.key === "Escape") {
       if (event.defaultPrevented) return;
       if (state.menu) { event.preventDefault?.(); event.stopPropagation?.(); closeMenu(true); return; }
+      // The session list handles its filter and menus first. Closing a narrow
+      // drawer during capture would swallow Escape before those controls see it.
+      if (event.target?.closest?.("#sessions-list .sx-menu") || (event.target?.id === "sessions-find" && event.target.value)) return;
       if (state.drawer && !nav()?.state?.transient) { event.preventDefault?.(); event.stopPropagation?.(); closeDrawer(true); }
       return;
     }
@@ -1713,7 +1731,7 @@
       sync("nav");
     });
     for (const name of ["mefi:workspace-state", "mefi:usage-report", "mefi:nav-badges", "mefi:autonomy-changed", "mefi:project-changed", "mefi:task-context", "mefi-music-change", "mefi:companion-state"]) window.addEventListener(name, () => scheduleLive());    // A place changed inside Settings or Team without a route of its own: the list column and the breadcrumb follow at once.
-    for (const name of ["mefi:settings-place", "mefi:team-place", "mefi:friends-place"]) window.addEventListener(name, () => { if (state.on) paintLive(); });
+    for (const name of ["mefi:settings-place", "mefi:team-place", "mefi:friends-place", "mefi:friends-room"]) window.addEventListener(name, () => { if (state.on) paintLive(); });
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("visibilitychange", () => { if (state.on && state.stale && !document.hidden) { state.stale = false; scheduleLive(); } });
     document.addEventListener("pointerdown", (event) => { if (!state.on) return; outsideMenu(event); outsideDrawer(event); }, true);

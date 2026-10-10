@@ -128,6 +128,20 @@ test("without the desktop bridge the section stays hidden", async () => {
   assert.equal(env.host.children.length, 0);
 });
 
+test("a room chip selects only a joined room and leaves playback and following under the member's control", async () => {
+  const env = environment(); await flush(); await env.ready();
+  assert.equal(await env.together.selectRoom("room_mine"), true);
+  assert.equal(env.together.status().roomId, "room_mine");
+  assert.equal(env.together.status().following, false);
+  assert.equal(env.player.played.length, 0);
+  assert.equal(await env.together.selectRoom("room_asked"), false);
+  assert.equal(await env.together.selectRoom("room_shut"), false);
+  assert.equal(await env.together.selectRoom("not/a/room"), false);
+  assert.equal(env.together.status().roomId, "room_mine", "a rejected target cannot clear the current room");
+  assert.deepEqual(kinds(env, "subscribe"), [["subscribe", "room_mine", true]]);
+  assert.equal(env.player.played.length, 0);
+});
+
 test("it explains what is missing before anything connects", async () => {
   const unconfigured = environment({ status: { configured: false } });
   await flush();

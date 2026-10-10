@@ -61,6 +61,7 @@ function workerActivity(entry, now = Date.now()) {
     lastOutputAt: stamp(entry.lastOutputAt),
     currentStep: currentTool || cleanActivity(step?.content ?? step?.label ?? step?.title ?? step?.text) || null,
     stepUpdatedAt: currentTool ? stamp(tool.updatedAt) || stamp(tool.startedAt) : stamp(entry.todosUpdatedAt),
+    tool: tool && ["running", "pending"].includes(tool.status) ? { name: cleanActivity(tool.tool, 40) || "Tool", status: tool.status, since: stamp(tool.startedAt) } : null,
   };
 }
 

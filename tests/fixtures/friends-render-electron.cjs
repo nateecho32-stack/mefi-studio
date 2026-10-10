@@ -21,7 +21,7 @@ const { fileURLToPath } = require("node:url");
 const root = process.env.MEFI_FRIENDS_FIXTURE;
 if (!root || !path.isAbsolute(root)) throw new Error("An isolated Friends fixture directory is required");
 const studio = path.resolve(__dirname, "..", "..");
-const report = { errors: [], networkAttempts: [], processAttempts: [], places: [], shots: [], steps: [], complete: false };
+const report = { errors: [], networkAttempts: [], processAttempts: [], permissionAttempts: [], places: [], shots: [], steps: [], complete: false };
 app.setName("Friends Fixture");
 for (const name of ["userData", "sessionData", "crashDumps"]) {
   const directory = path.join(root, name); fs.mkdirSync(directory, { recursive: true }); app.setPath(name, directory);
@@ -56,7 +56,7 @@ app.whenReady().then(async () => {
     if (!allowed) report.networkAttempts.push(details.url);
     callback({ cancel: !allowed });
   });
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => { report.permissionAttempts.push(permission); callback(false); });
   session.defaultSession.setPermissionCheckHandler(() => false);
   const now = Date.now(), projectId = "friends-project";
   // Friends › Playground from the real rules (as tests/fixtures/companion-hub-render-electron.cjs builds it).
@@ -71,10 +71,10 @@ app.whenReady().then(async () => {
   const project = { id: projectId, name: "Notes app", path: root };
   const responses = {
     projectsList: { ok: true, activeId: projectId, projects: [project] },
-    tasksList: { ok: true, projectId, tasks: [] }, ideasList: { ok: true, ideas: [] }, planningList: { ok: true, projectId, plans: [] },
+    tasksList: { ok: true, projectId, tasks: [{ id: "layout", projectId, title: "Lay out the list", status: "in_progress" }, { id: "save", projectId, title: "Save who brings what", status: "done" }, { id: "check", projectId, title: "Check it works", status: "todo" }] }, ideasList: { ok: true, ideas: [] }, planningList: { ok: true, projectId, plans: [] },
     prefsGet: { ok: true, prefs: { commandHome: false, autoReference: false } },
     assistantState: { ok: true, state: { projectId, status: "running", agents: [], messages: [], prefs: {}, work: [], questions: [] } },
-    assistantStatus: { ok: true, status: { projectId, enabled: true, execute: true, running: [], history: [] } },
+    assistantStatus: { ok: true, status: { projectId, enabled: true, execute: true, running: [{ taskId: "layout", projectId }], history: [] } },
     backlogStatus: { ok: true, projectId, paused: false, counts: {}, taskStates: [], next: [] },
     eyesState: { ok: true, sessions: [], todos: [], changes: [], pngs: [] }, eyesCheckpointsRead: { ok: true, checkpoints: {} }, eyesRequestsRead: { ok: true, requests: [] }, eyesBriefingRead: { ok: true, briefing: null }, eyesCollisions: { ok: true, collisions: [], presence: [] }, speedMeasurements: { ok: true, measurements: {} },
     readCatalog: JSON.parse(fs.readFileSync(path.join(root, "data", "models.json"), "utf8")),
@@ -85,8 +85,8 @@ app.whenReady().then(async () => {
     worktreesList: { ok: true, repo: false, projectId, enabled: { on: false, forced: false } }, skillsList: { ok: true, skills: [], roots: [] },
     syncStatus: { ok: true, checkedAt: now, headline: "GitHub has 2 commits this PC has not pulled yet.", lines: ["GitHub has 2 commits this PC has not pulled yet."], pending: [{ kind: "github-branch" }], state: { repo: true, remote: true, device: "DESKTOP-FIXTURE", behind: 2 } },
     hubFriends: friendsView, hubSharingSet: friendsView,
-    hubRooms: { ok: true, rooms: [{ id: "room_jam", name: "Friday jam", kind: "hangout", policy: "request", listed: true, status: "active", you: "owner", ownerId: "123456789012345678", memberCount: 2, maxMembers: 25 }] },
-    hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [], front: true, events: true, shop: true } },
+    hubRooms: { ok: true, rooms: [{ id: "lobby", name: "The Lobby", kind: "hangout", policy: "request", listed: true, status: "active", you: "member", ownerId: null, memberCount: 3, maxMembers: 1000 }, { id: "room_jam", name: "Friday jam", kind: "hangout", policy: "request", listed: true, status: "active", you: "owner", ownerId: "123456789012345678", memberCount: 4, maxMembers: 25 }] },
+    hubStatus: { ok: true, status: { configured: true, linked: true, state: "ready", user: { id: "123456789012345678", name: "Mefi" }, paused: false, rooms: [], lobby: false, joinCodes: true, front: true, events: true, shop: true } },
     pcSetupStatus: { ok: true, ready: true, account: "fixture-owner", tools: [{ id: "git", name: "Git", installed: true, version: "2.47.1" }, { id: "gh", name: "GitHub CLI", installed: true, version: "2.63.0" }], project: { root: "C:/Notes app", github: "fixture-owner/notes-app", hook: true }, steps: [], notes: [] },
     vaultStatus: { ok: true, linked: false, pcs: [], shelves: [] },
   };
@@ -177,16 +177,18 @@ app.whenReady().then(async () => {
   const names = await bridgeNames();
   const preload = path.join(root, "friends-preload.cjs");
   fs.writeFileSync(preload, `const {contextBridge}=require('electron');const responses=${JSON.stringify(responses)};const roomReplies=${JSON.stringify(roomReplies)};const eventReplies=${JSON.stringify(eventReplies)};const shopReplies=${JSON.stringify(shopReplies)};const names=${JSON.stringify(names)};const calls=[];
-    const bridge={};
+    const bridge={},listeners={};const push=(name,value)=>{for(const fn of listeners[name]||[])fn(JSON.parse(JSON.stringify(value)));};
     for(const name of names){
-      if(/^on[A-Z]/.test(name))bridge[name]=()=>()=>{};
+      if(/^on[A-Z]/.test(name))bridge[name]=(fn)=>{(listeners[name]??=[]).push(fn);return()=>{listeners[name]=listeners[name].filter(item=>item!==fn);};};
       else bridge[name]=async(...args)=>{calls.push(name);return name in responses?JSON.parse(JSON.stringify(responses[name])):{ok:true};};
     }
     bridge.hubRoom=async(method)=>{calls.push('hubRoom:'+method);return roomReplies[method]??{ok:true};};
     bridge.hubEvents=async(method)=>{calls.push('hubEvents:'+method);return eventReplies[method]??{ok:true};};
     bridge.hubShop=async(method,view)=>{calls.push('hubShop:'+method);return (method==='shop'?shopReplies[view]:shopReplies[method])??{ok:true,items:[]};};
+    bridge.hubSubscribe=(id,on)=>{if(on)setTimeout(()=>{push('onHubEvent',{type:'presence',roomId:id,inStudio:['123456789012345678','200000000000000001','200000000000000002']});push('onHubEvent',{type:'listen',roomId:id,session:{title:'Night Bus (fixture)',label:'Night Bus (fixture)',provider:'youtube',url:'https://www.youtube.com/watch?v=fixture',playing:true,host:{id:'200000000000000001',name:'Maxwell'}}});},10);};
     contextBridge.exposeInMainWorld('mefiStudio',bridge);
-    contextBridge.exposeInMainWorld('friendsFixture',{calls:()=>calls.slice(),signedIn:(on)=>{responses.hubStatus.status.linked=on===true;},pcsView:(view)=>{responses.pcsStatus=view;}});
+    contextBridge.exposeInMainWorld('friendsFixture',{calls:()=>calls.slice(),push,rooms:(rooms)=>{responses.hubRooms.rooms=rooms;},desktop:(on)=>{responses.hubStatus.status.lobby=on===true;},signedIn:(on)=>{responses.hubStatus.status.linked=on===true;},pcsView:(view)=>{responses.pcsStatus=view;}});
+    localStorage.setItem('mefiStudio.friendsRoomLayout','classic');
     localStorage.setItem('mefiStudio.commandHome','0');localStorage.setItem('mefiStudio.zen','0');localStorage.setItem('mefiStudio.zenReactive','0');localStorage.setItem('mefiStudio.keyHint.v1','1');localStorage.setItem('mefiStudio.walkthrough.v1',JSON.stringify({version:1,step:0,status:'complete'}));localStorage.setItem('mefiStudio.whatsNew.seen','vibe-build-1');localStorage.setItem('mefiStudio.setupHelper.seen','setup-helper-1');
   `);
   const window = new BrowserWindow({ show: false, width: 1920, height: 1080, useContentSize: true, frame: false, enableLargerThanScreen: true, webPreferences: { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false } });
@@ -396,29 +398,110 @@ app.whenReady().then(async () => {
   await until(placeIs("pcs") + " && document.getElementById('pc-sync-title') && !document.getElementById('friends-gate')", "Your PCs needs no sign-in");
   await run("window.friendsFixture.signedIn(true);");
   report.steps.push("the Lobby and the sign-in card");
+  // The default room desktop and its narrow reveals, using only this fixture's
+  // actual bridge records. The old layout above also pins the kill switch.
+  await run("localStorage.removeItem('mefiStudio.friendsRoomLayout'); window.friendsFixture.desktop(true); window.MefiNav.closeAll();");
+  await go("friends-page", { place: "lobby" });
+  await until("document.querySelector('#rooms.rooms-desktop')?.dataset.view === 'room' && document.querySelector('.rooms-room-name')?.textContent === 'The Lobby'", "Friends opens the Lobby chat by default");
+  assert.equal(await run("return Boolean(window.MefiRoomLayout.navigation()?.rows.some(row=>row.key==='friends:lobby' && row.label==='Lobby roundup'));"), true, "the roundup stays reachable from the room navigation");
   // An open room: one header, the chat filling the page above one composer, at three sizes.
   report.room = [];
-  for (const [width, height, zoom] of [[1920, 1080, 1], [1100, 720, 1], [600, 560, 1.5]]) {
+  for (const [width, height, zoom] of [[1440, 900, 1], [1920, 1080, 1], [1100, 720, 1], [600, 560, 1.5]]) {
     await resize(width, height, zoom);
     await go("friends-page", { place: "rooms", room: "room_jam" });
     await until(placeIs("rooms") + " && document.getElementById('rooms')?.dataset.view === 'room' && document.querySelectorAll('#rooms .rooms-message').length === 5", `Friday jam opens at ${width}x${height}@${zoom}`);
     await sleep(500);
+    await until("document.querySelector('.room-desktop-build')?.textContent.includes('1 of 3 tasks done') && document.querySelector('.room-desktop-listening')?.textContent.includes('Night Bus (fixture)') && document.querySelector('.room-desktop-jam')?.textContent.includes('Glow')", "the cards show the fixture's project, room player and jam");
     const room = await run(`const box = (node) => node.getBoundingClientRect();
       const log = document.querySelector('#rooms .rooms-messages'), composer = document.querySelector('#rooms .rooms-composer'), overlay = document.getElementById('friends-overlay');
       return { log: Math.round(box(log).height), overlay: overlay.clientHeight, composerTop: Math.round(box(composer).top), composerBottom: Math.round(box(composer).bottom), inner: innerHeight,
         texts: [...document.querySelectorAll('#rooms .rooms-message-text')].map((node) => node.textContent), names: document.querySelectorAll('#rooms .rooms-room-name').length,
-        status: document.getElementById('rooms-status').textContent, earlier: document.getElementById('rooms-earlier')?.hidden === false, send: Boolean(document.querySelector('#rooms .rooms-composer #rooms-send')) };`);
+        status: document.getElementById('rooms-status').textContent, earlier: document.getElementById('rooms-earlier')?.hidden === false, send: Boolean(document.querySelector('#rooms .rooms-composer #rooms-send')),
+        avatarCount: document.querySelectorAll('.rooms-message > .room-desktop-avatar').length,
+        right: getComputedStyle(document.querySelector('.room-desktop-context-body')).display,
+        people: [...document.querySelectorAll('#shell-pages .room-desktop-person-copy strong')].map(node=>node.textContent),
+        cards: [...document.querySelectorAll('.room-desktop-card-title')].map(node=>node.textContent) };`);
     room.size = `${width}x${height}@${zoom}`;
     report.room.push(room);
     await capture(`friends-room-${width}x${height}@${zoom}.png`);
     assert.equal(room.names, 1, `${room.size}: the room's name once, in its header`);
+    assert.equal(room.avatarCount, 5, `${room.size}: each actual message has its author's initials`);
+    assert.deepEqual(room.cards, ["Notes app", "Night Bus (fixture)", "Glow"]);
     assert.equal(room.status, "", `${room.size}: no second copy of the name in the status line`);
     assert.ok(room.composerTop >= 0 && room.composerBottom <= room.inner + 1, `${room.size}: the composer is on screen ${JSON.stringify(room)}`);
     assert.ok(room.log >= room.overlay * (zoom > 1 ? 0.25 : 0.45), `${room.size}: the chat takes most of the height ${JSON.stringify(room)}`);
     assert.ok(room.send && room.earlier, `${room.size}: Send sits in the composer and Load earlier is at the top of the log`);
     assert.ok(room.texts.includes("Me! @Mefi you in?") && room.texts.includes("Ask @someone too, they made the tileset."), `${room.size}: mentions read as names, an unknown one as @someone`);
     found.push(...problems(await run(measure), `the open room at ${room.size}`));
+    if (room.right === "none") {
+      await click('.room-desktop-context [data-room-control="context:toggle"]');
+      await until("getComputedStyle(document.querySelector('.room-desktop-context-body')).display === 'grid'", "the narrow context panel reveals");
+      await capture(`friends-room-context-${width}x${height}@${zoom}.png`);
+      await run("document.querySelector('.room-desktop-context [data-room-control=\"context:toggle\"]').focus();");
+      contents.sendInputEvent({ type: "keyDown", keyCode: "Escape" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("document.querySelector('.room-desktop-context').dataset.open === 'false'", "Escape closes the context panel");
+    }
   }
+  // Social uses this same room controller, with its own visible room column.
+  await run("window.MefiVibe.setMode('vibe', { go: false }); window.MefiNav.closeAll();");
+  report.socialRooms = [];
+  for (const [width, height, zoom] of [[1440, 900, 1], [600, 560, 1.5]]) {
+    await resize(width, height, zoom);
+    await go("friends-page", { place: "rooms", room: "room_jam" });
+    await until("document.querySelector('#rooms.rooms-desktop')?.dataset.view === 'room' && document.querySelectorAll('#rooms .rooms-message').length === 5", "Social opens the actual room");
+    await sleep(400);
+    const facts = await run(`const visible = node => node?.getClientRects().length > 0 && getComputedStyle(node).display !== 'none';
+      const composer = document.querySelector('#rooms .rooms-composer').getBoundingClientRect();
+      return { mode: window.MefiVibe.mode(), inline: visible(document.querySelector('.room-desktop-nav')), docked: visible(document.getElementById('shell-pages')),
+        collapsed: getComputedStyle(document.querySelector('.room-desktop-nav-body')).display === 'none', composerBottom: composer.bottom, height: innerHeight };`);
+    report.socialRooms.push({ size: `${width}x${height}@${zoom}`, ...facts });
+    assert.equal(facts.mode, "vibe", "room entry keeps Social mode");
+    assert.ok(facts.inline && !facts.docked, "Social shows one room navigation column");
+    assert.ok(facts.composerBottom <= facts.height + 1, "Social's composer is reachable");
+    found.push(...problems(await run(measure), `Social room ${width}x${height}@${zoom}`));
+    await capture(`friends-social-room-${width}x${height}@${zoom}.png`);
+    if (facts.collapsed) {
+      await click('[data-room-control="nav:toggle"]');
+      await until("document.querySelector('.room-desktop-nav').dataset.open === 'true'", "Social's room navigation opens");
+      await capture(`friends-social-navigation-${width}x${height}@${zoom}.png`);
+      await run("document.querySelector('[data-room-control=\"nav:toggle\"]').focus();");
+      contents.sendInputEvent({ type: "keyDown", keyCode: "Escape" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+      await until("document.querySelector('.room-desktop-nav').dataset.open === 'false' && document.activeElement?.dataset.roomControl === 'nav:toggle'", "Escape closes navigation and retains focus");
+    }
+  }
+  await resize(1440, 900);
+  await run(`window.roomDraft = document.querySelector('#rooms textarea'); window.roomDraft.value = 'Keep this draft through reconnect'; window.roomDraft.dispatchEvent(new Event('input',{bubbles:true}));
+    window.roomBuild = document.querySelector('.room-desktop-build');
+    for(let i=0;i<30;i++) window.friendsFixture.push('onAssistantStatus',{projectId:'friends-project',running:[{taskId:'layout',projectId:'friends-project'}]});`);
+  await sleep(150);
+  assert.equal(await run("return window.roomBuild === document.querySelector('.room-desktop-build');"), true, "unchanged worker frames keep the existing card");
+  await run("window.friendsFixture.push('onHubEvent',{type:'status',status:{state:'off'}});");
+  await until("document.querySelector('#rooms textarea')?.disabled && document.getElementById('rooms-status').textContent.includes('draft')", "offline room keeps its draft and disables sending");
+  assert.equal(await run("return document.querySelector('#rooms textarea') === window.roomDraft && window.roomDraft.value === 'Keep this draft through reconnect';"), true);
+  await capture("friends-social-offline-draft.png");
+  await run("window.friendsFixture.push('onHubEvent',{type:'status',status:{state:'ready',front:true,events:true}}); window.friendsFixture.push('onHubEvent',{type:'listen',roomId:'room_jam',session:null});");
+  await until("!document.querySelector('#rooms textarea')?.disabled && document.querySelector('.room-desktop-listening').textContent.includes('Nothing playing in this room')", "reconnect preserves an explicitly empty player state");
+  assert.equal(await run("return document.querySelector('#rooms textarea') === window.roomDraft && window.roomDraft.value === 'Keep this draft through reconnect';"), true);
+  await run(`for(let i=0;i<150;i++) window.friendsFixture.push('onHubEvent',{type:'message',roomId:'room_jam',message:{id:String(600000000000000000n+BigInt(i)),author:{id:'200000000000000001',name:'Maxwell'},text:'Long chat fixture '+i,createdAt:Date.now(),mentions:[],attachments:[]}});`);
+  assert.equal(await run("return document.querySelectorAll('#rooms .rooms-message').length;"), 155);
+  assert.equal(await run("const log=document.querySelector('.rooms-messages'); return log.scrollHeight>log.clientHeight;"), true, "long chat scrolls within its log");
+  await capture("friends-social-long-chat.png");
+  await run(`window.originalRooms = (await window.mefiStudio.hubRooms()).rooms;
+    window.friendsFixture.rooms([...window.originalRooms,...Array.from({length:40},(_,i)=>({id:'room_stress_'+i,name:'Long room fixture '+i,kind:'hangout',you:'member',status:'active',memberCount:2,maxMembers:25}))]); window.MefiNav.closeAll();`);
+  await resize(600, 560, 1.5);
+  await go("friends-page", { place: "rooms", room: "room_jam" });
+  await until("document.querySelector('[data-room-control=\"room:room_stress_39\"]')", "long room list is retained");
+  await click('[data-room-control="nav:toggle"]');
+  await run("document.querySelector('[data-room-control=\"room:room_stress_38\"]').focus();");
+  contents.sendInputEvent({ type: "keyDown", keyCode: "Tab" }); contents.sendInputEvent({ type: "keyUp", keyCode: "Tab" });
+  await until("document.activeElement?.dataset.roomControl === 'room:room_stress_39'", "Tab reaches the last room");
+  assert.equal(await run(`const nav=document.querySelector('.room-desktop-nav-body'), row=document.activeElement, box=row.getBoundingClientRect(), clip=nav.getBoundingClientRect();
+    return nav.scrollHeight>nav.clientHeight && box.top>=clip.top-1 && box.bottom<=clip.bottom+1;`), true, "keyboard focus reveals a long list item inside the scrolling navigation");
+  await capture("friends-social-long-room-list.png");
+  await run("window.friendsFixture.rooms(window.originalRooms);");
+  assert.deepEqual(report.permissionAttempts, [], "room entry, panel controls and empty player request no device permission");
+  report.steps.push("Social room, narrow navigation, offline draft, empty player and long chat");
+  await run("window.MefiVibe.setMode('build', { go: false }); window.MefiNav.setRailPinned(false, { save: false }); localStorage.setItem('mefiStudio.friendsRoomLayout','classic'); window.friendsFixture.desktop(false); window.MefiNav.closeAll();");
   await resize(1920, 1080);
   await go("friends-page", { place: "lobby" });
   report.steps.push("an open room fills the page");
@@ -522,7 +605,7 @@ app.whenReady().then(async () => {
   // groups in order, and Share projects last. The card is built again for each state (the place is left and opened again).
   const pcsFacts = `
     const shown = (node) => Boolean(node) && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden';
-    const reach = (node) => { if (!shown(node)) return false; node.scrollIntoView({ block: 'nearest' }); const r = node.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return Boolean(hit) && (hit === node || node.contains(hit)); };
+    const reach = (node) => { if (!shown(node)) return false; node.scrollIntoView({ block: 'nearest', behavior: 'instant' }); const r = node.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return Boolean(hit) && (hit === node || node.contains(hit)); };
     const walk = document.getElementById('pc-walk'), card = document.querySelector('#friends-place-body .pc-sync');
     const groups = [...card.querySelectorAll(':scope > .pc-group, :scope > .pc-share-group > .pc-group')].map((node) => {
       const head = node.matches('details') ? node.querySelector(':scope > summary') : node.querySelector('.pc-group-toggle');
@@ -554,6 +637,7 @@ app.whenReady().then(async () => {
       found.push(...problems(await run(measure), `Your PCs (${name}) at ${size}`));
       const facts = await run(pcsFacts);
       facts.state = name; facts.size = size;
+      if (!facts.syncRun) { facts.hit = await run(`const n=document.getElementById('pc-sync-run'), r=n.getBoundingClientRect(); return {box:{top:r.top,bottom:r.bottom,left:r.left,right:r.right},hit:document.elementFromPoint(r.left+r.width/2,r.top+r.height/2)?.outerHTML?.slice(0,600)};`); await capture(`friends-pcs-hit-${name}-${size}.png`); }
       report.walk.push(facts);
       assert.equal(facts.open, open, `${name} at ${size}: the steps are ${open ? "out" : "folded"} ${JSON.stringify(facts)}`);
       assert.deepEqual(facts.steps, ["Open Studio on your other PC.", "Sign in to Friends with the same Discord account on both PCs.", "When your other PC shows up, press Pair and check that both screens show the same six numbers."]);
@@ -582,6 +666,7 @@ app.whenReady().then(async () => {
     found.push(...problems(await run(measure), `${id} in a light palette`));
     await capture(`friends-light-${id}-1440x900.png`);
   }
+  await run("localStorage.removeItem('mefiStudio.friendsRoomLayout'); window.friendsFixture.desktop(true); window.MefiNav.closeAll();");
   await go("friends-page", { place: "rooms", room: "room_jam" });
   await until(placeIs("rooms") + " && document.querySelectorAll('#rooms .rooms-message').length === 5", "an open room in a light palette");
   await sleep(400);

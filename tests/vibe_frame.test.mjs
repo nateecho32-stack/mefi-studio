@@ -111,6 +111,21 @@ test("a Studio page asked for from Social switches to Studio first, then opens a
   assert.deepEqual(home.log, ["vibe"], "Home is Social's own: no switch");
 });
 
+// Help over Friends, then Friends in the rail: Friends was already the sheet under Help, so it "opened" under Shortcuts and
+// the click looked stuck. A page closes Shortcuts and Configuration; the tour (and the profiler) stay over what opens.
+test("a page asked for while Shortcuts or Configuration is up closes them; the tour stays", () => {
+  for (const [transient, closes] of [["help", true], ["config", true], ["onboarding", false]]) {
+    const loaded = load({ view: "vibe" });
+    loaded.nav.register({ id: "people", label: "People", short: "People", kind: "overlay", layer: "sheet", section: "friends", group: "surfaces", glyph: "g-chat", badge: null, showIn: {}, open: () => loaded.log.push("people"), close() {}, isOpen: () => false });
+    const closed = [];
+    loaded.nav.get(transient).close = () => { closed.push(transient); loaded.nav.state.transient = null; };
+    loaded.nav.state.transient = transient;
+    loaded.nav.go("people");
+    assert.deepEqual(closed, closes ? [transient] : [], `${transient} ${closes ? "closes" : "stays"}`);
+    assert.deepEqual(loaded.log, ["people"], "the page opens either way");
+  }
+});
+
 test("leaving Command opened from Vibe goes back to Vibe, not Build's Agents page", () => {
   const loaded = load();
   loaded.nav.go("command");

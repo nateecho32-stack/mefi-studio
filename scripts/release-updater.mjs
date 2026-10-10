@@ -288,6 +288,13 @@ function safeFileName(name) {
   return base.toLowerCase().endsWith(".zip") ? base : `${base}.zip`;
 }
 
+// Release asset API urls hand over the bytes only for an octet-stream Accept.
+// The Actions artifact zip endpoint answers that same header with 415 and
+// wants the ordinary GitHub Accept, then redirects to the archive.
+export function downloadAccept(url) {
+  return /\/actions\/artifacts\/\d+\/zip$/.test(String(url ?? "")) ? "application/vnd.github+json" : "application/octet-stream";
+}
+
 // Streams the asset to disk, hashing and reporting as it goes. `asset.url` is
 // the API url for API-described assets, which works for public and private
 // repositories alike because the Accept header asks for the bytes.
@@ -303,7 +310,7 @@ export async function downloadAsset({
   if (typeof fetchImpl !== "function") throw new Error("no fetch implementation available");
   await mkdir(directory, { recursive: true });
   const headers = githubHeaders(token);
-  headers.Accept = "application/octet-stream";
+  headers.Accept = downloadAccept(asset.url);
   const response = await fetchImpl(asset.url, { headers, redirect: "follow", signal: timeoutSignal(timeoutMs) });
   if (!response.ok) throw new Error(`download failed: GitHub answered ${response.status}`);
   const total = Number(response.headers?.get?.("content-length")) || Number(asset.size) || 0;

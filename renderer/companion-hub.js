@@ -529,7 +529,7 @@
   const shownPlaces = () => FRIENDS_PLACES.filter((place) => !place.modOnly || window.MefiFriendsMod?.isMod?.() === true);
   // A way in may name its place by target (lobby, rooms, pcs, playground, hub, events, shop, mod).
   const friendsPlaceOfTarget = (target) => (FRIENDS_PLACES.some((place) => place.id === target) ? target : null);
-  const friendsPage = { place: null, root: null, body: null, title: null, about: null, room: null };
+  const friendsPage = { place: null, root: null, body: null, title: null, about: null, room: null, view: null };
   const friendsPlaceById = (id) => FRIENDS_PLACES.find((place) => place.id === id) ?? null;
   const friendsOpen = () => Boolean(friendsPage.root && friendsPage.root.hidden === false);
   function mountFriendsPage() {
@@ -553,7 +553,7 @@
   function paintFriendsPlace(place) {
     for (const child of [...friendsPage.body.children]) child.dispose?.();
     let card = null;
-    if (place.id === "lobby") card = window.MefiFriendsFront?.card?.();
+    if (place.id === "lobby") card = window.MefiRooms?.desktopEnabled?.() === true && friendsPage.view !== "roundup" ? window.MefiRooms.panel({ room: "lobby" }) : window.MefiFriendsFront?.card?.();
     else if (place.id === "rooms") card = window.MefiRooms?.panel?.({ room: friendsPage.room });
     else if (place.id === "hub") card = window.MefiProjectHub?.card?.();
     else if (place.id === "mod") card = window.MefiFriendsMod?.card?.();
@@ -579,6 +579,9 @@
     const place = friendsPlaceById(params.place) ?? friendsPlaceById(friendsPlaceOfTarget(params.target)) ?? friendsPlaceById(friendsPage.place) ?? FRIENDS_PLACES[0];
     window.MefiNav?.claim?.("friends-page");
     const moved = friendsPage.place !== place.id;
+    const view = params.view === "roundup" && place.id === "lobby" ? "roundup" : null;
+    const viewMoved = friendsPage.view !== view;
+    friendsPage.view = view;
     // A room asked for by name (The Lobby's rooms and people) opens in Rooms, even when Rooms is already up.
     friendsPage.room = place.id === "rooms" && typeof params.room === "string" ? params.room : null;
     friendsPage.root.hidden = false;
@@ -588,9 +591,9 @@
     friendsPage.root.dataset.place = place.id;
     friendsPage.title.textContent = place.label;
     friendsPage.about.textContent = place.about;
-    if (moved || !friendsPage.body.childElementCount || friendsPage.room) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
+    if (moved || viewMoved || !friendsPage.body.childElementCount || friendsPage.room) { paintFriendsPlace(place); friendsPage.body.scrollTop = 0; }
     friendsPage.place = place.id;
-    if (moved) window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: place.id } }));
+    if (moved || viewMoved) window.dispatchEvent(new CustomEvent("mefi:friends-place", { detail: { place: place.id } }));
     window.MefiNav?.paintCurrent?.();
     window.MefiScroll?.scan?.(friendsPage.root);
     // Whether this member moderates, asked again each time Friends opens (cheap: one /v1/me).

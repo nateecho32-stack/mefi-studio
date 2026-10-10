@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildTable, check, generate, parseChangelog, sentenceOf, serialize, skipReason } from "../scripts/release-notes.mjs";
+import notes from "../scripts/whats-new.cjs";
 
 const studio = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const script = path.join(studio, "scripts", "release-notes.mjs");
@@ -222,7 +223,7 @@ test("this repository's committed assets/whats-new.json matches its CHANGELOG.md
   const table = JSON.parse(await readFile(path.join(studio, "assets", "whats-new.json"), "utf8"));
   assert.ok(Object.keys(table).length > 0, "the shipped file says something");
   for (const [version, lines] of Object.entries(table)) {
-    assert.match(version, /^\d+\.\d+\.\d+$/);
+    assert.equal(notes.cleanVersion(version), version, "a canonical stable or prerelease version");
     assert.ok(lines.length >= 1 && lines.length <= 6, `${version} has ${lines.length} sentences`);
     assert.ok(lines.every((line) => typeof line === "string" && line.length >= 12 && line.length <= 200 && !/[`*]/.test(line)), `${version}: plain sentences`);
   }

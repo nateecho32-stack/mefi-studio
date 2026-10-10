@@ -277,6 +277,7 @@ fn create_window(engine: &Arc<Engine>, options: &Value) -> Result<(), String> {
         .title(text(options, "title").filter(|t| !t.is_empty()).unwrap_or("Mefi's Studio AI+"))
         .inner_size(width, height)
         .visible(options.get("show").and_then(Value::as_bool).unwrap_or(true))
+        .fullscreen(options.get("fullscreen").and_then(Value::as_bool).unwrap_or(false))
         .initialization_script(init_script(engine))
         // The page's WebView2 profile lives with Studio's userData, where
         // Electron kept its Chromium data, beside the localStorage hand-over's

@@ -387,12 +387,14 @@ function observeEvent(state, event) {
     case "help.answer": {
       const seatId = live.runSeat.get(runId);
       if (!seatId) return false;
+      const waitingSince = live.asks.get(runId)?.at ?? at;
       live.asks.delete(runId);
       if (event.ok === false) {
-        live.escalations.set(runId, { at, taskId: ident(event.taskId) || null, text: clip(event.text, LIMITS.text) });
+        live.escalations.set(runId, { at: waitingSince, taskId: ident(event.taskId) || null, text: clip(event.text, LIMITS.text) });
         wire(state, "desk", "you", "escalate", at);
         pushRow(state, { at, kind: "escalated", from: "desk", to: "you", taskId: ident(event.taskId) || null, text: event.text });
       } else {
+        live.escalations.delete(runId);
         wire(state, "desk", seatId, "desk", at);
         pushRow(state, { at, kind: "answered", from: "desk", to: seatId, taskId: ident(event.taskId) || null, text: event.text });
       }
@@ -491,9 +493,11 @@ function observeStatus(state, status, at) {
       phase: PHASES.has(raw.phase) ? raw.phase : "building",
       step: clip(raw.currentStep, 160) || null,
       activity: clip(raw.activity, 160) || null,
+      activityAt: finite(raw.activityAt),
       progress: finite(raw.progress),
       lastOutputAt: finite(raw.lastOutputAt),
       stepAt: finite(raw.stepUpdatedAt) ?? finite(raw.activityAt),
+      tool: record(raw.tool) && ["running", "pending"].includes(raw.tool.status) ? { name: clip(raw.tool.name, 40) || "Tool", status: raw.tool.status, since: finite(raw.tool.since) } : null,
       sessionId: ident(raw.sessionId) || run.sessionId,
       route: clip(raw.route, 80) || run.route,
       branch: clip(raw.branch, 120) || run.branch,
@@ -506,7 +510,7 @@ function observeStatus(state, status, at) {
   changed = sweep(state, at) || changed;
   const signature = JSON.stringify([
     live.status.parallel, live.status.waiting, live.status.infraFailures, loop && [loop.state, loop.on, loop.headline, loop.reason, loop.ready],
-    [...live.runs.values()].map((run) => [run.runId, run.phase, run.step, run.activity, run.progress, run.stopping, run.goneAt === null]),
+    [...live.runs.values()].map((run) => [run.runId, run.phase, run.step, run.activity, run.tool, run.progress, run.stopping, run.goneAt === null]),
     live.status.cluster.map((agent) => [agent.id, agent.status, agent.step]),
   ]);
   if (signature !== live.statusSig) {
@@ -621,7 +625,9 @@ function builderSeat(state, seatId, { slug, team, loopOn }) {
     status: run ? (escalated ? "blocked" : ask ? "waiting" : "working") : loopOn ? "idle" : "off",
     now: run ? {
       runId: run.runId, taskId: run.taskId, title: run.title, phase: run.phase, step: run.step || run.activity,
-      progress: run.progress, since: run.startedAt, lastOutputAt: run.lastOutputAt, edits: run.edits, branch: run.branch,
+      progress: run.progress, since: run.startedAt, lastOutputAt: run.lastOutputAt,
+      lastAction: run.activityAt && run.activityAt > (run.stepAt ?? 0) ? run.activity || run.step : run.step || run.activity, tool: run.tool,
+      waitingSince: escalated?.at ?? ask?.at ?? null, blocker: escalated?.text ?? ask?.text ?? null, edits: run.edits, branch: run.branch,
       stopping: run.stopping, cluster: cluster.map((agent) => ({ role: agent.role, status: agent.status, step: agent.step })),
     } : null,
     ctx: null,
@@ -706,18 +712,18 @@ function health(state, at) {
   for (const run of live.runs.values()) {
     if (run.goneAt !== null) continue;
     const quietSince = Math.max(run.lastOutputAt ?? 0, run.stepAt ?? 0, run.startedAt ?? 0);
-    if (quietSince && at - quietSince >= LIMITS.quietMs) {
-      out.push({ id: `quiet:${run.runId}`, severity: "warn", seatId: run.seatId, summary: `${run.seatId} has been quiet for ${minutes(at - quietSince)} min`, reason: run.title, why: "No output, step or tool change from the worker in that time.", threshold: "10 min without output", inspect: { view: "seat", seatId: run.seatId } });
+    if (quietSince && at - quietSince >= LIMITS.quietMs && !live.asks.has(run.runId) && !live.escalations.has(run.runId)) {
+      out.push({ id: `quiet:${run.runId}`, severity: "warn", seatId: run.seatId, summary: `${run.seatId} has been quiet for ${minutes(at - quietSince)} min`, reason: run.step || run.activity || run.title, why: run.tool ? `${run.tool.name} is reported ${run.tool.status === "pending" ? "queued" : "in flight"}. Long tools can be quiet; this is not proof of a failure.` : "No output, step or tool change from the worker in that time. Its health is unknown, not a confirmed failure.", threshold: "10 min without output", inspect: { view: "seat", seatId: run.seatId } });
     }
   }
   for (const [runId, ask] of live.asks) {
-    if (at - ask.at < LIMITS.askMs) continue;
+    if (live.escalations.has(runId)) continue;
     const seatId = live.runSeat.get(runId) ?? null;
-    out.push({ id: `ask:${runId}`, severity: "warn", seatId, summary: `${seatId ?? "A builder"} has waited ${minutes(at - ask.at)} min for the desk`, reason: ask.text, why: "The desk has not answered the question yet.", threshold: "15 min without an answer", inspect: { view: "seat", seatId } });
+    out.push({ id: `ask:${runId}`, severity: at - ask.at >= LIMITS.askMs ? "warn" : "info", waitingSince: ask.at, seatId, summary: `${seatId ?? "A builder"} is waiting for the desk`, reason: ask.text, why: "The desk has not answered the question yet.", threshold: "15 min without an answer", inspect: { view: "seat", seatId } });
   }
   for (const [runId, item] of live.escalations) {
     const seatId = live.runSeat.get(runId) ?? null;
-    out.push({ id: `escalated:${runId}`, severity: "bad", seatId, summary: "The desk could not answer: this needs you", reason: item.text, why: "A builder asked, and the desk passed the question on.", threshold: "any escalation", inspect: { view: "task", taskId: item.taskId } });
+    out.push({ id: `escalated:${runId}`, severity: "bad", waitingSince: item.at, seatId, summary: "The desk could not answer: this needs you", reason: item.text, why: "A builder asked, and the desk passed the question on.", threshold: "any escalation", inspect: { view: "task", taskId: item.taskId } });
   }
   const byTask = new Map();
   for (const [seatId, seat] of Object.entries(state.seats)) {
@@ -745,7 +751,7 @@ function health(state, at) {
     out.push({ id: "infra", severity: "warn", seatId: null, summary: `${live.status.infraFailures} worker start failure${live.status.infraFailures === 1 ? "" : "s"}`, reason: live.status.lastError, why: "The coding CLI did not start.", threshold: "any start failure", inspect: { view: "loop", action: null } });
   }
   const rank = { bad: 0, warn: 1, info: 2 };
-  return out.sort((a, b) => rank[a.severity] - rank[b.severity] || a.id.localeCompare(b.id));
+  return out.sort((a, b) => rank[a.severity] - rank[b.severity] || (a.waitingSince ?? Infinity) - (b.waitingSince ?? Infinity) || a.id.localeCompare(b.id));
 }
 
 // What the Fleet view draws. `roster` is assistantState.agents, `team` the

@@ -152,10 +152,10 @@
     current?.dispose();
     let me = null, tab = "rooms", openRoom = null, busy = false, openSeq = 0;
     // What the room service carries (hub-client status): the Lobby, join codes, Who's online.
-    let flags = { lobby: false, joinCodes: false, online: false };
+    let flags = { lobby: false, joinCodes: false, online: false, front: false, events: false };
     let lobbyOpened = false, people = null, showOnline = true, onlineTimer = null;
     let wanted = typeof options?.room === "string" && options.room ? options.room : null;
-    let creating = false, roomMenu = false, here = [], hereBox = null;
+    let creating = false, roomMenu = false, here = [], hereBox = null, hereKnown = false, canPost = true;
     const messageMenus = new Set(); // messages whose small menu is open
     const codes = new Map(); // room id -> { code, link }
     let rooms = [], requests = [], invites = [], messages = [], more = false;
@@ -167,6 +167,18 @@
     const asking = new Set(); // rooms whose join note is open
     const reporting = new Set(); // messages whose report reason is open
     const rows = new Map(); // message id -> { message, item }
+    const layout = window.MefiRoomLayout?.create?.({ api,
+      snapshot: () => ({ room: openRoom, rooms, me, here, hereKnown, nameOf, connected: root.dataset.state === "ready" }),
+      open: (room) => { void open(room); }, close,
+      onFront: (front) => { if (Array.isArray(front?.online?.people)) people = front.online.people; },
+      onChange: () => {
+        const caption = root.querySelector?.("#rooms-room-caption");
+        if (caption && openRoom) { const text = `${openRoom.kind === "cowork" ? "Cowork" : "Hangout"} · ${hereKnown ? `${here.length} here` : `${openRoom.memberCount} members`}`; if (caption.textContent !== text) caption.textContent = text; }
+        const listen = root.querySelector?.("#rooms-listen"), track = layout?.player?.();
+        if (listen && openRoom) { const text = track?.title || track?.label ? `♪ ${String(track.title || track.label).slice(0, 40)} · Listen` : "Listen together"; if (listen.textContent !== text) listen.textContent = text; const label = `Listen together in ${openRoom.name}${track?.title || track?.label ? `: ${track.title || track.label}` : ""}`; if (listen.getAttribute("aria-label") !== label) listen.setAttribute("aria-label", label); }
+      },
+    }) || null;
+    if (layout) { root.className += " rooms-desktop"; root.dataset.layout = "desktop"; }
 
     const call = async (method, ...args) => {
       try { return await api.hubRoom(method, ...args); } catch (error) { return { ok: false, error: "failed", message: error?.message }; }
@@ -189,6 +201,7 @@
       invites = inviteList?.ok ? inviteList.invites : invites;
       tally(invites, requests, me);
       if (repaint) paint();
+      else layout?.changed();
     }
 
     function tabs() {
@@ -459,6 +472,7 @@
       const mine = message.author.id === me?.id;
       const item = node("li", `rooms-message${mine ? " mine" : ""}`);
       item.dataset.message = message.id;
+      if (layout) item.append(window.MefiRoomLayout.avatar(message.author.id, message.author.name, mine));
       const head = node("div", "rooms-message-head");
       head.append(node("strong", "", mine ? "You" : message.author.name || "Someone"), node("span", "muted", ` ${time(message.createdAt)}${message.editedAt ? " · edited" : ""}`));
       const canDelete = mine && message.author.viaStudio;
@@ -527,6 +541,7 @@
       const seq = ++openSeq;
       if (openRoom && openRoom.id !== room.id) { api.hubSubscribe?.(openRoom.id, false, "rooms"); petsHome(); }
       openRoom = room;
+      here = []; hereKnown = false;
       messages = [];
       more = false;
       rows.clear();
@@ -552,6 +567,7 @@
       openSeq += 1;
       if (openRoom) api.hubSubscribe?.(openRoom.id, false, "rooms");
       openRoom = null;
+      layout?.changed();
       petsHome();
       rows.clear();
       reporting.clear();
@@ -593,6 +609,7 @@
     // Who is in the room in Studio now (presence frames), as small faces beside its name.
     function paintHere() {
       if (!hereBox) return;
+      if (layout) { layout.changed(); return; }
       const ids = here.filter((id) => id !== me?.id);
       const chips = ids.slice(0, 5).map((id) => {
         const name = nameOf(id) || "Someone";
@@ -602,7 +619,8 @@
         return chip;
       });
       if (ids.length > 5) chips.push(node("span", "rooms-here-chip rooms-here-more", `+${ids.length - 5}`));
-      hereBox.replaceChildren(...chips, node("span", "muted rooms-here-words", ids.length ? `${ids.length} here` : "Just you here"));
+      hereBox.replaceChildren(...chips, node("span", "muted rooms-here-words", layout && !hereKnown ? "Checking presence…" : ids.length ? `${ids.length} here` : "Just you here"));
+      layout?.changed();
     }
 
     // The room's ⋯ menu: its invite code, inviting by name, agents working
@@ -668,7 +686,7 @@
       box.maxLength = 2000;
       box.rows = 1;
       box.placeholder = room.status === "active" ? `Message ${room.name}` : "This room is not taking messages.";
-      box.disabled = room.status !== "active";
+      box.disabled = room.status !== "active" || (layout && (root.dataset.state !== "ready" || !canPost));
       box.setAttribute("aria-label", `Message ${room.name} (Enter sends, Shift+Enter for a new line)`);
       const send = button("Send", () => {
         const text = box.value;
@@ -703,11 +721,12 @@
       const privacy = node("span", "muted rooms-privacy", room.id === "lobby" ? "Everyone signed in from the Void Engine server is here." : flags.lobby ? "Only the people in this room get its messages. The room service keeps none." : "Void Engine moderators can read every room.");
       privacy.id = "rooms-privacy";
       title.append(node("strong", "rooms-room-name", room.name), privacy);
+      if (layout) { const caption = node("span", "muted rooms-room-caption", `${room.kind === "cowork" ? "Cowork" : "Hangout"} · ${room.memberCount} members`); caption.id = "rooms-room-caption"; title.insertBefore(caption, privacy); }
       hereBox = node("div", "rooms-here");
       hereBox.setAttribute("aria-label", "Who's here");
       paintHere();
       const tools = node("div", "rooms-room-tools");
-      if (room.status === "active" && window.MefiMusic?.openAudio) tools.append(button("Listen together", () => { window.MefiMusic.openAudio(); window.MefiMusic.setSource?.("link"); window.MefiMusic.openSection?.("more"); }, "rooms-listen"));
+      if (room.status === "active" && window.MefiMusic?.openAudio) tools.append(button("Listen together", () => { if (layout) layout.listen(); else { window.MefiMusic.openAudio(); window.MefiMusic.setSource?.("link"); window.MefiMusic.openSection?.("more"); } }, "rooms-listen"));
       if (room.id !== "lobby") {
         const menu = button("⋯", () => { roomMenu = !roomMenu; paint(); }, "rooms-room-menu");
         menu.setAttribute("aria-label", roomMenu ? "Hide room options" : "Room options: invite, lock, leave");
@@ -728,7 +747,8 @@
       const chat = node("div", "rooms-chat");
       chat.append(earlier, log);
       if (!messages.length) log.replaceChildren(node("li", "muted rooms-empty", room.id === "lobby" ? "Nobody has said anything yet. Say hi!" : "No messages yet. Say hi, or share the room's invite code from ⋯."));
-      return [head, ...(roomMenu && room.id !== "lobby" ? [roomPanel(room)] : []), chat, composer(room)];
+      const parts = [head, ...(roomMenu && room.id !== "lobby" ? [roomPanel(room)] : []), chat, composer(room)];
+      return layout ? [layout.view(parts)] : parts;
     }
 
     // Rebuilds the view and gives every keyed field its draft (and focus) back.
@@ -741,12 +761,14 @@
       }
       fields.clear();
       root.dataset.view = openRoom ? "room" : tab;
+      if (!openRoom) layout?.hide();
       body.replaceChildren(...(openRoom ? roomView() : [tabs(), ...(tab === "rooms" ? listView() : tab === "online" ? onlineView() : tab === "requests" ? requestsView() : invitesView())]));
       for (const [key, el] of fields) {
         const draft = drafts.get(key);
         if (draft) { if (el.type === "checkbox") el.checked = draft.checked; else el.value = draft.value; }
         if (key === focused) el.focus?.({ preventScroll: true });
       }
+      layout?.changed();
     }
 
     // Linking happens right here: Discord asks once in the browser, then the
@@ -811,7 +833,9 @@
       }
       root.dataset.state = "ready";
       me = hub.user ?? me;
-      flags = { lobby: hub.lobby === true, joinCodes: hub.joinCodes === true, online: hub.online === true };
+      canPost = hub.paused !== true && hub.readOnly !== true;
+      flags = { lobby: hub.lobby === true, joinCodes: hub.joinCodes === true, online: hub.online === true, front: hub.front === true, events: hub.events === true };
+      void layout?.capabilities(flags);
       return true;
     }
     async function load() {
@@ -836,7 +860,22 @@
         if (["status", "joinRequest", "invite", "membership"].includes(event?.type)) void recountQuietly(api);
         return;
       }
-      if (event?.type === "status") { if (!openRoom) void load(); return; }
+      layout?.hear(event);
+      if (event?.type === "status") {
+        if (!openRoom) void load();
+        else if (layout && event.status) {
+          root.dataset.state = event.status.state || "off";
+          canPost = event.status.paused !== true && event.status.readOnly !== true;
+          const notice = event.status.state === "ready" ? event.status.paused ? "The room service is paused; you can read but not post." : event.status.readOnly ? "The room service is read-only; you can read but not post." : "" : "Connection lost. Your draft and this PC's chat are kept; Studio will reconnect.";
+          if (status.textContent !== notice) status.textContent = notice;
+          const compose = fields.get(`compose:${openRoom.id}`);
+          if (compose) compose.disabled = openRoom.status !== "active" || event.status.state !== "ready" || event.status.paused === true || event.status.readOnly === true;
+          const send = root.querySelector?.("#rooms-send"); if (send && compose) send.disabled = compose.disabled;
+          if (event.status.state !== "ready") { here = []; hereKnown = false; }
+          layout.changed();
+        }
+        return;
+      }
       if (openRoom && event?.type === "membership" && event.roomId === openRoom.id && (event.state === "closed" || (event.userId === me?.id && ["left", "removed"].includes(event.state)))) {
         status.textContent = event.state === "closed" ? REASONS.closed : event.state === "removed" ? REASONS.removed : `You left ${openRoom.name}.`;
         close();
@@ -856,7 +895,7 @@
       }
       if (!openRoom || event?.roomId !== openRoom.id) return;
       if (event.type === "roomPets") { window.MefiPets?.guests?.(petsOf(event)); return; }
-      if (event.type === "presence") { here = Array.isArray(event.inStudio) ? event.inStudio : []; paintHere(); return; }
+      if (event.type === "presence") { here = Array.isArray(event.inStudio) ? event.inStudio : []; hereKnown = true; paintHere(); return; }
       if (event.type === "claims") { if (coworkShow) void Promise.resolve(api.coworkStatus?.()).then(coworkShow).catch(() => {}); return; }
       if (event.type === "message" && !messages.some((item) => item.id === event.message.id)) { messages = [...messages, event.message].slice(-500); showMessages(); }
       else if (event.type === "messageUpdate") { messages = messages.map((item) => (item.id === event.message.id ? event.message : item)); showMessages(); }
@@ -876,6 +915,7 @@
     // Lets go of the open room's hold and stops hearing frames. Safe to call twice.
     function dispose() {
       openSeq += 1;
+      layout?.dispose();
       if (onlineTimer) { clearTimeout(onlineTimer); onlineTimer = null; }
       if (openRoom) { api.hubSubscribe?.(openRoom.id, false, "rooms"); petsHome(); }
       openRoom = null;
@@ -889,5 +929,5 @@
   }
 
   // recount(): Friends' front page asks for the invites and requests waiting, with Rooms itself closed.
-  window.MefiRooms = { panel, pending, subscribe, readable, recount: () => recountQuietly(bridge()) };
+  window.MefiRooms = { panel, pending, subscribe, readable, desktopEnabled: () => window.MefiRoomLayout?.enabled?.() === true, recount: () => recountQuietly(bridge()) };
 })();

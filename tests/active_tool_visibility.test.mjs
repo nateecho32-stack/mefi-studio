@@ -58,7 +58,9 @@ test("an observed Bash tool replaces a stale checklist step and names its runnin
   const result = workerActivity(entry, 361000);
   assert.equal(result.currentStep, "Bash running · 6m · Starting a background process");
   assert.equal(JSON.stringify(entry), before, "rendering active work never changes the worker record");
-  assert.deepEqual(Object.keys(result).sort(), ["route", "activity", "activityAt", "lastOutputAt", "currentStep", "stepUpdatedAt"].sort(), "the existing UI contract stays unchanged");
+  assert.deepEqual(Object.keys(result).sort(), ["route", "activity", "activityAt", "lastOutputAt", "currentStep", "stepUpdatedAt", "tool"].sort(), "the activity contract adds only the bounded tool observation");
+  assert.deepEqual(result.tool, { name: "bash", status: "running", since: 1000 });
+  assert.doesNotMatch(JSON.stringify(result.tool), /powershell|server\.py|sessionId|tool-1/, "the tool observation carries no command or worker identity");
 });
 
 test("active-tool descriptions are preferred over raw commands and sanitized before display", () => {

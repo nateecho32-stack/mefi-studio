@@ -331,8 +331,11 @@ app.whenReady().then(async () => {
     assert.deepEqual(report.errors,[]);report.themes.push(theme);
   }
   for (const [width,height] of [[1920,1200],[1440,900],[1100,720],[600,560]]) for (const zoom of [1,1.25,1.5]) for (const preset of ['focus','studio','atmosphere']) {
-    window.setContentSize(width,height); contents.setZoomFactor(zoom);
-    await sleep(40);
+    const previousZoom=contents.getZoomFactor();
+    window.setContentSize(width,height);
+    await until(`Math.abs(innerWidth-${width/previousZoom})<=2&&Math.abs(innerHeight-${height/previousZoom})<=2`,'resize before scale');
+    contents.setZoomFactor(zoom);
+    await until(`Math.abs(innerWidth-${width/zoom})<=2&&Math.abs(innerHeight-${height/zoom})<=2`,'requested viewport at '+width+' / '+zoom);
     await run(`window.MefiAppearance.apply({preset:${JSON.stringify(preset)}});await window.MefiNav.go('agents',{section:'setup',pane:'team'});`);
     await sleep(70);
     const layout = await run("const sheet=document.querySelector('.agents-sheet').getBoundingClientRect(),body=document.getElementById('agents-body'),foot=document.getElementById('agents-save-bar').getBoundingClientRect();return {w:innerWidth,h:innerHeight,sheet:{left:sheet.left,right:sheet.right,top:sheet.top,bottom:sheet.bottom},foot:foot.bottom,overflow:document.documentElement.scrollWidth>innerWidth+1,canScroll:body.scrollHeight>body.clientHeight,scrollbar:getComputedStyle(body).scrollbarWidth};");
@@ -340,7 +343,7 @@ app.whenReady().then(async () => {
     assert.ok(!layout.overflow&&layout.sheet.left>=0&&layout.sheet.right<=layout.w+1&&layout.sheet.top>=0&&layout.sheet.bottom<=layout.h+1&&layout.foot<=layout.h+1,JSON.stringify(report.layouts.at(-1)));
     if (layout.h<=520) {
       // The rail's four places in the 0.5 layout: Work, Map, Team and Friends.
-      const primary = await run("const list=document.getElementById('app-rail-sections');list.scrollTop=0;const box=list.getBoundingClientRect();return {top:box.top,bottom:box.bottom,heads:[...list.querySelectorAll('.app-rail-head')].map(el=>{const r=el.getBoundingClientRect();return {id:el.dataset.nav,top:r.top,bottom:r.bottom,height:r.height};})};");
+      const primary = await run("const list=document.getElementById('app-rail-sections');list.scrollTop=0;const box=list.getBoundingClientRect();const measure=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {id:el.id||el.className,top:r.top,bottom:r.bottom,height:r.height,min:s.minHeight,display:s.display};};return {top:box.top,bottom:box.bottom,parts:[...list.parentElement.children].map(measure),foot:[...document.getElementById('app-rail-foot').children].map(measure),heads:[...list.querySelectorAll('.app-rail-head')].map(el=>{const r=el.getBoundingClientRect();return {id:el.dataset.nav,top:r.top,bottom:r.bottom,height:r.height};})};");
       assert.deepEqual(primary.heads.map(head=>head.id), ['workspace','command','agents','friends']);
       assert.ok(primary.heads.every(head=>head.top>=primary.top-1&&head.bottom<=primary.bottom+1&&head.height>=28),'primary destinations stay visible at '+width+' / '+zoom+': '+JSON.stringify(primary));
     }

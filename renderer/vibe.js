@@ -448,7 +448,7 @@
 
     const needs = $("lane-needs");
     needs.replaceChildren();
-    for (const need of data.needs.slice(0, 4)) needs.append(row({ key: `needs:${need.kind}:${need.id}`, tone: need.tone, title: need.title, meta: need.meta, action: { label: need.verb, run: () => openNeed(need) }, onOpen: () => openNeed(need) }));
+    for (const need of data.needs.slice(0, 4)) needs.append(row({ key: `needs:${need.kind}:${need.id}`, tone: need.tone, title: need.title, meta: need.meta, detail: need.row?.reason || need.ask || need.question?.question || "", action: { label: need.verb, run: () => openNeed(need) }, onOpen: () => openNeed(need) }));
     if (data.needs.length > 4) needs.append(row({ key: "needs:more", tone: "next", title: `${data.needs.length - 4} more waiting on you`, meta: "in your tasks", onOpen: () => openPanel("tasks", { fold: "needs" }) }));
     const needCount = data.needs.length;
     $("count-needs").textContent = needCount ? String(needCount) : "";

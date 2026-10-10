@@ -259,9 +259,17 @@ app.whenReady().then(async () => {
     if(zoom===1) { await run("document.getElementById('agents-rules').scrollIntoView({block:'start'});"); await capture('agent-rules-'+width+'.png'); }
   }
   window.setContentSize(1100,720); contents.setZoomFactor(1);
+  await until("Math.abs(innerWidth-1100)<=2 && Math.abs(innerHeight-720)<=2", "Guided setup viewport");
   await run("document.getElementById('settings-guided-cli').click();");
   await until("!document.getElementById('walkthrough-cli-setup').hidden", "Guided tool setup");
   assert.equal(await run("return window.unifiedFixture.calls().some(c=>c.name.startsWith('cliSetup'));"), false, "opening never installs or calls a provider");
+  // The easy start is the first screen; the existing-provider choice opens
+  // Codex's installer. Follow the real pointer path instead of clicking a
+  // hidden control beneath that screen.
+  assert.ok(await reachable('#walkthrough-easy-opencode'));
+  assert.ok(await reachable('#walkthrough-easy-openrouter'));
+  await click('#walkthrough-easy-existing');
+  await until("!document.getElementById('walkthrough-cli-existing').hidden", "Existing provider choices");
   assert.ok(await reachable('#walkthrough-cli-install'));
   await capture('guided-cli-install.png');
   await click('#walkthrough-cli-install'); await click('#walkthrough-cli-refresh');
