@@ -15,6 +15,10 @@
    colours are the app's own tokens, and no scroller reserves width. */
 
 html[data-frame] .shell-frame { display: contents; }
+/* Zen covers the whole window. Geometry preferences stay saved for the return. */
+html[data-frame] body.command-zen :is(.shell-frame, #mefi-tabs, #section-bar, #app-rail, #vibe-rail, #studio-floats, #toast-host) { visibility: hidden !important; pointer-events: none !important; }
+html[data-frame] body.command-zen .shell-frame * { visibility: hidden !important; }
+html[data-frame] body.command-zen :is(.companion-orb, .companion-panel, .companion-bubble, .key-tip, #setup-look-tip, #setup-welcome-card) { visibility: hidden !important; pointer-events: none !important; }
 html[data-frame] .shell-region[hidden], html[data-frame] .shell-scrim[hidden], html[data-frame] .shell-split[hidden] { display: none !important; }
 html[data-frame] .shell-region, html[data-frame] .shell-split {
   --frame-rail-w: calc(var(--shell-x0) - var(--shell-list-w));

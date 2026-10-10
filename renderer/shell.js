@@ -842,7 +842,7 @@
   // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
   function placeTrail(n, id, dest) {
     // Social's own pages (renderer/social.js, renderer/today.js) are places of their own: the project, then the page.
-    if (id === "activity" || id === "projects") return [String(dest?.label || id)];
+    if (id === "activity" || id === "projects" || id === "watch") return [String(dest?.label || id)];
     const place = placeOfRoute(n, id);
     if (place === "settings") {
       if (id === "size") return ["Settings", "Appearance", String(dest?.label || "Size and density")];

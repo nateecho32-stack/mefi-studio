@@ -484,6 +484,7 @@
   let dropdownAnchor = null;
   let dropdownFocus = null;
   let dropdownHover = false;
+  let watchHost = null;
   let dropdownOpenTimer = 0;
   let dropdownCloseTimer = 0;
   let restoreWorkspace = false;
@@ -2011,7 +2012,7 @@
     }
     return target;
   }
-  function closeDeck() { if (deckOpen) morph(() => { deckOpen = false; renderDeck(); }); }
+  function closeDeck() { if (watchHost) return; if (deckOpen) morph(() => { deckOpen = false; renderDeck(); }); }
   function renderDeck() {
     if (!els.deck) return;
     const source = shownSource();
@@ -2527,7 +2528,7 @@
     const queueHeader = element("div", "music-link-queue-header", null, queue);
     els.linkQueueHeading = element("h3", null, "Up next", queueHeader); els.linkQueueHeading.setAttribute("aria-live", "polite");
     els.linkQueueNext = button("Play next video", "ghost mini", queueHeader, () => playQueued(), "music-link-queue-next");
-    els.linkQueueEmpty = element("p", "music-fineprint music-queue-empty", "Nothing lined up. Click a video on the left, or drag it here.", queue);
+    els.linkQueueEmpty = element("p", "music-fineprint music-queue-empty", "Nothing lined up. Browse for a video, or drag a link here.", queue);
     els.linkQueueList = element("ol", "music-link-queue-list", null, queue); els.linkQueueList.id = "music-link-queue-list";
     bindQueueDrops(queue);
     const linkTools = element("div", "music-link-tools music-now-tools", null, main);
@@ -2785,7 +2786,7 @@
     dropdown.addEventListener("pointerdown", pinAudioDropdown);
     dropdown.addEventListener("focusin", pinAudioDropdown);
     dropdown.addEventListener("focusout", (event) => {
-      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !mediaPlayerContains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
+      if (!watchHost && event.relatedTarget && !dropdown.contains(event.relatedTarget) && !mediaPlayerContains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
     });
     // Embedded pages do not bubble pointer/focus events to Studio. Once the
     // pointer enters the player, keep its menu in place until dismissed.
@@ -2820,6 +2821,7 @@
   function positionDropdown() {
     dropdownFrame = 0;
     if (els.dropdown?.hidden !== false) return;
+    if (watchHost) { placePlayer(); return; }
     const edge = 12;
     const width = window.innerWidth || 1024;
     // Layout v2 keeps the menu inside the free area (nav.js usable()); v1 is the window.
@@ -2871,6 +2873,7 @@
     scheduleDropdown();
   }
   function audioOutside(event) {
+    if (watchHost) return;
     if (!els.dropdown?.contains(event.target) && !mediaPlayerContains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
   }
   function mediaPlayerContains(target) {
@@ -2881,6 +2884,8 @@
   }
   function audioKey(event) {
     if (event.key === "Escape" && els.dropdown?.hidden === false) {
+      const top = window.MefiNav?.top?.();
+      if (watchHost && top && top !== "watch") return;
       // An open Save to a playlist list closes first.
       if (playlistsHook?.dismiss?.()) { event.preventDefault(); event.stopPropagation(); return; }
       if (window.MefiSelect?.owns?.(els.dropdown)) {
@@ -2946,7 +2951,8 @@
     window.addEventListener("scroll", pageScroll, true);
     if (!hover) els.dropdown.focus({ preventScroll: true });
   }
-  function closeAudio({ focus = false } = {}) {
+  function closeAudio({ focus = false, leavingWatch = false } = {}) {
+    if (watchHost && !leavingWatch) { window.MefiNav?.close?.("watch"); return; }
     stopClipboardChecks();
     cancelAudioHoverTimers();
     dropdownHover = false;
@@ -2968,9 +2974,35 @@
     dropdownAnchor = null; dropdownFocus = null;
   }
   function toggleAudio(anchor) {
+    if (watchHost) { openAudio(anchor); return; }
     if (els.dropdown?.hidden === false && dropdownHover) openAudio(anchor);
     else if (els.dropdown?.hidden === false) closeAudio({ focus: true });
     else openAudio(anchor);
+  }
+
+  function openWatch(host) {
+    if (!host) return false;
+    init();
+    closeAudio({ leavingWatch: true });
+    watchHost = host;
+    host.append(els.dropdown);
+    els.dropdown.dataset.watch = "true";
+    els.dropdown.setAttribute("role", "region");
+    openAudio();
+    // Show videos without interrupting a radio station or local track.
+    settingsReveal.source = "link";
+    deckOpen = true; deckSection = "browse";
+    render(); positionDropdown();
+    return true;
+  }
+  function closeWatch() {
+    if (!watchHost) return false;
+    closeAudio({ leavingWatch: true });
+    watchHost = null;
+    delete els.dropdown.dataset.watch;
+    els.dropdown.setAttribute("role", "dialog");
+    document.body.append(els.dropdown);
+    return true;
   }
   function updatePreview() {
     previewFrame = 0;
@@ -3029,7 +3061,7 @@
     else if (prefs.source === "radio") state.source = "radio";
     build();
     bindAudioHover(document.getElementById("settings-audio-open"));
-    window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
+    window.addEventListener("blur", () => { if (!watchHost && !els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
     applyTheme(prefs.theme, false); paintFont(prefs.font);
     syncTreePreferences(false); render(); renderMediaMenu();
     if (lastLink) els.linkInput.value = lastLink.url;
@@ -3055,8 +3087,10 @@
     window.addEventListener("mefi:nav", (event) => {
       if (event?.detail?.action !== "open") return;
       const id = event.detail.id;
+      // Search and other temporary dialogs leave Watch underneath them.
+      if (watchHost && window.MefiNav?.get?.(id)?.layer === "transient") return;
       if (id === "audio" || id === "music" && (event.detail.params === "sound" || event.detail.params?.group === "sound")) return;
-      closeAudio();
+      if (id !== "watch") closeAudio();
       if (["studio", "music", "appearancePreview"].includes(id)) return;
       const kind = window.MefiNav?.get?.(id)?.kind;
       if (kind === "overlay" || kind === "action") return;
@@ -3310,7 +3344,7 @@
       showLinks: () => mediaMenu.showLinks,
     };
   }
-  window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, openSection, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
+  window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, openWatch, closeWatch, openSection, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
     stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })),
     // Where the playing source is ({ position, duration } in seconds; duration 0 for a stream with no end): the status bar's time left.
     playback: () => { const at = playbackPosition(); return { position: at.position, duration: at.duration }; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,

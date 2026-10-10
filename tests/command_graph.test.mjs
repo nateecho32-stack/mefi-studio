@@ -208,7 +208,7 @@ function zenContext(enabled = true) {
   // Zen flies renderer/camera-tour.js through idle.js's director hook.
   const tour = { step: () => null, velocity: () => ({ x: 0, y: 0, z: 0, zoom: 0 }) };
   const window = { MefiNav: { top: () => "command" }, MefiCameraTour: { create: () => tour } };
-  const env = vm.createContext({ state, el, document, window, Date: class extends Date { static now() { return 31000; } }, Math, Object, Array, Boolean, String, Number, AMBIENT_ZEN_MS: 30000, ORBIT_BASE: 0.003, ORBIT_ENERGY: 0.001, PITCH_MAX: 0.55, CAMERA_SMOOTH: 0.38, noMotion: () => false, hideTip() {}, bumpHud() {}, syncViewControls() {}, renderHint() {}, renderFollowStatus() {}, updateFollowCamera() {}, glideZoom(zoom) { state.zoomTarget = zoom; }, writeStore: (...args) => writes.push(args) });
+  const env = vm.createContext({ state, el, document, window, Date: class extends Date { static now() { return 31000; } }, Math, Object, Array, Boolean, String, Number, AMBIENT_ZEN_MS: 30000, ORBIT_BASE: 0.003, ORBIT_ENERGY: 0.001, PITCH_MAX: 0.55, CAMERA_SMOOTH: 0.38, noMotion: () => false, closeMapMenu() {}, clearSearch() {}, hideTip() {}, bumpHud() {}, syncViewControls() {}, renderHint() {}, renderFollowStatus() {}, updateFollowCamera() {}, glideZoom(zoom) { state.zoomTarget = zoom; }, writeStore: (...args) => writes.push(args) });
   vm.runInContext(section("function canAmbientZen()", "function canDim()"), env);
   env.EDGE_ZEN_MS = 1500;
   window.innerWidth = 1200;
@@ -3000,4 +3000,24 @@ test("Command's enter params fall back from a finished builder to its task, then
   assert.deepEqual(toasts, ["That task is not on the Map right now"]);
   assert.equal(env.applyEnterParams({ selected: "session:gone" }), false);
   assert.equal(toasts.length, 1, "a stale restored selection stays quiet");
+});
+
+
+test("manual Zen is temporary, survives pointer input and restores controls without enabling automatic Zen", () => {
+  const { env, state, el, classes, writes } = zenContext(false);
+  assert.equal(env.setManualZen(true), true);
+  assert.equal(state.manualZen, true);
+  assert.equal(classes.has("command-zen"), true);
+  assert.equal(el.hud.inert, true);
+  assert.equal(state.ambientZenEnabled, false);
+  assert.equal(writes.length, 0);
+  for (const type of ["mousemove", "pointerdown", "wheel", "focusin", "keydown"]) {
+    assert.equal(env.ambientZenInput(type, {}, 32000), null);
+    assert.equal(state.ambientZen, true);
+  }
+  env.setManualZen(false);
+  assert.equal(state.manualZen, false);
+  assert.equal(classes.has("command-zen"), false);
+  assert.equal(el.hud.inert, false);
+  assert.equal(env.checkAmbientZen(90000), false);
 });

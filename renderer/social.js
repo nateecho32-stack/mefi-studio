@@ -35,6 +35,7 @@
   const read = (key) => { try { return globalThis.localStorage?.getItem?.(key) ?? null; } catch { return null; } };
   const allPages = () => read("mefiStudio.social.allPages") === "on";
   const friendsCardOff = () => read("mefiStudio.social.friendsCard") === "off";
+  const watchOn = () => read("mefiStudio.social.watch") !== "off";
   const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
   const initials = (name) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase() || "?";
   // A steady colour per member, from their id (The Lobby's own rule, renderer/friends-front.js).
@@ -45,7 +46,7 @@
   // ---- which pages are Social's --------------------------------------------------------------------------------
   // Pages, not actions or Search: an action (Pause agents, a Friends way in) runs where it is. Any page filed under Settings,
   // Help or Friends is Social's too, so a Settings page added later needs no line here.
-  const PAGES = Object.freeze(["vibe", "friends-page", "inbox", "projects", "activity", "studio", "size", "setup-helper", "shop"]);
+  const PAGES = Object.freeze(["vibe", "friends-page", "inbox", "projects", "activity", "watch", "studio", "size", "setup-helper", "shop"]);
   const SOCIAL_SECTIONS = Object.freeze(["settings", "help", "friends"]);
   function studioOnly(id, params = {}) {
     if (!socialMode() || typeof id !== "string" || allPages()) return false;
@@ -338,8 +339,48 @@
     return true;
   }
 
+  // Watch uses the same media menu and loaded player, in a page instead of a popup.
+  let watch = null;
+  function openWatch() {
+    if (!watchOn()) return false;
+    if (!watch) {
+      watch = el("div", "overlay workspace-page social-page");
+      watch.id = "watch-overlay"; watch.hidden = true;
+      const sheet = el("section", "sheet social-sheet social-watch-sheet");
+      sheet.tabIndex = -1; sheet.setAttribute("aria-labelledby", "watch-title");
+      const head = el("header", "social-page-head");
+      const words = el("div", "social-page-words");
+      const title = el("h1", "", "Watch"); title.id = "watch-title"; title.tabIndex = -1;
+      words.append(title, el("p", "social-page-about", "Find a video, line up what’s next, and settle in."));
+      head.append(words, button("Back to Home", "social-btn", () => nav()?.go?.("workspace")));
+      const host = el("div", "social-watch-media"); host.id = "watch-media";
+      sheet.append(head, host); watch.append(sheet); document.body.append(watch);
+    }
+    nav()?.claim?.("watch");
+    watch.hidden = false;
+    window.MefiMusic?.openWatch?.(document.getElementById("watch-media"));
+    window.MefiShell?.sync?.("watch");
+    return true;
+  }
+  function closeWatch() {
+    if (!watch || watch.hidden) return false;
+    window.MefiMusic?.closeWatch?.();
+    watch.hidden = true;
+    nav()?.release?.("watch");
+    return true;
+  }
+
   // ---- the registry -------------------------------------------------------------------------------------------------
   function register() {
+    nav()?.register?.({
+      id: "watch", label: "Watch", short: "Watch", kind: "overlay", layer: "sheet", section: "home", group: "surfaces",
+      glyph: "g-audio", badge: null, desc: "Videos, browsing, playlists and Up next in Social",
+      searchTerms: "watch videos youtube media player browse playlist queue social",
+      showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
+      element: "watch-overlay", focus: "#watch-title",
+      hidden: () => !watchOn(),
+      open: openWatch, close: closeWatch, isOpen: () => Boolean(watch && !watch.hidden),
+    });
     nav()?.register?.({
       id: "projects", label: "Projects", short: "Projects", kind: "overlay", layer: "sheet", section: "home", group: "surfaces",
       glyph: "g-folder", badge: null, desc: "Your apps and projects, New app, and what friends made",
@@ -351,8 +392,10 @@
   }
   if (nav()?.register) register();
   else document.addEventListener?.("DOMContentLoaded", register, { once: true });
+  const watchButton = document.getElementById("vibe-rail-watch");
+  if (watchButton) watchButton.hidden = !watchOn();
   // The project list follows a switch made anywhere while the page shows.
   window.addEventListener?.("mefi:project-changed", () => { if (projects.root && !projects.root.hidden) { projects.signature = ""; void paintProjects(); } });
 
-  window.MefiSocial = { PAGES, studioOnly, toStudio, openInStudio, openTask, peopleCard, openProjects, closeProjects };
+  window.MefiSocial = { PAGES, studioOnly, toStudio, openInStudio, openTask, peopleCard, openProjects, closeProjects, openWatch, closeWatch };
 })();

@@ -231,3 +231,25 @@ test("the Friends card reads nothing while Social's Home is out of sight, and ca
   assert.equal(reads, 2);
   card.dispose();
 });
+
+
+test("Watch is Social's page, uses the existing media player and has a per-device switch", () => {
+  const t = load();
+  let opened = 0, closed = 0;
+  t.window.MefiMusic = { openWatch: host => { assert.equal(host.id, "watch-media"); opened += 1; }, closeWatch: () => { closed += 1; } };
+  const record = t.registered.find(entry => entry.id === "watch");
+  assert.equal(t.social.studioOnly("watch"), false);
+  record.open();
+  assert.equal(record.isOpen(), true);
+  assert.deepEqual(t.claimed, ["watch"]);
+  assert.equal(opened, 1);
+  record.close();
+  assert.equal(record.isOpen(), false);
+  assert.deepEqual(t.released, ["watch"]);
+  assert.equal(closed, 1);
+  const off = load({ storage: new Map([["mefiStudio.social.watch", "off"]]) });
+  const disabled = off.registered.find(entry => entry.id === "watch");
+  assert.equal(disabled.hidden(), true);
+  assert.equal(disabled.open(), false);
+  assert.equal(off.claimed.length, 0);
+});

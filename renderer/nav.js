@@ -700,6 +700,15 @@
       run: () => window.MefiMusic?.openAudio?.(),
     },
     {
+      id: "zen", label: "Zen mode", short: "Zen", kind: "action", layer: null, section: "agents", group: "tools",
+      key: "Ctrl Z", glyph: "g-orbit", badge: null,
+      desc: "Open the Zen view and hide menus. Ctrl+Z or Escape returns the controls; text fields keep Undo.",
+      searchTerms: "zen focus hide menus distraction free calm fullscreen",
+      showIn: showIn({ palette: true, help: true }),
+      keyMatch: () => false, // The chord is handled before navigation and editing shortcuts.
+      run: () => toggleZen(),
+    },
+    {
       id: "appearancePreview", label: "Appearance preview", short: "Preview", kind: "overlay", layer: "transient", section: "settings",
       group: "tools", key: null, glyph: "g-style", badge: null, showIn: showIn({}),
       element: "music-overlay", focus: "#music-close",
@@ -896,6 +905,7 @@
   // So are Social's own Activity (renderer/today.js) and Projects (renderer/social.js).
   WORKSPACE_PAGES.add("activity");
   WORKSPACE_PAGES.add("projects");
+  WORKSPACE_PAGES.add("watch");
   // And the Shop (renderer/friends-shop.js registers the route "shop"; Friends lists it among its places).
   WORKSPACE_PAGES.add("shop");
   function syncPageInert() {
@@ -1949,6 +1959,7 @@
   // the same variables the layers use (so a fold is already in them).
   function usable() {
     const { w, h } = viewportSize();
+    if (document.body?.classList?.contains?.("command-zen")) return { left: 0, top: 0, right: w, bottom: h, width: w, height: h };
     const box = (id) => {
       const rect = document.getElementById?.(id)?.getBoundingClientRect?.();
       return rect && rect.width > 0 && rect.height > 0 ? rect : null;
@@ -2271,7 +2282,38 @@
     return true;
   }
 
+  function toggleZen() {
+    if (!zenShortcutEnabled()) return false;
+    const idle = window.MefiIdle;
+    if (typeof idle?.setManualZen !== "function") return false;
+    if (document.body?.classList?.contains?.("command-zen")) return idle.setManualZen(false);
+    window.MefiCompanionHub?.close?.({ immediate: true, restore: false });
+    window.MefiCompanion?.close?.();
+    window.MefiMusic?.closeAudio?.();
+    closeHelpMenu();
+    window.MefiSidebar?.close?.();
+    delete document.documentElement.dataset.railDrawer;
+    go("command");
+    return idle.setManualZen(true);
+  }
+
+  function zenShortcutEnabled() {
+    try { return localStorage.getItem("mefiStudio.zenShortcut") !== "off"; } catch { return true; }
+  }
+
   function handleKey(event) {
+    const editing = event.target?.closest?.("input, textarea, select, [contenteditable]") || document.activeElement?.closest?.("input, textarea, select, [contenteditable]");
+    const zenChord = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key?.toLowerCase?.() === "z";
+    if (zenChord && !editing && !event.defaultPrevented && zenShortcutEnabled()) {
+      event.preventDefault();
+      if (!event.repeat) toggleZen();
+      return;
+    }
+    if (document.body?.classList?.contains?.("command-zen") && window.MefiIdle?.ambientZenStatus?.()?.manual) {
+      event.preventDefault();
+      if (event.key === "Escape") window.MefiIdle.setManualZen(false);
+      return;
+    }
     if (event.defaultPrevented || window.MefiCompanionHub?.isOpen()) return;
     if (event.key === "Escape" && closeHelpMenu(true)) { event.preventDefault(); return; }
     if (event.key === "Escape" && "railDrawer" in (document.documentElement?.dataset ?? {}) && !state.transient) {

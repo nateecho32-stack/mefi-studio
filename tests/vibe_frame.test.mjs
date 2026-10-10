@@ -151,12 +151,12 @@ test("the Social rail in the template points only at registered destinations, an
   assert.ok(rail, "renderer/booklet.template.html ships #vibe-rail");
   const loaded = load();
   // social.js registers Projects and today.js Activity themselves; the rest come from nav.js and vibe.js.
-  const known = new Set([...loaded.nav.list({}).map((dest) => dest.id), "projects", "activity"]);
+  const known = new Set([...loaded.nav.list({}).map((dest) => dest.id), "projects", "activity", "watch"]);
   const targets = [...rail.matchAll(/data-nav="([^"]+)"/g)].map((match) => match[1]);
   // Social's rail holds Social's places (a QA pass on 2026-10-06): Home, Friends, Projects and Activity, then Search;
   // Settings and Help at the foot. The Map, the boards and Team are Studio's.
-  assert.deepEqual(targets, ["vibe", "friends", "projects", "activity", "palette", "studio", "help"]);
-  assert.deepEqual([...rail.matchAll(/<span>([^<]+)<\/span>/g)].map((match) => match[1]), ["Home", "Friends", "Projects", "Activity", "Search", "Settings", "Help", "Studio"], "Home, as the tab and the trail say it in Social");
+  assert.deepEqual(targets, ["vibe", "friends", "projects", "watch", "activity", "palette", "studio", "help"]);
+  assert.deepEqual([...rail.matchAll(/<span>([^<]+)<\/span>/g)].map((match) => match[1]), ["Home", "Friends", "Projects", "Watch", "Activity", "Search", "Settings", "Help", "Studio"], "Home, as the tab and the trail say it in Social");
   for (const id of targets) assert.ok(known.has(id), `${id} is a registered destination`);
   assert.deepEqual([...rail.matchAll(/data-ui-mode="([^"]+)"/g)].map((match) => match[1]), ["build"]);
 });

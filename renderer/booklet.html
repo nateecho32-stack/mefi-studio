@@ -3246,6 +3246,7 @@ html[data-no-blur] {
 #idle-hud .cmd-feed.collapsed .feed-state { margin: 0 2px 0 4px; font-size: 10px; font-weight: 500; }
 #idle-hud .cmd-feed.collapsed .feed-toggle .glyph { margin-left: 4px; }
 body.command-zen #idle-hud { opacity: 0; pointer-events: none; }
+body.command-zen :is(#idle-layer, #idle-layer-far) { inset: 0 !important; }
 body.command-zen, body.command-zen * { cursor: none !important; }
 body.command-zen #idle-hud * { pointer-events: none !important; }
 body:not(.command-zen) #idle-hud .feed-content:not([hidden]),
@@ -12166,6 +12167,27 @@ html[data-shell="rail"] .social-page > .social-sheet { width: 100%; height: auto
   .social-project > .social-btn { grid-column: 1 / -1; justify-self: start; }
 }
 
+/* Watch keeps the loaded player in the page. Its queue is beside it, browsing underneath. */
+#watch-overlay { display: block; }
+.social-watch-media { min-width: 0; container: social-watch / inline-size; }
+.music-dropdown[data-watch="true"] { position: static; width: 100% !important; max-height: none !important; border-radius: 16px; box-shadow: none; }
+.music-dropdown[data-watch="true"] .music-dropdown-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "now" "nav" "deck"; overflow: visible; }
+.music-dropdown[data-watch="true"] :is(.music-main, .music-deck) { overflow: visible; border: 0; }
+.music-dropdown[data-watch="true"] .music-main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 14px; padding: 16px; }
+.music-dropdown[data-watch="true"] .music-main > * { min-width: 0; }
+.music-dropdown[data-watch="true"] :is(.music-expand, #music-next-line) { display: none; }
+.music-dropdown[data-watch="true"] .music-quick { display: none; }
+.music-dropdown[data-watch="true"] .music-deck { padding: 16px; }
+.music-dropdown[data-watch="true"] .music-video-stage[data-docked="true"][data-shape="video"] { height: auto; aspect-ratio: 16 / 9; max-height: max(180px, calc(100dvh - 360px)); }
+.music-dropdown[data-watch="true"] .music-link-queue { margin: 0; padding: 12px; border: 1px solid var(--md-line); border-radius: 12px; background: var(--md-well); }
+.music-dropdown[data-watch="true"] .music-link-queue-list { max-height: 420px; overflow-y: auto; }
+@container social-watch (min-width: 900px) {
+  .music-dropdown[data-watch="true"] .music-main { grid-template-columns: minmax(0, 1fr) minmax(260px, 30%); }
+  .music-dropdown[data-watch="true"] .music-now-card { grid-column: 1; grid-row: 1; }
+  .music-dropdown[data-watch="true"] .music-link-queue { grid-column: 2; grid-row: 1 / span 3; }
+  .music-dropdown[data-watch="true"] .music-main > :not(.music-now-card, .music-link-queue) { grid-column: 1; }
+}
+
 /* The setup helper (renderer/setup-helper.js): one sheet for every agent
    setting. A section rail on the left, the section on the right, Back/Next in
    the foot. Built from the shared tokens so every theme carries through; the
@@ -13702,6 +13724,10 @@ html[data-layout="v2"][data-detail="all"],
    colours are the app's own tokens, and no scroller reserves width. */
 
 html[data-frame] .shell-frame { display: contents; }
+/* Zen covers the whole window. Geometry preferences stay saved for the return. */
+html[data-frame] body.command-zen :is(.shell-frame, #mefi-tabs, #section-bar, #app-rail, #vibe-rail, #studio-floats, #toast-host) { visibility: hidden !important; pointer-events: none !important; }
+html[data-frame] body.command-zen .shell-frame * { visibility: hidden !important; }
+html[data-frame] body.command-zen :is(.companion-orb, .companion-panel, .companion-bubble, .key-tip, #setup-look-tip, #setup-welcome-card) { visibility: hidden !important; pointer-events: none !important; }
 html[data-frame] .shell-region[hidden], html[data-frame] .shell-scrim[hidden], html[data-frame] .shell-split[hidden] { display: none !important; }
 html[data-frame] .shell-region, html[data-frame] .shell-split {
   --frame-rail-w: calc(var(--shell-x0) - var(--shell-list-w));
@@ -15647,6 +15673,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   <div class="vibe-rail-items">
     <button id="vibe-rail-friends" type="button" data-nav="friends" data-vibe-place="friends" title="Friends: who's online, rooms, events and your PCs"><svg class="glyph" aria-hidden="true"><use href="#g-chat"/></svg><span>Friends</span></button>
     <button id="vibe-rail-projects" type="button" data-nav="projects" title="Projects: your apps, and New app"><svg class="glyph" aria-hidden="true"><use href="#g-folder"/></svg><span>Projects</span></button>
+    <button id="vibe-rail-watch" type="button" data-nav="watch" title="Watch: videos, playlists and Up next"><svg class="glyph" aria-hidden="true"><use href="#g-audio"/></svg><span>Watch</span></button>
     <button id="vibe-rail-activity" type="button" data-nav="activity" title="Activity: what needs you, what's running and what's done"><svg class="glyph" aria-hidden="true"><use href="#g-activity"/></svg><span>Activity</span><span id="vibe-rail-needs" class="count warn" hidden></span></button>
     <button type="button" data-nav="palette" title="Search everything (Ctrl K)"><svg class="glyph" aria-hidden="true"><use href="#g-search"/></svg><span>Search</span></button>
   </div>
@@ -25952,6 +25979,15 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       run: () => window.MefiMusic?.openAudio?.(),
     },
     {
+      id: "zen", label: "Zen mode", short: "Zen", kind: "action", layer: null, section: "agents", group: "tools",
+      key: "Ctrl Z", glyph: "g-orbit", badge: null,
+      desc: "Open the Zen view and hide menus. Ctrl+Z or Escape returns the controls; text fields keep Undo.",
+      searchTerms: "zen focus hide menus distraction free calm fullscreen",
+      showIn: showIn({ palette: true, help: true }),
+      keyMatch: () => false, // The chord is handled before navigation and editing shortcuts.
+      run: () => toggleZen(),
+    },
+    {
       id: "appearancePreview", label: "Appearance preview", short: "Preview", kind: "overlay", layer: "transient", section: "settings",
       group: "tools", key: null, glyph: "g-style", badge: null, showIn: showIn({}),
       element: "music-overlay", focus: "#music-close",
@@ -26148,6 +26184,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // So are Social's own Activity (renderer/today.js) and Projects (renderer/social.js).
   WORKSPACE_PAGES.add("activity");
   WORKSPACE_PAGES.add("projects");
+  WORKSPACE_PAGES.add("watch");
   // And the Shop (renderer/friends-shop.js registers the route "shop"; Friends lists it among its places).
   WORKSPACE_PAGES.add("shop");
   function syncPageInert() {
@@ -27201,6 +27238,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // the same variables the layers use (so a fold is already in them).
   function usable() {
     const { w, h } = viewportSize();
+    if (document.body?.classList?.contains?.("command-zen")) return { left: 0, top: 0, right: w, bottom: h, width: w, height: h };
     const box = (id) => {
       const rect = document.getElementById?.(id)?.getBoundingClientRect?.();
       return rect && rect.width > 0 && rect.height > 0 ? rect : null;
@@ -27523,7 +27561,38 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return true;
   }
 
+  function toggleZen() {
+    if (!zenShortcutEnabled()) return false;
+    const idle = window.MefiIdle;
+    if (typeof idle?.setManualZen !== "function") return false;
+    if (document.body?.classList?.contains?.("command-zen")) return idle.setManualZen(false);
+    window.MefiCompanionHub?.close?.({ immediate: true, restore: false });
+    window.MefiCompanion?.close?.();
+    window.MefiMusic?.closeAudio?.();
+    closeHelpMenu();
+    window.MefiSidebar?.close?.();
+    delete document.documentElement.dataset.railDrawer;
+    go("command");
+    return idle.setManualZen(true);
+  }
+
+  function zenShortcutEnabled() {
+    try { return localStorage.getItem("mefiStudio.zenShortcut") !== "off"; } catch { return true; }
+  }
+
   function handleKey(event) {
+    const editing = event.target?.closest?.("input, textarea, select, [contenteditable]") || document.activeElement?.closest?.("input, textarea, select, [contenteditable]");
+    const zenChord = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key?.toLowerCase?.() === "z";
+    if (zenChord && !editing && !event.defaultPrevented && zenShortcutEnabled()) {
+      event.preventDefault();
+      if (!event.repeat) toggleZen();
+      return;
+    }
+    if (document.body?.classList?.contains?.("command-zen") && window.MefiIdle?.ambientZenStatus?.()?.manual) {
+      event.preventDefault();
+      if (event.key === "Escape") window.MefiIdle.setManualZen(false);
+      return;
+    }
     if (event.defaultPrevented || window.MefiCompanionHub?.isOpen()) return;
     if (event.key === "Escape" && closeHelpMenu(true)) { event.preventDefault(); return; }
     if (event.key === "Escape" && "railDrawer" in (document.documentElement?.dataset ?? {}) && !state.transient) {
@@ -41183,6 +41252,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     hudTimer: null,
     ambientZenEnabled: readStore("mefiStudio.ambientZen") === "1",
     ambientZen: false,
+    manualZen: false,
     zenEdgeSince: null,
     zenDirector: null, // the camera tour Zen is flying, while it flies
     tasks: [],
@@ -53169,7 +53239,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function canAmbientZen() {
     const top = window.MefiNav?.top?.();
     const focus = document.activeElement;
-    return Boolean((!state.director || state.director === state.zenDirector) && (state.ambientZenEnabled || state.zenEdgeSince != null) && state.active && !document.hidden && !state.settingsPreview &&
+    return Boolean((!state.director || state.director === state.zenDirector) && (state.manualZen || state.ambientZenEnabled || state.zenEdgeSince != null) && state.active && !document.hidden && !state.settingsPreview &&
       !document.body.dataset.sheet && (!top || top === "command") &&
       !state.panning && !state.rotating && !state.query &&
       // No open menu fades out from under the pointer: the Map's View ▾ and
@@ -53182,7 +53252,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
 
   function setAmbientZen(active) {
     const next = Boolean(active);
-    if (!next) state.zenEdgeSince = null;
+    if (!next) { state.zenEdgeSince = null; state.manualZen = false; }
     if (next === state.ambientZen || (next && !canAmbientZen())) return false;
     state.ambientZen = next;
     if (next) {
@@ -53222,6 +53292,9 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // Parking in the last eight CSS pixels is an explicit, temporary Zen
   // gesture. It leaves the saved thirty-second idle preference untouched.
   function ambientZenInput(type, event, now = Date.now()) {
+    // Explicit Zen stays put while the pointer moves or a video receives input.
+    // Navigation owns Ctrl+Z and Escape; ambient Zen still wakes on any input.
+    if (state.manualZen) return null;
     const atEdge = type === "mousemove" && !event.buttons &&
       event.clientX >= window.innerWidth - 8 && event.clientX < window.innerWidth &&
       event.clientY >= 0 && event.clientY < window.innerHeight;
@@ -53240,6 +53313,19 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     if (el.ambientZen) el.ambientZen.checked = state.ambientZenEnabled;
     wakeAmbientZen();
     bumpHud();
+  }
+
+  function setManualZen(active) {
+    if (!active) return wakeAmbientZen();
+    closeMapMenu();
+    clearSearch();
+    document.activeElement?.blur?.();
+    for (const menu of document.querySelectorAll?.("#idle-hud details[open]") ?? []) menu.open = false;
+    state.feedMenuOpen = false;
+    state.manualZen = true;
+    const entered = state.ambientZen || setAmbientZen(true);
+    if (!entered) state.manualZen = false;
+    return Boolean(entered);
   }
 
   function checkAmbientZen(now = Date.now()) {
@@ -54440,10 +54526,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     )
   );
 
-  window.addEventListener("blur", () => wakeAmbientZen());
-  window.addEventListener("resize", () => wakeAmbientZen());
+  window.addEventListener("blur", () => { if (!state.manualZen) wakeAmbientZen(); });
+  window.addEventListener("resize", () => { if (!state.manualZen) wakeAmbientZen(); });
   window.addEventListener("mouseout", (event) => {
-    if (!event.relatedTarget) wakeAmbientZen();
+    if (!event.relatedTarget && !state.manualZen) wakeAmbientZen();
   });
 
   // Input anywhere in the window, and the page's own change events, end a rest
@@ -54483,7 +54569,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     // Home's backdrop: workspace.js turns it on when Home shows and off when it leaves.
     setHomeBackdrop,
     homeBackdropStatus: () => ({ drawing: state.homeBackdrop, wanted: state.homeBackdropWanted, commandActive: state.active }),
-    ambientZenStatus: () => ({ enabled: state.ambientZenEnabled, active: state.ambientZen, delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
+    ambientZenStatus: () => ({ enabled: state.ambientZenEnabled, active: state.ambientZen, manual: Boolean(state.manualZen), delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
     settingsPreviewStatus: () => ({ active: Boolean(state.settingsPreview), viewport: state.settingsPreview ? { ...state.settingsPreview } : null, camera: { ...state.camera }, zoom: state.zoom, fit: state.fit, previousWasActive: state.previewRestore?.wasActive ?? null }),
     followStatus: () => ({ mode: state.camMode, taskId: state.follow?.taskId ?? null, nodeId: state.follow?.key ?? null, title: state.follow?.title ?? null, stage: state.follow?.stage ?? null, reason: state.follow?.reason ?? null, since: state.follow?.since ?? null, zoom: state.zoom, targetZoom: state.followZoomTarget }),
     audioStatus,
@@ -54519,6 +54605,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     exitFocus,
     setCardStyle,
     setDirector,
+    setManualZen,
     // Zen now: switches Zen on if it is off (Map look's Zen mode, saved) and
     // enters it at once when the view allows it.
     enterZen: () => {
@@ -75541,6 +75628,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   let dropdownAnchor = null;
   let dropdownFocus = null;
   let dropdownHover = false;
+  let watchHost = null;
   let dropdownOpenTimer = 0;
   let dropdownCloseTimer = 0;
   let restoreWorkspace = false;
@@ -77068,7 +77156,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     }
     return target;
   }
-  function closeDeck() { if (deckOpen) morph(() => { deckOpen = false; renderDeck(); }); }
+  function closeDeck() { if (watchHost) return; if (deckOpen) morph(() => { deckOpen = false; renderDeck(); }); }
   function renderDeck() {
     if (!els.deck) return;
     const source = shownSource();
@@ -77584,7 +77672,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     const queueHeader = element("div", "music-link-queue-header", null, queue);
     els.linkQueueHeading = element("h3", null, "Up next", queueHeader); els.linkQueueHeading.setAttribute("aria-live", "polite");
     els.linkQueueNext = button("Play next video", "ghost mini", queueHeader, () => playQueued(), "music-link-queue-next");
-    els.linkQueueEmpty = element("p", "music-fineprint music-queue-empty", "Nothing lined up. Click a video on the left, or drag it here.", queue);
+    els.linkQueueEmpty = element("p", "music-fineprint music-queue-empty", "Nothing lined up. Browse for a video, or drag a link here.", queue);
     els.linkQueueList = element("ol", "music-link-queue-list", null, queue); els.linkQueueList.id = "music-link-queue-list";
     bindQueueDrops(queue);
     const linkTools = element("div", "music-link-tools music-now-tools", null, main);
@@ -77842,7 +77930,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     dropdown.addEventListener("pointerdown", pinAudioDropdown);
     dropdown.addEventListener("focusin", pinAudioDropdown);
     dropdown.addEventListener("focusout", (event) => {
-      if (event.relatedTarget && !dropdown.contains(event.relatedTarget) && !mediaPlayerContains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
+      if (!watchHost && event.relatedTarget && !dropdown.contains(event.relatedTarget) && !mediaPlayerContains(event.relatedTarget) && !dropdownAnchor?.contains(event.relatedTarget) && !audioSelectContains(event.relatedTarget)) closeAudio();
     });
     // Embedded pages do not bubble pointer/focus events to Studio. Once the
     // pointer enters the player, keep its menu in place until dismissed.
@@ -77877,6 +77965,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   function positionDropdown() {
     dropdownFrame = 0;
     if (els.dropdown?.hidden !== false) return;
+    if (watchHost) { placePlayer(); return; }
     const edge = 12;
     const width = window.innerWidth || 1024;
     // Layout v2 keeps the menu inside the free area (nav.js usable()); v1 is the window.
@@ -77928,6 +78017,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     scheduleDropdown();
   }
   function audioOutside(event) {
+    if (watchHost) return;
     if (!els.dropdown?.contains(event.target) && !mediaPlayerContains(event.target) && !dropdownAnchor?.contains(event.target) && !audioSelectContains(event.target)) closeAudio();
   }
   function mediaPlayerContains(target) {
@@ -77938,6 +78028,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   function audioKey(event) {
     if (event.key === "Escape" && els.dropdown?.hidden === false) {
+      const top = window.MefiNav?.top?.();
+      if (watchHost && top && top !== "watch") return;
       // An open Save to a playlist list closes first.
       if (playlistsHook?.dismiss?.()) { event.preventDefault(); event.stopPropagation(); return; }
       if (window.MefiSelect?.owns?.(els.dropdown)) {
@@ -78003,7 +78095,8 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     window.addEventListener("scroll", pageScroll, true);
     if (!hover) els.dropdown.focus({ preventScroll: true });
   }
-  function closeAudio({ focus = false } = {}) {
+  function closeAudio({ focus = false, leavingWatch = false } = {}) {
+    if (watchHost && !leavingWatch) { window.MefiNav?.close?.("watch"); return; }
     stopClipboardChecks();
     cancelAudioHoverTimers();
     dropdownHover = false;
@@ -78025,9 +78118,35 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     dropdownAnchor = null; dropdownFocus = null;
   }
   function toggleAudio(anchor) {
+    if (watchHost) { openAudio(anchor); return; }
     if (els.dropdown?.hidden === false && dropdownHover) openAudio(anchor);
     else if (els.dropdown?.hidden === false) closeAudio({ focus: true });
     else openAudio(anchor);
+  }
+
+  function openWatch(host) {
+    if (!host) return false;
+    init();
+    closeAudio({ leavingWatch: true });
+    watchHost = host;
+    host.append(els.dropdown);
+    els.dropdown.dataset.watch = "true";
+    els.dropdown.setAttribute("role", "region");
+    openAudio();
+    // Show videos without interrupting a radio station or local track.
+    settingsReveal.source = "link";
+    deckOpen = true; deckSection = "browse";
+    render(); positionDropdown();
+    return true;
+  }
+  function closeWatch() {
+    if (!watchHost) return false;
+    closeAudio({ leavingWatch: true });
+    watchHost = null;
+    delete els.dropdown.dataset.watch;
+    els.dropdown.setAttribute("role", "dialog");
+    document.body.append(els.dropdown);
+    return true;
   }
   function updatePreview() {
     previewFrame = 0;
@@ -78086,7 +78205,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     else if (prefs.source === "radio") state.source = "radio";
     build();
     bindAudioHover(document.getElementById("settings-audio-open"));
-    window.addEventListener("blur", () => { if (!els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
+    window.addEventListener("blur", () => { if (!watchHost && !els.browser?.active && !els.linkPlayer?.contains(document.activeElement)) closeAudio(); });
     applyTheme(prefs.theme, false); paintFont(prefs.font);
     syncTreePreferences(false); render(); renderMediaMenu();
     if (lastLink) els.linkInput.value = lastLink.url;
@@ -78112,8 +78231,10 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     window.addEventListener("mefi:nav", (event) => {
       if (event?.detail?.action !== "open") return;
       const id = event.detail.id;
+      // Search and other temporary dialogs leave Watch underneath them.
+      if (watchHost && window.MefiNav?.get?.(id)?.layer === "transient") return;
       if (id === "audio" || id === "music" && (event.detail.params === "sound" || event.detail.params?.group === "sound")) return;
-      closeAudio();
+      if (id !== "watch") closeAudio();
       if (["studio", "music", "appearancePreview"].includes(id)) return;
       const kind = window.MefiNav?.get?.(id)?.kind;
       if (kind === "overlay" || kind === "action") return;
@@ -78367,7 +78488,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
       showLinks: () => mediaMenu.showLinks,
     };
   }
-  window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, openSection, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
+  window.MefiMusic = { init, open, openPreview, openAudio, closeAudio, toggleAudio, openWatch, closeWatch, openSection, mountSettings, activateSettings, revealSettingsTarget, settingsAppearanceActive: () => settingsAppearance, leaveSettingsAppearance: (options) => setSettingsAppearance(false, options), close, status, graphPreferences, applyNodeStyle, applyNodeLayout, applyNodeEffects, getAudioElement: () => { init(); return activeDeck(); }, tune, stopRadio,
     stations: () => STATIONS.map((item) => ({ id: item.id, name: item.name, detail: item.detail, origin: item.origin, mirrors: item.mirrors.length })),
     // Where the playing source is ({ position, duration } in seconds; duration 0 for a stream with no end): the status bar's time left.
     playback: () => { const at = playbackPosition(); return { position: at.position, duration: at.duration }; }, setRecommender: (fn) => { recommender = typeof fn === "function" ? fn : null; render(); }, addFiles, setSource, applyTheme, applyCustomColors,
@@ -104629,6 +104750,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   const read = (key) => { try { return globalThis.localStorage?.getItem?.(key) ?? null; } catch { return null; } };
   const allPages = () => read("mefiStudio.social.allPages") === "on";
   const friendsCardOff = () => read("mefiStudio.social.friendsCard") === "off";
+  const watchOn = () => read("mefiStudio.social.watch") !== "off";
   const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
   const initials = (name) => String(name || "?").trim().split(/\s+/).slice(0, 2).map((part) => part[0] ?? "").join("").toUpperCase() || "?";
   // A steady colour per member, from their id (The Lobby's own rule, renderer/friends-front.js).
@@ -104639,7 +104761,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // ---- which pages are Social's --------------------------------------------------------------------------------
   // Pages, not actions or Search: an action (Pause agents, a Friends way in) runs where it is. Any page filed under Settings,
   // Help or Friends is Social's too, so a Settings page added later needs no line here.
-  const PAGES = Object.freeze(["vibe", "friends-page", "inbox", "projects", "activity", "studio", "size", "setup-helper", "shop"]);
+  const PAGES = Object.freeze(["vibe", "friends-page", "inbox", "projects", "activity", "watch", "studio", "size", "setup-helper", "shop"]);
   const SOCIAL_SECTIONS = Object.freeze(["settings", "help", "friends"]);
   function studioOnly(id, params = {}) {
     if (!socialMode() || typeof id !== "string" || allPages()) return false;
@@ -104932,8 +105054,48 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
     return true;
   }
 
+  // Watch uses the same media menu and loaded player, in a page instead of a popup.
+  let watch = null;
+  function openWatch() {
+    if (!watchOn()) return false;
+    if (!watch) {
+      watch = el("div", "overlay workspace-page social-page");
+      watch.id = "watch-overlay"; watch.hidden = true;
+      const sheet = el("section", "sheet social-sheet social-watch-sheet");
+      sheet.tabIndex = -1; sheet.setAttribute("aria-labelledby", "watch-title");
+      const head = el("header", "social-page-head");
+      const words = el("div", "social-page-words");
+      const title = el("h1", "", "Watch"); title.id = "watch-title"; title.tabIndex = -1;
+      words.append(title, el("p", "social-page-about", "Find a video, line up what’s next, and settle in."));
+      head.append(words, button("Back to Home", "social-btn", () => nav()?.go?.("workspace")));
+      const host = el("div", "social-watch-media"); host.id = "watch-media";
+      sheet.append(head, host); watch.append(sheet); document.body.append(watch);
+    }
+    nav()?.claim?.("watch");
+    watch.hidden = false;
+    window.MefiMusic?.openWatch?.(document.getElementById("watch-media"));
+    window.MefiShell?.sync?.("watch");
+    return true;
+  }
+  function closeWatch() {
+    if (!watch || watch.hidden) return false;
+    window.MefiMusic?.closeWatch?.();
+    watch.hidden = true;
+    nav()?.release?.("watch");
+    return true;
+  }
+
   // ---- the registry -------------------------------------------------------------------------------------------------
   function register() {
+    nav()?.register?.({
+      id: "watch", label: "Watch", short: "Watch", kind: "overlay", layer: "sheet", section: "home", group: "surfaces",
+      glyph: "g-audio", badge: null, desc: "Videos, browsing, playlists and Up next in Social",
+      searchTerms: "watch videos youtube media player browse playlist queue social",
+      showIn: { tabs: false, tools: false, dock: false, palette: true, help: true, footer: false },
+      element: "watch-overlay", focus: "#watch-title",
+      hidden: () => !watchOn(),
+      open: openWatch, close: closeWatch, isOpen: () => Boolean(watch && !watch.hidden),
+    });
     nav()?.register?.({
       id: "projects", label: "Projects", short: "Projects", kind: "overlay", layer: "sheet", section: "home", group: "surfaces",
       glyph: "g-folder", badge: null, desc: "Your apps and projects, New app, and what friends made",
@@ -104945,10 +105107,12 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   }
   if (nav()?.register) register();
   else document.addEventListener?.("DOMContentLoaded", register, { once: true });
+  const watchButton = document.getElementById("vibe-rail-watch");
+  if (watchButton) watchButton.hidden = !watchOn();
   // The project list follows a switch made anywhere while the page shows.
   window.addEventListener?.("mefi:project-changed", () => { if (projects.root && !projects.root.hidden) { projects.signature = ""; void paintProjects(); } });
 
-  window.MefiSocial = { PAGES, studioOnly, toStudio, openInStudio, openTask, peopleCard, openProjects, closeProjects };
+  window.MefiSocial = { PAGES, studioOnly, toStudio, openInStudio, openTask, peopleCard, openProjects, closeProjects, openWatch, closeWatch };
 })();
 
 // Key tips: small pop-ups beside a button, tab or box that name the key doing
@@ -110516,7 +110680,7 @@ html[data-studio-theme="chrome"] .vibe-hero h1 { background: var(--chrome-text);
   // Where you are, past the project, in a place that has places of its own; null leaves it to the section and the page.
   function placeTrail(n, id, dest) {
     // Social's own pages (renderer/social.js, renderer/today.js) are places of their own: the project, then the page.
-    if (id === "activity" || id === "projects") return [String(dest?.label || id)];
+    if (id === "activity" || id === "projects" || id === "watch") return [String(dest?.label || id)];
     const place = placeOfRoute(n, id);
     if (place === "settings") {
       if (id === "size") return ["Settings", "Appearance", String(dest?.label || "Size and density")];

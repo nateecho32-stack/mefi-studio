@@ -382,7 +382,7 @@ test("the shortcut sheet groups every key by the rail's places, with Esc under H
   assert.deepEqual(grid.children.map(title), ["Work", "Team and Map", "Settings", "Help"], "Home is Work's; Agents is Team, with the Map's page");
   const keysIn = (name) => grid.children.find((group) => title(group) === name).querySelectorAll("kbd").map((cap) => cap.textContent);
   assert.deepEqual(keysIn("Work"), ["H", "T", "P", "I", "A"]);
-  assert.deepEqual(new Set(keysIn("Team and Map")), new Set(["B", "D", "3", "E", "J", "O", "G", "1", "2", "/", "R"]));
+  assert.deepEqual(new Set(keysIn("Team and Map")), new Set(["B", "D", "3", "E", "J", "O", "G", "1", "2", "/", "R", "Ctrl Z"]));
   assert.deepEqual(keysIn("Settings"), ["4", "Ctrl ,", "Ctrl Shift ,", "U"]);
   assert.deepEqual(keysIn("Help"), ["Ctrl K", "?", "Esc"]);
   for (const group of grid.children) assert.equal(group.getAttribute("aria-labelledby"), group.querySelector("h4").id);

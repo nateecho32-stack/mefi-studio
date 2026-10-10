@@ -3236,6 +3236,7 @@ html[data-no-blur] {
 #idle-hud .cmd-feed.collapsed .feed-state { margin: 0 2px 0 4px; font-size: 10px; font-weight: 500; }
 #idle-hud .cmd-feed.collapsed .feed-toggle .glyph { margin-left: 4px; }
 body.command-zen #idle-hud { opacity: 0; pointer-events: none; }
+body.command-zen :is(#idle-layer, #idle-layer-far) { inset: 0 !important; }
 body.command-zen, body.command-zen * { cursor: none !important; }
 body.command-zen #idle-hud * { pointer-events: none !important; }
 body:not(.command-zen) #idle-hud .feed-content:not([hidden]),

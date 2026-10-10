@@ -3089,3 +3089,9 @@ among several cards or revive a question from an unrelated earlier turn.
 Chat Undo selects the named saved decision or the latest active decision.
 An **inbox identity** hashes the saved request's scope; promotion refuses an
 outdated identity and preserves the request's agent/owner origin.
+
+### Zen shortcut and Social Watch
+
+**Ctrl+Z** (Cmd+Z on macOS) opens the Map’s Zen view from any Studio page, closes menus and hides the rail, tabs, frame bars, inspector, companion controls and media controls. It stays open as the pointer moves. **Ctrl+Z** or **Escape** restores the controls; fields keep Undo and Ctrl+Shift+Z keeps Redo. This temporary choice leaves the saved automatic Zen preference unchanged. Reduced motion keeps the view still.
+
+Social’s rail has **Watch**, a page for the existing media player: search or paste a link, browse videos and playlists, and keep **Up next** beside a larger 16:9 player when there is room (below it on narrower windows). It uses the same loaded frame and queue as Music & video. Leaving Watch floats the same player and keeps its position; closing the video stops it. Opening Watch to browse leaves existing local music or radio playing until a video is chosen.

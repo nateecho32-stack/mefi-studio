@@ -39,6 +39,22 @@ the guide are the frozen archive.
 `npm run test:fast` leaves out every suite that launches Electron (the first
 five rows) and is the loop to use while editing; `npm test` is the gate.
 
+## 2026-10-09 Ctrl+Z Zen and Social Watch: integration after rebase
+
+The wip/zen-watch change is rebased onto origin/main b73a22e. Kept Resources, Scratch and Zen/Watch additions together in CHANGELOG; rebuilt renderer/booklet.html. Regenerated the TESTRUNS merge by inserting the new run into main's notebook and rotating older rows; verified all 101 dated entries from both branches remained reachable. Preserved the notebook's line endings.
+
+After integration: npm run check passed (317 targets, 646 specs, every selector used), npm run audit passed (0 errors, 0 warnings). npm run test:one -- --test-concurrency=2 on app_rail, layout_contract_nav, sidebar, shell_frame_wiring, zen_shortcut, music, social, command_graph, command_director and vibe_frame passed 360/360 in 17.4 s. This run's own processes were resumed when Windows suspended them. Full-gate failures and the outstanding Electron/Python/path-lock stages remain as recorded in the preceding Zen/Watch entry; the work stays on a pushed WIP branch, not main.
+
+## 2026-10-09 Ctrl+Z Zen and Social Watch: feature checks green, full gate blocked
+
+Developed in an isolated managed worktree from c481e2c. Ctrl+Z / Cmd+Z opens the Map's temporary Zen view, closes menus and hides all frame, companion and media controls. Ctrl+Z or Escape restores them; pointer input keeps explicit Zen open, text fields keep Undo, and the saved automatic Zen preference is untouched. Social has Watch: the existing player docks into a larger page with browsing and playlists below and Up next beside it on wide windows, below it on narrow ones. Leaving Watch floats the same loaded video and retains its position and queue. Search over Watch owns Escape first. Device kill switches: mefiStudio.zenShortcut = "off", mefiStudio.social.watch = "off".
+
+Rebuilt renderer/booklet.html. npm run check passed (314 targets, 642 specs, every selector used), npm run audit passed (0 errors, 0 warnings), npm run lint passed (0 errors, the same 47 existing warnings), git diff --check passed. Through npm run test:one: app_rail, layout_contract_nav, sidebar, shell_frame_wiring, zen_shortcut, music, social, command_graph, command_director and vibe_frame passed 360/360. The music tests retain the actual loaded frame and dock host, cover local audio continuing while browsing, and check Escape in Search and in Watch.
+
+Browser preview: Ctrl+Z left only the Map canvas in the accessibility tree; Escape restored the controls. A native MP4 played in Watch. At 1280x720 its stage was 360 px tall and ended at y654, above the status bar; at 700x800 the queue moved below the player with no horizontal overflow. No new animation loop or host I/O: Zen uses the existing tour; Watch moves the same media controls and loaded player.
+
+Full npm test was attempted, then repeated at MEFI_TEST_WIDTH=4 / MEFI_TEST_WINDOW_WIDTH=1. Windows repeatedly suspended every thread of the test processes, including another session's run; only this run's own descendants were resumed. The final attempt was stopped after 561 suite results (556 passed, 5 failed), rather than report an incomplete gate as green. Failures: booklet_build (116 s), attempt_review_host (344 s), attempt_snapshots_host (434 s), command_toolbar and tabs_host. Clean origin/main b73a22e, exported to a separate temporary tree, reproduced the command_toolbar CSS-boundary assertion and tabs_host's CmdOrCtrl+Shift+T overlap (29/31). The other failures occurred in the suspension-affected host/build suites. map_render, shell_render and command_render were requested through the lease and cancelled after waiting more than nine minutes behind the other session's Electron lane; they did not run. The full Electron/Python/path-lock gate remains outstanding. Preserve this change on a pushed wip/zen-watch branch until a quiet full gate can pass; do not treat this record as permission to bypass main's gates.
+
 ## 2026-10-09 Scratch tier WP2: the JavaScript store, its settings and the Resources line
 
 Branch `feat/scratch-wp2` (C:\wt\scratch-wp2, off main b640d29, rebased onto a2aaa86 and then b4ff7d8 without a
@@ -470,51 +486,6 @@ clock, which read 5m on a slow run, and passed again), team_render, settings_ren
 worktrees_render, skills_render, review_render and map_render all pass. Unit suites: 764/764 across today_*, vibe_*,
 sessions_*, settings_*, agents_*, team_*, friends_*, shell_frame_*, size_*, layout_contract_css, studio_ui, info_tips,
 file_inputs (a new test for the idle marker), booklet_build and module_purity; `npm run check` ok.
-
-## 2026-10-06 Linux CI: My PCs' battery and Resources stop asking Node for the platform
-
-Branch `fix/linux-ci-battery-resources` (b06201c, off main 8f84614, in C:\wt\lxci), with PR #7 open so
-studio-linux.yml ran on the branch (it triggers on main pushes and pull requests only). Studio checks (Linux) had failed
-on every main push since c4b9e2e (resource_host: the journal after Slow down/Pause, and a launch putting back what the
-last Studio held) and 89639b4 (pcs_host: the low-battery handoff, and the stop line with Continue). Both suites play a
-Windows PC on any host; the code under test asked Node instead: main.cjs's pcsPowerLook now passes process.platform to
-pc-power's readBattery, and resource-host joins its helper's folder with path.win32 when its platform is win32. No test
-changed, and Windows behaves the same. Here (Windows): a preload that makes Node report linux and load path.posix
-reproduced the four CI failures with their messages, and pcs_host, resource_host and pc_power pass 29 of 29 under it
-after the fix; `npm run test:one` over the ten My PCs and Resources suites (resource_helper_win included) 153 of 153;
-check ok, lint 47 warnings (as main), audit ok; `electron . --smoke` with a fresh profile 45 cards. Hosted CI on the
-branch, all green: Studio checks (Linux) run 37527676158 (PR #7), Node stage 7589 tests, 0 fail, 58 skipped, then the
-audit and the Xvfb smoke (45 cards), which had not run on Linux since c4b9e2e because the red Tests step stopped the
-job first; Studio checks (Windows) runs 37527647312 (push) and 37527676135 (PR), Node stage 7589 tests, 0 fail, 34
-skipped, Python contracts 248 OK, audit and the portable package ok.
-
-## 2026-10-06 The 0.5 polish pass: a full gate, every window failure checked against main, and the fixes
-
-Branches `polish/0.5` (C:\wt\v05, with `polish/names` and `polish/tour` merged in; the owner merged it as #6, feb4a29)
-and `polish/0.5-b` (C:\wt\v05b, landed here), found with a fresh-profile run of the real app (C:\wt\probe: isolated
-profile, coding CLIs blocked, driven over CDP: every place and page in both modes, 12 themes, interface scale, menus).
-Fixed: a blank Studio menu after Social to Studio, Configuration and Friends leaving their layer claims, the old tree
-strip over Settings, Plans laid out by its own room, key tips over the welcome, the welcome's AI choice never applied
-on Continue (and never re-read after a sign-in in its own window: now on window focus, Check again and Continue),
-queued tasks shown as running with agents off, Events in the menu, the Help sheet's links, a place row (picker below
-760 px, out of the way below 520 px of height), the first task carried from Start a new app into the welcome,
-GETTING_STARTED.md rewritten for 0.5.
-
-Full `npm test` on polish/0.5 (ab7d4ea, about 2 h at 700 MB free): Node stage 7587 tests, 7572 pass, 1 fail (a test
-still matching the old setup advice "is selected"; fixed on main as 0c4633c), 14 skipped; Python contracts pass;
-Electron lane 69 tests, 62 pass, 6 fail, plus command_render. Each failing window suite then ran alone on a control
-worktree of main before the polish (4d23e3c, C:\wt\ctl) and on the branch: all passed on the control, so all were
-the polish's. Causes and fixes: the menu's default pin moved to 1600 px changed every fixture's layout at 1100 and
-1440 px (Size went to two columns, Home's composer moved with its drawer, the project map's Browse stayed open,
-unified_studio's hover dwell) - reverted to main's 1100 px default; Team's place row took the row a 400 px window
-needs (agent_setup_render) - picker and short-window rule; the frame's right margin overrode styles.css's narrow one
-below 900 px - restored; Size's kept-in-view picture now stays within two thirds of the pane with its caption and
-buttons (507 of 715 px before); fixtures that pinned old words (the welcome's titles and buttons, "Folder mapped" now
-"Project mapped", the hidden tree strip that command_render waited to see painting on a tab page).
-
-On the landed tree, one window suite at a time under the lease: agent_setup_render (one missed click, then 2/2), project_map_render, size_render, workflow_render, team_render, friends_render, shell_render, settings_render, setup_helper_render, unified_studio_render and command_render (84 s) all pass. `npm run test:fast`:
-7589 tests, 7572 pass, 14 skipped, 3 failed under about 400 MB free with the Electron lane busy and all 3 pass alone (paired_reconnect 6/6, resource_helper_win 1/1, rust_parity_git 4/4 in 188 s). `npm run check` ok, `npm run audit` 0 findings. Not run here: a second full `npm test` (the lane
-results above cover every suite the fixes touch).
 
 ## Read Before Any Tests
 

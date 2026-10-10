@@ -304,6 +304,7 @@
     hudTimer: null,
     ambientZenEnabled: readStore("mefiStudio.ambientZen") === "1",
     ambientZen: false,
+    manualZen: false,
     zenEdgeSince: null,
     zenDirector: null, // the camera tour Zen is flying, while it flies
     tasks: [],
@@ -12290,7 +12291,7 @@
   function canAmbientZen() {
     const top = window.MefiNav?.top?.();
     const focus = document.activeElement;
-    return Boolean((!state.director || state.director === state.zenDirector) && (state.ambientZenEnabled || state.zenEdgeSince != null) && state.active && !document.hidden && !state.settingsPreview &&
+    return Boolean((!state.director || state.director === state.zenDirector) && (state.manualZen || state.ambientZenEnabled || state.zenEdgeSince != null) && state.active && !document.hidden && !state.settingsPreview &&
       !document.body.dataset.sheet && (!top || top === "command") &&
       !state.panning && !state.rotating && !state.query &&
       // No open menu fades out from under the pointer: the Map's View ▾ and
@@ -12303,7 +12304,7 @@
 
   function setAmbientZen(active) {
     const next = Boolean(active);
-    if (!next) state.zenEdgeSince = null;
+    if (!next) { state.zenEdgeSince = null; state.manualZen = false; }
     if (next === state.ambientZen || (next && !canAmbientZen())) return false;
     state.ambientZen = next;
     if (next) {
@@ -12343,6 +12344,9 @@
   // Parking in the last eight CSS pixels is an explicit, temporary Zen
   // gesture. It leaves the saved thirty-second idle preference untouched.
   function ambientZenInput(type, event, now = Date.now()) {
+    // Explicit Zen stays put while the pointer moves or a video receives input.
+    // Navigation owns Ctrl+Z and Escape; ambient Zen still wakes on any input.
+    if (state.manualZen) return null;
     const atEdge = type === "mousemove" && !event.buttons &&
       event.clientX >= window.innerWidth - 8 && event.clientX < window.innerWidth &&
       event.clientY >= 0 && event.clientY < window.innerHeight;
@@ -12361,6 +12365,19 @@
     if (el.ambientZen) el.ambientZen.checked = state.ambientZenEnabled;
     wakeAmbientZen();
     bumpHud();
+  }
+
+  function setManualZen(active) {
+    if (!active) return wakeAmbientZen();
+    closeMapMenu();
+    clearSearch();
+    document.activeElement?.blur?.();
+    for (const menu of document.querySelectorAll?.("#idle-hud details[open]") ?? []) menu.open = false;
+    state.feedMenuOpen = false;
+    state.manualZen = true;
+    const entered = state.ambientZen || setAmbientZen(true);
+    if (!entered) state.manualZen = false;
+    return Boolean(entered);
   }
 
   function checkAmbientZen(now = Date.now()) {
@@ -13561,10 +13578,10 @@
     )
   );
 
-  window.addEventListener("blur", () => wakeAmbientZen());
-  window.addEventListener("resize", () => wakeAmbientZen());
+  window.addEventListener("blur", () => { if (!state.manualZen) wakeAmbientZen(); });
+  window.addEventListener("resize", () => { if (!state.manualZen) wakeAmbientZen(); });
   window.addEventListener("mouseout", (event) => {
-    if (!event.relatedTarget) wakeAmbientZen();
+    if (!event.relatedTarget && !state.manualZen) wakeAmbientZen();
   });
 
   // Input anywhere in the window, and the page's own change events, end a rest
@@ -13604,7 +13621,7 @@
     // Home's backdrop: workspace.js turns it on when Home shows and off when it leaves.
     setHomeBackdrop,
     homeBackdropStatus: () => ({ drawing: state.homeBackdrop, wanted: state.homeBackdropWanted, commandActive: state.active }),
-    ambientZenStatus: () => ({ enabled: state.ambientZenEnabled, active: state.ambientZen, delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
+    ambientZenStatus: () => ({ enabled: state.ambientZenEnabled, active: state.ambientZen, manual: Boolean(state.manualZen), delayMs: AMBIENT_ZEN_MS, idleMs: Math.max(0, Date.now() - state.lastInput), eligible: canAmbientZen(), feedCollapsed: state.feedCollapsed }),
     settingsPreviewStatus: () => ({ active: Boolean(state.settingsPreview), viewport: state.settingsPreview ? { ...state.settingsPreview } : null, camera: { ...state.camera }, zoom: state.zoom, fit: state.fit, previousWasActive: state.previewRestore?.wasActive ?? null }),
     followStatus: () => ({ mode: state.camMode, taskId: state.follow?.taskId ?? null, nodeId: state.follow?.key ?? null, title: state.follow?.title ?? null, stage: state.follow?.stage ?? null, reason: state.follow?.reason ?? null, since: state.follow?.since ?? null, zoom: state.zoom, targetZoom: state.followZoomTarget }),
     audioStatus,
@@ -13640,6 +13657,7 @@
     exitFocus,
     setCardStyle,
     setDirector,
+    setManualZen,
     // Zen now: switches Zen on if it is off (Map look's Zen mode, saved) and
     // enters it at once when the view allows it.
     enterZen: () => {

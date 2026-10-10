@@ -15,6 +15,9 @@ All notable changes to Mefi's Studio AI+ are recorded here. The format follows
   moved into an Auto mode fold under the list. Restore all only shows while
   Studio is holding something back.
 
+- **Zen on Ctrl+Z.** Open the Zen tree with every menu hidden; press Ctrl+Z or Escape to bring back the controls. Moving the mouse keeps Zen open, and text fields keep their usual Undo.
+- **Watch in Social.** A larger video page with Up next beside the player on wide windows and browsing below it. Returning to Home floats the same playing video without restarting it.
+
 - **The window reads like a desktop.** One bar runs across the whole top of
   the window, with the Social | Studio switch, the trail and Search in it; the
   menu rail, the session list and the project panel start under it, the same

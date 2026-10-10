@@ -150,3 +150,24 @@ html[data-shell="rail"] .social-page > .social-sheet { width: 100%; height: auto
   .social-project { grid-template-columns: auto minmax(0, 1fr); }
   .social-project > .social-btn { grid-column: 1 / -1; justify-self: start; }
 }
+
+/* Watch keeps the loaded player in the page. Its queue is beside it, browsing underneath. */
+#watch-overlay { display: block; }
+.social-watch-media { min-width: 0; container: social-watch / inline-size; }
+.music-dropdown[data-watch="true"] { position: static; width: 100% !important; max-height: none !important; border-radius: 16px; box-shadow: none; }
+.music-dropdown[data-watch="true"] .music-dropdown-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "now" "nav" "deck"; overflow: visible; }
+.music-dropdown[data-watch="true"] :is(.music-main, .music-deck) { overflow: visible; border: 0; }
+.music-dropdown[data-watch="true"] .music-main { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 14px; padding: 16px; }
+.music-dropdown[data-watch="true"] .music-main > * { min-width: 0; }
+.music-dropdown[data-watch="true"] :is(.music-expand, #music-next-line) { display: none; }
+.music-dropdown[data-watch="true"] .music-quick { display: none; }
+.music-dropdown[data-watch="true"] .music-deck { padding: 16px; }
+.music-dropdown[data-watch="true"] .music-video-stage[data-docked="true"][data-shape="video"] { height: auto; aspect-ratio: 16 / 9; max-height: max(180px, calc(100dvh - 360px)); }
+.music-dropdown[data-watch="true"] .music-link-queue { margin: 0; padding: 12px; border: 1px solid var(--md-line); border-radius: 12px; background: var(--md-well); }
+.music-dropdown[data-watch="true"] .music-link-queue-list { max-height: 420px; overflow-y: auto; }
+@container social-watch (min-width: 900px) {
+  .music-dropdown[data-watch="true"] .music-main { grid-template-columns: minmax(0, 1fr) minmax(260px, 30%); }
+  .music-dropdown[data-watch="true"] .music-now-card { grid-column: 1; grid-row: 1; }
+  .music-dropdown[data-watch="true"] .music-link-queue { grid-column: 2; grid-row: 1 / span 3; }
+  .music-dropdown[data-watch="true"] .music-main > :not(.music-now-card, .music-link-queue) { grid-column: 1; }
+}

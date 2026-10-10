@@ -194,6 +194,12 @@ function environment({ menuSaved = null, queueSaved = null, mediaVolumeSaved = n
     emit: (type, detail) => listeners.get(type)?.({ detail }),
     message: (event) => listeners.get("message")?.(event),
     pointer: (target) => documentListeners.get("pointerdown")?.({ target }),
+    key: (key) => {
+      const event = { key, prevented: false, stopped: false,
+        preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; } };
+      documentListeners.get("keydown")?.(event);
+      return event;
+    },
     gesture: (type, target, detail = {}) => {
       const event = { type, target, pointerId: 1, button: 0, prevented: false, stopped: false,
         preventDefault() { this.prevented = true; }, stopImmediatePropagation() { this.stopped = true; }, ...detail };
@@ -3366,4 +3372,67 @@ test("Playlists: a shared list typed into Browse goes to Playlists, and Find mor
   env.ids.get("music-link-load").click(); await flush();
   assert.equal(offered.length, 1); assert.equal(box.value, "", "the box is handed over, not searched");
   assert.deepEqual(asked, ["2swap"]);
+});
+
+
+test("Watch keeps the existing video and queue while the page opens, loses focus and returns to floating playback", () => {
+  const env = environment({ mediaWindow: true });
+  env.music.playLink("https://youtu.be/dQw4w9WgXcQ");
+  env.ids.get("music-link-url").value = "https://youtu.be/abcdefghijk";
+  env.ids.get("music-link-queue-add").click();
+  const frame = env.music.linkElement().element;
+  const host = env.document.createElement("div");
+  env.document.body.append(host);
+  assert.equal(env.music.openWatch(host), true);
+  env.frames();
+  const dropdown = env.ids.get("music-dropdown");
+  assert.equal(env.player.host, env.ids.get("music-video-stage"));
+  assert.equal(dropdown.parentElement, host);
+  assert.equal(dropdown.dataset.watch, "true");
+  assert.equal(dropdown.dataset.size, "full");
+  assert.equal(dropdown.dataset.section, "browse");
+  assert.equal(env.music.linkElement().element, frame);
+  env.pointer(env.document.body);
+  dropdown.dispatch("focusout", { relatedTarget: env.document.body });
+  env.emit("blur");
+  assert.equal(dropdown.hidden, false);
+  assert.equal(env.music.closeWatch(), true);
+  assert.equal(dropdown.parentElement, env.document.body);
+  assert.equal(dropdown.hidden, true);
+  assert.equal(env.player.host, null);
+  assert.equal(env.music.linkElement().element, frame);
+  env.music.openAudio();
+  assert.equal(dropdown.dataset.watch, undefined);
+  assert.equal(dropdown.attrs.role, "dialog");
+  assert.equal(dropdown.dataset.size, "compact");
+});
+
+test("browsing Watch leaves local music playing until the user chooses a video", async () => {
+  const env = environment();
+  env.music.addFiles([file("Watch music.mp3")]);
+  env.ids.get("music-play").click(); await flush();
+  env.audio.currentTime = 32;
+  env.music.openWatch(env.document.createElement("div"));
+  assert.equal(env.audio.paused, false);
+  assert.equal(env.audio.currentTime, 32);
+  env.music.closeWatch();
+  assert.equal(env.audio.paused, false);
+});
+
+test("Escape belongs to Search over Watch, then closes Watch through navigation", () => {
+  const env = environment({ mediaWindow: true });
+  let top = "watch";
+  env.window.MefiNav.top = () => top;
+  env.window.MefiNav.get = id => ({ id, kind: "overlay", layer: id === "palette" ? "transient" : "sheet" });
+  env.window.MefiNav.close = id => { assert.equal(id, "watch"); env.music.closeWatch(); };
+  env.music.playLink("https://youtu.be/dQw4w9WgXcQ");
+  const frame = env.music.linkElement().element;
+  env.music.openWatch(env.document.createElement("div"));
+  top = "palette"; env.emit("mefi:nav", { id: top, action: "open" });
+  assert.equal(env.key("Escape").prevented, false, "the front dialog handles its own Escape");
+  assert.equal(env.ids.get("music-dropdown").hidden, false);
+  top = "watch";
+  assert.equal(env.key("Escape").prevented, true);
+  assert.equal(env.ids.get("music-dropdown").hidden, true);
+  assert.equal(env.music.linkElement().element, frame, "the same video floats after leaving Watch");
 });
