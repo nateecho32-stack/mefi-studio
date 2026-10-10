@@ -84,6 +84,7 @@
 .pl-banner b { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink); background: linear-gradient(180deg, #fff, var(--accent-bright)); }
 .pl-banner-long, .pl-banner-short { overflow: hidden; text-overflow: ellipsis; }
 .pl-banner-short { display: none; }
+.pl-demo-context { margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .pl-toast { position: absolute; left: 50%; bottom: 58px; z-index: 145; max-width: min(520px, calc(100% - 32px)); margin: 0; padding: 10px 16px; border-radius: 12px; font-size: 13.5px; font-weight: 600; text-align: center; color: var(--ivory); background: rgb(var(--bg-2-rgb) / 0.96); box-shadow: 0 0 0 1px rgb(var(--accent-2-rgb) / 0.4), 0 20px 40px -16px rgb(0 0 0 / 0.9); opacity: 0; transform: translate(-50%, 10px); transition: opacity .3s ease, transform .45s var(--ease-spring); pointer-events: none; }
 .pl-toast.on { opacity: 1; transform: translate(-50%, 0); }
 .pl-orb.sm { width: 28px; height: 28px; animation: none; }

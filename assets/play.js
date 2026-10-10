@@ -152,7 +152,7 @@
           '<span class="pl-pill work" aria-hidden="true"><i></i><em class="n-work">0</em> working</span>' +
           '<button type="button" class="pl-skip">Skip to the site' + SVG.close + '</button>' +
         '</header>' +
-        '<p class="pl-banner"><b>Guided demo</b><span class="pl-banner-long">Made-up friends and projects, sped up. Press the glowing button at each step, or wait and it plays itself.</span><span class="pl-banner-short">Press the glowing button, or wait.</span></p>' +
+        '<p class="pl-banner"><b>Simulated demo</b><span class="pl-banner-long">These people and projects are made up. Nothing connects to real users. Press the glowing button, or wait.</span><span class="pl-banner-short">Made-up people. No live connection.</span></p>' +
         '<div class="pl-body">' +
           '<nav class="pl-rail" aria-hidden="true"><i class="on" title="Home">' + SVG.today + '</i><i class="r-friends" title="Friends">' + SVG.friends + '<em class="badge">2</em></i><i title="Projects">' + SVG.folder + '</i><i title="Activity">' + SVG.pulse + '</i></nav>' +
           '<main class="pl-main">' +
@@ -177,9 +177,10 @@
             '<div class="pl-tabs" role="tablist" aria-label="Panels"><button type="button" role="tab" data-tab="friends" aria-selected="true">Friends<em class="tab-dot"></em></button><button type="button" role="tab" data-tab="changes" aria-selected="false">Changes</button><button type="button" role="tab" data-tab="preview" aria-selected="false">Preview</button><i class="pl-tab-ink" aria-hidden="true"></i></div>' +
             '<div class="pl-panes">' +
               '<section class="pl-pane on" data-pane="friends">' +
-                '<p class="pl-k"><i class="dot live"></i>3 online</p>' +
+                '<p class="pl-k">3 simulated friends</p>' +
+                '<p class="pl-demo-context">Cowork rooms are for building alongside people. The Project hub is for sharing builds and finding testers. This preview uses sample activity and asks for no device permissions.</p>' +
                 '<ul class="pl-online"></ul>' +
-                '<div class="pl-room"><p class="pl-room-head"><b>Friday hangout</b><span>Hangout · 4 here</span></p><div class="pl-chat" aria-live="polite"></div></div>' +
+                '<div class="pl-room"><p class="pl-room-head"><b>Friday hangout</b><span>Sample room · 4 simulated people</span></p><div class="pl-chat" aria-live="polite"></div></div>' +
               '</section>' +
               '<section class="pl-pane" data-pane="changes"><p class="pl-k">Changes</p><div class="pl-empty">Nothing changed yet.</div></section>' +
               '<section class="pl-pane" data-pane="preview"><p class="pl-k">Preview</p><div class="pl-empty">Nothing to preview yet.</div></section>' +
